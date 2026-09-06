@@ -1697,15 +1697,15 @@ select, .form-select, select.form-control {
     height: 100vh !important;
     display: flex !important;
     z-index: 999999 !important;
-    background: #090d16 !important;
+    background: #0c1219 !important;
     overflow: hidden !important;
 }
 
-/* Left Hero Side */
+/* Left Hero Side: VidaSana Ambient Showcase */
 .login-hero-side {
-    flex: 1.25;
+    flex: 1.2;
     position: relative;
-    background: linear-gradient(135deg, #02142e 0%, #062347 50%, #030e21 100%);
+    background: linear-gradient(145deg, #0a1117 0%, #121c24 50%, #0d151c 100%);
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -1718,144 +1718,176 @@ select, .form-select, select.form-control {
 .login-hero-side::before {
     content: '';
     position: absolute;
-    top: -20%;
-    left: -20%;
-    width: 140%;
-    height: 140%;
+    top: -25%;
+    left: -25%;
+    width: 150%;
+    height: 150%;
     background: 
-        radial-gradient(circle at 25% 25%, rgba(2, 132, 199, 0.28), transparent 45%),
-        radial-gradient(circle at 75% 75%, rgba(124, 58, 237, 0.22), transparent 45%),
-        radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.15), transparent 50%);
+        radial-gradient(circle at 20% 25%, rgba(126, 161, 60, 0.24), transparent 45%),
+        radial-gradient(circle at 75% 70%, rgba(154, 198, 59, 0.16), transparent 40%),
+        radial-gradient(circle at 60% 30%, rgba(14, 116, 144, 0.18), transparent 50%);
     pointer-events: none;
 }
 
 .login-hero-content {
     position: relative;
     z-index: 2;
-    max-width: 620px;
+    max-width: 580px;
 }
 
-.login-hero-logo {
-    max-height: 65px;
+.vs-hero-brand-card {
+    background: rgba(255, 255, 255, 0.97);
+    padding: 14px 24px;
+    border-radius: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.2);
+    margin-bottom: 30px;
+    backdrop-filter: blur(12px);
+    transition: transform 0.3s ease;
+}
+
+.vs-hero-brand-card:hover {
+    transform: translateY(-2px);
+}
+
+.vs-hero-logo-img {
+    max-height: 52px;
     width: auto;
     object-fit: contain;
-    margin-bottom: 40px;
-    filter: drop-shadow(0 6px 20px rgba(0, 180, 255, 0.4));
+    display: block;
 }
 
-.login-hero-badge {
+.vs-hero-badge {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    background: rgba(2, 132, 199, 0.18);
-    border: 1px solid rgba(2, 132, 199, 0.35);
-    color: #38bdf8;
+    background: rgba(126, 161, 60, 0.16);
+    border: 1px solid rgba(126, 161, 60, 0.32);
+    color: #9ec845;
     padding: 6px 14px;
     border-radius: 20px;
-    font-size: 0.78rem;
+    font-size: 0.74rem;
     font-weight: 700;
-    letter-spacing: 1px;
-    margin-bottom: 20px;
+    letter-spacing: 1.2px;
+    margin-bottom: 18px;
 }
 
 .login-hero-text h1 {
-    font-size: 2.6rem;
+    font-size: 2.4rem;
     font-weight: 800;
-    line-height: 1.18;
-    margin-bottom: 16px;
+    line-height: 1.2;
+    margin-bottom: 12px;
     color: #ffffff;
-    letter-spacing: -0.03em;
+    letter-spacing: -0.025em;
 }
 
 .login-hero-text p {
-    font-size: 1.05rem;
+    font-size: 1.02rem;
     color: #94a3b8;
-    line-height: 1.6;
-    margin-bottom: 35px;
+    line-height: 1.55;
+    margin-bottom: 30px;
+    max-width: 480px;
 }
 
-.login-hero-features {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    margin-bottom: 40px;
+.vs-hero-pills {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    max-width: 440px;
+    margin-bottom: 36px;
 }
 
-.hero-feature-item {
+.vs-pill-item {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 10px;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    padding: 14px 20px;
-    border-radius: 14px;
-    backdrop-filter: blur(10px);
+    padding: 12px 16px;
+    border-radius: 12px;
+    color: #e2e8f0;
+    font-size: 0.88rem;
+    font-weight: 600;
+    backdrop-filter: blur(8px);
     transition: all 0.25s ease;
 }
 
-.hero-feature-item:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(2, 132, 199, 0.3);
-    transform: translateX(6px);
+.vs-pill-item i {
+    color: #9ec845;
+    font-size: 1rem;
 }
 
-.hero-feature-icon {
-    width: 42px;
-    height: 42px;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.06);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.2rem;
-}
-
-.hero-feature-item strong {
-    display: block;
-    font-size: 0.95rem;
-    color: #f8fafc;
-}
-
-.hero-feature-item small {
-    display: block;
-    font-size: 0.78rem;
-    color: #94a3b8;
+.vs-pill-item:hover {
+    background: rgba(126, 161, 60, 0.1);
+    border-color: rgba(126, 161, 60, 0.35);
+    transform: translateX(4px);
 }
 
 .login-hero-footer {
     color: #64748b;
-    font-size: 0.8rem;
+    font-size: 0.78rem;
+    font-weight: 500;
 }
 
 /* Right Form Side */
 .login-form-side {
-    flex: 0.75;
+    flex: 0.8;
     min-width: 420px;
-    background: #0b1324;
+    background: #0d151d;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 40px;
     position: relative;
-    border-left: 1px solid rgba(255, 255, 255, 0.08);
+    border-left: 1px solid rgba(255, 255, 255, 0.07);
     box-sizing: border-box;
+}
+
+.login-form-side::before {
+    content: '';
+    position: absolute;
+    top: 20%;
+    right: 10%;
+    width: 300px;
+    height: 300px;
+    background: radial-gradient(circle, rgba(126, 161, 60, 0.08), transparent 70%);
+    pointer-events: none;
 }
 
 .login-form-card {
     width: 100%;
     max-width: 380px;
+    position: relative;
+    z-index: 2;
 }
 
 .login-form-header {
-    margin-bottom: 30px;
+    margin-bottom: 26px;
+    text-align: left;
 }
 
-.login-mobile-logo {
-    display: none;
+.vs-form-brand-badge {
+    background: rgba(255, 255, 255, 0.98);
+    padding: 10px 20px;
+    border-radius: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+    margin-bottom: 22px;
+}
+
+.vs-form-logo-img {
+    max-height: 42px;
+    width: auto;
+    object-fit: contain;
+    display: block;
 }
 
 .login-form-header h2 {
-    font-size: 1.9rem;
+    font-size: 1.85rem;
     font-weight: 800;
     color: #ffffff;
     margin-bottom: 6px;
@@ -1874,12 +1906,12 @@ select, .form-select, select.form-control {
 }
 
 .form-label-new {
-    color: rgba(255, 255, 255, 0.95) !important;
-    font-size: 0.88rem !important;
+    color: rgba(255, 255, 255, 0.9) !important;
+    font-size: 0.85rem !important;
     font-weight: 700 !important;
     margin-bottom: 8px !important;
     text-align: left !important;
-    letter-spacing: 0.6px !important;
+    letter-spacing: 0.5px !important;
 }
 
 .input-icon-wrapper {
@@ -1892,19 +1924,19 @@ select, .form-select, select.form-control {
     left: 16px !important;
     top: 50% !important;
     transform: translateY(-50%) !important;
-    color: rgba(255, 255, 255, 0.45) !important;
-    font-size: 1.05rem !important;
+    color: rgba(255, 255, 255, 0.4) !important;
+    font-size: 1rem !important;
     pointer-events: none !important;
     transition: color 0.25s ease, transform 0.25s ease !important;
 }
 
 .form-input-new {
-    background: rgba(255, 255, 255, 0.05) !important;
-    border: 1px solid rgba(255, 255, 255, 0.14) !important;
+    background: rgba(255, 255, 255, 0.04) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
     color: #ffffff !important;
     padding: 14px 18px 14px 46px !important;
-    border-radius: 14px !important;
-    font-size: 0.98rem !important;
+    border-radius: 12px !important;
+    font-size: 0.95rem !important;
     outline: none !important;
     transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
     width: 100% !important;
@@ -1917,30 +1949,30 @@ select, .form-select, select.form-control {
 }
 
 .form-input-new:focus {
-    background: rgba(255, 255, 255, 0.09) !important;
-    border-color: #0284c7 !important;
-    box-shadow: 0 0 20px rgba(2, 132, 199, 0.35), 0 0 0 3px rgba(2, 132, 199, 0.2) !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+    border-color: #7fa13c !important;
+    box-shadow: 0 0 20px rgba(126, 161, 60, 0.32), 0 0 0 3px rgba(126, 161, 60, 0.15) !important;
 }
 
 .input-icon-wrapper:focus-within .input-icon {
-    color: #38bdf8 !important;
+    color: #9ec845 !important;
     transform: translateY(-50%) scale(1.1) !important;
 }
 
 .login-btn-new {
-    background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%) !important;
+    background: linear-gradient(135deg, #7fa13c 0%, #608127 100%) !important;
     border: none !important;
     color: #ffffff !important;
-    padding: 16px !important;
-    border-radius: 14px !important;
-    font-size: 1.02rem !important;
+    padding: 15px !important;
+    border-radius: 12px !important;
+    font-size: 0.98rem !important;
     font-weight: 800 !important;
-    letter-spacing: 1.5px !important;
+    letter-spacing: 1.2px !important;
     text-transform: uppercase !important;
     cursor: pointer !important;
     width: 100% !important;
     box-sizing: border-box !important;
-    box-shadow: 0 8px 25px rgba(2, 132, 199, 0.4) !important;
+    box-shadow: 0 8px 24px rgba(126, 161, 60, 0.38) !important;
     transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
     display: flex !important;
     align-items: center !important;
@@ -1948,23 +1980,23 @@ select, .form-select, select.form-control {
 }
 
 .login-btn-new:hover {
-    transform: translateY(-3px) scale(1.01) !important;
-    box-shadow: 0 12px 35px rgba(2, 132, 199, 0.55) !important;
-    filter: brightness(1.08) !important;
+    transform: translateY(-2px) scale(1.01) !important;
+    box-shadow: 0 12px 30px rgba(126, 161, 60, 0.5) !important;
+    filter: brightness(1.06) !important;
 }
 
 .login-btn-new:active {
-    transform: translateY(-1px) scale(0.99) !important;
-    box-shadow: 0 6px 18px rgba(2, 132, 199, 0.35) !important;
+    transform: translateY(0) scale(0.99) !important;
+    box-shadow: 0 4px 14px rgba(126, 161, 60, 0.3) !important;
 }
 
 .login-form-footer {
-    margin-top: 30px;
+    margin-top: 28px;
     text-align: center;
 }
 
 .security-tag {
-    font-size: 0.78rem;
+    font-size: 0.76rem;
     color: #64748b;
     display: inline-flex;
     align-items: center;
@@ -1976,6 +2008,7 @@ select, .form-select, select.form-control {
     .login-overlay-split {
         flex-direction: column;
         overflow-y: auto;
+        justify-content: center;
     }
     .login-hero-side {
         display: none;
@@ -1984,10 +2017,11 @@ select, .form-select, select.form-control {
         flex: 1;
         width: 100%;
         min-width: 100%;
-        padding: 40px 20px;
+        padding: 40px 24px;
+        border-left: none;
     }
-    .login-mobile-logo {
-        display: block;
+    .vs-form-brand-badge {
+        display: inline-flex;
     }
 }
 
