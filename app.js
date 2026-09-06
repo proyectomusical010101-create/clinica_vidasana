@@ -887,7 +887,7 @@ function checkAuthSession() {
 
 function applyRolePermissionsUI(role) {
     const r = (role || '').toLowerCase();
-    const isAdmin = r.includes('admin') || r.includes('super');
+    const isAdmin = r.includes('admin') || r.includes('super') || r.includes('director');
     const isDoctor = r.includes('medico') || r.includes('odont') || r.includes('doctor') || r.includes('dentista') || r.includes('médico');
     const isAssistant = r.includes('asistente') || r.includes('recep');
 
@@ -1198,7 +1198,7 @@ window.navigateToTab = async function(tabName) {
     const user = getCurrentUser();
     if (user) {
         const r = (user.role || '').toLowerCase();
-        const isAdmin = r.includes('admin') || r.includes('super');
+        const isAdmin = r.includes('admin') || r.includes('super') || r.includes('director');
         const isDoctor = r.includes('medico') || r.includes('odont') || r.includes('doctor') || r.includes('dentista') || r.includes('médico');
         const roleType = isAdmin ? 'admin' : (isDoctor ? 'doctor' : 'assistant');
         const allowedTabs = {
@@ -9279,7 +9279,7 @@ async function renderSettingsView() {
     if (!user) return;
 
     const r = (user.role || '').toLowerCase();
-    const isAdmin = r.includes('admin') || r.includes('super');
+    const isAdmin = r.includes('admin') || r.includes('super') || r.includes('director');
     const isDoctor = r.includes('medico') || r.includes('odont') || r.includes('doctor') || r.includes('dentista') || r.includes('médico');
 
     const navButtons = document.querySelectorAll('.settings-nav-btn');
@@ -14948,7 +14948,7 @@ window.emptyTrash = async function() {
 window.renderAuditLogsPane = async function() {
     const u = (typeof getCurrentUser === 'function' ? getCurrentUser() : null);
     const r = (u ? u.role || '' : '').toLowerCase();
-    const isAdmin = r.includes('admin') || r.includes('super');
+    const isAdmin = r.includes('admin') || r.includes('super') || r.includes('director');
 
     const restrictionMsg = document.getElementById('audit-admin-restriction-msg');
     const mainContent = document.getElementById('audit-logs-main-content');
