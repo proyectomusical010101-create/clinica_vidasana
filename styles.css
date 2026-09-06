@@ -7,28 +7,29 @@
    LIGHT MODE SYSTEM (DEFAULT - CLEAN & BRIGHT)
    ========================================== */
 :root {
-    --bg-dark: #f8fafc;          /* Atmospheric Slate Background */
+    --bg-dark: #f5f7f4;          /* Soft Clinical Organic Tint */
     --bg-card: #ffffff;          /* Pure White Cards */
-    --bg-card-hover: #f1f5f9;
+    --bg-card-hover: #f2f5f0;
     --bg-sidebar: #ffffff;       /* Glass White Sidebar */
-    --bg-input: #f1f5f9;        /* Soft Light Input */
+    --bg-input: #f1f4ef;         /* Soft Fresh Light Input */
     --bg-viewport: #ffffff;
     
-    --border-color: #e2e8f0;     /* Delicate Grey Border */
-    --border-highlight: rgba(2, 132, 199, 0.4);
+    --border-color: #e2e8df;     /* Delicate Clean Border */
+    --border-highlight: rgba(127, 161, 60, 0.45);
     
-    --text-heading: #0f172a;     /* Deep Slate Heading */
-    --text-main: #1e293b;        /* Readable Dark Body Text */
+    --text-heading: #1e262e;     /* Deep Slate/Charcoal Heading (Matching Logo Sana) */
+    --text-main: #273440;        /* Readable Slate Body Text */
     --text-muted: #64748b;       /* Muted Grey Text */
     --text-dim: #94a3b8;
     
-    --primary-cyan: #0284c7;     /* Sky Blue Accent */
-    --primary-blue: #2563eb;     /* Royal Blue */
-    --accent-purple: #7c3aed;    /* Deep Violet */
+    --primary-cyan: #7fa13c;     /* VidaSana Bamboo Leaf Green */
+    --primary-blue: #608127;     /* Deep Olive Medical Green */
+    --primary-lime: #9ec845;     /* Fresh Lime Bamboo Accent */
+    --accent-purple: #1e262e;    /* Sleek Charcoal from Logo */
     
     --status-treated: #2563eb;   /* Azul - Tratado */
     --status-patology: #ef4444;  /* Rojo - Caries / Patología */
-    --status-proposed: #10b981;  /* Verde - Plan de tratamiento */
+    --status-proposed: #7fa13c;  /* Verde VidaSana - Plan de tratamiento */
     --status-amber: #f59e0b;     /* Naranja / Alerta */
     
     --tooth-face-bg: #f8fafc;
@@ -40,9 +41,9 @@
     --radius-sm: 8px;
     --radius-md: 14px;
     --radius-lg: 20px;
-    --shadow-soft: 0 10px 25px -5px rgba(15, 23, 42, 0.05), 0 4px 10px -2px rgba(15, 23, 42, 0.03);
-    --shadow-elevated: 0 20px 45px -10px rgba(15, 23, 42, 0.09), 0 8px 18px -4px rgba(15, 23, 42, 0.04);
-    --shadow-glow-cyan: 0 6px 22px rgba(2, 132, 199, 0.3);
+    --shadow-soft: 0 10px 25px -5px rgba(27, 36, 46, 0.05), 0 4px 10px -2px rgba(27, 36, 46, 0.03);
+    --shadow-elevated: 0 20px 45px -10px rgba(27, 36, 46, 0.09), 0 8px 18px -4px rgba(27, 36, 46, 0.04);
+    --shadow-glow-cyan: 0 6px 22px rgba(127, 161, 60, 0.32);
     
     --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
     --font-heading: 'Outfit', var(--font-sans);
@@ -90,8 +91,8 @@ body {
     font-family: var(--font-sans);
     background-color: var(--bg-dark);
     background-image: 
-        radial-gradient(circle at 12% 12%, rgba(2, 132, 199, 0.04), transparent 45%),
-        radial-gradient(circle at 88% 88%, rgba(124, 58, 237, 0.03), transparent 45%);
+        radial-gradient(circle at 12% 12%, rgba(127, 161, 60, 0.05), transparent 45%),
+        radial-gradient(circle at 88% 88%, rgba(158, 200, 69, 0.04), transparent 45%);
     background-attachment: fixed;
     color: var(--text-main);
     line-height: 1.5;
@@ -156,18 +157,19 @@ h4 { font-size: 1rem; }
 }
 
 .brand {
-    padding: 16px 18px;
+    padding: 14px 18px;
     display: flex;
     align-items: center;
-    gap: 12px;
+    justify-content: center;
     border-bottom: 1px solid var(--border-color);
     flex-shrink: 0;
-    min-height: 64px;
+    min-height: 72px;
+    background: #ffffff;
 }
 
 .brand-icon {
-    min-width: 44px;
-    height: auto;
+    width: 100%;
+    min-width: unset;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -189,7 +191,7 @@ h4 { font-size: 1rem; }
 .brand-monogram-badge {
     width: 44px;
     height: 44px;
-    background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);
+    background: linear-gradient(135deg, #7fa13c 0%, #608127 100%);
     border-radius: 12px;
     display: flex;
     align-items: center;
@@ -198,18 +200,24 @@ h4 { font-size: 1rem; }
     font-weight: 900;
     color: #ffffff;
     letter-spacing: -0.5px;
-    box-shadow: 0 4px 15px rgba(2, 132, 199, 0.35);
+    box-shadow: 0 4px 15px rgba(127, 161, 60, 0.35);
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 .clinic-logo-sidebar {
-    max-height: 52px;
-    max-width: 180px;
+    max-height: 48px;
+    max-width: 200px;
     width: auto;
-    height: auto;
     object-fit: contain;
     display: block;
+    margin: 0 auto;
+    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.04));
+    transition: transform 0.25s ease;
+}
+
+.clinic-logo-sidebar:hover {
+    transform: scale(1.02);
 }
 
 .clinic-logo-header {
@@ -268,7 +276,7 @@ h4 { font-size: 1rem; }
 }
 
 .nav-item:hover {
-    background-color: rgba(2, 132, 199, 0.06);
+    background-color: rgba(127, 161, 60, 0.08);
     color: var(--primary-cyan);
     transform: translateX(3px);
 }
@@ -279,10 +287,10 @@ h4 { font-size: 1rem; }
 }
 
 .nav-item.active {
-    background: linear-gradient(135deg, #0284c7 0%, #1d4ed8 100%) !important;
+    background: linear-gradient(135deg, #7fa13c 0%, #608127 100%) !important;
     color: #ffffff !important;
     font-weight: 700 !important;
-    box-shadow: 0 6px 20px rgba(2, 132, 199, 0.35) !important;
+    box-shadow: 0 6px 20px rgba(127, 161, 60, 0.35) !important;
     border-left: none !important;
 }
 
@@ -754,28 +762,48 @@ h4 { font-size: 1rem; }
 }
 
 .stat-card {
-    background: linear-gradient(135deg, #0284c7 0%, #1d4ed8 100%) !important;
+    background: linear-gradient(135deg, #7fa13c 0%, #5d7c25 100%) !important;
     border: 1px solid rgba(255, 255, 255, 0.28) !important;
     border-radius: 20px !important;
     padding: 24px !important;
     position: relative !important;
     overflow: hidden !important;
-    box-shadow: 0 10px 28px rgba(2, 132, 199, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+    box-shadow: 0 10px 28px rgba(127, 161, 60, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
     transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
     color: #ffffff !important;
 }
 
 .stat-card:hover {
     transform: translateY(-4px) !important;
-    box-shadow: 0 16px 36px rgba(2, 132, 199, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.45) !important;
-    filter: brightness(1.05) !important;
+    box-shadow: 0 16px 36px rgba(127, 161, 60, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.45) !important;
+    filter: brightness(1.06) !important;
 }
 
-.stat-card.border-cyan { border-top: 4px solid #ffffff !important; }
-.stat-card.border-green { border-top: 4px solid #4ade80 !important; }
-.stat-card.border-purple { border-top: 4px solid #c084fc !important; }
-.stat-card.border-red { border-top: 4px solid #f87171 !important; }
-.stat-card.border-blue { border-top: 4px solid #93c5fd !important; }
+.stat-card.border-cyan {
+    background: linear-gradient(135deg, #7fa13c 0%, #5d7c25 100%) !important;
+    border-top: 4px solid #b5de4c !important;
+    box-shadow: 0 10px 28px rgba(127, 161, 60, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+}
+.stat-card.border-green {
+    background: linear-gradient(135deg, #186b59 0%, #0e4b3e 100%) !important;
+    border-top: 4px solid #34d399 !important;
+    box-shadow: 0 10px 28px rgba(24, 107, 89, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+}
+.stat-card.border-purple {
+    background: linear-gradient(135deg, #273440 0%, #162029 100%) !important;
+    border-top: 4px solid #9ec845 !important;
+    box-shadow: 0 10px 28px rgba(22, 32, 41, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+}
+.stat-card.border-red {
+    background: linear-gradient(135deg, #87a93e 0%, #688a29 100%) !important;
+    border-top: 4px solid #d4f378 !important;
+    box-shadow: 0 10px 28px rgba(135, 169, 62, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+}
+.stat-card.border-blue {
+    background: linear-gradient(135deg, #1e7869 0%, #115549 100%) !important;
+    border-top: 4px solid #6ee7b7 !important;
+    box-shadow: 0 10px 28px rgba(30, 120, 105, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+}
 
 .stat-header {
     display: flex !important;
@@ -888,18 +916,18 @@ h4 { font-size: 1rem; }
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, #0284c7 0%, #1d4ed8 100%) !important;
+    background: linear-gradient(135deg, #7fa13c 0%, #608127 100%) !important;
     color: #ffffff !important;
     border: none !important;
     font-weight: 700 !important;
     border-radius: 12px !important;
-    box-shadow: 0 6px 20px rgba(2, 132, 199, 0.35) !important;
+    box-shadow: 0 6px 20px rgba(127, 161, 60, 0.35) !important;
     transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
 .btn-primary:hover {
     transform: translateY(-2px) !important;
-    box-shadow: 0 10px 28px rgba(2, 132, 199, 0.5) !important;
+    box-shadow: 0 10px 28px rgba(127, 161, 60, 0.5) !important;
     filter: brightness(1.08) !important;
 }
 
@@ -4293,9 +4321,9 @@ select, .form-select, select.form-control {
         width: 52px !important;
         height: 52px !important;
         border-radius: 50% !important;
-        background: linear-gradient(135deg, #06b6d4, #0891b2) !important;
+        background: linear-gradient(135deg, #7fa13c, #608127) !important;
         color: #ffffff !important;
-        box-shadow: 0 6px 18px rgba(8, 145, 178, 0.45) !important;
+        box-shadow: 0 6px 18px rgba(127, 161, 60, 0.45) !important;
         align-items: center !important;
         justify-content: center !important;
         font-size: 1.4rem !important;

@@ -314,10 +314,10 @@ function applyClinicBrandingUI(config) {
     const sideLogoContainer = document.getElementById('sidebar-brand-logo-container');
     const sideName = document.getElementById('sidebar-brand-name');
     if (sideLogoContainer) {
-        sideLogoContainer.innerHTML = `<div class="brand-monogram-badge">RN</div>`;
+        sideLogoContainer.innerHTML = `<img src="${logoUrl || 'logo-vidasana.png'}" alt="Clínica VidaSana" class="clinic-logo-sidebar">`;
     }
     if (sideName) {
-        sideName.innerHTML = `Dr. Rodrigo Navas <small style="display: block; font-size: 0.65rem; color: var(--primary-cyan); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px;">Odontología Especializada</small>`;
+        sideName.innerHTML = `Clínica VidaSana <small style="display: block; font-size: 0.65rem; color: var(--primary-cyan); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px;">Centro Médico Odontológico</small>`;
     }
 
     // 2. Mobile Top Header Brand Logo (Prominent, High-Resolution, No Superfluous User Text)
@@ -330,8 +330,8 @@ function applyClinicBrandingUI(config) {
         } else {
             mobBrandContainer.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 1.05rem; color: var(--text-main);">
-                    <i class="fa-solid fa-tooth text-cyan" style="font-size: 1.25rem;"></i>
-                    <span id="mobile-header-brand-name">${busName}</span>
+                    <img src="logo-vidasana.png" alt="Logo" style="max-height: 32px; width: auto; object-fit: contain;">
+                    <span id="mobile-header-brand-name">Clínica VidaSana</span>
                 </div>
             `;
         }

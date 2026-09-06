@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DentalCare ERP/EHR - Consultorio Odontológico Unipersonal</title>
+    <title>Clínica VidaSana - Centro Médico Odontológico</title>
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=220">
+    <link rel="stylesheet" href="styles.css?v=221">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -164,12 +164,12 @@
 
         <!-- Sidebar Navigation -->
         <aside class="sidebar">
-            <div class="brand">
-                <div class="brand-icon" id="sidebar-brand-logo-container">
-                    <div class="brand-monogram-badge">RN</div>
+            <div class="brand vs-brand-sidebar">
+                <div class="brand-icon" id="sidebar-brand-logo-container" style="width: 100%; display: flex; justify-content: center; min-width: unset;">
+                    <img src="logo-vidasana.png" alt="Clínica VidaSana" class="clinic-logo-sidebar">
                 </div>
-                <div class="brand-info">
-                    <h2 id="sidebar-brand-name">Dr. Rodrigo Navas <small style="display: block; font-size: 0.65rem; color: var(--primary-cyan); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px;">Odontología Especializada</small></h2>
+                <div class="brand-info" style="display: none;">
+                    <h2 id="sidebar-brand-name">Clínica VidaSana <small style="display: block; font-size: 0.65rem; color: var(--primary-cyan); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px;">Centro Médico Odontológico</small></h2>
                 </div>
             </div>
 
@@ -255,8 +255,8 @@
                         <i class="fa-solid fa-bars"></i>
                     </button>
                     <div class="mobile-brand-title" id="mobile-header-brand-container">
-                        <i class="fa-solid fa-tooth text-cyan"></i>
-                        <span id="mobile-header-brand-name">DentalCare Pro</span>
+                        <img src="logo-vidasana.png" alt="Clínica VidaSana" style="max-height: 32px; width: auto; object-fit: contain;">
+                        <span id="mobile-header-brand-name">Clínica VidaSana</span>
                     </div>
                 </div>
 
