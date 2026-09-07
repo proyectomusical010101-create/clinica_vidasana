@@ -1280,6 +1280,12 @@ window.navigateToTab = async function(tabName) {
         await renderSettingsView();
     } else if (tabName === 'help') {
         await renderHelpView();
+    } else if (tabName === 'specialties') {
+        if (window.ClinicalERP) window.ClinicalERP.renderSpecialties();
+    } else if (tabName === 'rooms') {
+        if (window.ClinicalERP) window.ClinicalERP.renderRooms();
+    } else if (tabName === 'payroll') {
+        if (window.ClinicalERP) window.ClinicalERP.renderPayroll();
     }
 
     // Update floating budget bubble visibility upon navigation

@@ -25,6 +25,11 @@
             await this.loadAll();
             this.renderDashboardWidgets();
             this.bindEvents();
+
+            const activeTab = document.documentElement.getAttribute('data-active-tab') || localStorage.getItem('dental_active_tab');
+            if (activeTab === 'specialties') this.renderSpecialties();
+            if (activeTab === 'rooms') this.renderRooms();
+            if (activeTab === 'payroll') this.renderPayroll();
         },
 
         bindNavigation() {
