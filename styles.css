@@ -4789,72 +4789,250 @@ select, .form-select, select.form-control {
 }
 
 /* ============================================================
-   CLÍNICA VIDASANA - MULTI-SPECIALTY ERP STYLES
+   CLÍNICA VIDASANA - WORLD-CLASS MEDICAL ERP STYLES
    ============================================================ */
-.room-card {
-    background: var(--bg-card);
-    border-radius: var(--radius-lg, 12px);
-    border: 1px solid var(--border-color);
-    padding: 16px;
+
+/* Executive Light Stat Cards (Clean, airy, modern) */
+.erp-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.erp-stat-card {
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 16px !important;
+    padding: 20px 22px !important;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    transition: transform 0.2s, box-shadow 0.2s;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.03) !important;
+    transition: all 0.25s ease !important;
+    position: relative;
+    overflow: hidden;
 }
 
-.room-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(0,0,0,0.06);
+.erp-stat-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.07) !important;
+    border-color: #cbd5e1 !important;
 }
 
-.room-card.border-green { border-top: 4px solid #10b981; }
-.room-card.border-red { border-top: 4px solid #ef4444; }
-.room-card.border-blue { border-top: 4px solid #06b6d4; }
-.room-card.border-amber { border-top: 4px solid #f59e0b; }
+.erp-stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+}
 
-.room-card-header {
+.erp-stat-card.accent-green::before { background: linear-gradient(90deg, #7fa13c, #10b981); }
+.erp-stat-card.accent-blue::before { background: linear-gradient(90deg, #0284c7, #38bdf8); }
+.erp-stat-card.accent-red::before { background: linear-gradient(90deg, #ef4444, #f87171); }
+.erp-stat-card.accent-purple::before { background: linear-gradient(90deg, #8b5cf6, #c084fc); }
+
+.erp-stat-header {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
+    align-items: center;
     margin-bottom: 12px;
 }
 
-.room-code {
-    font-size: 0.72rem;
-    color: var(--text-muted);
-    letter-spacing: 0.5px;
+.erp-stat-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #64748b;
     text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
-.room-name {
-    margin: 4px 0 0 0;
-    font-size: 1.05rem;
-    color: var(--text-main);
+.erp-stat-icon-wrap {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+}
+
+.erp-stat-icon-wrap.green { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+.erp-stat-icon-wrap.blue { background: #eff6ff; color: #0284c7; border: 1px solid #bfdbfe; }
+.erp-stat-icon-wrap.red { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+.erp-stat-icon-wrap.purple { background: #faf5ff; color: #9333ea; border: 1px solid #e9d5ff; }
+
+.erp-stat-value {
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: #0f172a;
+    line-height: 1.1;
+    margin-bottom: 6px;
+    font-family: 'Outfit', sans-serif;
+}
+
+.erp-stat-sub {
+    font-size: 0.78rem;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Split Commission Graphical Bar */
+.erp-commission-bar-container {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 170px;
+}
+
+.erp-split-bar {
+    height: 8px;
+    border-radius: 6px;
+    background: #e2e8f0;
+    display: flex;
+    overflow: hidden;
+}
+
+.erp-split-doctor {
+    background: linear-gradient(90deg, #7fa13c, #10b981);
+    height: 100%;
+    transition: width 0.3s ease;
+}
+
+.erp-split-clinic {
+    background: #0284c7;
+    height: 100%;
+    transition: width 0.3s ease;
+}
+
+.erp-split-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.74rem;
     font-weight: 700;
 }
 
-.room-card-body {
+.erp-split-labels .doc-label { color: #507119; }
+.erp-split-labels .cli-label { color: #0369a1; }
+
+/* Room Blueprint Modern Cards */
+.erp-room-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.03);
+    transition: all 0.25s ease;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    margin-bottom: 14px;
-    font-size: 0.85rem;
 }
 
-.room-info-item {
+.erp-room-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.08);
+    border-color: #cbd5e1;
+}
+
+.erp-room-card-top-bar {
+    height: 4px;
+    width: 100%;
+}
+.erp-room-card-top-bar.disponible { background: #10b981; }
+.erp-room-card-top-bar.ocupado { background: #ef4444; }
+.erp-room-card-top-bar.alquilado { background: #0284c7; }
+.erp-room-card-top-bar.mantenimiento { background: #f59e0b; }
+
+.erp-room-card-header {
+    padding: 16px 20px 12px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.erp-room-badge-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.74rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 20px;
+}
+
+.erp-room-badge-pill.disponible { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
+.erp-room-badge-pill.ocupado { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+.erp-room-badge-pill.alquilado { background: #eff6ff; color: #0284c7; border: 1px solid #bfdbfe; }
+.erp-room-badge-pill.mantenimiento { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
+
+.erp-room-badge-pill .pulse-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 6px currentColor;
+}
+
+.erp-room-card-body {
+    padding: 0 20px 16px 20px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.erp-room-rates-strip {
+    background: #f8fafc;
+    border: 1px solid #f1f5f9;
+    border-radius: 10px;
+    padding: 10px 12px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    font-size: 0.78rem;
+}
+
+.erp-room-rates-strip strong {
+    color: #0f172a;
+    font-size: 0.88rem;
+}
+
+.erp-room-tenant-box {
+    background: #ffffff;
+    border: 1px dashed #cbd5e1;
+    border-radius: 10px;
+    padding: 8px 12px;
     display: flex;
     align-items: center;
-    gap: 8px;
-    color: var(--text-main);
+    justify-content: space-between;
+    font-size: 0.82rem;
 }
 
-.room-card-actions {
+.erp-room-card-footer {
+    padding: 12px 20px;
+    background: #f8fafc;
+    border-top: 1px solid #f1f5f9;
     display: flex;
     justify-content: flex-end;
     gap: 8px;
-    border-top: 1px solid var(--border-color);
-    padding-top: 10px;
 }
+
+/* Icon Avatar for Specialties and Staff */
+.erp-circle-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    margin-right: 12px;
+    vertical-align: middle;
+}
+
 
 
 

@@ -2249,126 +2249,256 @@
 
                 <!-- VIEW: ESPECIALIDADES & COMISIONES -->
                 <section id="view-specialties" class="tab-view">
-                    <div class="view-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 24px;">
+                    <div class="view-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;">
                         <div>
-                            <h1><i class="fa-solid fa-stethoscope text-teal"></i> Especialidades & Ganancias</h1>
-                            <p class="subtitle">Gestión integral de áreas médicas y reparto porcentual de comisiones (% Médico vs % Clínica).</p>
+                            <h1 style="font-family: 'Outfit', sans-serif; font-size: 1.6rem; color: #1e293b; display: flex; align-items: center; gap: 10px; margin: 0 0 6px 0;">
+                                <i class="fa-solid fa-stethoscope" style="color: var(--primary-cyan);"></i> Especialidades & Ganancias
+                            </h1>
+                            <p class="subtitle" style="margin: 0; color: #64748b; font-size: 0.9rem;">
+                                Gestión integral de áreas médicas, comisiones porcentuales y distribución de ingresos (% Médico vs % Clínica).
+                            </p>
                         </div>
-                        <button type="button" class="btn btn-primary" onclick="window.ClinicalERP.openAddSpecialty()">
+                        <button type="button" class="btn btn-primary" onclick="window.ClinicalERP.openAddSpecialty()" style="background: linear-gradient(135deg, #7fa13c 0%, #608127 100%) !important; border: none !important; box-shadow: 0 4px 12px rgba(127, 161, 60, 0.35); font-weight: 700; border-radius: 10px; padding: 10px 20px;">
                             <i class="fa-solid fa-plus"></i> Nueva Especialidad
                         </button>
                     </div>
 
-                    <div class="card shadow-sm">
-                        <div class="card-body p-0">
-                            <div class="table-responsive">
-                                <table class="data-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Especialidad</th>
-                                            <th>Categoría / Tipo</th>
-                                            <th class="text-center">% Ganancia Médico</th>
-                                            <th class="text-center">% Ganancia Clínica</th>
-                                            <th>Estatus</th>
-                                            <th class="text-right">Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="specialties-table-body">
-                                        <!-- Cargado dinámicamente -->
-                                    </tbody>
-                                </table>
+                    <!-- Top Executive Stats -->
+                    <div class="erp-stats-grid">
+                        <div class="erp-stat-card accent-green">
+                            <div class="erp-stat-header">
+                                <span class="erp-stat-title">Especialidades Activas</span>
+                                <div class="erp-stat-icon-wrap green"><i class="fa-solid fa-heart-pulse"></i></div>
                             </div>
+                            <div class="erp-stat-value" id="spec-stat-total">13</div>
+                            <div class="erp-stat-sub"><i class="fa-solid fa-circle-check text-green"></i> Disponibles en recepción y citas</div>
+                        </div>
+
+                        <div class="erp-stat-card accent-blue">
+                            <div class="erp-stat-header">
+                                <span class="erp-stat-title">Promedio Comisión Médicos</span>
+                                <div class="erp-stat-icon-wrap blue"><i class="fa-solid fa-user-doctor"></i></div>
+                            </div>
+                            <div class="erp-stat-value text-teal" id="spec-stat-doc-avg">62%</div>
+                            <div class="erp-stat-sub">Honorarios directos por atención</div>
+                        </div>
+
+                        <div class="erp-stat-card accent-purple">
+                            <div class="erp-stat-header">
+                                <span class="erp-stat-title">Retención Media Clínica</span>
+                                <div class="erp-stat-icon-wrap purple"><i class="fa-solid fa-hospital"></i></div>
+                            </div>
+                            <div class="erp-stat-value" id="spec-stat-cli-avg" style="color: #608127;">38%</div>
+                            <div class="erp-stat-sub">Canon institucional y operatividad</div>
+                        </div>
+
+                        <div class="erp-stat-card accent-red">
+                            <div class="erp-stat-header">
+                                <span class="erp-stat-title">Departamentos Clínicos</span>
+                                <div class="erp-stat-icon-wrap red"><i class="fa-solid fa-layer-group"></i></div>
+                            </div>
+                            <div class="erp-stat-value" id="spec-stat-depts">3 Áreas</div>
+                            <div class="erp-stat-sub">Consultas, Diagnóstico y Salud Bucal</div>
+                        </div>
+                    </div>
+
+                    <!-- Filter and Search Bar -->
+                    <div class="card filter-card" style="margin-bottom: 20px;">
+                        <div class="filter-group" id="spec-filter-group">
+                            <button type="button" class="filter-btn active" onclick="window.ClinicalERP.filterSpecialties('all', this)">Todas</button>
+                            <button type="button" class="filter-btn" onclick="window.ClinicalERP.filterSpecialties('Consultas Médicas', this)">Consultas</button>
+                            <button type="button" class="filter-btn" onclick="window.ClinicalERP.filterSpecialties('Diagnóstico y Análisis', this)">Diagnóstico</button>
+                            <button type="button" class="filter-btn" onclick="window.ClinicalERP.filterSpecialties('Salud Bucal', this)">Salud Bucal</button>
+                        </div>
+                        <div class="search-box">
+                            <input type="text" id="specialties-search-input" oninput="window.ClinicalERP.searchSpecialties(this.value)" placeholder="Buscar especialidad...">
+                        </div>
+                    </div>
+
+                    <!-- Specialties Table -->
+                    <div class="card" style="border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.03);">
+                        <div class="table-responsive">
+                            <table class="table" id="specialties-table">
+                                <thead>
+                                    <tr>
+                                        <th>Especialidad Médica</th>
+                                        <th>Departamento</th>
+                                        <th style="min-width: 220px;">Distribución Ganancia (% Dr / % Clínica)</th>
+                                        <th class="text-center">Estado</th>
+                                        <th class="text-right">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="specialties-table-body">
+                                    <!-- Populated dynamically by ClinicalERP -->
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </section>
 
                 <!-- VIEW: CONSULTORIOS & ESPACIOS FÍSICOS -->
                 <section id="view-rooms" class="tab-view">
-                    <div class="view-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 24px;">
+                    <div class="view-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;">
                         <div>
-                            <h1><i class="fa-solid fa-door-open text-teal"></i> Consultorios & Áreas Clínicas</h1>
-                            <p class="subtitle">Apertura, edición, alquiler y control en tiempo real de espacios físicos (por hora, turno o canon mensual).</p>
+                            <h1 style="font-family: 'Outfit', sans-serif; font-size: 1.6rem; color: #1e293b; display: flex; align-items: center; gap: 10px; margin: 0 0 6px 0;">
+                                <i class="fa-solid fa-door-open" style="color: var(--primary-cyan);"></i> Consultorios & Áreas Clínicas
+                            </h1>
+                            <p class="subtitle" style="margin: 0; color: #64748b; font-size: 0.9rem;">
+                                Gestión de consultorios físicos, modalidades de alquiler (por hora, turno o canon mensual) y disponibilidad en tiempo real.
+                            </p>
                         </div>
-                        <button type="button" class="btn btn-primary" onclick="window.ClinicalERP.openAddRoom()">
+                        <button type="button" class="btn btn-primary" onclick="window.ClinicalERP.openAddRoom()" style="background: linear-gradient(135deg, #7fa13c 0%, #608127 100%) !important; border: none !important; box-shadow: 0 4px 12px rgba(127, 161, 60, 0.35); font-weight: 700; border-radius: 10px; padding: 10px 20px;">
                             <i class="fa-solid fa-plus"></i> Nuevo Consultorio
                         </button>
                     </div>
 
-                    <div id="rooms-cards-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px;">
-                        <!-- Cargado dinámicamente -->
+                    <!-- Room Stats Strip -->
+                    <div class="erp-stats-grid">
+                        <div class="erp-stat-card accent-blue">
+                            <div class="erp-stat-header">
+                                <span class="erp-stat-title">Total Espacios</span>
+                                <div class="erp-stat-icon-wrap blue"><i class="fa-solid fa-hospital-user"></i></div>
+                            </div>
+                            <div class="erp-stat-value" id="room-stat-total">6</div>
+                            <div class="erp-stat-sub">Capacidad operativa total</div>
+                        </div>
+
+                        <div class="erp-stat-card accent-green">
+                            <div class="erp-stat-header">
+                                <span class="erp-stat-title">Disponibles Ahora</span>
+                                <div class="erp-stat-icon-wrap green"><i class="fa-solid fa-door-open"></i></div>
+                            </div>
+                            <div class="erp-stat-value text-success" id="room-stat-disponibles">5</div>
+                            <div class="erp-stat-sub">Listos para consulta o alquiler</div>
+                        </div>
+
+                        <div class="erp-stat-card accent-purple">
+                            <div class="erp-stat-header">
+                                <span class="erp-stat-title">Alquilados / Ocupados</span>
+                                <div class="erp-stat-icon-wrap purple"><i class="fa-solid fa-user-doctor"></i></div>
+                            </div>
+                            <div class="erp-stat-value" id="room-stat-alquilados" style="color: #608127;">1</div>
+                            <div class="erp-stat-sub">Generando canon mensual o por turno</div>
+                        </div>
+
+                        <div class="erp-stat-card accent-red">
+                            <div class="erp-stat-header">
+                                <span class="erp-stat-title">Tasa de Ocupación</span>
+                                <div class="erp-stat-icon-wrap red"><i class="fa-solid fa-chart-pie"></i></div>
+                            </div>
+                            <div class="erp-stat-value text-teal" id="room-stat-ocupacion">17%</div>
+                            <div class="erp-stat-sub">Espacio físico rentabilizado</div>
+                        </div>
+                    </div>
+
+                    <!-- Filter bar for rooms -->
+                    <div class="card filter-card" style="margin-bottom: 20px;">
+                        <div class="filter-group" id="room-filter-group">
+                            <button type="button" class="filter-btn active" onclick="window.ClinicalERP.filterRooms('all', this)">Todos</button>
+                            <button type="button" class="filter-btn" onclick="window.ClinicalERP.filterRooms('Disponible', this)">Disponibles</button>
+                            <button type="button" class="filter-btn" onclick="window.ClinicalERP.filterRooms('Alquilado', this)">Alquilados</button>
+                            <button type="button" class="filter-btn" onclick="window.ClinicalERP.filterRooms('Mantenimiento', this)">Mantenimiento</button>
+                        </div>
+                        <div class="search-box">
+                            <input type="text" id="rooms-search-input" oninput="window.ClinicalERP.searchRooms(this.value)" placeholder="Buscar consultorio o equipo...">
+                        </div>
+                    </div>
+
+                    <div id="rooms-cards-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px;">
+                        <!-- Populated dynamically by ClinicalERP -->
                     </div>
                 </section>
 
                 <!-- VIEW: NÓMINA (PERSONAL FIJO Y MÉDICOS) -->
                 <section id="view-payroll" class="tab-view">
-                    <div class="view-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 24px;">
+                    <div class="view-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;">
                         <div>
-                            <h1><i class="fa-solid fa-hand-holding-dollar text-teal"></i> Nómina & Liquidación Médica</h1>
-                            <p class="subtitle">Cálculo automatizado para Personal Fijo (sueldos/bonos) y Médicos Contratados (honorarios, consultas y deducción por alquiler).</p>
+                            <h1 style="font-family: 'Outfit', sans-serif; font-size: 1.6rem; color: #1e293b; display: flex; align-items: center; gap: 10px; margin: 0 0 6px 0;">
+                                <i class="fa-solid fa-hand-holding-dollar" style="color: var(--primary-cyan);"></i> Nómina & Liquidación Médica
+                            </h1>
+                            <p class="subtitle" style="margin: 0; color: #64748b; font-size: 0.9rem;">
+                                Liquidación automatizada para Personal Fijo (sueldos/bonos) y Médicos Especialistas (honorarios por consulta con deducción de alquiler).
+                            </p>
                         </div>
-                        <button type="button" class="btn btn-primary" onclick="window.ClinicalERP.openAddPayroll()">
+                        <button type="button" class="btn btn-primary" onclick="window.ClinicalERP.openAddPayroll()" style="background: linear-gradient(135deg, #7fa13c 0%, #608127 100%) !important; border: none !important; box-shadow: 0 4px 12px rgba(127, 161, 60, 0.35); font-weight: 700; border-radius: 10px; padding: 10px 20px;">
                             <i class="fa-solid fa-plus"></i> Nueva Liquidación
                         </button>
                     </div>
 
-                    <!-- Métricas de Nómina -->
-                    <div class="stats-grid" style="margin-bottom: 24px;">
-                        <div class="stat-card border-blue">
-                            <div class="stat-header">
-                                <span>Total Nómina Fija</span>
-                                <div class="stat-icon blue"><i class="fa-solid fa-users"></i></div>
+                    <!-- Métricas de Nómina Limpias y Ejecutivas -->
+                    <div class="erp-stats-grid">
+                        <div class="erp-stat-card accent-blue">
+                            <div class="erp-stat-header">
+                                <span class="erp-stat-title">Nómina Personal Fijo</span>
+                                <div class="erp-stat-icon-wrap blue"><i class="fa-solid fa-users"></i></div>
                             </div>
-                            <h2 id="payroll-stat-fijo">$0.00</h2>
-                            <small class="text-muted">Personal Administrativo / Asistencial</small>
+                            <div class="erp-stat-value" id="payroll-stat-fijo">$0.00</div>
+                            <div class="erp-stat-sub">Sueldos base personal de planta</div>
                         </div>
-                        <div class="stat-card border-cyan">
-                            <div class="stat-header">
-                                <span>Total Honorarios Médicos</span>
-                                <div class="stat-icon cyan"><i class="fa-solid fa-user-doctor"></i></div>
+
+                        <div class="erp-stat-card accent-green">
+                            <div class="erp-stat-header">
+                                <span class="erp-stat-title">Honorarios Médicos</span>
+                                <div class="erp-stat-icon-wrap green"><i class="fa-solid fa-user-doctor"></i></div>
                             </div>
-                            <h2 id="payroll-stat-medicos">$0.00</h2>
-                            <small class="text-muted">Producción por Especialidad</small>
+                            <div class="erp-stat-value text-success" id="payroll-stat-medicos">$0.00</div>
+                            <div class="erp-stat-sub">Producción según % de especialidad</div>
                         </div>
-                        <div class="stat-card border-red">
-                            <div class="stat-header">
-                                <span>Alquileres / Deducciones</span>
-                                <div class="stat-icon red"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+
+                        <div class="erp-stat-card accent-red">
+                            <div class="erp-stat-header">
+                                <span class="erp-stat-title">Deducciones / Alquileres</span>
+                                <div class="erp-stat-icon-wrap red"><i class="fa-solid fa-file-invoice-dollar"></i></div>
                             </div>
-                            <h2 id="payroll-stat-deducciones">$0.00</h2>
-                            <small class="text-muted">Canon de consultorios deducidos</small>
+                            <div class="erp-stat-value text-danger" id="payroll-stat-deducciones">$0.00</div>
+                            <div class="erp-stat-sub">Canon de consultorios y retenciones</div>
                         </div>
-                        <div class="stat-card border-green">
-                            <div class="stat-header">
-                                <span>Total Neto a Pagar</span>
-                                <div class="stat-icon green"><i class="fa-solid fa-money-bill-wave"></i></div>
+
+                        <div class="erp-stat-card accent-purple">
+                            <div class="erp-stat-header">
+                                <span class="erp-stat-title">Total Neto a Liquidar</span>
+                                <div class="erp-stat-icon-wrap purple"><i class="fa-solid fa-money-bill-wave"></i></div>
                             </div>
-                            <h2 id="payroll-stat-neto">$0.00</h2>
-                            <small class="text-muted">Monto total liquidado del período</small>
+                            <div class="erp-stat-value" id="payroll-stat-neto" style="color: #608127;">$0.00</div>
+                            <div class="erp-stat-sub">Monto neto consolidado a pagar</div>
                         </div>
                     </div>
 
-                    <div class="card shadow-sm">
-                        <div class="card-body p-0">
-                            <div class="table-responsive">
-                                <table class="data-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Colaborador / Médico</th>
-                                            <th>Tipo de Vínculo</th>
-                                            <th>Período</th>
-                                            <th class="text-right">Sueldo / Prod.</th>
-                                            <th class="text-right">Bonos</th>
-                                            <th class="text-right">Deducciones</th>
-                                            <th class="text-right">Neto a Liquidar</th>
-                                            <th class="text-center">Estatus</th>
-                                            <th class="text-right">Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="payroll-table-body">
-                                        <!-- Cargado dinámicamente -->
-                                    </tbody>
-                                </table>
-                            </div>
+                    <!-- Filter bar for payroll -->
+                    <div class="card filter-card" style="margin-bottom: 20px;">
+                        <div class="filter-group" id="payroll-filter-group">
+                            <button type="button" class="filter-btn active" onclick="window.ClinicalERP.filterPayroll('all', this)">Todos</button>
+                            <button type="button" class="filter-btn" onclick="window.ClinicalERP.filterPayroll('personal_fijo', this)">Personal Fijo</button>
+                            <button type="button" class="filter-btn" onclick="window.ClinicalERP.filterPayroll('medico_contratado', this)">Médicos Especialistas</button>
+                            <button type="button" class="filter-btn" onclick="window.ClinicalERP.filterPayroll('pendiente', this)">Pendientes</button>
+                            <button type="button" class="filter-btn" onclick="window.ClinicalERP.filterPayroll('pagado', this)">Pagados</button>
+                        </div>
+                        <div class="search-box">
+                            <input type="text" id="payroll-search-input" oninput="window.ClinicalERP.searchPayroll(this.value)" placeholder="Buscar colaborador o médico...">
+                        </div>
+                    </div>
+
+                    <!-- Payroll Table -->
+                    <div class="card" style="border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.03);">
+                        <div class="table-responsive">
+                            <table class="table" id="payroll-table">
+                                <thead>
+                                    <tr>
+                                        <th>Colaborador / Médico</th>
+                                        <th>Tipo de Vínculo</th>
+                                        <th>Período</th>
+                                        <th class="text-right">Sueldo / Honorarios</th>
+                                        <th class="text-right">Bonificaciones</th>
+                                        <th class="text-right">Deducción Alquiler</th>
+                                        <th class="text-right">Neto a Liquidar</th>
+                                        <th class="text-center">Estado</th>
+                                        <th class="text-right">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="payroll-table-body">
+                                    <!-- Populated dynamically by ClinicalERP -->
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </section>
