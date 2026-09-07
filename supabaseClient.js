@@ -1376,6 +1376,298 @@ class SupabaseDataService {
     }
 
     // ==========================================
+    // 13. MULTI-SPECIALTY CLINIC ENGINE (VIDASANA)
+    // ==========================================
+    static _specialtiesCache = null;
+    static _specialtiesCacheTime = 0;
+
+    static async getSpecialties(forceRefresh = false) {
+        const local = JSON.parse(localStorage.getItem('vidasana_specialties')) || [];
+        if (!this.isCloudConnected()) return local;
+
+        const now = Date.now();
+        if (!forceRefresh && this._specialtiesCacheTime && (now - this._specialtiesCacheTime < 5000) && this._specialtiesCache) {
+            return this._specialtiesCache;
+        }
+
+        try {
+            const { data, error } = await supabaseClient.from('specialties').select('*').order('name', { ascending: true });
+            if (error) throw error;
+            if (data && data.length > 0) {
+                localStorage.setItem('vidasana_specialties', JSON.stringify(data));
+                this._specialtiesCache = data;
+                this._specialtiesCacheTime = Date.now();
+                return data;
+            }
+            return local;
+        } catch(err) {
+            console.warn('Supabase getSpecialties Error:', err);
+            return local;
+        }
+    }
+
+    static async saveSpecialty(spec) {
+        if (!spec.id) spec.id = 'esp-' + Date.now();
+        const local = JSON.parse(localStorage.getItem('vidasana_specialties')) || [];
+        const idx = local.findIndex(s => s.id === spec.id);
+        if (idx >= 0) local[idx] = spec; else local.push(spec);
+        localStorage.setItem('vidasana_specialties', JSON.stringify(local));
+        this._specialtiesCacheTime = 0;
+
+        if (this.isCloudConnected()) {
+            try {
+                const { error } = await supabaseClient.from('specialties').upsert(spec);
+                if (error) throw error;
+                this.notifyDataChanged('specialties', spec.id);
+            } catch(e) {
+                console.error('Supabase saveSpecialty Error:', e);
+            }
+        }
+        return spec;
+    }
+
+    static async deleteSpecialty(id) {
+        let local = JSON.parse(localStorage.getItem('vidasana_specialties')) || [];
+        local = local.filter(s => s.id !== id);
+        localStorage.setItem('vidasana_specialties', JSON.stringify(local));
+        this._specialtiesCacheTime = 0;
+
+        if (this.isCloudConnected()) {
+            try {
+                await supabaseClient.from('specialties').delete().eq('id', id);
+                this.notifyDataChanged('specialties', id);
+            } catch(e) {
+                console.error('Supabase deleteSpecialty Error:', e);
+            }
+        }
+    }
+
+    // --- CLINIC ROOMS / CONSULTORIOS ---
+    static _roomsCache = null;
+    static _roomsCacheTime = 0;
+
+    static async getClinicRooms(forceRefresh = false) {
+        const local = JSON.parse(localStorage.getItem('vidasana_rooms')) || [];
+        if (!this.isCloudConnected()) return local;
+
+        const now = Date.now();
+        if (!forceRefresh && this._roomsCacheTime && (now - this._roomsCacheTime < 5000) && this._roomsCache) {
+            return this._roomsCache;
+        }
+
+        try {
+            const { data, error } = await supabaseClient.from('clinic_rooms').select('*').order('name', { ascending: true });
+            if (error) throw error;
+            if (data && data.length > 0) {
+                localStorage.setItem('vidasana_rooms', JSON.stringify(data));
+                this._roomsCache = data;
+                this._roomsCacheTime = Date.now();
+                return data;
+            }
+            return local;
+        } catch(err) {
+            console.warn('Supabase getClinicRooms Error:', err);
+            return local;
+        }
+    }
+
+    static async saveClinicRoom(room) {
+        if (!room.id) room.id = 'room-' + Date.now();
+        const local = JSON.parse(localStorage.getItem('vidasana_rooms')) || [];
+        const idx = local.findIndex(r => r.id === room.id);
+        if (idx >= 0) local[idx] = room; else local.push(room);
+        localStorage.setItem('vidasana_rooms', JSON.stringify(local));
+        this._roomsCacheTime = 0;
+
+        if (this.isCloudConnected()) {
+            try {
+                const { error } = await supabaseClient.from('clinic_rooms').upsert(room);
+                if (error) throw error;
+                this.notifyDataChanged('rooms', room.id);
+            } catch(e) {
+                console.error('Supabase saveClinicRoom Error:', e);
+            }
+        }
+        return room;
+    }
+
+    static async deleteClinicRoom(id) {
+        let local = JSON.parse(localStorage.getItem('vidasana_rooms')) || [];
+        local = local.filter(r => r.id !== id);
+        localStorage.setItem('vidasana_rooms', JSON.stringify(local));
+        this._roomsCacheTime = 0;
+
+        if (this.isCloudConnected()) {
+            try {
+                await supabaseClient.from('clinic_rooms').delete().eq('id', id);
+                this.notifyDataChanged('rooms', id);
+            } catch(e) {
+                console.error('Supabase deleteClinicRoom Error:', e);
+            }
+        }
+    }
+
+    // --- DOCTOR SCHEDULES ---
+    static _schedulesCache = null;
+    static _schedulesCacheTime = 0;
+
+    static async getDoctorSchedules(forceRefresh = false) {
+        const local = JSON.parse(localStorage.getItem('vidasana_schedules')) || [];
+        if (!this.isCloudConnected()) return local;
+
+        const now = Date.now();
+        if (!forceRefresh && this._schedulesCacheTime && (now - this._schedulesCacheTime < 5000) && this._schedulesCache) {
+            return this._schedulesCache;
+        }
+
+        try {
+            const { data, error } = await supabaseClient.from('doctor_schedules').select('*').order('day_of_week');
+            if (error) throw error;
+            if (data && data.length > 0) {
+                localStorage.setItem('vidasana_schedules', JSON.stringify(data));
+                this._schedulesCache = data;
+                this._schedulesCacheTime = Date.now();
+                return data;
+            }
+            return local;
+        } catch(err) {
+            console.warn('Supabase getDoctorSchedules Error:', err);
+            return local;
+        }
+    }
+
+    static async saveDoctorSchedule(sched) {
+        if (!sched.id) sched.id = 'sched-' + Date.now();
+        const local = JSON.parse(localStorage.getItem('vidasana_schedules')) || [];
+        const idx = local.findIndex(s => s.id === sched.id);
+        if (idx >= 0) local[idx] = sched; else local.push(sched);
+        localStorage.setItem('vidasana_schedules', JSON.stringify(local));
+        this._schedulesCacheTime = 0;
+
+        if (this.isCloudConnected()) {
+            try {
+                const { error } = await supabaseClient.from('doctor_schedules').upsert(sched);
+                if (error) throw error;
+                this.notifyDataChanged('schedules', sched.id);
+            } catch(e) {
+                console.error('Supabase saveDoctorSchedule Error:', e);
+            }
+        }
+        return sched;
+    }
+
+    static async deleteDoctorSchedule(id) {
+        let local = JSON.parse(localStorage.getItem('vidasana_schedules')) || [];
+        local = local.filter(s => s.id !== id);
+        localStorage.setItem('vidasana_schedules', JSON.stringify(local));
+        this._schedulesCacheTime = 0;
+
+        if (this.isCloudConnected()) {
+            try {
+                await supabaseClient.from('doctor_schedules').delete().eq('id', id);
+                this.notifyDataChanged('schedules', id);
+            } catch(e) {
+                console.error('Supabase deleteDoctorSchedule Error:', e);
+            }
+        }
+    }
+
+    // --- PAYROLL / NÓMINA ---
+    static _payrollCache = null;
+    static _payrollCacheTime = 0;
+
+    static async getPayrollRecords(forceRefresh = false) {
+        const local = JSON.parse(localStorage.getItem('vidasana_payroll')) || [];
+        if (!this.isCloudConnected()) return local;
+
+        const now = Date.now();
+        if (!forceRefresh && this._payrollCacheTime && (now - this._payrollCacheTime < 5000) && this._payrollCache) {
+            return this._payrollCache;
+        }
+
+        try {
+            const { data, error } = await supabaseClient.from('payroll_records').select('*').order('created_at', { ascending: false });
+            if (error) throw error;
+            if (data && data.length > 0) {
+                localStorage.setItem('vidasana_payroll', JSON.stringify(data));
+                this._payrollCache = data;
+                this._payrollCacheTime = Date.now();
+                return data;
+            }
+            return local;
+        } catch(err) {
+            console.warn('Supabase getPayrollRecords Error:', err);
+            return local;
+        }
+    }
+
+    static async savePayrollRecord(record) {
+        if (!record.id) record.id = 'pay-' + Date.now();
+        const local = JSON.parse(localStorage.getItem('vidasana_payroll')) || [];
+        const idx = local.findIndex(p => p.id === record.id);
+        if (idx >= 0) local[idx] = record; else local.push(record);
+        localStorage.setItem('vidasana_payroll', JSON.stringify(local));
+        this._payrollCacheTime = 0;
+
+        if (this.isCloudConnected()) {
+            try {
+                const { error } = await supabaseClient.from('payroll_records').upsert(record);
+                if (error) throw error;
+                this.notifyDataChanged('payroll', record.id);
+            } catch(e) {
+                console.error('Supabase savePayrollRecord Error:', e);
+            }
+        }
+        return record;
+    }
+
+    static async deletePayrollRecord(id) {
+        let local = JSON.parse(localStorage.getItem('vidasana_payroll')) || [];
+        local = local.filter(p => p.id !== id);
+        localStorage.setItem('vidasana_payroll', JSON.stringify(local));
+        this._payrollCacheTime = 0;
+
+        if (this.isCloudConnected()) {
+            try {
+                await supabaseClient.from('payroll_records').delete().eq('id', id);
+                this.notifyDataChanged('payroll', id);
+            } catch(e) {
+                console.error('Supabase deletePayrollRecord Error:', e);
+            }
+        }
+    }
+
+    // --- CASHEA TRACKING & BIRTHDAYS ---
+    static async getCasheaInvoices() {
+        const invoices = await this.getInvoices(true);
+        return invoices.filter(inv => inv.is_cashea || (inv.paymentMethod && inv.paymentMethod.toLowerCase().includes('cashea')));
+    }
+
+    static async getBirthdayPatients() {
+        const patients = await this.getPatients(false);
+        const today = new Date();
+        const curMonth = today.getMonth() + 1;
+        const curDay = today.getDate();
+
+        return patients.map(p => {
+            if (!p.birthdate) return null;
+            const parts = p.birthdate.split('-');
+            if (parts.length < 3) return null;
+            const bMonth = parseInt(parts[1], 10);
+            const bDay = parseInt(parts[2], 10);
+            const isToday = (bMonth === curMonth && bDay === curDay);
+            const isThisMonth = (bMonth === curMonth);
+            return {
+                ...p,
+                birthMonth: bMonth,
+                birthDay: bDay,
+                isBirthdayToday: isToday,
+                isBirthdayThisMonth: isThisMonth
+            };
+        }).filter(Boolean);
+    }
+
+    // ==========================================
     // 14. UNIVERSAL MULTI-DEVICE REALTIME ENGINE
     // ==========================================
     static _realtimeChannel = null;

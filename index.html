@@ -58,6 +58,9 @@
         html[data-active-tab="inventory"] .tab-view:not(#view-inventory),
         html[data-active-tab="pricing"] .tab-view:not(#view-pricing),
         html[data-active-tab="users"] .tab-view:not(#view-users),
+        html[data-active-tab="specialties"] .tab-view:not(#view-specialties),
+        html[data-active-tab="rooms"] .tab-view:not(#view-rooms),
+        html[data-active-tab="payroll"] .tab-view:not(#view-payroll),
         html[data-active-tab="stationery"] .tab-view:not(#view-stationery),
         html[data-active-tab="settings"] .tab-view:not(#view-settings),
         html[data-active-tab="help"] .tab-view:not(#view-help) {
@@ -73,6 +76,9 @@
         html[data-active-tab="inventory"] #view-inventory,
         html[data-active-tab="pricing"] #view-pricing,
         html[data-active-tab="users"] #view-users,
+        html[data-active-tab="specialties"] #view-specialties,
+        html[data-active-tab="rooms"] #view-rooms,
+        html[data-active-tab="payroll"] #view-payroll,
         html[data-active-tab="stationery"] #view-stationery,
         html[data-active-tab="settings"] #view-settings,
         html[data-active-tab="help"] #view-help {
@@ -218,6 +224,18 @@
                 <a href="#users" class="nav-item" data-tab="users">
                     <i class="fa-solid fa-users-gear"></i>
                     <span>Usuarios / Personal</span>
+                </a>
+                <a href="#specialties" class="nav-item" data-tab="specialties">
+                    <i class="fa-solid fa-stethoscope"></i>
+                    <span>Especialidades</span>
+                </a>
+                <a href="#rooms" class="nav-item" data-tab="rooms">
+                    <i class="fa-solid fa-door-open"></i>
+                    <span>Consultorios</span>
+                </a>
+                <a href="#payroll" class="nav-item" data-tab="payroll">
+                    <i class="fa-solid fa-hand-holding-dollar"></i>
+                    <span>Nómina Médica</span>
                 </a>
                 <a href="#settings" class="nav-item" data-tab="settings">
                     <i class="fa-solid fa-gears"></i>
@@ -396,6 +414,37 @@
                                     <div id="dashboard-stock-alerts">
                                         <!-- Dynamic alerts -->
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Widgets Adicionales VidaSana: Cumpleaños, Consultorios y Cashea -->
+                    <div class="grid-2-col" style="margin-top: 20px;">
+                        <!-- Cumpleaños de Pacientes -->
+                        <div class="card">
+                            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                                <h3><i class="fa-solid fa-cake-candles text-cyan"></i> Cumpleaños de Pacientes (Este Mes)</h3>
+                                <span class="badge-tag green" style="font-size: 0.75rem;">Felicitar WhatsApp</span>
+                            </div>
+                            <div class="card-body" style="padding: 12px;">
+                                <div id="dashboard-birthdays-widget">
+                                    <!-- Populated dynamically by ClinicalERP -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Estado de Consultorios en Vivo & Cashea -->
+                        <div class="card">
+                            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                                <h3><i class="fa-solid fa-door-open text-teal"></i> Estado de Consultorios & Cashea</h3>
+                                <button type="button" class="btn btn-sm btn-outline" onclick="window.ClinicalERP.openCasheaModal()" style="border-color: #06b6d4; color: #06b6d4;">
+                                    <i class="fa-solid fa-credit-card"></i> Ver Cashea
+                                </button>
+                            </div>
+                            <div class="card-body" style="padding: 12px;">
+                                <div id="dashboard-rooms-widget">
+                                    <!-- Populated dynamically by ClinicalERP -->
                                 </div>
                             </div>
                         </div>
@@ -2195,6 +2244,129 @@
                                 </div>
                             </div>
                         </div>
+                <!-- VIEW: ESPECIALIDADES & COMISIONES -->
+                <section id="view-specialties" class="tab-view">
+                    <div class="view-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 24px;">
+                        <div>
+                            <h1><i class="fa-solid fa-stethoscope text-teal"></i> Especialidades & Ganancias</h1>
+                            <p class="subtitle">Gestión integral de áreas médicas y reparto porcentual de comisiones (% Médico vs % Clínica).</p>
+                        </div>
+                        <button type="button" class="btn btn-primary" onclick="window.ClinicalERP.openAddSpecialty()">
+                            <i class="fa-solid fa-plus"></i> Nueva Especialidad
+                        </button>
+                    </div>
+
+                    <div class="card shadow-sm">
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Especialidad</th>
+                                            <th>Categoría / Tipo</th>
+                                            <th class="text-center">% Ganancia Médico</th>
+                                            <th class="text-center">% Ganancia Clínica</th>
+                                            <th>Estatus</th>
+                                            <th class="text-right">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="specialties-table-body">
+                                        <!-- Cargado dinámicamente -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- VIEW: CONSULTORIOS & ESPACIOS FÍSICOS -->
+                <section id="view-rooms" class="tab-view">
+                    <div class="view-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 24px;">
+                        <div>
+                            <h1><i class="fa-solid fa-door-open text-teal"></i> Consultorios & Áreas Clínicas</h1>
+                            <p class="subtitle">Apertura, edición, alquiler y control en tiempo real de espacios físicos (por hora, turno o canon mensual).</p>
+                        </div>
+                        <button type="button" class="btn btn-primary" onclick="window.ClinicalERP.openAddRoom()">
+                            <i class="fa-solid fa-plus"></i> Nuevo Consultorio
+                        </button>
+                    </div>
+
+                    <div id="rooms-cards-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px;">
+                        <!-- Cargado dinámicamente -->
+                    </div>
+                </section>
+
+                <!-- VIEW: NÓMINA (PERSONAL FIJO Y MÉDICOS) -->
+                <section id="view-payroll" class="tab-view">
+                    <div class="view-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 24px;">
+                        <div>
+                            <h1><i class="fa-solid fa-hand-holding-dollar text-teal"></i> Nómina & Liquidación Médica</h1>
+                            <p class="subtitle">Cálculo automatizado para Personal Fijo (sueldos/bonos) y Médicos Contratados (honorarios, consultas y deducción por alquiler).</p>
+                        </div>
+                        <button type="button" class="btn btn-primary" onclick="window.ClinicalERP.openAddPayroll()">
+                            <i class="fa-solid fa-plus"></i> Nueva Liquidación
+                        </button>
+                    </div>
+
+                    <!-- Métricas de Nómina -->
+                    <div class="stats-grid" style="margin-bottom: 24px;">
+                        <div class="stat-card border-blue">
+                            <div class="stat-header">
+                                <span>Total Nómina Fija</span>
+                                <div class="stat-icon blue"><i class="fa-solid fa-users"></i></div>
+                            </div>
+                            <h2 id="payroll-stat-fijo">$0.00</h2>
+                            <small class="text-muted">Personal Administrativo / Asistencial</small>
+                        </div>
+                        <div class="stat-card border-cyan">
+                            <div class="stat-header">
+                                <span>Total Honorarios Médicos</span>
+                                <div class="stat-icon cyan"><i class="fa-solid fa-user-doctor"></i></div>
+                            </div>
+                            <h2 id="payroll-stat-medicos">$0.00</h2>
+                            <small class="text-muted">Producción por Especialidad</small>
+                        </div>
+                        <div class="stat-card border-red">
+                            <div class="stat-header">
+                                <span>Alquileres / Deducciones</span>
+                                <div class="stat-icon red"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+                            </div>
+                            <h2 id="payroll-stat-deducciones">$0.00</h2>
+                            <small class="text-muted">Canon de consultorios deducidos</small>
+                        </div>
+                        <div class="stat-card border-green">
+                            <div class="stat-header">
+                                <span>Total Neto a Pagar</span>
+                                <div class="stat-icon green"><i class="fa-solid fa-money-bill-wave"></i></div>
+                            </div>
+                            <h2 id="payroll-stat-neto">$0.00</h2>
+                            <small class="text-muted">Monto total liquidado del período</small>
+                        </div>
+                    </div>
+
+                    <div class="card shadow-sm">
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Colaborador / Médico</th>
+                                            <th>Tipo de Vínculo</th>
+                                            <th>Período</th>
+                                            <th class="text-right">Sueldo / Prod.</th>
+                                            <th class="text-right">Bonos</th>
+                                            <th class="text-right">Deducciones</th>
+                                            <th class="text-right">Neto a Liquidar</th>
+                                            <th class="text-center">Estatus</th>
+                                            <th class="text-right">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="payroll-table-body">
+                                        <!-- Cargado dinámicamente -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </section>
             </div>
@@ -3750,6 +3922,231 @@
         </div>
     </div>
 
+    <!-- MODAL: ESPECIALIDAD MÉDICA & COMISIONES -->
+    <div class="modal-overlay hidden" id="modal-specialty">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3 id="modal-specialty-title"><i class="fa-solid fa-stethoscope text-teal"></i> Especialidad Médica</h3>
+                <button class="modal-close" data-close-erp="modal-specialty">&times;</button>
+            </div>
+            <form id="form-specialty">
+                <div class="modal-body">
+                    <input type="hidden" id="specialty-id">
+                    <div class="form-group">
+                        <label>Nombre de la Especialidad *</label>
+                        <input type="text" id="specialty-name" class="form-control" required placeholder="Ej: Cardiología, Traumatología...">
+                    </div>
+                    <div class="form-group">
+                        <label>Categoría</label>
+                        <select id="specialty-category" class="form-control">
+                            <option value="Consulta Médica">Consulta Médica</option>
+                            <option value="Procedimiento Quirúrgico">Procedimiento Quirúrgico</option>
+                            <option value="Diagnóstico / Imágenes">Diagnóstico / Imágenes (Rayos X, Eco)</option>
+                            <option value="Laboratorio Clínico">Laboratorio Clínico</option>
+                            <option value="Odontología Especializada">Odontología Especializada</option>
+                        </select>
+                    </div>
+                    <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label>% Ganancia Médico *</label>
+                            <input type="number" id="specialty-doc-pct" class="form-control" min="0" max="100" value="60" required>
+                        </div>
+                        <div class="form-group">
+                            <label>% Ganancia Clínica *</label>
+                            <input type="number" id="specialty-cli-pct" class="form-control" min="0" max="100" value="40" required>
+                        </div>
+                    </div>
+                    <small class="text-muted mb-3 d-block"><i class="fa-solid fa-info-circle"></i> Ambos porcentajes deben sumar exactamente 100%.</small>
+                    <div class="form-group">
+                        <label>Descripción / Observaciones</label>
+                        <textarea id="specialty-desc" class="form-control" rows="2" placeholder="Detalles de la especialidad..."></textarea>
+                    </div>
+                    <div class="form-group" style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" id="specialty-active" checked style="width: auto;">
+                        <label for="specialty-active" style="margin: 0; cursor: pointer;">Especialidad Activa y Visible en Agenda</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" data-close-erp="modal-specialty">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Guardar Especialidad</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: CONSULTORIO / ÁREA FÍSICA -->
+    <div class="modal-overlay hidden" id="modal-room">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3 id="modal-room-title"><i class="fa-solid fa-door-open text-teal"></i> Consultorio / Espacio</h3>
+                <button class="modal-close" data-close-erp="modal-room">&times;</button>
+            </div>
+            <form id="form-room">
+                <div class="modal-body">
+                    <input type="hidden" id="room-id">
+                    <div class="form-row" style="display: grid; grid-template-columns: 1fr 2fr; gap: 12px;">
+                        <div class="form-group">
+                            <label>Código *</label>
+                            <input type="text" id="room-code" class="form-control" required placeholder="CONS-1">
+                        </div>
+                        <div class="form-group">
+                            <label>Nombre del Espacio *</label>
+                            <input type="text" id="room-name" class="form-control" required placeholder="Ej: Consultorio 1 - Cardiología">
+                        </div>
+                    </div>
+                    <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label>Tipo de Área</label>
+                            <select id="room-type" class="form-control">
+                                <option value="consultorio">Consultorio Médico</option>
+                                <option value="odontologia">Sillón Odontológico</option>
+                                <option value="quirofano_menor">Quirófano Menor</option>
+                                <option value="laboratorio">Área de Laboratorio</option>
+                                <option value="ecosonografia">Sala de Ecosonografía</option>
+                                <option value="rayos_x">Sala de Rayos X</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Estado Actual</label>
+                            <select id="room-status" class="form-control">
+                                <option value="disponible">Disponible</option>
+                                <option value="ocupado">En Consulta (Ocupado)</option>
+                                <option value="alquilado">Alquilado a Médico</option>
+                                <option value="mantenimiento">En Mantenimiento</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label>Modalidad de Alquiler</label>
+                            <select id="room-rental-mode" class="form-control">
+                                <option value="mensual">Canon Fijo Mensual</option>
+                                <option value="por_turno">Por Turno (Mañana/Tarde)</option>
+                                <option value="por_hora">Por Hora</option>
+                                <option value="propio">Uso Propio de Clínica</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Canon de Alquiler ($)</label>
+                            <input type="number" id="room-rental-canon" class="form-control" step="0.01" min="0" value="0">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Médico Arrendatario / Asignado</label>
+                        <input type="text" id="room-renter-name" class="form-control" placeholder="Nombre del Dr. que alquila o usa el consultorio">
+                    </div>
+                    <div class="form-group">
+                        <label>Notas de Equipamiento / Horario</label>
+                        <textarea id="room-notes" class="form-control" rows="2" placeholder="Equipos presentes, camilla, horarios acordados..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" data-close-erp="modal-room">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Guardar Consultorio</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: NÓMINA / HONORARIOS MÉDICOS -->
+    <div class="modal-overlay hidden" id="modal-payroll">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3 id="modal-payroll-title"><i class="fa-solid fa-hand-holding-dollar text-teal"></i> Liquidación de Nómina</h3>
+                <button class="modal-close" data-close-erp="modal-payroll">&times;</button>
+            </div>
+            <form id="form-payroll">
+                <div class="modal-body">
+                    <input type="hidden" id="payroll-id">
+                    <div class="form-row" style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label>Nombre del Colaborador / Doctor *</label>
+                            <input type="text" id="payroll-name" class="form-control" required placeholder="Dr. Juan Pérez / Lic. María Gómez">
+                        </div>
+                        <div class="form-group">
+                            <label>Tipo de Vínculo</label>
+                            <select id="payroll-type" class="form-control">
+                                <option value="personal_fijo">Personal Fijo (Sueldo)</option>
+                                <option value="medico_contratado">Médico Contratado (Honorarios)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label>Cargo o Especialidad</label>
+                            <input type="text" id="payroll-role" class="form-control" placeholder="Ej: Pediatra, Recepcionista, etc.">
+                        </div>
+                        <div class="form-group">
+                            <label>Período de Liquidación</label>
+                            <input type="text" id="payroll-period" class="form-control" placeholder="Mes Actual / Quincena 1">
+                        </div>
+                    </div>
+                    <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label>Sueldo Base ($)</label>
+                            <input type="number" id="payroll-base" class="form-control" step="0.01" min="0" value="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Honorarios / Producción ($)</label>
+                            <input type="number" id="payroll-prod" class="form-control" step="0.01" min="0" value="0">
+                        </div>
+                    </div>
+                    <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label>Bonos / Extras ($)</label>
+                            <input type="number" id="payroll-bonus" class="form-control" step="0.01" min="0" value="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Deducciones (Canon alquiler/anticipos) ($)</label>
+                            <input type="number" id="payroll-ded" class="form-control" step="0.01" min="0" value="0">
+                        </div>
+                    </div>
+                    <div style="background: var(--bg-main); padding: 12px 16px; border-radius: 8px; margin: 12px 0; display: flex; justify-content: space-between; align-items: center; border: 1px dashed var(--primary-cyan);">
+                        <strong style="color: var(--text-main);">Neto a Liquidar:</strong>
+                        <h3 id="payroll-net-display" style="margin: 0; color: #7fa13c; font-weight: 800;">$0.00</h3>
+                    </div>
+                    <div class="form-group">
+                        <label>Estatus del Pago</label>
+                        <select id="payroll-status" class="form-control">
+                            <option value="pendiente">Pendiente por Pagar</option>
+                            <option value="aprobado">Aprobado para Pago</option>
+                            <option value="pagado">Pagado / Liquidado</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Observaciones</label>
+                        <textarea id="payroll-notes" class="form-control" rows="2" placeholder="Detalles del cálculo, comisiones aplicadas..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" data-close-erp="modal-payroll">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Guardar Liquidación</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: SEGUIMIENTO CASHEA / CRÉDITO -->
+    <div class="modal-overlay hidden" id="modal-cashea-tracker">
+        <div class="modal-dialog modal-lg" style="max-width: 720px;">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-credit-card text-teal"></i> Seguimiento Cashea & Financiamiento a Crédito</h3>
+                <button class="modal-close" data-close-erp="modal-cashea-tracker">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 18px;">
+                <p class="text-muted" style="margin-top: 0; font-size: 0.88rem;">
+                    Monitoreo de pacientes con financiamiento en cuotas (Cashea o crédito interno). Envíe recordatorios directos por WhatsApp con 1 clic.
+                </p>
+                <div id="cashea-list-container" style="max-height: 480px; overflow-y: auto;">
+                    <!-- Cargado dinámicamente -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-close-erp="modal-cashea-tracker">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Application JavaScript Bundles -->
     <script src="seededData.js?v=251"></script>
     <script src="supabaseClient.js?v=251"></script>
@@ -3758,6 +4155,7 @@
     <script src="whatsapp.js?v=251"></script>
     <script src="kardex.js?v=251"></script>
     <script src="app.js?v=251"></script>
+    <script src="clinicalERP.js?v=251"></script>
     <script src="tutorial.js?v=251"></script>
 </body>
 </html>

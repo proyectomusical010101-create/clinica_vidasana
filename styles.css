@@ -4788,4 +4788,73 @@ select, .form-select, select.form-control {
     }
 }
 
+/* ============================================================
+   CLÍNICA VIDASANA - MULTI-SPECIALTY ERP STYLES
+   ============================================================ */
+.room-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg, 12px);
+    border: 1px solid var(--border-color);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.room-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.06);
+}
+
+.room-card.border-green { border-top: 4px solid #10b981; }
+.room-card.border-red { border-top: 4px solid #ef4444; }
+.room-card.border-blue { border-top: 4px solid #06b6d4; }
+.room-card.border-amber { border-top: 4px solid #f59e0b; }
+
+.room-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+}
+
+.room-code {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.room-name {
+    margin: 4px 0 0 0;
+    font-size: 1.05rem;
+    color: var(--text-main);
+    font-weight: 700;
+}
+
+.room-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 14px;
+    font-size: 0.85rem;
+}
+
+.room-info-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-main);
+}
+
+.room-card-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    border-top: 1px solid var(--border-color);
+    padding-top: 10px;
+}
+
+
 

@@ -906,12 +906,15 @@ function applyRolePermissionsUI(role) {
         finance: '.nav-item[data-tab="finance"]',
         stationery: '.nav-item[data-tab="stationery"]',
         settings: '.nav-item[data-tab="settings"]',
-        help: '.nav-item[data-tab="help"]'
+        help: '.nav-item[data-tab="help"]',
+        specialties: '.nav-item[data-tab="specialties"]',
+        rooms: '.nav-item[data-tab="rooms"]',
+        payroll: '.nav-item[data-tab="payroll"]'
     };
 
     const permissions = {
-        admin: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help'],
-        doctor: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'pricing', 'settings', 'help'],
+        admin: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll'],
+        doctor: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'pricing', 'settings', 'help', 'specialties', 'rooms'],
         assistant: ['dashboard', 'patients', 'agenda', 'billing', 'finance', 'pricing', 'settings', 'help']
     };
 
@@ -1202,8 +1205,8 @@ window.navigateToTab = async function(tabName) {
         const isDoctor = r.includes('medico') || r.includes('odont') || r.includes('doctor') || r.includes('dentista') || r.includes('médico');
         const roleType = isAdmin ? 'admin' : (isDoctor ? 'doctor' : 'assistant');
         const allowedTabs = {
-            admin: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help'],
-            doctor: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'pricing', 'settings', 'help'],
+            admin: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll'],
+            doctor: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'pricing', 'settings', 'help', 'specialties', 'rooms'],
             assistant: ['dashboard', 'patients', 'agenda', 'billing', 'finance', 'pricing', 'settings', 'help']
         }[roleType] || ['dashboard', 'help'];
 
