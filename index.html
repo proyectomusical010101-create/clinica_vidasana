@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=263">
+    <link rel="stylesheet" href="styles.css?v=264">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -5602,7 +5602,7 @@
                     </h4>
                     <input type="hidden" id="tag-form-id" value="">
                     
-                    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 14px; margin-bottom: 12px;">
+                    <div class="tag-form-grid-1">
                         <div>
                             <label style="font-size: 0.84rem; font-weight: 600; color: #334155; display: block; margin-bottom: 4px;">Nombre del Convenio / Etiqueta *</label>
                             <input type="text" id="tag-form-name" class="form-control" placeholder="Ej: Convenio Empresas Polar, Seguro Mercantil..." style="height: 38px; border-radius: 8px; border: 1px solid var(--border-color); background: #fff; width: 100%; box-sizing: border-box; font-size: 0.9rem;">
@@ -5623,7 +5623,7 @@
                         </div>
                     </div>
 
-                    <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 14px; margin-bottom: 12px;">
+                    <div class="tag-form-grid-2">
                         <div>
                             <label style="font-size: 0.84rem; font-weight: 600; color: #334155; display: block; margin-bottom: 4px;">Regla Económica / Comercial *</label>
                             <select id="tag-form-rule-type" class="form-control" onchange="window.onTagRuleTypeChange()" style="height: 38px; border-radius: 8px; border: 1px solid var(--border-color); background: #fff; width: 100%; box-sizing: border-box; font-size: 0.88rem; cursor: pointer;">
@@ -5898,7 +5898,7 @@
             <!-- Modal Body: 2 Columns (Services Selection & Checkout) -->
             <div class="modal-body" style="padding: 20px 24px; overflow-y: auto; flex: 1; position: relative;">
                 
-                <div style="display: grid; grid-template-columns: 1.25fr 0.95fr; gap: 24px;" class="direct-sale-grid">
+                <div class="direct-sale-grid">
                     
                     <!-- LEFT COLUMN: Patient & Services -->
                     <div style="display: flex; flex-direction: column; gap: 16px;">
@@ -5924,7 +5924,7 @@
                                 <i class="fa-solid fa-stethoscope text-cyan"></i> 2. Especialidad y Servicios a Vender
                             </label>
 
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                            <div class="ds-specialty-row" style="margin-bottom: 10px;">
                                 <div>
                                     <label style="font-size: 0.78rem; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Especialidad / Área:</label>
                                     <select id="ds-specialty-select" class="form-control" onchange="window.onDirectSaleSpecialtyChange(this.value)" style="height: 38px; border-radius: 6px; font-size: 0.85rem;">
@@ -5945,7 +5945,7 @@
                             </div>
 
                             <!-- Inline Service Options: Qty, Price, Discount -->
-                            <div style="display: grid; grid-template-columns: 80px 1fr 90px auto; gap: 10px; align-items: flex-end;">
+                            <div class="ds-service-input-row">
                                 <div>
                                     <label style="font-size: 0.75rem; font-weight: 600; color: #64748b; display: block; margin-bottom: 4px;">Cant.</label>
                                     <input type="number" id="ds-item-qty" class="form-control" min="1" value="1" style="height: 36px; border-radius: 6px; font-size: 0.85rem; text-align: center;">
@@ -5972,7 +5972,7 @@
                                 <span><i class="fa-solid fa-cart-shopping"></i> Servicios en esta Venta (<span id="ds-items-count">0</span>)</span>
                                 <small class="text-muted">Calculado con tasa oficial BCV</small>
                             </div>
-                            <div style="max-height: 230px; overflow-y: auto;">
+                            <div class="ds-table-container">
                                 <table class="table table-compact" style="width: 100%; margin: 0;">
                                     <thead style="position: sticky; top: 0; background: var(--bg-card); z-index: 1;">
                                         <tr style="font-size: 0.78rem; text-transform: uppercase;">
@@ -6020,7 +6020,7 @@
                         </div>
 
                         <!-- Professional & Assistant Selectors -->
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div class="ds-staff-row">
                             <div>
                                 <label style="font-size: 0.78rem; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Doctor / Especialista *</label>
                                 <select id="ds-doctor-select" class="form-control" style="height: 36px; border-radius: 6px; font-size: 0.82rem;">
@@ -6052,7 +6052,7 @@
                         <!-- Split Payment Details (Hidden unless 'split') -->
                         <div id="ds-split-container" style="display: none; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px;">
                             <div style="font-size: 0.78rem; font-weight: 700; color: #334155; margin-bottom: 6px;">Distribución Mixta ($ USD):</div>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                            <div class="ds-split-grid">
                                 <div><small>Pago Móvil ($):</small><input type="number" id="ds-split-pm" class="form-control btn-xs" value="0" min="0" step="0.01" oninput="window.onDirectSaleSplitChange()"></div>
                                 <div><small>Efectivo ($):</small><input type="number" id="ds-split-cash" class="form-control btn-xs" value="0" min="0" step="0.01" oninput="window.onDirectSaleSplitChange()"></div>
                                 <div><small>Zelle ($):</small><input type="number" id="ds-split-zelle" class="form-control btn-xs" value="0" min="0" step="0.01" oninput="window.onDirectSaleSplitChange()"></div>
@@ -6092,7 +6092,7 @@
                                 </div>
                             </div>
 
-                            <div id="ds-cashea-initial-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                            <div id="ds-cashea-initial-row" class="ds-cashea-initial-row">
                                 <div>
                                     <label style="font-size: 0.74rem; font-weight: 700; color: #0369a1; display: block; margin-bottom: 2px;">Inicial Pagada Hoy ($):</label>
                                     <input type="number" id="ds-cashea-initial-input" class="form-control btn-xs" value="0.00" min="0" step="0.01" style="height: 30px; font-weight: 700;" oninput="window.onDirectSaleCasheaInitialChange(this.value)">
@@ -6483,14 +6483,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=263"></script>
-    <script src="supabaseClient.js?v=263"></script>
-    <script src="odontogram.js?v=263"></script>
-    <script src="signature.js?v=263"></script>
-    <script src="whatsapp.js?v=263"></script>
-    <script src="kardex.js?v=263"></script>
-    <script src="app.js?v=263"></script>
-    <script src="clinicalERP.js?v=263"></script>
-    <script src="tutorial.js?v=263"></script>
+    <script src="seededData.js?v=264"></script>
+    <script src="supabaseClient.js?v=264"></script>
+    <script src="odontogram.js?v=264"></script>
+    <script src="signature.js?v=264"></script>
+    <script src="whatsapp.js?v=264"></script>
+    <script src="kardex.js?v=264"></script>
+    <script src="app.js?v=264"></script>
+    <script src="clinicalERP.js?v=264"></script>
+    <script src="tutorial.js?v=264"></script>
 </body>
 </html>

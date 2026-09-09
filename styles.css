@@ -5043,6 +5043,175 @@ select, .form-select, select.form-control {
     vertical-align: middle;
 }
 
+/* =========================================================
+   ERP ACTION MODALS RESPONSIVE SUITE
+   (Direct Sale, Tags/Convenios, Birthdays, Cashflow)
+   ========================================================= */
+
+#modal-direct-sale .modal-dialog,
+#modal-manage-tags .modal-dialog,
+#modal-birthdays-hub .modal-dialog,
+#modal-cf-area-details .modal-dialog {
+    box-sizing: border-box !important;
+    max-width: 1040px;
+    width: 95vw;
+}
+
+#modal-direct-sale .modal-body,
+#modal-manage-tags .modal-body,
+#modal-birthdays-hub .modal-body,
+#modal-cf-area-details .modal-body {
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+}
+
+/* Direct Sale 2-Column Responsive Grid */
+.direct-sale-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.95fr);
+    gap: 20px;
+    width: 100%;
+    box-sizing: border-box;
+    align-items: start;
+}
+
+.direct-sale-grid > div {
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+}
+
+.ds-specialty-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.ds-service-input-row {
+    display: grid;
+    grid-template-columns: 75px minmax(0, 1fr) 85px auto;
+    gap: 10px;
+    align-items: flex-end;
+}
+
+.ds-staff-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.ds-split-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.ds-cashea-initial-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.ds-table-container {
+    width: 100%;
+    max-height: 240px;
+    overflow-y: auto;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.tag-form-grid-1 {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 14px;
+    margin-bottom: 12px;
+}
+
+.tag-form-grid-2 {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr;
+    gap: 14px;
+    margin-bottom: 12px;
+}
+
+/* Breakpoint: Tablets and Narrow Desktops / Laptops (<= 1024px) */
+@media (max-width: 1024px) {
+    .direct-sale-grid {
+        grid-template-columns: 1fr !important;
+        gap: 18px !important;
+    }
+
+    #modal-direct-sale .modal-dialog {
+        max-width: 760px !important;
+        width: 95vw !important;
+    }
+}
+
+/* Breakpoint: Mobile Phones (<= 640px) */
+@media (max-width: 640px) {
+    .ds-specialty-row {
+        grid-template-columns: 1fr !important;
+        gap: 8px !important;
+    }
+
+    .ds-service-input-row {
+        grid-template-columns: 1fr 1fr 1fr !important;
+        gap: 8px !important;
+    }
+
+    .ds-service-input-row button {
+        grid-column: span 3 !important;
+        width: 100% !important;
+        justify-content: center !important;
+        margin-top: 4px;
+        height: 38px !important;
+    }
+
+    .ds-staff-row {
+        grid-template-columns: 1fr !important;
+        gap: 8px !important;
+    }
+
+    .ds-split-grid {
+        grid-template-columns: 1fr !important;
+        gap: 8px !important;
+    }
+
+    .ds-cashea-initial-row {
+        grid-template-columns: 1fr !important;
+        gap: 8px !important;
+    }
+
+    .tag-form-grid-1,
+    .tag-form-grid-2 {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+    }
+
+    #modal-direct-sale .modal-header,
+    #modal-manage-tags .modal-header,
+    #modal-birthdays-hub .modal-header {
+        padding: 12px 14px !important;
+    }
+
+    #modal-direct-sale .modal-header h3,
+    #modal-manage-tags .modal-header h3,
+    #modal-birthdays-hub .modal-header h3 {
+        font-size: 1.02rem !important;
+    }
+
+    #modal-direct-sale .modal-body,
+    #modal-manage-tags .modal-body,
+    #modal-birthdays-hub .modal-body {
+        padding: 12px 12px 24px !important;
+    }
+
+    .direct-sale-grid {
+        gap: 14px !important;
+    }
+}
+
+
 
 
 
