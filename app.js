@@ -15949,72 +15949,226 @@ window.processCasheaReconciliation = async function(e) {
     }
 };
 
+window.cashFlowClinicalTransactions = [];
+window.currentCFArea = 'Odontología';
+window.currentCFAreaPeriod = 'today';
+
+function detectClinicalArea(rawArea, concept = '') {
+    const str = ((rawArea || '') + ' ' + (concept || '')).toLowerCase();
+    if (str.includes('odont') || str.includes('dent') || str.includes('endod') || str.includes('ortod') || str.includes('period') || str.includes('implante') || str.includes('resina') || str.includes('muela') || str.includes('profilaxis') || str.includes('diente') || str.includes('cirugía bucal')) return 'Odontología';
+    if (str.includes('lab') || str.includes('perfil') || str.includes('examen') || str.includes('hematolog') || str.includes('orina') || str.includes('heces') || str.includes('química')) return 'Laboratorio';
+    if (str.includes('rayos') || str.includes('rx') || str.includes('panorám') || str.includes('periapical') || str.includes('imagen') || str.includes('ecograf') || str.includes('tomograf')) return 'Rayos X e Imagen';
+    if (str.includes('cardio') || str.includes('electro') || str.includes('holter') || str.includes('tensión')) return 'Cardiología';
+    if (str.includes('gineco') || str.includes('obstet') || str.includes('citolog') || str.includes('prenatal')) return 'Ginecología';
+    if (str.includes('pediatr') || str.includes('niño') || str.includes('vacuna')) return 'Pediatría';
+    if (str.includes('traumat') || str.includes('ortop') || str.includes('yeso')) return 'Traumatología';
+    if (str.includes('oftalm') || str.includes('vista') || str.includes('ojo')) return 'Oftalmología';
+    return rawArea && rawArea.trim() && rawArea !== 'General' ? rawArea.trim() : 'Medicina General';
+}
+
+function getAreaIconInfo(areaName) {
+    switch (areaName) {
+        case 'Odontología': return { icon: 'fa-tooth', color: '#0891b2', bg: 'rgba(8, 145, 178, 0.1)' };
+        case 'Medicina General': return { icon: 'fa-user-doctor', color: '#10b981', bg: 'rgba(16, 185, 129, 0.1)' };
+        case 'Laboratorio': return { icon: 'fa-flask-vial', color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.1)' };
+        case 'Rayos X e Imagen': return { icon: 'fa-x-ray', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)' };
+        case 'Cardiología': return { icon: 'fa-heart-pulse', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.1)' };
+        case 'Ginecología': return { icon: 'fa-person-pregnant', color: '#ec4899', bg: 'rgba(236, 72, 153, 0.1)' };
+        case 'Pediatría': return { icon: 'fa-baby', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)' };
+        default: return { icon: 'fa-hospital', color: '#64748b', bg: 'rgba(100, 116, 139, 0.1)' };
+    }
+}
+
 async function renderCashFlow() {
     const tbody = document.getElementById('finance-cashflow-tbody');
     if (!tbody) return;
     tbody.innerHTML = '';
 
     const patients = await SupabaseDataService.getPatients();
+    const invoices = await SupabaseDataService.getInvoices();
     const bills = await SupabaseDataService.getProviderBills();
+    const rate = getExchangeRate();
 
     let inflows = 0;
     let outflows = 0;
     let transactions = [];
+    window.cashFlowClinicalTransactions = [];
 
     const methodTotals = {
         'pagomovil': 0,
         'cash': 0,
         'zelle': 0,
+        'pos': 0,
         'binance': 0,
-        'punto': 0
+        'cashea': 0
     };
 
+    const processedDocKeys = new Set();
+
+    // 1. Process Patient Payments Ledger
     patients.forEach(p => {
         (p.payments || []).forEach(pay => {
             if (pay.paidUSD > 0) {
                 inflows += pay.paidUSD;
-                
-                // Map and track breakdown totals
-                const m = pay.method ? pay.method.toLowerCase() : 'cash';
+                const uniqueKey = `${p.id}_${pay.id || pay.reference || pay.concept}_${pay.date}`;
+                processedDocKeys.add(uniqueKey);
+                if (pay.id) processedDocKeys.add(pay.id);
+                if (pay.docId) processedDocKeys.add(pay.docId);
+
+                const m = (pay.method || '').toLowerCase();
+                let cleanMethod = 'cash';
+
                 if (m === 'split' && pay.splitPayments) {
                     for (const sm in pay.splitPayments) {
                         const subAmt = parseFloat(pay.splitPayments[sm]) || 0;
                         const cleanSm = sm.toLowerCase();
                         if (methodTotals[cleanSm] !== undefined) {
                             methodTotals[cleanSm] += subAmt;
+                        } else if (cleanSm.includes('punto') || cleanSm.includes('pos')) {
+                            methodTotals['pos'] += subAmt;
+                        } else if (cleanSm.includes('cashea')) {
+                            methodTotals['cashea'] += subAmt;
                         } else {
                             methodTotals['cash'] += subAmt;
                         }
                     }
-                } else if (methodTotals[m] !== undefined) {
-                    methodTotals[m] += pay.paidUSD;
+                    cleanMethod = 'split';
+                } else if (m.includes('cashea')) {
+                    methodTotals['cashea'] += pay.paidUSD;
+                    cleanMethod = 'cashea';
+                } else if (m.includes('punto') || m.includes('pos') || m.includes('tarjeta') || m.includes('debito') || m.includes('débito')) {
+                    methodTotals['pos'] += pay.paidUSD;
+                    cleanMethod = 'pos';
+                } else if (m.includes('pago') || m.includes('movil') || m.includes('móvil') || m.includes('bs') || m.includes('transferencia')) {
+                    methodTotals['pagomovil'] += pay.paidUSD;
+                    cleanMethod = 'pagomovil';
+                } else if (m.includes('zelle')) {
+                    methodTotals['zelle'] += pay.paidUSD;
+                    cleanMethod = 'zelle';
+                } else if (m.includes('binance') || m.includes('usdt')) {
+                    methodTotals['binance'] += pay.paidUSD;
+                    cleanMethod = 'binance';
                 } else {
-                    // Backwards compatibility mapping for old records
-                    if (m.includes('dólar') || m.includes('usd') || m.includes('efectivo') || m === 'dólares') {
-                        methodTotals['cash'] += pay.paidUSD;
-                    } else if (m.includes('bs') || m.includes('pago') || m.includes('transferencia')) {
-                        methodTotals['pagomovil'] += pay.paidUSD;
-                    } else if (m.includes('zelle')) {
-                        methodTotals['zelle'] += pay.paidUSD;
-                    } else if (m.includes('binance')) {
-                        methodTotals['binance'] += pay.paidUSD;
-                    } else {
-                        methodTotals['cash'] += pay.paidUSD;
+                    methodTotals['cash'] += pay.paidUSD;
+                    cleanMethod = 'cash';
+                }
+
+                // Match with invoice or patient sessions to determine area and doctor
+                let matchedArea = pay.specialty || '';
+                let matchedDoctor = pay.doctor || pay.specialist || '';
+                
+                if (!matchedArea || !matchedDoctor) {
+                    const matchInv = invoices.find(inv => String(inv.id) === String(pay.id) || String(inv.id) === String(pay.docId));
+                    if (matchInv) {
+                        matchedArea = matchedArea || matchInv.specialty || matchInv.category || '';
+                        matchedDoctor = matchedDoctor || matchInv.doctor || '';
                     }
                 }
 
+                if (!matchedDoctor && p.sessions && p.sessions.length > 0) {
+                    matchedDoctor = p.sessions[p.sessions.length - 1].specialist || p.sessions[p.sessions.length - 1].doctor || '';
+                }
+
+                const finalArea = detectClinicalArea(matchedArea, pay.concept);
+                const finalDoctor = matchedDoctor || 'Dr. Médico Tratante';
+
+                const clinicalEntry = {
+                    id: pay.id || pay.docId || `REC-${Date.now().toString().slice(-4)}`,
+                    date: (pay.date || '').split('T')[0] || new Date().toISOString().split('T')[0],
+                    patientId: p.id,
+                    patientName: p.fullname,
+                    area: finalArea,
+                    doctor: finalDoctor,
+                    concept: pay.concept || 'Atención en Consulta',
+                    method: pay.method ? getPaymentMethodLabel(pay.method) : 'Cash (Efectivo)',
+                    rawMethod: cleanMethod,
+                    amountUSD: pay.paidUSD,
+                    amountBs: pay.paidUSD * rate
+                };
+
+                window.cashFlowClinicalTransactions.push(clinicalEntry);
+
                 transactions.push({
-                    date: pay.date,
+                    date: clinicalEntry.date,
                     concept: `Abono de Paciente: ${p.fullname} (${pay.concept})`,
                     type: 'Ingreso',
-                    method: pay.method ? getPaymentMethodLabel(pay.method) : 'Cash (Efectivo)',
+                    method: clinicalEntry.method,
                     amount: pay.paidUSD
                 });
             }
         });
     });
 
-    // Account Transfers (Traslados entre cuentas)
+    // 2. Include any paid invoices not already counted in patient ledger
+    invoices.forEach(inv => {
+        const invPaid = parseFloat(inv.paidRef || 0);
+        if (invPaid > 0 && !processedDocKeys.has(inv.id)) {
+            inflows += invPaid;
+            processedDocKeys.add(inv.id);
+
+            const m = (inv.paymentMethod || '').toLowerCase();
+            let cleanMethod = 'cash';
+
+            if (inv.is_cashea || (inv.casheaDetails && inv.casheaDetails.initialPaidUSD > 0)) {
+                methodTotals['cashea'] += invPaid;
+                cleanMethod = 'cashea';
+            } else if (inv.splitDetails) {
+                for (const sm in inv.splitDetails) {
+                    const subAmt = parseFloat(inv.splitDetails[sm]) || 0;
+                    const cleanSm = sm.toLowerCase();
+                    if (methodTotals[cleanSm] !== undefined) methodTotals[cleanSm] += subAmt;
+                    else if (cleanSm.includes('pos') || cleanSm.includes('punto')) methodTotals['pos'] += subAmt;
+                    else if (cleanSm.includes('cashea')) methodTotals['cashea'] += subAmt;
+                    else methodTotals['cash'] += subAmt;
+                }
+                cleanMethod = 'split';
+            } else if (m.includes('pos') || m.includes('punto')) {
+                methodTotals['pos'] += invPaid;
+                cleanMethod = 'pos';
+            } else if (m.includes('pago') || m.includes('movil') || m.includes('móvil') || m.includes('bs')) {
+                methodTotals['pagomovil'] += invPaid;
+                cleanMethod = 'pagomovil';
+            } else if (m.includes('zelle')) {
+                methodTotals['zelle'] += invPaid;
+                cleanMethod = 'zelle';
+            } else if (m.includes('binance') || m.includes('usdt')) {
+                methodTotals['binance'] += invPaid;
+                cleanMethod = 'binance';
+            } else {
+                methodTotals['cash'] += invPaid;
+                cleanMethod = 'cash';
+            }
+
+            const finalArea = detectClinicalArea(inv.specialty || inv.category || '', (inv.items || []).map(i => i.name).join(' '));
+            const finalDoctor = inv.doctor || 'Dr. Médico Tratante';
+
+            const clinicalEntry = {
+                id: inv.id,
+                date: (inv.invoiceDate || '').split('T')[0] || new Date().toISOString().split('T')[0],
+                patientId: inv.patientId,
+                patientName: inv.patientName || 'Paciente',
+                area: finalArea,
+                doctor: finalDoctor,
+                concept: (inv.items || []).map(i => i.name).join(', ') || 'Venta de Servicios',
+                method: inv.paymentMethod ? getPaymentMethodLabel(inv.paymentMethod) : 'Cash (Efectivo)',
+                rawMethod: cleanMethod,
+                amountUSD: invPaid,
+                amountBs: invPaid * rate
+            };
+
+            window.cashFlowClinicalTransactions.push(clinicalEntry);
+
+            transactions.push({
+                date: clinicalEntry.date,
+                concept: `Factura: ${clinicalEntry.patientName} (${clinicalEntry.concept})`,
+                type: 'Ingreso',
+                method: clinicalEntry.method,
+                amount: invPaid
+            });
+        }
+    });
+
+    // 3. Account Transfers (Traslados entre cuentas)
     const transfers = JSON.parse(localStorage.getItem('dental_account_transfers')) || [];
     transfers.forEach(t => {
         const fromM = (t.fromAccount || '').toLowerCase();
@@ -16040,6 +16194,7 @@ async function renderCashFlow() {
         });
     });
 
+    // 4. Provider Bills Outflows
     bills.forEach(bill => {
         if (bill.status === 'Pagado') {
             outflows += bill.amount;
@@ -16055,38 +16210,51 @@ async function renderCashFlow() {
 
     transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
 
+    // Update Top 3 KPIs
     document.getElementById('cf-total-inflows').innerText = `$${inflows.toFixed(2)}`;
     document.getElementById('cf-total-outflows').innerText = `$${outflows.toFixed(2)}`;
-    
-    // Update payment method breakdown display cards
-    if (document.getElementById('cf-total-pagomovil')) {
-        document.getElementById('cf-total-pagomovil').innerText = `$${methodTotals['pagomovil'].toFixed(2)}`;
-        document.getElementById('cf-total-cash').innerText = `$${methodTotals['cash'].toFixed(2)}`;
-        document.getElementById('cf-total-zelle').innerText = `$${methodTotals['zelle'].toFixed(2)}`;
-        document.getElementById('cf-total-binance').innerText = `$${methodTotals['binance'].toFixed(2)}`;
-    }
-    
     const netBalance = inflows - outflows;
     document.getElementById('cf-net-balance').innerText = `$${netBalance.toFixed(2)}`;
-    
+
     const balanceStatus = document.getElementById('cf-balance-status');
-    if (netBalance >= 0) {
-        balanceStatus.className = 'trend up';
-        balanceStatus.innerHTML = '<i class="fa-solid fa-arrow-trend-up"></i> Balance Neto Positivo';
-    } else {
-        balanceStatus.className = 'trend down';
-        balanceStatus.innerHTML = '<i class="fa-solid fa-arrow-trend-down"></i> Balance Neto Negativo';
+    if (balanceStatus) {
+        if (netBalance >= 0) {
+            balanceStatus.className = 'trend up';
+            balanceStatus.innerHTML = '<i class="fa-solid fa-arrow-trend-up"></i> Balance Neto Positivo';
+        } else {
+            balanceStatus.className = 'trend down';
+            balanceStatus.innerHTML = '<i class="fa-solid fa-arrow-trend-down"></i> Balance Neto Negativo';
+        }
     }
 
-    document.getElementById('cf-inflows-details').innerText = `${transactions.filter(t => t.type === 'Ingreso').length} abonos recibidos`;
+    document.getElementById('cf-inflows-details').innerText = `${window.cashFlowClinicalTransactions.length} ingresos registrados`;
     document.getElementById('cf-outflows-details').innerText = `${bills.filter(b => b.status === 'Pagado').length} facturas liquidadas`;
 
+    // 5. Update High-Contrast Executive Payment Methods Breakdown Grid
+    const updateMethodCard = (usdId, bsId, usdVal) => {
+        const elUsd = document.getElementById(usdId);
+        const elBs = document.getElementById(bsId);
+        if (elUsd) elUsd.innerText = `$${usdVal.toFixed(2)}`;
+        if (elBs) elBs.innerText = `Bs. ${(usdVal * rate).toFixed(2)}`;
+    };
+
+    updateMethodCard('cf-total-pagomovil', 'cf-bs-pagomovil', methodTotals['pagomovil']);
+    updateMethodCard('cf-total-cash', 'cf-bs-cash', methodTotals['cash']);
+    updateMethodCard('cf-total-zelle', 'cf-bs-zelle', methodTotals['zelle']);
+    updateMethodCard('cf-total-pos', 'cf-bs-pos', methodTotals['pos']);
+    updateMethodCard('cf-total-binance', 'cf-bs-binance', methodTotals['binance']);
+    updateMethodCard('cf-total-cashea', 'cf-bs-cashea', methodTotals['cashea']);
+
+    // 6. Render Level 1: Specialty / Department Summary Cards Grid
+    renderCashFlowAreasGrid(rate);
+
+    // 7. Render Transaction Table
     if (transactions.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding: 15px;">No hay historial financiero registrado.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding: 24px;">No hay historial financiero registrado.</td></tr>';
         return;
     }
 
-    transactions.forEach(t => {
+    tbody.innerHTML = transactions.map(t => {
         let typeClass = 'text-green';
         let typeBadge = '<span class="badge-tag green">Ingreso</span>';
         let sign = '+';
@@ -16102,18 +16270,291 @@ async function renderCashFlow() {
         }
 
         const deleteTransferBtn = t.isTransfer ? `<button class="btn btn-xs btn-outline text-red" style="margin-left:6px; padding:2px 6px;" onclick="deleteAccountTransfer('${t.id}')" title="Eliminar Traslado"><i class="fa-solid fa-trash"></i></button>` : '';
-        
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td>${t.date}</td>
-            <td><strong>${t.concept}</strong> ${deleteTransferBtn}</td>
-            <td>${typeBadge}</td>
-            <td>${t.method}</td>
-            <td class="${typeClass}"><strong>${sign}$${t.amount.toFixed(2)}</strong></td>
+
+        return `
+            <tr>
+                <td>${t.date}</td>
+                <td><strong>${t.concept}</strong> ${deleteTransferBtn}</td>
+                <td>${typeBadge}</td>
+                <td>${t.method}</td>
+                <td class="${typeClass}"><strong>${sign}$${t.amount.toFixed(2)}</strong></td>
+            </tr>
         `;
-        tbody.appendChild(tr);
-    });
+    }).join('');
 }
+
+function renderCashFlowAreasGrid(rate) {
+    const grid = document.getElementById('cf-areas-summary-grid');
+    if (!grid) return;
+
+    // Base departments to ensure clinical showcase
+    const baseAreas = [
+        'Odontología',
+        'Medicina General',
+        'Laboratorio',
+        'Rayos X e Imagen',
+        'Cardiología',
+        'Ginecología',
+        'Pediatría'
+    ];
+
+    const areaMap = {};
+    baseAreas.forEach(a => {
+        areaMap[a] = { name: a, totalUSD: 0, count: 0 };
+    });
+
+    (window.cashFlowClinicalTransactions || []).forEach(tx => {
+        const area = tx.area || 'Medicina General';
+        if (!areaMap[area]) {
+            areaMap[area] = { name: area, totalUSD: 0, count: 0 };
+        }
+        areaMap[area].totalUSD += tx.amountUSD;
+        areaMap[area].count++;
+    });
+
+    const areaList = Object.values(areaMap);
+    // Sort areas with revenue first, then alphabet
+    areaList.sort((a, b) => b.totalUSD - a.totalUSD);
+
+    grid.innerHTML = areaList.map(a => {
+        const iconInfo = getAreaIconInfo(a.name);
+        const totalBs = a.totalUSD * rate;
+
+        return `
+            <div class="cf-area-card" onclick="window.openCashFlowAreaDetails('${a.name}')" 
+                 style="cursor: pointer; background: var(--bg-card); border: 1.5px solid var(--border-color); border-left: 5px solid ${iconInfo.color}; border-radius: 12px; padding: 14px 16px; transition: all 0.22s ease-in-out; box-shadow: 0 1px 3px rgba(0,0,0,0.03);"
+                 onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 16px rgba(0,0,0,0.06)';"
+                 onmouseout="this.style.transform='none'; this.style.boxShadow='0 1px 3px rgba(0,0,0,0.03)';">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="width: 34px; height: 34px; border-radius: 8px; background: ${iconInfo.bg}; color: ${iconInfo.color}; display: flex; align-items: center; justify-content: center; font-size: 1.05rem;">
+                            <i class="fa-solid ${iconInfo.icon}"></i>
+                        </div>
+                        <strong style="font-size: 0.95rem; color: #0f172a;">${a.name}</strong>
+                    </div>
+                    <span class="badge-tag" style="background: #f1f5f9; color: #475569; font-size: 0.72rem; font-weight: 700;">${a.count} ventas</span>
+                </div>
+                
+                <div style="font-size: 1.35rem; font-weight: 800; color: #0f172a; line-height: 1.15; margin-top: 4px;">
+                    $${a.totalUSD.toFixed(2)} <small style="font-size: 0.75rem; font-weight: 600; color: #64748b;">USD</small>
+                </div>
+                <div style="font-size: 0.78rem; font-weight: 700; color: #0284c7; margin-top: 2px;">
+                    Bs. ${totalBs.toFixed(2)}
+                </div>
+
+                <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: #64748b;">
+                    <span>Ver doctores y métodos</span>
+                    <span style="color: ${iconInfo.color}; font-weight: 700;">Auditar <i class="fa-solid fa-arrow-right"></i></span>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// ============================================================================
+// LEVEL 2: DRILL-DOWN MODAL FOR AREA FINANCIAL PERFORMANCE & DOCTOR RANKING
+// ============================================================================
+
+window.openCashFlowAreaDetails = function(areaName, period = 'today') {
+    window.currentCFArea = areaName;
+    window.currentCFAreaPeriod = period;
+
+    const modal = document.getElementById('modal-cf-area-details');
+    if (!modal) return;
+
+    // Update Header Icon & Title
+    const titleEl = document.getElementById('cf-area-modal-title');
+    const iconBadge = document.getElementById('cf-area-modal-icon-badge');
+    const iconInfo = getAreaIconInfo(areaName);
+
+    if (titleEl) titleEl.innerText = `Flujo de Caja: ${areaName}`;
+    if (iconBadge) {
+        iconBadge.style.color = iconInfo.color;
+        iconBadge.style.background = iconInfo.bg;
+        iconBadge.innerHTML = `<i class="fa-solid ${iconInfo.icon}"></i>`;
+    }
+
+    // Reset period buttons
+    const btnToday = document.getElementById('cf-area-filter-today');
+    document.querySelectorAll('#modal-cf-area-details .filter-btn').forEach(b => b.classList.remove('active'));
+    if (period === 'today' && btnToday) btnToday.classList.add('active');
+    else {
+        const targetBtn = document.getElementById(`cf-area-filter-${period}`);
+        if (targetBtn) targetBtn.classList.add('active');
+    }
+
+    openModal('modal-cf-area-details');
+    window.renderCashFlowAreaDetailsView(areaName, period);
+};
+
+window.filterCashFlowAreaDate = function(period, btn) {
+    if (btn) {
+        document.querySelectorAll('#modal-cf-area-details .filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    }
+    window.currentCFAreaPeriod = period;
+    window.renderCashFlowAreaDetailsView(window.currentCFArea, period);
+};
+
+window.renderCashFlowAreaDetailsView = function(areaName, period) {
+    const rate = getExchangeRate();
+    const todayStr = new Date().toISOString().split('T')[0];
+    const now = new Date();
+
+    // 1. Filter transactions by area and date period
+    const allAreaTx = (window.cashFlowClinicalTransactions || []).filter(t => t.area === areaName);
+    
+    let filtered = allAreaTx.filter(t => {
+        if (period === 'all') return true;
+        const tDate = t.date;
+        if (period === 'today') return tDate === todayStr;
+        if (period === 'week') {
+            const diffDays = (now - new Date(tDate)) / (1000 * 3600 * 24);
+            return diffDays <= 7 && diffDays >= 0;
+        }
+        if (period === 'month') {
+            return (tDate || '').startsWith(todayStr.slice(0, 7));
+        }
+        return true;
+    });
+
+    // 2. Compute Area KPIs
+    let totalUSD = 0;
+    const areaMethods = {
+        'pagomovil': 0,
+        'cash': 0,
+        'zelle': 0,
+        'pos': 0,
+        'binance': 0,
+        'cashea': 0
+    };
+    const doctorMap = {};
+
+    filtered.forEach(tx => {
+        totalUSD += tx.amountUSD;
+        
+        // Method tracking
+        const m = tx.rawMethod || 'cash';
+        if (areaMethods[m] !== undefined) areaMethods[m] += tx.amountUSD;
+        else areaMethods['cash'] += tx.amountUSD;
+
+        // Doctor tracking
+        const docName = tx.doctor || 'Dr. Médico Tratante';
+        if (!doctorMap[docName]) {
+            doctorMap[docName] = { name: docName, count: 0, totalUSD: 0 };
+        }
+        doctorMap[docName].count++;
+        doctorMap[docName].totalUSD += tx.amountUSD;
+    });
+
+    const totalBs = totalUSD * rate;
+    const count = filtered.length;
+
+    // Populate KPIs
+    const elUsd = document.getElementById('cf-area-kpi-total-usd');
+    const elBs = document.getElementById('cf-area-kpi-total-bs');
+    const elCount = document.getElementById('cf-area-kpi-count');
+    const elCountLabel = document.getElementById('cf-area-kpi-count-label');
+    const elTopDoc = document.getElementById('cf-area-kpi-top-doctor');
+    const elTopDocAmt = document.getElementById('cf-area-kpi-top-doctor-amount');
+
+    if (elUsd) elUsd.innerText = `$${totalUSD.toFixed(2)}`;
+    if (elBs) elBs.innerText = `Bs. ${totalBs.toFixed(2)}`;
+    if (elCount) elCount.innerText = count;
+    if (elCountLabel) elCountLabel.innerText = `${count} servicio${count === 1 ? '' : 's'} en el período (${period})`;
+
+    // Doctor Rankings Array
+    const doctorRankings = Object.values(doctorMap);
+    doctorRankings.sort((a, b) => b.totalUSD - a.totalUSD);
+
+    const topDoc = doctorRankings.length > 0 ? doctorRankings[0] : null;
+    if (elTopDoc) elTopDoc.innerText = topDoc ? topDoc.name : 'Sin ventas';
+    if (elTopDocAmt) elTopDocAmt.innerText = topDoc ? `$${topDoc.totalUSD.toFixed(2)} (${((topDoc.totalUSD / (totalUSD || 1)) * 100).toFixed(1)}% del área)` : '$0.00';
+
+    // 3. Render Area Payment Methods Grid
+    const methodsGrid = document.getElementById('cf-area-methods-grid');
+    if (methodsGrid) {
+        const methodCardsConfig = [
+            { key: 'pagomovil', label: 'Pago Móvil', icon: 'fa-mobile-screen-button', color: '#15803d', bg: '#f0fdf4' },
+            { key: 'cash', label: 'Efectivo', icon: 'fa-money-bill-wave', color: '#0f172a', bg: '#f8fafc' },
+            { key: 'zelle', label: 'Zelle', icon: 'fa-vault', color: '#7e22ce', bg: '#faf5ff' },
+            { key: 'pos', label: 'Punto POS', icon: 'fa-credit-card', color: '#0284c7', bg: '#f0f9ff' },
+            { key: 'cashea', label: 'Cashea', icon: 'fa-layer-group', color: '#0891b2', bg: '#ecfeff' },
+            { key: 'binance', label: 'Binance', icon: 'fa-coins', color: '#b45309', bg: '#fffbeb' }
+        ];
+
+        methodsGrid.innerHTML = methodCardsConfig.map(mc => {
+            const val = areaMethods[mc.key] || 0;
+            return `
+                <div style="background: ${mc.bg}; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 10px; text-align: center;">
+                    <small style="font-size: 0.72rem; font-weight: 700; color: ${mc.color}; display: flex; align-items: center; justify-content: center; gap: 4px;">
+                        <i class="fa-solid ${mc.icon}"></i> ${mc.label}
+                    </small>
+                    <div style="font-size: 1rem; font-weight: 800; color: ${mc.color}; margin-top: 3px;">
+                        $${val.toFixed(2)}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    // 4. Render Doctor Productivity Ranking Table
+    const docTbody = document.getElementById('cf-area-doctor-ranking-tbody');
+    if (docTbody) {
+        if (doctorRankings.length === 0) {
+            docTbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding: 20px;">No se registraron ventas médicas en este período para esta área.</td></tr>';
+        } else {
+            docTbody.innerHTML = doctorRankings.map((doc, idx) => {
+                let medal = `#${idx + 1}`;
+                let rowBg = '';
+                if (idx === 0) { medal = '🥇 <span style="font-size:0.75rem; font-weight:800; color:#b45309;">Líder</span>'; rowBg = 'background: rgba(254, 240, 138, 0.15);'; }
+                else if (idx === 1) medal = '🥈 #2';
+                else if (idx === 2) medal = '🥉 #3';
+
+                const pct = totalUSD > 0 ? ((doc.totalUSD / totalUSD) * 100).toFixed(1) : '0.0';
+                const docBs = doc.totalUSD * rate;
+
+                return `
+                    <tr style="font-size: 0.85rem; border-bottom: 1px solid var(--border-color); ${rowBg}">
+                        <td style="text-align: center; font-weight: 800;">${medal}</td>
+                        <td>
+                            <strong style="color: #0f172a;">${doc.name}</strong>
+                            ${idx === 0 ? '<span class="badge-tag green" style="margin-left: 6px; font-size: 0.68rem;">Mayor Facturación</span>' : ''}
+                        </td>
+                        <td class="text-center"><strong>${doc.count}</strong> pacientes</td>
+                        <td class="text-right" style="font-weight: 800; color: #16a34a; font-size: 0.95rem;">$${doc.totalUSD.toFixed(2)}</td>
+                        <td class="text-right" style="color: #0284c7; font-weight: 600;">Bs. ${docBs.toFixed(2)}</td>
+                        <td class="text-center">
+                            <span class="badge-tag blue" style="font-weight: 800;">${pct}%</span>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+    }
+
+    // 5. Render Area Transactions Table
+    const txTbody = document.getElementById('cf-area-transactions-tbody');
+    if (txTbody) {
+        if (filtered.length === 0) {
+            txTbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding: 24px;">Sin transacciones para el período seleccionado.</td></tr>';
+        } else {
+            txTbody.innerHTML = filtered.map(t => {
+                return `
+                    <tr style="font-size: 0.82rem; border-bottom: 1px solid var(--border-color);">
+                        <td>${t.date}</td>
+                        <td><strong class="text-cyan">${t.id}</strong></td>
+                        <td><strong>${t.patientName}</strong></td>
+                        <td>${t.concept}</td>
+                        <td>${t.doctor}</td>
+                        <td><span class="badge-tag" style="background:#f1f5f9; font-size:0.75rem;">${t.method}</span></td>
+                        <td class="text-right text-green" style="font-weight: 800;">$${t.amountUSD.toFixed(2)}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+    }
+};
 
 window.deleteAccountTransfer = async function(transferId) {
     const { value: confirm } = await Swal.fire({

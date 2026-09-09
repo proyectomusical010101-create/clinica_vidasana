@@ -1997,6 +1997,7 @@
 
                     <!-- SUBTAB: Flujo de Caja (Cash Flow) -->
                     <div id="subtab-cash-flow" class="subtab-content">
+                        <!-- Top 3 Financial KPIs -->
                         <div class="stats-grid mb-20">
                             <div class="stat-card border-green">
                                 <div class="stat-header">
@@ -2016,22 +2017,107 @@
                             </div>
                             <div class="stat-card border-cyan">
                                 <div class="stat-header">
-                                    <span>Balance Netos</span>
+                                    <span>Balance Neto Clínico</span>
                                     <div class="stat-icon cyan"><i class="fa-solid fa-wallet"></i></div>
                                 </div>
                                 <h2 id="cf-net-balance">$0.00</h2>
                                 <small id="cf-balance-status" class="trend up">Estado Financiero Positivo</small>
                             </div>
-                            <div class="stat-card border-purple">
-                                <div class="stat-header">
-                                    <span>Ingresos por Método</span>
-                                    <div class="stat-icon purple"><i class="fa-solid fa-list-check"></i></div>
+                        </div>
+
+                        <!-- High-Contrast Executive Payment Methods Breakdown Grid -->
+                        <div class="card mb-20" style="background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border-color); overflow: hidden;">
+                            <div class="card-header border-bottom" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; background: linear-gradient(135deg, rgba(8, 145, 178, 0.05) 0%, rgba(13, 148, 136, 0.05) 100%);">
+                                <h3 style="margin: 0; font-size: 1.05rem; color: #0f172a; font-weight: 800; display: flex; align-items: center; gap: 8px;">
+                                    <i class="fa-solid fa-coins text-cyan"></i> Ingresos Totales por Método de Pago ($ USD y Bs.)
+                                </h3>
+                                <small class="text-muted" style="font-weight: 600;">Monitoreo en tiempo real de cajas y cuentas</small>
+                            </div>
+                            <div class="card-body" style="padding: 16px 20px;">
+                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px;">
+                                    
+                                    <!-- Pago Móvil Card -->
+                                    <div style="background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 10px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                            <span style="font-size: 0.8rem; font-weight: 700; color: #166534;"><i class="fa-solid fa-mobile-screen-button"></i> Pago Móvil</span>
+                                            <span style="font-size: 0.72rem; background: #bbf7d0; color: #14532d; padding: 1px 6px; border-radius: 4px; font-weight: 800;">Bs.</span>
+                                        </div>
+                                        <div id="cf-total-pagomovil" style="font-size: 1.3rem; font-weight: 800; color: #15803d; line-height: 1.2;">$0.00</div>
+                                        <div id="cf-bs-pagomovil" style="font-size: 0.78rem; font-weight: 700; color: #166534; margin-top: 2px;">Bs. 0.00</div>
+                                    </div>
+
+                                    <!-- Efectivo (Cash) Card -->
+                                    <div style="background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 10px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                            <span style="font-size: 0.8rem; font-weight: 700; color: #334155;"><i class="fa-solid fa-money-bill-wave" style="color: #16a34a;"></i> Efectivo ($ / Bs.)</span>
+                                            <span style="font-size: 0.72rem; background: #e2e8f0; color: #334155; padding: 1px 6px; border-radius: 4px; font-weight: 800;">Caja</span>
+                                        </div>
+                                        <div id="cf-total-cash" style="font-size: 1.3rem; font-weight: 800; color: #0f172a; line-height: 1.2;">$0.00</div>
+                                        <div id="cf-bs-cash" style="font-size: 0.78rem; font-weight: 700; color: #475569; margin-top: 2px;">Bs. 0.00</div>
+                                    </div>
+
+                                    <!-- Zelle Card -->
+                                    <div style="background: #faf5ff; border: 1.5px solid #d8b4fe; border-radius: 10px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                            <span style="font-size: 0.8rem; font-weight: 700; color: #6b21a8;"><i class="fa-solid fa-vault"></i> Zelle</span>
+                                            <span style="font-size: 0.72rem; background: #f3e8ff; color: #581c87; padding: 1px 6px; border-radius: 4px; font-weight: 800;">USD</span>
+                                        </div>
+                                        <div id="cf-total-zelle" style="font-size: 1.3rem; font-weight: 800; color: #7e22ce; line-height: 1.2;">$0.00</div>
+                                        <div style="font-size: 0.78rem; font-weight: 600; color: #9333ea; margin-top: 2px;">Transferencia Directa</div>
+                                    </div>
+
+                                    <!-- Punto de Venta (POS) Card -->
+                                    <div style="background: #f0f9ff; border: 1.5px solid #7dd3fc; border-radius: 10px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                            <span style="font-size: 0.8rem; font-weight: 700; color: #0369a1;"><i class="fa-solid fa-credit-card"></i> Punto de Venta</span>
+                                            <span style="font-size: 0.72rem; background: #e0f2fe; color: #0c4a6e; padding: 1px 6px; border-radius: 4px; font-weight: 800;">POS</span>
+                                        </div>
+                                        <div id="cf-total-pos" style="font-size: 1.3rem; font-weight: 800; color: #0284c7; line-height: 1.2;">$0.00</div>
+                                        <div id="cf-bs-pos" style="font-size: 0.78rem; font-weight: 700; color: #0369a1; margin-top: 2px;">Bs. 0.00</div>
+                                    </div>
+
+                                    <!-- Binance Card -->
+                                    <div style="background: #fffbeb; border: 1.5px solid #fde047; border-radius: 10px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                            <span style="font-size: 0.8rem; font-weight: 700; color: #854d0e;"><i class="fa-solid fa-coins text-amber"></i> Binance</span>
+                                            <span style="font-size: 0.72rem; background: #fef08a; color: #713f12; padding: 1px 6px; border-radius: 4px; font-weight: 800;">USDT</span>
+                                        </div>
+                                        <div id="cf-total-binance" style="font-size: 1.3rem; font-weight: 800; color: #b45309; line-height: 1.2;">$0.00</div>
+                                        <div style="font-size: 0.78rem; font-weight: 600; color: #854d0e; margin-top: 2px;">Criptoactivos</div>
+                                    </div>
+
+                                    <!-- Cashea (Inicial en Caja) Card -->
+                                    <div style="background: #ecfeff; border: 1.5px solid #a5f3fc; border-radius: 10px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                            <span style="font-size: 0.8rem; font-weight: 700; color: #155e75;"><i class="fa-solid fa-layer-group text-cyan"></i> Cashea (Inicial)</span>
+                                            <span style="font-size: 0.72rem; background: #cffafe; color: #164e63; padding: 1px 6px; border-radius: 4px; font-weight: 800;">Cobrado</span>
+                                        </div>
+                                        <div id="cf-total-cashea" style="font-size: 1.3rem; font-weight: 800; color: #0891b2; line-height: 1.2;">$0.00</div>
+                                        <div id="cf-bs-cashea" style="font-size: 0.78rem; font-weight: 700; color: #155e75; margin-top: 2px;">Bs. 0.00</div>
+                                    </div>
+
                                 </div>
-                                <div id="cf-method-breakdown" style="font-size: 0.8rem; margin-top: 8px; line-height: 1.45; color: var(--text-main);">
-                                    <div style="display: flex; justify-content: space-between;"><span>Pago Móvil:</span><strong id="cf-total-pagomovil">$0.00</strong></div>
-                                    <div style="display: flex; justify-content: space-between;"><span>Cash (Efectivo):</span><strong id="cf-total-cash">$0.00</strong></div>
-                                    <div style="display: flex; justify-content: space-between;"><span>Zelle:</span><strong id="cf-total-zelle">$0.00</strong></div>
-                                    <div style="display: flex; justify-content: space-between;"><span>Binance:</span><strong id="cf-total-binance">$0.00</strong></div>
+                            </div>
+                        </div>
+
+                        <!-- Specialty / Department Cash Flow Section -->
+                        <div class="card mb-20" style="background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border-color); overflow: hidden;">
+                            <div class="card-header border-bottom" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; padding: 14px 20px; background: linear-gradient(135deg, rgba(8, 145, 178, 0.05) 0%, rgba(13, 148, 136, 0.05) 100%);">
+                                <div>
+                                    <h3 style="margin: 0; font-size: 1.15rem; color: #0f172a; font-weight: 800; display: flex; align-items: center; gap: 8px;">
+                                        <i class="fa-solid fa-hospital text-cyan"></i> Flujo de Caja por Área / Departamento
+                                    </h3>
+                                    <p class="subtitle" style="margin: 2px 0 0 0; font-size: 0.82rem; color: #64748b;">
+                                        Haga clic en cualquier departamento para ver el detalle de ventas, métodos de cobro y el médico que más vendió.
+                                    </p>
+                                </div>
+                                <span class="badge-tag cyan" style="font-weight: 700; display: inline-flex; align-items: center; gap: 6px;">
+                                    <i class="fa-solid fa-hand-pointer"></i> Seleccione un área para auditar
+                                </span>
+                            </div>
+                            <div class="card-body" style="padding: 18px 20px;">
+                                <div id="cf-areas-summary-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px;">
+                                    <div class="text-center text-muted" style="grid-column: 1/-1; padding: 20px;">Cargando áreas clínicas...</div>
                                 </div>
                             </div>
                         </div>
@@ -6096,15 +6182,159 @@
         </div>
     </div>
 
+    <!-- MODAL 4: DETALLE DE FLUJO DE CAJA POR ÁREA / ESPECIALIDAD (DRILL-DOWN) -->
+    <div id="modal-cf-area-details" class="modal-overlay hidden" style="z-index: 10570;">
+        <div class="modal-dialog" style="max-width: 960px; width: 95%; max-height: 90vh; display: flex; flex-direction: column; background: var(--bg-card); border-radius: 14px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+            <!-- Header -->
+            <div class="modal-header" style="padding: 16px 24px; border-bottom: 1px solid var(--border-color); background: linear-gradient(135deg, rgba(8, 145, 178, 0.08) 0%, rgba(13, 148, 136, 0.08) 100%); display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div id="cf-area-modal-icon-badge" style="width: 44px; height: 44px; border-radius: 12px; background: rgba(8, 145, 178, 0.15); display: flex; align-items: center; justify-content: center; color: #0891b2; font-size: 1.4rem;">
+                        <i class="fa-solid fa-tooth"></i>
+                    </div>
+                    <div>
+                        <h3 id="cf-area-modal-title" style="margin: 0; font-size: 1.2rem; color: #0f172a; font-weight: 800;">
+                            Flujo de Caja: Odontología
+                        </h3>
+                        <p style="margin: 2px 0 0 0; font-size: 0.82rem; color: #64748b;">
+                            Auditoría de ingresos, ventas del período, doctores más productivos y transacciones.
+                        </p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" onclick="closeModal('modal-cf-area-details')" style="background: none; border: none; font-size: 1.25rem; color: #64748b; cursor: pointer; padding: 6px 10px; border-radius: 6px;">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Body -->
+            <div class="modal-body" style="padding: 20px 24px; overflow-y: auto; flex: 1;">
+                
+                <!-- Period Filter Bar -->
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; background: #f8fafc; padding: 10px 14px; border-radius: 10px; border: 1px solid #e2e8f0;">
+                    <div style="font-size: 0.82rem; font-weight: 700; color: #334155; display: flex; align-items: center; gap: 6px;">
+                        <i class="fa-regular fa-calendar text-cyan"></i> Período a Consultar:
+                    </div>
+                    <div class="filter-group" style="display: flex; gap: 6px;">
+                        <button class="filter-btn active" id="cf-area-filter-today" onclick="window.filterCashFlowAreaDate('today', this)">Hoy</button>
+                        <button class="filter-btn" id="cf-area-filter-week" onclick="window.filterCashFlowAreaDate('week', this)">Esta Semana</button>
+                        <button class="filter-btn" id="cf-area-filter-month" onclick="window.filterCashFlowAreaDate('month', this)">Este Mes</button>
+                        <button class="filter-btn" id="cf-area-filter-all" onclick="window.filterCashFlowAreaDate('all', this)">Todo el Histórico</button>
+                    </div>
+                </div>
+
+                <!-- Area KPIs -->
+                <div class="stats-grid mb-20" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+                    <div class="stat-card border-green">
+                        <div class="stat-header">
+                            <span>Ingresos del Área</span>
+                            <div class="stat-icon green"><i class="fa-solid fa-dollar-sign"></i></div>
+                        </div>
+                        <h2 id="cf-area-kpi-total-usd" style="font-size: 1.5rem; color: #16a34a;">$0.00</h2>
+                        <small id="cf-area-kpi-total-bs" style="font-weight: 700; color: #0284c7;">Bs. 0.00</small>
+                    </div>
+
+                    <div class="stat-card border-cyan">
+                        <div class="stat-header">
+                            <span>Servicios Cobrados</span>
+                            <div class="stat-icon cyan"><i class="fa-solid fa-receipt"></i></div>
+                        </div>
+                        <h2 id="cf-area-kpi-count" style="font-size: 1.5rem; color: #0891b2;">0</h2>
+                        <small class="text-muted" id="cf-area-kpi-count-label">Procedimientos atendidos</small>
+                    </div>
+
+                    <div class="stat-card border-purple">
+                        <div class="stat-header">
+                            <span>Top Médico Productor</span>
+                            <div class="stat-icon purple"><i class="fa-solid fa-trophy"></i></div>
+                        </div>
+                        <h2 id="cf-area-kpi-top-doctor" style="font-size: 1.15rem; color: #7c3aed; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">--</h2>
+                        <small id="cf-area-kpi-top-doctor-amount" style="font-weight: 700; color: #64748b;">$0.00 facturado</small>
+                    </div>
+                </div>
+
+                <!-- Area Payment Methods Breakdown -->
+                <div style="background: #ffffff; border: 1px solid var(--border-color); border-radius: 10px; padding: 14px 16px; margin-bottom: 20px;">
+                    <div style="font-size: 0.85rem; font-weight: 800; color: #0f172a; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+                        <i class="fa-solid fa-credit-card text-teal"></i> ¿Cómo ingresó el dinero en esta área? (Desglose por Método)
+                    </div>
+                    <div id="cf-area-methods-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px;">
+                        <!-- Dynamic method chips for this area -->
+                    </div>
+                </div>
+
+                <!-- Doctor Productivity Ranking -->
+                <div style="background: #ffffff; border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden; margin-bottom: 20px;">
+                    <div style="padding: 12px 16px; background: #f8fafc; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                        <h4 style="margin: 0; font-size: 0.95rem; font-weight: 800; color: #0f172a; display: flex; align-items: center; gap: 8px;">
+                            <i class="fa-solid fa-medal text-amber"></i> Ranking de Productividad Médica (¿Quién vendió más?)
+                        </h4>
+                        <small class="text-muted">Ordenado por recaudación total en el período</small>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-compact" style="width: 100%; margin: 0;">
+                            <thead>
+                                <tr style="font-size: 0.78rem; text-transform: uppercase;">
+                                    <th style="width: 50px; text-align: center;">Rank</th>
+                                    <th>Médico / Especialista</th>
+                                    <th class="text-center">Atenciones / Pacientes</th>
+                                    <th class="text-right">Total Facturado ($ USD)</th>
+                                    <th class="text-right">Equivalente (Bs.)</th>
+                                    <th class="text-center" style="width: 120px;">% Aporte al Área</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cf-area-doctor-ranking-tbody">
+                                <tr><td colspan="6" class="text-center text-muted" style="padding: 16px;">Sin ventas registradas para este período.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Chronological Transactions Table of this Area -->
+                <div style="background: #ffffff; border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden;">
+                    <div style="padding: 12px 16px; background: #f8fafc; border-bottom: 1px solid var(--border-color);">
+                        <h4 style="margin: 0; font-size: 0.95rem; font-weight: 800; color: #0f172a; display: flex; align-items: center; gap: 8px;">
+                            <i class="fa-solid fa-list-check text-cyan"></i> Detalle de Ventas y Servicios Realizados
+                        </h4>
+                    </div>
+                    <div class="table-responsive" style="max-height: 280px; overflow-y: auto;">
+                        <table class="table table-compact" style="width: 100%; margin: 0;">
+                            <thead style="position: sticky; top: 0; background: #ffffff; z-index: 1;">
+                                <tr style="font-size: 0.78rem; text-transform: uppercase;">
+                                    <th>Fecha</th>
+                                    <th>Comprobante</th>
+                                    <th>Paciente</th>
+                                    <th>Procedimiento / Servicio</th>
+                                    <th>Doctor</th>
+                                    <th>Método</th>
+                                    <th class="text-right">Monto ($)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cf-area-transactions-tbody">
+                                <tr><td colspan="7" class="text-center text-muted" style="padding: 16px;">No hay transacciones en este período.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Footer -->
+            <div class="modal-footer" style="padding: 14px 24px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; background: var(--bg-card);">
+                <button type="button" class="btn btn-outline" onclick="closeModal('modal-cf-area-details')">
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=258"></script>
-    <script src="supabaseClient.js?v=258"></script>
-    <script src="odontogram.js?v=258"></script>
-    <script src="signature.js?v=258"></script>
-    <script src="whatsapp.js?v=258"></script>
-    <script src="kardex.js?v=258"></script>
-    <script src="app.js?v=258"></script>
-    <script src="clinicalERP.js?v=258"></script>
-    <script src="tutorial.js?v=258"></script>
+    <script src="seededData.js?v=259"></script>
+    <script src="supabaseClient.js?v=259"></script>
+    <script src="odontogram.js?v=259"></script>
+    <script src="signature.js?v=259"></script>
+    <script src="whatsapp.js?v=259"></script>
+    <script src="kardex.js?v=259"></script>
+    <script src="app.js?v=259"></script>
+    <script src="clinicalERP.js?v=259"></script>
+    <script src="tutorial.js?v=259"></script>
 </body>
 </html>
