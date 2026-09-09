@@ -1637,6 +1637,277 @@ class SupabaseDataService {
         }
     }
 
+    // =========================================================================
+    // 14. LIQUIDACIÓN DE HONORARIOS POR SERVICIO (MÉDICOS Y ASISTENTES)
+    // Persistencia 100% en Base de Datos Supabase Cloud para todos los dispositivos
+    // =========================================================================
+    static _serviceLiquidationsCache = null;
+    static _serviceLiquidationsCacheTime = 0;
+
+    static async getServiceLiquidations(forceRefresh = false) {
+        const local = JSON.parse(localStorage.getItem('vidasana_service_liquidations')) || [];
+        if (!this.isCloudConnected()) return local;
+
+        const now = Date.now();
+        if (!forceRefresh && this._serviceLiquidationsCacheTime && (now - this._serviceLiquidationsCacheTime < 4000) && this._serviceLiquidationsCache) {
+            return this._serviceLiquidationsCache;
+        }
+
+        try {
+            const { data, error } = await supabaseClient.from('patients').select('*').eq('id', 'SYS-SERVICE-LIQUIDATIONS').maybeSingle();
+            if (!error && data && data.odontogram_data && Array.isArray(data.odontogram_data.liquidations)) {
+                const cloudList = data.odontogram_data.liquidations;
+                localStorage.setItem('vidasana_service_liquidations', JSON.stringify(cloudList));
+                this._serviceLiquidationsCache = cloudList;
+                this._serviceLiquidationsCacheTime = Date.now();
+                return cloudList;
+            }
+            return local;
+        } catch(err) {
+            console.warn('Supabase getServiceLiquidations warning:', err);
+            return local;
+        }
+    }
+
+    static async saveServiceLiquidation(record) {
+        if (!record.id) record.id = 'liq-srv-' + Date.now();
+        let list = await this.getServiceLiquidations(true);
+        const idx = list.findIndex(item => item.id === record.id);
+        if (idx >= 0) {
+            list[idx] = { ...list[idx], ...record };
+        } else {
+            list.unshift(record);
+        }
+
+        localStorage.setItem('vidasana_service_liquidations', JSON.stringify(list));
+        this._serviceLiquidationsCache = list;
+        this._serviceLiquidationsCacheTime = Date.now();
+
+        if (this.isCloudConnected()) {
+            try {
+                const payload = {
+                    id: 'SYS-SERVICE-LIQUIDATIONS',
+                    fullname: 'Registro Cloud de Liquidaciones Médicas y de Asistentes por Servicio',
+                    birthdate: '2026-01-01',
+                    phone: '',
+                    status: 'Sistema',
+                    odontogram_data: {
+                        _is_system_config: true,
+                        liquidations: list,
+                        updatedAt: new Date().toISOString()
+                    }
+                };
+                await supabaseClient.from('patients').upsert(payload);
+                this.notifyDataChanged('service_liquidations', record.id);
+            } catch(e) {
+                console.error('Supabase saveServiceLiquidation Error:', e);
+            }
+        }
+        return record;
+    }
+
+    static async deleteServiceLiquidation(id) {
+        let list = await this.getServiceLiquidations(true);
+        list = list.filter(item => item.id !== id);
+        localStorage.setItem('vidasana_service_liquidations', JSON.stringify(list));
+        this._serviceLiquidationsCache = list;
+        this._serviceLiquidationsCacheTime = Date.now();
+
+        if (this.isCloudConnected()) {
+            try {
+                const payload = {
+                    id: 'SYS-SERVICE-LIQUIDATIONS',
+                    fullname: 'Registro Cloud de Liquidaciones Médicas y de Asistentes por Servicio',
+                    birthdate: '2026-01-01',
+                    phone: '',
+                    status: 'Sistema',
+                    odontogram_data: {
+                        _is_system_config: true,
+                        liquidations: list,
+                        updatedAt: new Date().toISOString()
+                    }
+                };
+                await supabaseClient.from('patients').upsert(payload);
+                this.notifyDataChanged('service_liquidations', id);
+            } catch(e) {
+                console.error('Supabase deleteServiceLiquidation Error:', e);
+            }
+        }
+    }
+
+    static async settleServicePayment({ liquidationId, target, paymentMethod, paymentRef, notes, customDoctorAmount, customAssistantAmount }) {
+        let list = await this.getServiceLiquidations(true);
+        const item = list.find(l => l.id === liquidationId);
+        if (!item) throw new Error('Registro de liquidación no encontrado');
+
+        const nowStr = new Date().toISOString();
+
+        if (target === 'doctor' || target === 'both') {
+            item.doctor = item.doctor || {};
+            if (customDoctorAmount !== undefined && customDoctorAmount !== null) {
+                item.doctor.amount = parseFloat(customDoctorAmount) || item.doctor.amount;
+            }
+            item.doctor.status = 'Liquidado';
+            item.doctor.paid_at = nowStr;
+            item.doctor.payment_method = paymentMethod || 'Transferencia';
+            item.doctor.payment_ref = paymentRef || '';
+        }
+
+        if (target === 'assistant' || target === 'both') {
+            if (item.assistant && item.assistant.has_assistant) {
+                if (customAssistantAmount !== undefined && customAssistantAmount !== null) {
+                    item.assistant.amount = parseFloat(customAssistantAmount) || item.assistant.amount;
+                }
+                item.assistant.status = 'Liquidado';
+                item.assistant.paid_at = nowStr;
+                item.assistant.payment_method = paymentMethod || 'Transferencia';
+                item.assistant.payment_ref = paymentRef || '';
+            }
+        }
+
+        const isDocPaid = !item.doctor || item.doctor.status === 'Liquidado';
+        const isAstPaid = !item.assistant || !item.assistant.has_assistant || item.assistant.status === 'Liquidado' || item.assistant.status === 'No Aplica';
+
+        if (isDocPaid && isAstPaid) {
+            item.overall_status = 'Liquidado Total';
+        } else if (isDocPaid || (item.assistant && item.assistant.status === 'Liquidado')) {
+            item.overall_status = 'Parcialmente Liquidado';
+        } else {
+            item.overall_status = 'Pendiente';
+        }
+
+        if (!item.settlement_log) item.settlement_log = [];
+        let paidAmt = 0;
+        if (target === 'doctor') paidAmt = item.doctor ? item.doctor.amount : 0;
+        else if (target === 'assistant') paidAmt = item.assistant ? item.assistant.amount : 0;
+        else if (target === 'both') paidAmt = (item.doctor ? item.doctor.amount : 0) + (item.assistant ? item.assistant.amount : 0);
+
+        item.settlement_log.push({
+            target: target,
+            amount: paidAmt,
+            method: paymentMethod || 'Transferencia',
+            ref: paymentRef || '',
+            date: nowStr,
+            notes: notes || ''
+        });
+
+        if (notes) {
+            item.notes = (item.notes ? item.notes + ' | ' : '') + notes;
+        }
+
+        return await this.saveServiceLiquidation(item);
+    }
+
+    static async recordServiceCompletionForLiquidation(params) {
+        const {
+            serviceCode,
+            serviceName,
+            servicePrice = 0,
+            patientId = '',
+            patientName = '',
+            doctorName = '',
+            doctorId = '',
+            assistantName = '',
+            assistantId = '',
+            hasAssistant = false,
+            sourceType = 'clinical_service',
+            date = new Date().toISOString().split('T')[0],
+            notes = ''
+        } = params;
+
+        const price = parseFloat(servicePrice) || 0;
+        const users = await this.getUsers();
+        const baremo = await this.getBaremo();
+        const baremoItem = baremo.find(b => b.code === serviceCode || (b.name && serviceName && b.name.toLowerCase() === serviceName.toLowerCase()));
+
+        // 1. Calculate Doctor Gain
+        let docCalcType = 'percentage';
+        let docRate = 40.0; // Default 40% if not configured
+        let docUser = null;
+        if (doctorId) {
+            docUser = users.find(u => u.id === doctorId);
+        } else if (doctorName) {
+            docUser = users.find(u => u.fullname && u.fullname.toLowerCase() === doctorName.toLowerCase());
+        }
+
+        if (docUser && docUser.doctorProfile) {
+            if (docUser.doctorProfile.commission !== undefined && docUser.doctorProfile.commission !== null && docUser.doctorProfile.commission !== '') {
+                docRate = parseFloat(docUser.doctorProfile.commission) || 40.0;
+                docCalcType = 'percentage';
+            } else if (docUser.doctorProfile.fixedFee) {
+                docRate = parseFloat(docUser.doctorProfile.fixedFee) || 0;
+                docCalcType = 'fixed';
+            }
+        }
+
+        const docAmount = docCalcType === 'percentage' 
+            ? parseFloat(((price * docRate) / 100).toFixed(2))
+            : parseFloat(docRate.toFixed(2));
+
+        // 2. Calculate Assistant Gain
+        let astHas = hasAssistant;
+        let astCalcType = 'fixed';
+        let astRate = 0.0;
+        let astAmount = 0.0;
+        let astFinalName = assistantName;
+
+        if (baremoItem && baremoItem.hygienistBonus && parseFloat(baremoItem.hygienistBonus) > 0) {
+            astRate = parseFloat(baremoItem.hygienistBonus);
+            astCalcType = 'fixed';
+            astHas = true;
+            if (!astFinalName) astFinalName = 'Asistente de Turno';
+        }
+
+        if (astHas && astRate === 0) {
+            // Default flat $5.00 assistant bonus if assistant assigned but no baremo rule
+            astRate = 5.00;
+            astCalcType = 'fixed';
+        }
+
+        astAmount = astHas ? (astCalcType === 'percentage' ? parseFloat(((price * astRate) / 100).toFixed(2)) : parseFloat(astRate.toFixed(2))) : 0.0;
+
+        const clinicRetained = Math.max(0, price - (docAmount + astAmount));
+
+        const record = {
+            id: 'liq-srv-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+            service_code: serviceCode || 'SRV-GEN',
+            service_name: serviceName || 'Servicio Clínico Atendido',
+            patient_id: patientId,
+            patient_name: patientName || 'Paciente Particular',
+            service_price: price,
+            date: date,
+            source_type: sourceType,
+            doctor: {
+                id: docUser ? docUser.id : (doctorId || ''),
+                name: docUser ? docUser.fullname : (doctorName || 'Médico Especialista'),
+                calc_type: docCalcType,
+                rate: docRate,
+                amount: docAmount,
+                status: 'Pendiente',
+                paid_at: null,
+                payment_method: null,
+                payment_ref: null
+            },
+            assistant: {
+                id: assistantId || '',
+                name: astHas ? (astFinalName || 'Asistente Clínico') : 'No aplica',
+                has_assistant: astHas,
+                calc_type: astCalcType,
+                rate: astRate,
+                amount: astAmount,
+                status: astHas ? 'Pendiente' : 'No Aplica',
+                paid_at: null,
+                payment_method: null,
+                payment_ref: null
+            },
+            clinic_retained: parseFloat(clinicRetained.toFixed(2)),
+            overall_status: 'Pendiente',
+            notes: notes || 'Servicio concretado y registrado para liquidación'
+        };
+
+        return await this.saveServiceLiquidation(record);
+    }
+
     // --- CASHEA TRACKING & BIRTHDAYS ---
     static async getCasheaInvoices() {
         const invoices = await this.getInvoices(true);

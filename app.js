@@ -2099,6 +2099,38 @@ window.finalizeBudgetDirect = async function(budgetId) {
             await SupabaseDataService.savePatient(pat);
         }
 
+        // 2.1 Auto-record medical liquidation for completed treatments
+        try {
+            const currentUser = getCurrentUser();
+            const docName = budget.doctor || (currentUser ? currentUser.fullname : 'Médico Tratante');
+            const docId = currentUser ? currentUser.id : null;
+            const itemsToLiquidate = Array.isArray(budget.items) && budget.items.length > 0
+                ? budget.items 
+                : (pat && pat.metadata && Array.isArray(pat.metadata.treatments) ? pat.metadata.treatments : []);
+
+            for (const item of itemsToLiquidate) {
+                const srvPrice = parseFloat(item.price || item.totalUSD || item.cost || 0);
+                if (srvPrice > 0 || item.name || item.treatment) {
+                    await SupabaseDataService.recordServiceCompletionForLiquidation({
+                        serviceCode: item.serviceCode || item.code || 'SRV-BUDGET',
+                        serviceName: item.name || item.treatment || item.description || 'Procedimiento Odontológico',
+                        servicePrice: srvPrice,
+                        patientId: budget.patientId || (pat ? pat.id : ''),
+                        patientName: (pat ? pat.fullname : (patient ? patient.fullname : 'Paciente Clínico')),
+                        doctorId: docId,
+                        doctorName: docName,
+                        sourceType: 'budget_completion',
+                        notes: `Finalizado con Presupuesto #${budget.id} (${formValues.receiptNum || 'Recibo'})`
+                    });
+                }
+            }
+            if (window.ClinicalERP && window.ClinicalERP.loadAll) {
+                await window.ClinicalERP.loadAll();
+            }
+        } catch(liqErr) {
+            console.warn('[Liquidation] Error auto-recording budget items liquidation:', liqErr);
+        }
+
         // 3. Refresh views
         if (typeof renderOdontogramView === 'function') await renderOdontogramView();
         if (typeof renderPatientsTable === 'function') await renderPatientsTable();
@@ -9179,6 +9211,31 @@ function initGlobalEvents() {
                             const faceKey = trt.face && trt.face !== 'Gnl' ? `${toothInt}-${trt.face}` : `${toothInt}-center`;
                             p.odontogramData[faceKey] = 'treated'; // Green completed in odontogram!
                         }
+
+                        // Auto-record medical liquidation for completed session treatment
+                        try {
+                            const currentUser = getCurrentUser();
+                            const docName = currentUser ? currentUser.fullname : 'Médico Tratante';
+                            const docId = currentUser ? currentUser.id : null;
+                            const priceVal = parseFloat(trt.cost || trt.price || paymentUSD || 0);
+                            await SupabaseDataService.recordServiceCompletionForLiquidation({
+                                serviceCode: trt.code || trt.serviceCode || 'EHR-SESSION',
+                                serviceName: trt.treatment || trt.name || (content ? content.substring(0, 40) : 'Procedimiento Atendido'),
+                                servicePrice: priceVal,
+                                patientId: p.id,
+                                patientName: p.fullname,
+                                doctorId: docId,
+                                doctorName: docName,
+                                sourceType: 'clinical_session',
+                                date: datetime ? datetime.split('T')[0] : new Date().toISOString().split('T')[0],
+                                notes: `Sesión clínica atendida y completada (${toothNum !== 'General' ? 'Pieza: ' + toothNum : 'General'})`
+                            });
+                            if (window.ClinicalERP && window.ClinicalERP.loadAll) {
+                                await window.ClinicalERP.loadAll();
+                            }
+                        } catch(errLiq) {
+                            console.warn('[Liquidation] Error auto-recording session liquidation:', errLiq);
+                        }
                     }
                 }
 
@@ -12359,6 +12416,40 @@ async function renderBillingView() {
 
         // Save in DB
         await SupabaseDataService.saveInvoice(invoiceObj);
+
+        // Auto-record medical liquidation for billed services
+        try {
+            const currentUser = getCurrentUser();
+            const docName = (currentUser ? currentUser.fullname : '') || (activePatient && activePatient.assignedDoctor) || 'Médico Tratante';
+            const docId = currentUser ? currentUser.id : null;
+            const astName = selectedAssistant ? selectedAssistant.fullname : '';
+            const astId = selectedAssistant ? selectedAssistant.id : null;
+
+            for (const bItem of billingItems) {
+                const itemPrice = (parseFloat(bItem.price) || 0) * (parseInt(bItem.qty) || 1);
+                await SupabaseDataService.recordServiceCompletionForLiquidation({
+                    serviceCode: bItem.code || 'FAC-ITEM',
+                    serviceName: bItem.name || 'Servicio Facturado',
+                    servicePrice: itemPrice,
+                    patientId: pId,
+                    patientName: activePatient ? activePatient.fullname : 'Paciente Clínico',
+                    doctorId: docId,
+                    doctorName: docName,
+                    assistantId: astId,
+                    assistantName: astName,
+                    hasAssistant: !!selectedAssistant,
+                    sourceType: 'billing_invoice',
+                    invoiceId: invoiceId,
+                    date: invoiceObj.invoiceDate,
+                    notes: `Facturado en Caja (${invoiceId}) - Método: ${method}`
+                });
+            }
+            if (window.ClinicalERP && window.ClinicalERP.loadAll) {
+                await window.ClinicalERP.loadAll();
+            }
+        } catch (liqErr) {
+            console.warn('[Liquidation] Error auto-recording billed liquidation:', liqErr);
+        }
 
         // Handle credit invoice outstanding balance
         if (terms === 'Crédito') {

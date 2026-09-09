@@ -2486,94 +2486,190 @@
 
                 <!-- VIEW: NÓMINA (PERSONAL FIJO Y MÉDICOS) -->
                 <section id="view-payroll" class="tab-view">
-                    <div class="view-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;">
+                    <div class="view-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 16px;">
                         <div>
                             <h1 style="font-family: 'Outfit', sans-serif; font-size: 1.6rem; color: #1e293b; display: flex; align-items: center; gap: 10px; margin: 0 0 6px 0;">
                                 <i class="fa-solid fa-hand-holding-dollar" style="color: var(--primary-cyan);"></i> Nómina & Liquidación Médica
                             </h1>
                             <p class="subtitle" style="margin: 0; color: #64748b; font-size: 0.9rem;">
-                                Liquidación automatizada para Personal Fijo (sueldos/bonos) y Médicos Especialistas (honorarios por consulta con deducción de alquiler).
+                                Liquidación automatizada de honorarios por servicio (Médicos y Asistentes) y nómina de personal fijo.
                             </p>
                         </div>
-                        <button type="button" class="btn btn-primary" onclick="window.ClinicalERP.openAddPayroll()" style="background: linear-gradient(135deg, #7fa13c 0%, #608127 100%) !important; border: none !important; box-shadow: 0 4px 12px rgba(127, 161, 60, 0.35); font-weight: 700; border-radius: 10px; padding: 10px 20px;">
-                            <i class="fa-solid fa-plus"></i> Nueva Liquidación
+                        <div class="action-buttons-group" style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <button type="button" class="btn btn-outline" onclick="window.ClinicalERP.openAddServiceLiquidationModal()" style="font-weight: 600;">
+                                <i class="fa-solid fa-file-invoice-dollar text-cyan"></i> + Registrar Servicio a Liquidar
+                            </button>
+                            <button type="button" class="btn btn-primary" onclick="window.ClinicalERP.openAddPayroll()" style="background: linear-gradient(135deg, #7fa13c 0%, #608127 100%) !important; border: none !important; box-shadow: 0 4px 12px rgba(127, 161, 60, 0.35); font-weight: 700; border-radius: 10px; padding: 10px 18px;">
+                                <i class="fa-solid fa-plus"></i> Nueva Liquidación Nómina Fija
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Subtabs Switcher: Servicios vs Nómina Fija -->
+                    <div class="card" style="margin-bottom: 20px; padding: 6px; background: rgba(0,0,0,0.03); border: 1px solid var(--border-color); border-radius: 12px; display: inline-flex; gap: 6px; width: auto;">
+                        <button type="button" id="tab-btn-payroll-services" class="filter-btn active" onclick="window.ClinicalERP.switchPayrollSubtab('services')" style="font-weight: 700; padding: 8px 18px; border-radius: 8px;">
+                            <i class="fa-solid fa-stethoscope"></i> Honorarios por Servicio (Pendientes por Liquidar)
+                        </button>
+                        <button type="button" id="tab-btn-payroll-general" class="filter-btn" onclick="window.ClinicalERP.switchPayrollSubtab('general')" style="font-weight: 600; padding: 8px 18px; border-radius: 8px;">
+                            <i class="fa-solid fa-users"></i> Nómina General & Personal Fijo
                         </button>
                     </div>
 
-                    <!-- Métricas de Nómina Limpias y Ejecutivas -->
-                    <div class="erp-stats-grid">
-                        <div class="erp-stat-card accent-blue">
-                            <div class="erp-stat-header">
-                                <span class="erp-stat-title">Nómina Personal Fijo</span>
-                                <div class="erp-stat-icon-wrap blue"><i class="fa-solid fa-users"></i></div>
+                    <!-- SUBVIEW 1: LIQUIDACIÓN POR SERVICIO (MÉDICOS & ASISTENTES) -->
+                    <div id="payroll-subview-services">
+                        <!-- Métricas en Vivo de Honorarios por Servicio -->
+                        <div class="erp-stats-grid">
+                            <div class="erp-stat-card accent-green">
+                                <div class="erp-stat-header">
+                                    <span class="erp-stat-title">Pendiente Médicos</span>
+                                    <div class="erp-stat-icon-wrap green"><i class="fa-solid fa-user-doctor"></i></div>
+                                </div>
+                                <div class="erp-stat-value text-success" id="stat-srv-doc-pending">$0.00</div>
+                                <div class="erp-stat-sub">Honorarios acumulados por pagar a especialistas</div>
                             </div>
-                            <div class="erp-stat-value" id="payroll-stat-fijo">$0.00</div>
-                            <div class="erp-stat-sub">Sueldos base personal de planta</div>
+
+                            <div class="erp-stat-card accent-blue">
+                                <div class="erp-stat-header">
+                                    <span class="erp-stat-title">Pendiente Asistentes</span>
+                                    <div class="erp-stat-icon-wrap blue"><i class="fa-solid fa-headset"></i></div>
+                                </div>
+                                <div class="erp-stat-value" id="stat-srv-ast-pending" style="color: #0284c7;">$0.00</div>
+                                <div class="erp-stat-sub">Bonos acumulados por pagar a asistentes</div>
+                            </div>
+
+                            <div class="erp-stat-card accent-red">
+                                <div class="erp-stat-header">
+                                    <span class="erp-stat-title">Servicios por Liquidar</span>
+                                    <div class="erp-stat-icon-wrap red"><i class="fa-solid fa-clock-rotate-left"></i></div>
+                                </div>
+                                <div class="erp-stat-value text-danger" id="stat-srv-count-pending">0</div>
+                                <div class="erp-stat-sub">Procedimientos con pagos pendientes</div>
+                            </div>
+
+                            <div class="erp-stat-card accent-purple">
+                                <div class="erp-stat-header">
+                                    <span class="erp-stat-title">Total Liquidado (Histórico)</span>
+                                    <div class="erp-stat-icon-wrap purple"><i class="fa-solid fa-circle-check"></i></div>
+                                </div>
+                                <div class="erp-stat-value" id="stat-srv-total-settled" style="color: #16a34a;">$0.00</div>
+                                <div class="erp-stat-sub">Honorarios ya pagados y conciliados</div>
+                            </div>
                         </div>
 
-                        <div class="erp-stat-card accent-green">
-                            <div class="erp-stat-header">
-                                <span class="erp-stat-title">Honorarios Médicos</span>
-                                <div class="erp-stat-icon-wrap green"><i class="fa-solid fa-user-doctor"></i></div>
+                        <!-- Filtros y Buscador para Servicios -->
+                        <div class="card filter-card" style="margin-bottom: 20px;">
+                            <div class="filter-group" id="service-liquidations-filter-group">
+                                <button type="button" class="filter-btn active" onclick="window.ClinicalERP.filterServiceLiquidations('all', this)">Todos</button>
+                                <button type="button" class="filter-btn" onclick="window.ClinicalERP.filterServiceLiquidations('pendiente', this)">Solo Pendientes</button>
+                                <button type="button" class="filter-btn" onclick="window.ClinicalERP.filterServiceLiquidations('parcial', this)">Parcialmente Liquidados</button>
+                                <button type="button" class="filter-btn" onclick="window.ClinicalERP.filterServiceLiquidations('liquidado', this)">Totalmente Pagados</button>
                             </div>
-                            <div class="erp-stat-value text-success" id="payroll-stat-medicos">$0.00</div>
-                            <div class="erp-stat-sub">Producción según % de especialidad</div>
+                            <div class="search-box">
+                                <input type="text" id="service-liquidations-search" oninput="window.ClinicalERP.searchServiceLiquidations(this.value)" placeholder="Buscar por paciente, médico o servicio...">
+                            </div>
                         </div>
 
-                        <div class="erp-stat-card accent-red">
-                            <div class="erp-stat-header">
-                                <span class="erp-stat-title">Deducciones / Alquileres</span>
-                                <div class="erp-stat-icon-wrap red"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+                        <!-- Tabla de Servicios Pendientes por Liquidar -->
+                        <div class="card" style="border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.03);">
+                            <div class="table-responsive">
+                                <table class="table" id="service-liquidations-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Fecha & Paciente</th>
+                                            <th>Servicio Realizado</th>
+                                            <th class="text-right">Precio ($)</th>
+                                            <th>Médico Especialista</th>
+                                            <th>Asistente Participante</th>
+                                            <th class="text-right">Retención Clínica ($)</th>
+                                            <th class="text-center">Estatus General</th>
+                                            <th class="text-right">Acciones de Liquidación</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="service-liquidations-table-body">
+                                        <!-- Populated dynamically -->
+                                    </tbody>
+                                </table>
                             </div>
-                            <div class="erp-stat-value text-danger" id="payroll-stat-deducciones">$0.00</div>
-                            <div class="erp-stat-sub">Canon de consultorios y retenciones</div>
-                        </div>
-
-                        <div class="erp-stat-card accent-purple">
-                            <div class="erp-stat-header">
-                                <span class="erp-stat-title">Total Neto a Liquidar</span>
-                                <div class="erp-stat-icon-wrap purple"><i class="fa-solid fa-money-bill-wave"></i></div>
-                            </div>
-                            <div class="erp-stat-value" id="payroll-stat-neto" style="color: #608127;">$0.00</div>
-                            <div class="erp-stat-sub">Monto neto consolidado a pagar</div>
                         </div>
                     </div>
 
-                    <!-- Filter bar for payroll -->
-                    <div class="card filter-card" style="margin-bottom: 20px;">
-                        <div class="filter-group" id="payroll-filter-group">
-                            <button type="button" class="filter-btn active" onclick="window.ClinicalERP.filterPayroll('all', this)">Todos</button>
-                            <button type="button" class="filter-btn" onclick="window.ClinicalERP.filterPayroll('personal_fijo', this)">Personal Fijo</button>
-                            <button type="button" class="filter-btn" onclick="window.ClinicalERP.filterPayroll('medico_contratado', this)">Médicos Especialistas</button>
-                            <button type="button" class="filter-btn" onclick="window.ClinicalERP.filterPayroll('pendiente', this)">Pendientes</button>
-                            <button type="button" class="filter-btn" onclick="window.ClinicalERP.filterPayroll('pagado', this)">Pagados</button>
-                        </div>
-                        <div class="search-box">
-                            <input type="text" id="payroll-search-input" oninput="window.ClinicalERP.searchPayroll(this.value)" placeholder="Buscar colaborador o médico...">
-                        </div>
-                    </div>
+                    <!-- SUBVIEW 2: NÓMINA GENERAL Y PERSONAL FIJO -->
+                    <div id="payroll-subview-general" class="hidden">
+                        <!-- Métricas de Nómina Fija Existentes -->
+                        <div class="erp-stats-grid">
+                            <div class="erp-stat-card accent-blue">
+                                <div class="erp-stat-header">
+                                    <span class="erp-stat-title">Nómina Personal Fijo</span>
+                                    <div class="erp-stat-icon-wrap blue"><i class="fa-solid fa-users"></i></div>
+                                </div>
+                                <div class="erp-stat-value" id="payroll-stat-fijo">$0.00</div>
+                                <div class="erp-stat-sub">Sueldos base personal de planta</div>
+                            </div>
 
-                    <!-- Payroll Table -->
-                    <div class="card" style="border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.03);">
-                        <div class="table-responsive">
-                            <table class="table" id="payroll-table">
-                                <thead>
-                                    <tr>
-                                        <th>Colaborador / Médico</th>
-                                        <th>Tipo de Vínculo</th>
-                                        <th>Período</th>
-                                        <th class="text-right">Sueldo / Honorarios</th>
-                                        <th class="text-right">Bonificaciones</th>
-                                        <th class="text-right">Deducción Alquiler</th>
-                                        <th class="text-right">Neto a Liquidar</th>
-                                        <th class="text-center">Estado</th>
-                                        <th class="text-right">Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="payroll-table-body">
-                                    <!-- Populated dynamically by ClinicalERP -->
-                                </tbody>
-                            </table>
+                            <div class="erp-stat-card accent-green">
+                                <div class="erp-stat-header">
+                                    <span class="erp-stat-title">Honorarios Médicos Fijos</span>
+                                    <div class="erp-stat-icon-wrap green"><i class="fa-solid fa-user-doctor"></i></div>
+                                </div>
+                                <div class="erp-stat-value text-success" id="payroll-stat-medicos">$0.00</div>
+                                <div class="erp-stat-sub">Producción fija mensual/quincenal</div>
+                            </div>
+
+                            <div class="erp-stat-card accent-red">
+                                <div class="erp-stat-header">
+                                    <span class="erp-stat-title">Deducciones / Alquileres</span>
+                                    <div class="erp-stat-icon-wrap red"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+                                </div>
+                                <div class="erp-stat-value text-danger" id="payroll-stat-deducciones">$0.00</div>
+                                <div class="erp-stat-sub">Canon de consultorios y retenciones</div>
+                            </div>
+
+                            <div class="erp-stat-card accent-purple">
+                                <div class="erp-stat-header">
+                                    <span class="erp-stat-title">Total Neto a Liquidar</span>
+                                    <div class="erp-stat-icon-wrap purple"><i class="fa-solid fa-money-bill-wave"></i></div>
+                                </div>
+                                <div class="erp-stat-value" id="payroll-stat-neto" style="color: #608127;">$0.00</div>
+                                <div class="erp-stat-sub">Monto neto consolidado a pagar</div>
+                            </div>
+                        </div>
+
+                        <!-- Filter bar for payroll -->
+                        <div class="card filter-card" style="margin-bottom: 20px;">
+                            <div class="filter-group" id="payroll-filter-group">
+                                <button type="button" class="filter-btn active" onclick="window.ClinicalERP.filterPayroll('all', this)">Todos</button>
+                                <button type="button" class="filter-btn" onclick="window.ClinicalERP.filterPayroll('personal_fijo', this)">Personal Fijo</button>
+                                <button type="button" class="filter-btn" onclick="window.ClinicalERP.filterPayroll('medico_contratado', this)">Médicos Especialistas</button>
+                                <button type="button" class="filter-btn" onclick="window.ClinicalERP.filterPayroll('pendiente', this)">Pendientes</button>
+                                <button type="button" class="filter-btn" onclick="window.ClinicalERP.filterPayroll('pagado', this)">Pagados</button>
+                            </div>
+                            <div class="search-box">
+                                <input type="text" id="payroll-search-input" oninput="window.ClinicalERP.searchPayroll(this.value)" placeholder="Buscar colaborador o médico...">
+                            </div>
+                        </div>
+
+                        <!-- Payroll Table -->
+                        <div class="card" style="border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.03);">
+                            <div class="table-responsive">
+                                <table class="table" id="payroll-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Colaborador / Médico</th>
+                                            <th>Tipo de Vínculo</th>
+                                            <th>Período</th>
+                                            <th class="text-right">Sueldo / Honorarios</th>
+                                            <th class="text-right">Bonificaciones</th>
+                                            <th class="text-right">Deducción Alquiler</th>
+                                            <th class="text-right">Neto a Liquidar</th>
+                                            <th class="text-center">Estado</th>
+                                            <th class="text-right">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="payroll-table-body">
+                                        <!-- Populated dynamically by ClinicalERP -->
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -4516,6 +4612,270 @@
         </div>
     </div>
 
+    <!-- MODAL: LIQUIDAR SERVICIO (MÉDICO / ASISTENTE / AMBOS) -->
+    <div class="modal-overlay hidden" id="modal-settle-service">
+        <div class="modal-dialog" style="max-width: 580px; width: 95vw;">
+            <div class="modal-header">
+                <h3 id="modal-settle-service-title"><i class="fa-solid fa-hand-holding-dollar text-cyan"></i> Liquidar Honorarios por Servicio</h3>
+                <button class="modal-close" data-close-erp="modal-settle-service">&times;</button>
+            </div>
+            <form id="form-settle-service" onsubmit="window.ClinicalERP.confirmSettlement(event)">
+                <input type="hidden" id="settle-liquidation-id">
+                <div class="modal-body" style="padding: 20px;">
+                    <div style="background: rgba(8, 145, 178, 0.05); border: 1px solid rgba(8, 145, 178, 0.2); border-radius: 10px; padding: 12px 16px; margin-bottom: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <strong id="settle-service-name" style="font-size: 0.98rem; color: var(--text-color);">Servicio Clínico</strong>
+                            <span id="settle-service-price" style="font-weight: 700; color: #16a34a; font-size: 0.95rem;">$0.00</span>
+                        </div>
+                        <div style="font-size: 0.82rem; color: var(--text-muted);">
+                            <span id="settle-patient-name"><i class="fa-solid fa-user"></i> Paciente</span> • 
+                            <span id="settle-service-date"><i class="fa-regular fa-calendar"></i> Fecha</span>
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 16px;">
+                        <label style="font-weight: 600; margin-bottom: 8px; display: block;">¿A quién deseas liquidar?</label>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;" id="settle-target-selector">
+                            <label style="border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; cursor: pointer; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 4px;" id="lbl-settle-doctor">
+                                <input type="radio" name="settle_target" value="doctor" checked onchange="window.ClinicalERP.updateSettleModalTarget('doctor')">
+                                <span style="font-size: 0.84rem; font-weight: 600;"><i class="fa-solid fa-user-doctor text-cyan"></i> Solo Médico</span>
+                                <small id="settle-doc-badge-amt" style="color: #16a34a; font-weight: 700;">$0.00</small>
+                            </label>
+                            <label style="border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; cursor: pointer; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 4px;" id="lbl-settle-assistant">
+                                <input type="radio" name="settle_target" value="assistant" onchange="window.ClinicalERP.updateSettleModalTarget('assistant')">
+                                <span style="font-size: 0.84rem; font-weight: 600;"><i class="fa-solid fa-headset text-teal"></i> Solo Asistente</span>
+                                <small id="settle-ast-badge-amt" style="color: #0284c7; font-weight: 700;">$0.00</small>
+                            </label>
+                            <label style="border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; cursor: pointer; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 4px;" id="lbl-settle-both">
+                                <input type="radio" name="settle_target" value="both" onchange="window.ClinicalERP.updateSettleModalTarget('both')">
+                                <span style="font-size: 0.84rem; font-weight: 600;"><i class="fa-solid fa-users text-purple"></i> Ambos a la vez</span>
+                                <small id="settle-both-badge-amt" style="color: #608127; font-weight: 700;">$0.00</small>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div style="background: var(--card-bg); border: 1px dashed var(--primary-cyan); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 0.9rem; font-weight: 600; color: var(--text-color);">Monto a Liquidar:</span>
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span style="font-weight: 800; font-size: 1.2rem; color: #16a34a;">$</span>
+                            <input type="number" id="settle-amount-input" step="0.01" min="0" required class="form-control" style="width: 120px; font-size: 1.15rem; font-weight: 800; text-align: right; color: #16a34a;">
+                        </div>
+                    </div>
+
+                    <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                        <div class="form-group">
+                            <label>Método de Pago / Egreso *</label>
+                            <select id="settle-payment-method" class="form-control" required>
+                                <option value="Efectivo en Dólares ($)">Efectivo en Dólares ($)</option>
+                                <option value="Pago Móvil (Bs)">Pago Móvil (Bs)</option>
+                                <option value="Transferencia Bancaria">Transferencia Bancaria</option>
+                                <option value="Zelle">Zelle</option>
+                                <option value="Punto de Venta">Punto de Venta</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Nº de Referencia / Comprobante</label>
+                            <input type="text" id="settle-payment-ref" class="form-control" placeholder="Ej: REF-98402 / S/N">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Observaciones de la Liquidación</label>
+                        <textarea id="settle-notes" class="form-control" rows="2" placeholder="Detalles del pago, notas de conciliación..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" data-close-erp="modal-settle-service">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" style="background: #16a34a !important; border: none !important;">
+                        <i class="fa-solid fa-check"></i> Confirmar y Liquidar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: EDITAR GANANCIAS DEL SERVICIO (AJUSTE PREVIO) -->
+    <div class="modal-overlay hidden" id="modal-edit-service-gain">
+        <div class="modal-dialog" style="max-width: 640px; width: 95vw;">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-pen-to-square text-cyan"></i> Ajustar Ganancias de Servicio</h3>
+                <button class="modal-close" data-close-erp="modal-edit-service-gain">&times;</button>
+            </div>
+            <form id="form-edit-service-gain" onsubmit="window.ClinicalERP.saveEditedGain(event)">
+                <input type="hidden" id="edit-gain-liquidation-id">
+                <div class="modal-body" style="padding: 20px;">
+                    <p class="text-muted" style="margin-top: 0; font-size: 0.86rem;">
+                        Ajuste libremente los montos o porcentajes acordados para este servicio antes de procesar el pago.
+                    </p>
+
+                    <div class="form-group" style="margin-bottom: 14px;">
+                        <label>Servicio Clínico</label>
+                        <input type="text" id="edit-gain-service-name" class="form-control" readonly style="background: rgba(0,0,0,0.03);">
+                    </div>
+
+                    <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+                        <div class="form-group">
+                            <label>Paciente</label>
+                            <input type="text" id="edit-gain-patient-name" class="form-control" readonly style="background: rgba(0,0,0,0.03);">
+                        </div>
+                        <div class="form-group">
+                            <label>Precio Cobrado ($) *</label>
+                            <input type="number" id="edit-gain-service-price" step="0.01" min="0" required class="form-control" oninput="window.ClinicalERP.recalcEditGainPreview()">
+                        </div>
+                    </div>
+
+                    <!-- Bloque Médico -->
+                    <div style="background: rgba(13, 148, 136, 0.05); border: 1px solid rgba(13, 148, 136, 0.25); border-radius: 10px; padding: 14px; margin-bottom: 14px;">
+                        <h4 style="margin: 0 0 10px 0; font-size: 0.92rem; color: #0d9488; display: flex; align-items: center; gap: 8px;">
+                            <i class="fa-solid fa-user-doctor"></i> Honorarios del Médico Especialista
+                        </h4>
+                        <div class="form-row" style="display: grid; grid-template-columns: 1.5fr 1fr 1.2fr; gap: 10px;">
+                            <div class="form-group">
+                                <label>Médico Tratante</label>
+                                <input type="text" id="edit-gain-doc-name" class="form-control" placeholder="Nombre del Médico">
+                            </div>
+                            <div class="form-group">
+                                <label>Tipo de Cálculo</label>
+                                <select id="edit-gain-doc-type" class="form-control" onchange="window.ClinicalERP.recalcEditGainPreview()">
+                                    <option value="percentage">Porcentaje (%)</option>
+                                    <option value="fixed">Monto Fijo ($)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label id="lbl-edit-doc-rate">Tasa (%) / Monto ($)</label>
+                                <input type="number" id="edit-gain-doc-rate" step="0.01" min="0" class="form-control" oninput="window.ClinicalERP.recalcEditGainPreview()">
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 0.88rem;">
+                            <span>Monto Total a Pagar al Médico:</span>
+                            <strong style="color: #0d9488; font-size: 1.05rem;" id="edit-gain-doc-preview">$0.00</strong>
+                        </div>
+                    </div>
+
+                    <!-- Bloque Asistente -->
+                    <div style="background: rgba(2, 132, 199, 0.05); border: 1px solid rgba(2, 132, 199, 0.25); border-radius: 10px; padding: 14px; margin-bottom: 14px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <h4 style="margin: 0; font-size: 0.92rem; color: #0284c7; display: flex; align-items: center; gap: 8px;">
+                                <i class="fa-solid fa-headset"></i> Honorarios / Bono de Asistente
+                            </h4>
+                            <label style="display: flex; align-items: center; gap: 6px; font-size: 0.82rem; cursor: pointer; font-weight: 600;">
+                                <input type="checkbox" id="edit-gain-has-assistant" onchange="window.ClinicalERP.toggleEditAssistantFields(this.checked)"> ¿Aplica Asistente?
+                            </label>
+                        </div>
+                        <div id="edit-gain-assistant-fields" class="form-row" style="display: grid; grid-template-columns: 1.5fr 1fr 1.2fr; gap: 10px;">
+                            <div class="form-group">
+                                <label>Asistente Participante</label>
+                                <input type="text" id="edit-gain-ast-name" class="form-control" placeholder="Nombre del Asistente">
+                            </div>
+                            <div class="form-group">
+                                <label>Tipo de Cálculo</label>
+                                <select id="edit-gain-ast-type" class="form-control" onchange="window.ClinicalERP.recalcEditGainPreview()">
+                                    <option value="fixed">Monto Fijo ($)</option>
+                                    <option value="percentage">Porcentaje (%)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Bono ($) / Tasa (%)</label>
+                                <input type="number" id="edit-gain-ast-rate" step="0.01" min="0" class="form-control" oninput="window.ClinicalERP.recalcEditGainPreview()">
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 0.88rem;">
+                            <span>Monto Total a Pagar al Asistente:</span>
+                            <strong style="color: #0284c7; font-size: 1.05rem;" id="edit-gain-ast-preview">$0.00</strong>
+                        </div>
+                    </div>
+
+                    <div style="background: rgba(0,0,0,0.02); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; font-size: 0.88rem;">
+                        <span>Margen de Retención para la Clínica:</span>
+                        <strong style="color: #16a34a; font-size: 1rem;" id="edit-gain-clinic-preview">$0.00</strong>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" data-close-erp="modal-edit-service-gain">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Guardar Cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: REGISTRAR SERVICIO MANUAL PARA LIQUIDACIÓN -->
+    <div class="modal-overlay hidden" id="modal-add-service-liquidation">
+        <div class="modal-dialog" style="max-width: 600px; width: 95vw;">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-file-circle-plus text-cyan"></i> Registrar Servicio para Liquidación</h3>
+                <button class="modal-close" data-close-erp="modal-add-service-liquidation">&times;</button>
+            </div>
+            <form id="form-add-service-liquidation" onsubmit="window.ClinicalERP.saveManualServiceLiquidation(event)">
+                <div class="modal-body" style="padding: 20px;">
+                    <div class="form-group" style="margin-bottom: 12px;">
+                        <label>Servicio del Baremo *</label>
+                        <select id="man-liq-service-select" class="form-control" required onchange="window.ClinicalERP.onManualServiceSelected(this.value)">
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+
+                    <div class="form-row" style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px; margin-bottom: 12px;">
+                        <div class="form-group">
+                            <label>Nombre del Paciente Atendido *</label>
+                            <input type="text" id="man-liq-patient-name" class="form-control" required placeholder="Ej: María Rodríguez">
+                        </div>
+                        <div class="form-group">
+                            <label>Precio Total Cobrado ($) *</label>
+                            <input type="number" id="man-liq-price" step="0.01" min="0" required class="form-control" value="0.00" oninput="window.ClinicalERP.recalcManualLiquidationPreview()">
+                        </div>
+                    </div>
+
+                    <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                        <div class="form-group">
+                            <label>Médico Tratante *</label>
+                            <select id="man-liq-doctor-select" class="form-control" required onchange="window.ClinicalERP.recalcManualLiquidationPreview()">
+                                <!-- Populated dynamically from users -->
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Asistente Clínico (Opcional)</label>
+                            <select id="man-liq-assistant-select" class="form-control" onchange="window.ClinicalERP.recalcManualLiquidationPreview()">
+                                <option value="">(No aplica asistente)</option>
+                                <!-- Populated dynamically from users -->
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                        <div class="form-group">
+                            <label>Fecha de Realización *</label>
+                            <input type="date" id="man-liq-date" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Observaciones / N° Recibo</label>
+                            <input type="text" id="man-liq-notes" class="form-control" placeholder="Ej: Recibo #402, turno tarde">
+                        </div>
+                    </div>
+
+                    <!-- Resumen del cálculo estimado -->
+                    <div style="background: rgba(8, 145, 178, 0.05); border: 1px solid rgba(8, 145, 178, 0.2); border-radius: 8px; padding: 12px 16px; margin-top: 14px;">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 4px;">
+                            <span>Honorarios Médico Estimados:</span>
+                            <strong id="man-liq-preview-doc" style="color: #0d9488;">$0.00</strong>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 4px;">
+                            <span>Bono Asistente Estimado:</span>
+                            <strong id="man-liq-preview-ast" style="color: #0284c7;">$0.00</strong>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 0.88rem; font-weight: 700; border-top: 1px dashed var(--border-color); padding-top: 4px; margin-top: 4px;">
+                            <span>Retención Clínica:</span>
+                            <strong id="man-liq-preview-clinic" style="color: #16a34a;">$0.00</strong>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" data-close-erp="modal-add-service-liquidation">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Registrar Servicio</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- MODAL: SEGUIMIENTO CASHEA / CRÉDITO -->
     <div class="modal-overlay hidden" id="modal-cashea-tracker">
         <div class="modal-dialog modal-lg" style="max-width: 720px;">
@@ -4538,14 +4898,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=252"></script>
-    <script src="supabaseClient.js?v=252"></script>
-    <script src="odontogram.js?v=252"></script>
-    <script src="signature.js?v=252"></script>
-    <script src="whatsapp.js?v=252"></script>
-    <script src="kardex.js?v=252"></script>
-    <script src="app.js?v=252"></script>
-    <script src="clinicalERP.js?v=252"></script>
-    <script src="tutorial.js?v=252"></script>
+    <script src="seededData.js?v=253"></script>
+    <script src="supabaseClient.js?v=253"></script>
+    <script src="odontogram.js?v=253"></script>
+    <script src="signature.js?v=253"></script>
+    <script src="whatsapp.js?v=253"></script>
+    <script src="kardex.js?v=253"></script>
+    <script src="app.js?v=253"></script>
+    <script src="clinicalERP.js?v=253"></script>
+    <script src="tutorial.js?v=253"></script>
 </body>
 </html>
