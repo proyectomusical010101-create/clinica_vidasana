@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=262">
+    <link rel="stylesheet" href="styles.css?v=263">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -782,6 +782,9 @@
                                 <div class="odontogram-viewport" id="odontogram-viewport">
                                     <!-- Rendered dynamically via odontogram.js -->
                                 </div>
+                            </div>
+                        </div>
+
                         <!-- SECCIÓN 4: PRESUPUESTO GENERADO -->
                         <div class="card budget-card">
                             <div class="card-header border-bottom" style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
@@ -1011,6 +1014,7 @@
                         </div>
 
                     </div>
+                </div>
 
                     <!-- 3. EDITOR DE PRESUPUESTO MÉDICO & ESPECIALIDADES (SIN ODONTOGRAMA) -->
                     <div id="medical-budget-editor-container" class="hidden">
@@ -1781,6 +1785,7 @@
                             <div class="card-header">
                                 <h3><i class="fa-solid fa-eye text-green"></i> Previsualización & Acciones</h3>
                             </div>
+                            <div class="card-body" style="padding: 20px;">
                                 <div id="invoice-processed-actions" class="flex-row gap-10 mb-15">
                                     <button class="btn btn-success flex-1" id="btn-print-invoice-final">
                                         <i class="fa-solid fa-print"></i> Imprimir Factura
@@ -3162,7 +3167,6 @@
                 </section>
             </div>
         </main>
-    </div>
 
     <!-- MODAL: AGREGAR ITEM AL PRESUPUESTO -->
     <div class="modal-overlay hidden" id="modal-add-item">
@@ -5488,6 +5492,8 @@
                 <button type="button" class="btn btn-primary" data-close-erp="modal-cashea-tracker">Cerrar</button>
             </div>
         </div>
+    </div>
+
     <!-- MODAL: SELECCIONAR TIPO DE PRESUPUESTO / ESPECIALIDAD -->
     <div class="modal-overlay hidden" id="modal-select-budget-type">
         <div class="modal-dialog" style="max-width: 780px; width: 95vw;">
@@ -5570,6 +5576,7 @@
             <div class="modal-footer" style="padding: 14px 24px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end;">
                 <button type="button" class="btn btn-outline" onclick="closeModal('modal-select-budget-type')">Cancelar</button>
             </div>
+        </div>
     </div>
 
     <!-- MODAL: GESTIÓN DE ETIQUETAS Y CONVENIOS -->
@@ -6476,14 +6483,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=262"></script>
-    <script src="supabaseClient.js?v=262"></script>
-    <script src="odontogram.js?v=262"></script>
-    <script src="signature.js?v=262"></script>
-    <script src="whatsapp.js?v=262"></script>
-    <script src="kardex.js?v=262"></script>
-    <script src="app.js?v=262"></script>
-    <script src="clinicalERP.js?v=262"></script>
-    <script src="tutorial.js?v=262"></script>
+    <script src="seededData.js?v=263"></script>
+    <script src="supabaseClient.js?v=263"></script>
+    <script src="odontogram.js?v=263"></script>
+    <script src="signature.js?v=263"></script>
+    <script src="whatsapp.js?v=263"></script>
+    <script src="kardex.js?v=263"></script>
+    <script src="app.js?v=263"></script>
+    <script src="clinicalERP.js?v=263"></script>
+    <script src="tutorial.js?v=263"></script>
 </body>
 </html>
