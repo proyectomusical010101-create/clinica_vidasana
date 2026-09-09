@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=266">
+    <link rel="stylesheet" href="styles.css?v=267">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -306,14 +306,7 @@
                     <!-- Launch Interactive Tutorial Button -->
                     <button id="btn-launch-tutorial" class="btn btn-sm btn-outline" style="border-color: var(--primary-cyan); color: var(--primary-cyan); font-weight: 700; display: inline-flex; align-items: center; gap: 6px; border-radius: 8px; padding: 6px 12px;" title="Ver Tutorial Guiado del Flujo de Atención">
                         <i class="fa-solid fa-graduation-cap" style="font-size: 1rem;"></i>
-                        <span class="btn-text-full">Tutorial Guiado</span>
-                    </button>
-
-                    <!-- Notifications & Birthday Alerts Bell -->
-                    <button id="btn-notifications-bell" class="btn btn-sm btn-outline" style="position: relative; border-radius: 8px; padding: 6px 12px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; border-color: #cbd5e1; color: var(--text-main); background: var(--bg-card); cursor: pointer;" onclick="window.openBirthdaysHubModal()" title="Alertas del Sistema y Cumpleaños">
-                        <i class="fa-solid fa-bell text-amber" style="font-size: 1.05rem; color: #f59e0b;"></i>
-                        <span class="btn-text-full" style="font-size: 0.85rem;">Alertas</span>
-                        <span id="notifications-badge-count" style="display: none; background: #ef4444; color: #ffffff; font-size: 0.72rem; font-weight: 800; padding: 1px 6px; border-radius: 10px; min-width: 18px; text-align: center; box-shadow: 0 1px 3px rgba(239, 68, 68, 0.4);">0</span>
+                        <span class="btn-text-full">Tutorial</span>
                     </button>
 
                     <!-- Unified Interactive BCV Exchange Rate Toggle Button -->
@@ -322,14 +315,54 @@
                         <span>$ <strong>0.00 Bs.</strong></span>
                     </button>
 
-                    <!-- Direct Sale / Fast Checkout Button -->
-                    <button class="btn btn-sm btn-success" id="btn-direct-sale-top" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; font-weight: 700; border-radius: 8px; padding: 6px 13px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; box-shadow: 0 2px 4px rgba(16, 185, 129, 0.25);" onclick="window.openDirectSaleModal()" title="Cobro Rápido / Venta Directa de Servicios sin Presupuesto">
-                        <i class="fa-solid fa-bolt"></i> <span>Venta Directa</span>
+                    <!-- Notifications & Birthday Alerts Bell (Clean Icon without border/box) -->
+                    <button id="btn-notifications-bell" class="btn-icon-bell" onclick="window.openBirthdaysHubModal()" title="Alertas del Sistema y Cumpleaños">
+                        <i class="fa-solid fa-bell text-amber" style="font-size: 1.25rem; color: #f59e0b;"></i>
+                        <span id="notifications-badge-count" style="display: none;">0</span>
                     </button>
 
-                    <button class="btn btn-primary btn-quick-patient-main" id="btn-quick-patient">
-                        <i class="fa-solid fa-user-plus"></i> <span>Nuevo Paciente</span>
-                    </button>
+                    <!-- Unified "+ Nuevo" Action Dropdown -->
+                    <div class="header-dropdown-wrapper" id="dropdown-new-wrapper">
+                        <button type="button" class="btn btn-primary" id="btn-header-new-menu" onclick="window.toggleHeaderNewMenu(event)" style="font-weight: 700; border-radius: 8px; padding: 7px 15px; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; box-shadow: 0 2px 6px rgba(2, 132, 199, 0.3); font-size: 0.88rem;">
+                            <i class="fa-solid fa-plus"></i>
+                            <span>Nuevo</span>
+                            <i class="fa-solid fa-chevron-down" style="font-size: 0.72rem; transition: transform 0.2s;" id="chevron-header-new"></i>
+                        </button>
+                        <div class="header-dropdown-menu hidden" id="menu-header-new">
+                            <a href="javascript:void(0)" class="header-dropdown-item" onclick="window.triggerHeaderNewAction('direct-sale')">
+                                <span class="header-dropdown-icon" style="background: rgba(16, 185, 129, 0.12); color: #10b981;">
+                                    <i class="fa-solid fa-bolt"></i>
+                                </span>
+                                <div>
+                                    <div style="font-weight: 700;">Venta Directa</div>
+                                    <small style="color: #64748b; font-size: 0.72rem; font-weight: normal; display: block;">Cobro rápido de servicios</small>
+                                </div>
+                            </a>
+                            <a href="javascript:void(0)" class="header-dropdown-item" onclick="window.triggerHeaderNewAction('new-patient')">
+                                <span class="header-dropdown-icon" style="background: rgba(2, 132, 199, 0.12); color: #0284c7;">
+                                    <i class="fa-solid fa-user-plus"></i>
+                                </span>
+                                <div>
+                                    <div style="font-weight: 700;">Nuevo Paciente</div>
+                                    <small style="color: #64748b; font-size: 0.72rem; font-weight: normal; display: block;">Registrar nueva ficha</small>
+                                </div>
+                            </a>
+                            <div style="height: 1px; background: var(--border-color, #e2e8f0); margin: 3px 0;"></div>
+                            <a href="javascript:void(0)" class="header-dropdown-item" onclick="window.triggerHeaderNewAction('new-budget')">
+                                <span class="header-dropdown-icon" style="background: rgba(168, 85, 247, 0.12); color: #a855f7;">
+                                    <i class="fa-solid fa-file-invoice-dollar"></i>
+                                </span>
+                                <div>
+                                    <div style="font-weight: 700;">Nuevo Presupuesto</div>
+                                    <small style="color: #64748b; font-size: 0.72rem; font-weight: normal; display: block;">Odontograma o baremo</small>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Hidden original buttons to preserve 100% backward compatibility (Golden Rule 1) -->
+                    <button id="btn-direct-sale-top" style="display: none !important;"></button>
+                    <button id="btn-quick-patient" style="display: none !important;"></button>
 
                     <div class="current-patient-pill hidden" id="active-patient-bar" style="display: none !important;">
                         <i class="fa-solid fa-user-check"></i>
@@ -6497,14 +6530,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=266"></script>
-    <script src="supabaseClient.js?v=266"></script>
-    <script src="odontogram.js?v=266"></script>
-    <script src="signature.js?v=266"></script>
-    <script src="whatsapp.js?v=266"></script>
-    <script src="kardex.js?v=266"></script>
-    <script src="app.js?v=266"></script>
-    <script src="clinicalERP.js?v=266"></script>
-    <script src="tutorial.js?v=266"></script>
+    <script src="seededData.js?v=267"></script>
+    <script src="supabaseClient.js?v=267"></script>
+    <script src="odontogram.js?v=267"></script>
+    <script src="signature.js?v=267"></script>
+    <script src="whatsapp.js?v=267"></script>
+    <script src="kardex.js?v=267"></script>
+    <script src="app.js?v=267"></script>
+    <script src="clinicalERP.js?v=267"></script>
+    <script src="tutorial.js?v=267"></script>
 </body>
 </html>

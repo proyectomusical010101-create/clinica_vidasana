@@ -5253,3 +5253,124 @@ select, .form-select, select.form-control {
     }
 }
 
+/* ==========================================================
+   DESKTOP TOP-HEADER ALIGNMENT & CLEAN ACTION CONTROLS
+   ========================================================== */
+@media (min-width: 1025px) {
+    .top-header-left {
+        display: none !important;
+    }
+    .header-search {
+        margin-right: auto !important;
+        width: 380px !important;
+    }
+}
+
+/* Clean Icon Bell without borders or box */
+.btn-icon-bell {
+    position: relative !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 8px 10px !important;
+    cursor: pointer !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 50% !important;
+    color: var(--text-main) !important;
+    transition: all 0.2s ease !important;
+}
+
+.btn-icon-bell:hover {
+    background: rgba(245, 158, 11, 0.12) !important;
+    transform: scale(1.08) !important;
+}
+
+.btn-icon-bell:active {
+    transform: scale(0.95) !important;
+}
+
+#notifications-badge-count {
+    position: absolute !important;
+    top: 2px !important;
+    right: 2px !important;
+    font-size: 0.62rem !important;
+    font-weight: 800 !important;
+    min-width: 16px !important;
+    height: 16px !important;
+    line-height: 16px !important;
+    text-align: center !important;
+    border-radius: 50% !important;
+    padding: 0 3px !important;
+    box-shadow: 0 2px 4px rgba(239, 68, 68, 0.45) !important;
+    border: 2px solid var(--bg-card, #ffffff) !important;
+    transform: translate(20%, -20%) !important;
+}
+
+/* Header "+ Nuevo" Dropdown Menu */
+.header-dropdown-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.header-dropdown-menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
+    background: #ffffff;
+    border: 1px solid var(--border-color, #e2e8f0);
+    border-radius: 12px;
+    box-shadow: 0 12px 30px -4px rgba(0, 0, 0, 0.18), 0 4px 12px -2px rgba(0, 0, 0, 0.08);
+    min-width: 220px;
+    z-index: 1050;
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    animation: fadeInDownHeader 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.header-dropdown-menu.hidden {
+    display: none !important;
+}
+
+.header-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    color: var(--text-heading, #0f172a);
+    text-decoration: none;
+    font-size: 0.86rem;
+    font-weight: 600;
+    transition: all 0.15s ease;
+    cursor: pointer;
+}
+
+.header-dropdown-item:hover {
+    background: var(--bg-card-hover, #f1f5f9);
+}
+
+.header-dropdown-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    flex-shrink: 0;
+}
+
+@keyframes fadeInDownHeader {
+    from {
+        opacity: 0;
+        transform: translateY(-6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

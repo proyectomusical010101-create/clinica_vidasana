@@ -4887,6 +4887,69 @@ window.openEHRForPatient = function(patientId) {
 };
 
 // ============================================================================
+// ============================================================================
+// HEADER ACTION DROPDOWN (+ NUEVO) CONTROLLER
+// ============================================================================
+window.toggleHeaderNewMenu = function(e) {
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    const menu = document.getElementById('menu-header-new');
+    const chevron = document.getElementById('chevron-header-new');
+    if (!menu) return;
+    const isHidden = menu.classList.contains('hidden');
+    if (isHidden) {
+        menu.classList.remove('hidden');
+        if (chevron) chevron.style.transform = 'rotate(180deg)';
+    } else {
+        menu.classList.add('hidden');
+        if (chevron) chevron.style.transform = 'rotate(0deg)';
+    }
+};
+
+window.closeHeaderNewMenu = function() {
+    const menu = document.getElementById('menu-header-new');
+    const chevron = document.getElementById('chevron-header-new');
+    if (menu) menu.classList.add('hidden');
+    if (chevron) chevron.style.transform = 'rotate(0deg)';
+};
+
+window.triggerHeaderNewAction = async function(action) {
+    window.closeHeaderNewMenu();
+    if (action === 'direct-sale') {
+        if (typeof window.openDirectSaleModal === 'function') {
+            await window.openDirectSaleModal();
+        } else if (typeof openModal === 'function') {
+            openModal('modal-direct-sale');
+        }
+    } else if (action === 'new-patient') {
+        if (typeof window.openPatientModalForNew === 'function') {
+            window.openPatientModalForNew();
+        } else if (typeof window.selectRegisterFlow === 'function') {
+            window.selectRegisterFlow();
+        } else if (typeof openModal === 'function') {
+            openModal('modal-patient');
+        }
+    } else if (action === 'new-budget') {
+        const budgetNav = document.querySelector('[data-tab="odontogram"]');
+        if (budgetNav) {
+            budgetNav.click();
+        }
+        if (typeof openModal === 'function') {
+            openModal('modal-select-budget-type');
+        }
+    }
+};
+
+document.addEventListener('click', (e) => {
+    const wrapper = document.getElementById('dropdown-new-wrapper');
+    if (wrapper && !wrapper.contains(e.target)) {
+        window.closeHeaderNewMenu();
+    }
+});
+
+// ============================================================================
 // MÓDULO DE VENTA DIRECTA & COBRO RÁPIDO DE SERVICIOS (POS CLÍNICO)
 // ============================================================================
 
