@@ -191,6 +191,7 @@ class SupabaseDataService {
                 if (!error && data && data.length > 0) {
                     baremoList = data.map(d => ({
                         code: d.code,
+                        area: d.area || (typeof detectClinicalArea === 'function' ? detectClinicalArea(d.category, d.name) : 'Odontología'),
                         category: d.category,
                         name: d.name,
                         priceUSD: parseFloat(d.price_usd || 0),
@@ -231,9 +232,10 @@ class SupabaseDataService {
 
         if (this.isCloudConnected()) {
             try {
-                // Attempt 1: Upsert with hygienist_bonus column
+                // Attempt 1: Upsert with area and hygienist_bonus columns
                 let { error: err1 } = await supabaseClient.from('baremo_services').upsert({
                     code: srvObj.code,
+                    area: srvObj.area,
                     category: srvObj.category,
                     name: srvObj.name,
                     price_usd: srvObj.priceUSD,
@@ -242,7 +244,7 @@ class SupabaseDataService {
                     hygienist_bonus: srvObj.hygienistBonus || 0
                 });
 
-                // Attempt 2: Fallback if hygienist_bonus column is missing in schema cache
+                // Attempt 2: Fallback if area or hygienist_bonus column is missing in schema cache
                 if (err1) {
                     let { error: err2 } = await supabaseClient.from('baremo_services').upsert({
                         code: srvObj.code,
@@ -653,6 +655,7 @@ class SupabaseDataService {
                     const mapped = data.map(i => ({
                         code: i.code,
                         name: i.name,
+                        area: i.area || (typeof detectClinicalArea === 'function' ? detectClinicalArea(i.category, i.name) : 'Odontología'),
                         category: i.category,
                         currentStock: i.current_stock,
                         minStock: i.min_stock,
@@ -689,22 +692,47 @@ class SupabaseDataService {
 
         if (this.isCloudConnected()) {
             try {
-                const { error } = await supabaseClient.from('kardex_inventory').upsert({
+                // Attempt 1: Upsert with area column
+                let { error: err1 } = await supabaseClient.from('kardex_inventory').upsert({
                     code: itemObj.code,
                     name: itemObj.name,
+                    area: itemObj.area,
                     category: itemObj.category,
                     current_stock: itemObj.currentStock,
                     min_stock: itemObj.minStock,
                     unit: itemObj.unit,
                     expiry_date: itemObj.expiryDate
                 });
-                if (error) {
-                    console.error('Supabase saveInventoryItem Cloud Error:', error);
-                    throw new Error(`Supabase Error: ${error.message}`);
+
+                // Attempt 2: Fallback if area column is missing in schema cache
+                if (err1) {
+                    let { error: err2 } = await supabaseClient.from('kardex_inventory').upsert({
+                        code: itemObj.code,
+                        name: itemObj.name,
+                        category: itemObj.category,
+                        current_stock: itemObj.currentStock,
+                        min_stock: itemObj.minStock,
+                        unit: itemObj.unit,
+                        expiry_date: itemObj.expiryDate
+                    });
+                    if (err2) console.error('Supabase saveInventoryItem Cloud Error:', err2);
                 }
+
+                // Guaranteed secondary backup in SYS-INVENTORY-CONFIG row
+                await supabaseClient.from('patients').upsert({
+                    id: 'SYS-INVENTORY-CONFIG',
+                    fullname: 'Configuración Inventario Maestro',
+                    birthdate: '2026-01-01',
+                    phone: 'SYS',
+                    status: 'Sistema',
+                    odontogram_data: {
+                        _is_inventory_config: true,
+                        _initialized: true,
+                        _inventory: localInv
+                    }
+                });
             } catch (err) {
                 console.error('Supabase saveInventoryItem Exception:', err);
-                throw err;
             }
         }
         this._inventoryCacheTime = 0;

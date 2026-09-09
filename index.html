@@ -1449,15 +1449,28 @@
                         </div>
                     </div>
 
-                    <!-- Filters bar -->
-                    <div class="card filter-card">
-                        <div class="filter-group">
-                            <button class="filter-btn active" data-filter="all">Todos</button>
-                            <button class="filter-btn" data-filter="low_stock">Stock Bajo</button>
-                            <button class="filter-btn" data-filter="expired">Vencidos / Por Vencer</button>
+                    <!-- Filters bar: Sectorización por Área y Estado de Stock -->
+                    <div class="card filter-card" style="display: flex; flex-direction: column; gap: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                            <div class="filter-group" id="inventory-area-filters" style="display: flex; flex-wrap: wrap; gap: 6px;">
+                                <button class="filter-btn active" data-area-filter="all"><i class="fa-solid fa-layer-group"></i> Todas las Áreas</button>
+                                <button class="filter-btn" data-area-filter="Odontología"><i class="fa-solid fa-tooth text-cyan"></i> Odontología</button>
+                                <button class="filter-btn" data-area-filter="Cardiología"><i class="fa-solid fa-heart-pulse text-red"></i> Cardiología</button>
+                                <button class="filter-btn" data-area-filter="Laboratorio"><i class="fa-solid fa-flask-vial text-purple"></i> Laboratorio</button>
+                                <button class="filter-btn" data-area-filter="Rayos X e Imagen"><i class="fa-solid fa-x-ray text-amber"></i> Rayos X</button>
+                                <button class="filter-btn" data-area-filter="Medicina General"><i class="fa-solid fa-user-doctor text-green"></i> Med. General</button>
+                                <button class="filter-btn" data-area-filter="Ginecología"><i class="fa-solid fa-person-pregnant text-pink"></i> Ginecología</button>
+                                <button class="filter-btn" data-area-filter="Pediatría"><i class="fa-solid fa-baby text-blue"></i> Pediatría</button>
+                            </div>
+                            <div class="search-box" style="min-width: 240px;">
+                                <input type="text" id="inventory-table-search" placeholder="Buscar insumo, código o área...">
+                            </div>
                         </div>
-                        <div class="search-box">
-                            <input type="text" id="inventory-table-search" placeholder="Buscar insumo o código...">
+                        <div style="display: flex; gap: 8px; align-items: center; border-top: 1px dashed var(--border-color); padding-top: 8px;">
+                            <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted);"><i class="fa-solid fa-filter"></i> Filtrar Alertas:</span>
+                            <button class="filter-btn active btn-xs" data-status-filter="all" style="padding: 3px 10px;">Todos los Stocks</button>
+                            <button class="filter-btn btn-xs" data-status-filter="low_stock" style="padding: 3px 10px;"><i class="fa-solid fa-triangle-exclamation text-amber"></i> Stock Bajo / Crítico</button>
+                            <button class="filter-btn btn-xs" data-status-filter="expired" style="padding: 3px 10px;"><i class="fa-regular fa-clock text-red"></i> Vencidos / Por Vencer</button>
                         </div>
                     </div>
 
@@ -1467,6 +1480,7 @@
                                 <thead>
                                     <tr>
                                         <th>Código</th>
+                                        <th>Área Clínica</th>
                                         <th>Nombre del Insumo</th>
                                         <th>Categoría</th>
                                         <th>Stock Actual</th>
@@ -1508,18 +1522,20 @@
                         </div>
                     </div>
 
-                    <!-- Filters bar -->
-                    <div class="card filter-card">
-                        <div class="filter-group">
-                            <button class="filter-btn active" data-filter="all">Todos</button>
-                            <button class="filter-btn" data-filter="Odontología General">General</button>
-                            <button class="filter-btn" data-filter="Ortodoncia">Ortodoncia</button>
-                            <button class="filter-btn" data-filter="Endodoncia">Endodoncia</button>
-                            <button class="filter-btn" data-filter="Cirugía">Cirugía</button>
-                            <button class="filter-btn" data-filter="Estética">Estética</button>
+                    <!-- Filters bar: Sectorización por Área Clínica Hospitalaria -->
+                    <div class="card filter-card" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                        <div class="filter-group" id="pricing-area-filters" style="display: flex; flex-wrap: wrap; gap: 6px;">
+                            <button class="filter-btn active" data-filter="all"><i class="fa-solid fa-layer-group"></i> Todos</button>
+                            <button class="filter-btn" data-filter="Odontología"><i class="fa-solid fa-tooth text-cyan"></i> Odontología</button>
+                            <button class="filter-btn" data-filter="Medicina General"><i class="fa-solid fa-user-doctor text-green"></i> Med. General</button>
+                            <button class="filter-btn" data-filter="Laboratorio"><i class="fa-solid fa-flask-vial text-purple"></i> Laboratorio</button>
+                            <button class="filter-btn" data-filter="Rayos X e Imagen"><i class="fa-solid fa-x-ray text-amber"></i> Rayos X e Imagen</button>
+                            <button class="filter-btn" data-filter="Cardiología"><i class="fa-solid fa-heart-pulse text-red"></i> Cardiología</button>
+                            <button class="filter-btn" data-filter="Ginecología"><i class="fa-solid fa-person-pregnant text-pink"></i> Ginecología</button>
+                            <button class="filter-btn" data-filter="Pediatría"><i class="fa-solid fa-baby text-blue"></i> Pediatría</button>
                         </div>
-                        <div class="search-box">
-                            <input type="text" id="pricing-table-search" placeholder="Buscar servicio o código...">
+                        <div class="search-box" style="min-width: 240px;">
+                            <input type="text" id="pricing-table-search" placeholder="Buscar servicio, código o área...">
                         </div>
                     </div>
 
@@ -1529,6 +1545,7 @@
                                 <thead>
                                     <tr>
                                         <th>Código</th>
+                                        <th>Área Clínica</th>
                                         <th>Categoría</th>
                                         <th>Nombre del Tratamiento</th>
                                         <th>Precio Base ($ USD)</th>
@@ -3225,15 +3242,30 @@
                         <input type="text" id="mat-name" required placeholder="ej: Anestesia Lidocaína 2%">
                     </div>
                     <div class="form-group">
-                        <label>Categoría *</label>
-                        <select id="mat-category">
-                            <option value="Restauración">Restauración</option>
-                            <option value="Anestesia">Anestesia</option>
-                            <option value="Bioseguridad">Bioseguridad</option>
-                            <option value="Cirugía">Cirugía</option>
-                            <option value="Endodoncia">Endodoncia</option>
-                            <option value="Ortodoncia">Ortodoncia</option>
+                        <label>Área / Departamento Clínico *</label>
+                        <select id="mat-area">
+                            <option value="Odontología">Odontología</option>
+                            <option value="Cardiología">Cardiología</option>
+                            <option value="Laboratorio">Laboratorio</option>
+                            <option value="Rayos X e Imagen">Rayos X e Imagen</option>
+                            <option value="Medicina General">Medicina General</option>
+                            <option value="Ginecología">Ginecología</option>
+                            <option value="Pediatría">Pediatría</option>
+                            <option value="General">General / Policlínica</option>
                         </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Categoría / Subtipo *</label>
+                        <input type="text" id="mat-category" placeholder="ej: Descartables, Farmacología, Resina, Reactivos" list="mat-category-list">
+                        <datalist id="mat-category-list">
+                            <option value="Descartables y Bioseguridad">
+                            <option value="Farmacología y Anestesia">
+                            <option value="Material Quirúrgico">
+                            <option value="Restauración y Resinas">
+                            <option value="Reactivos de Laboratorio">
+                            <option value="Insumos de Rayos X">
+                            <option value="Ortodoncia y Endodoncia">
+                        </datalist>
                     </div>
                     <div class="form-group">
                         <label>Unidad de Medida</label>
@@ -3283,19 +3315,36 @@
                         <input type="text" id="srv-code" required placeholder="OD-006">
                     </div>
                     <div class="form-group">
-                        <label>Nombre del Procedimiento *</label>
-                        <input type="text" id="srv-name" required placeholder="ej: Blanqueamiento Dental LED">
+                        <label>Nombre del Procedimiento / Servicio *</label>
+                        <input type="text" id="srv-name" required placeholder="ej: Blanqueamiento Dental LED / Electrocardiograma">
                     </div>
                     <div class="form-group">
-                        <label>Categoría *</label>
-                        <select id="srv-category">
-                            <option value="Operatoria">Operatoria</option>
-                            <option value="Prevención">Prevención</option>
-                            <option value="Endodoncia">Endodoncia</option>
-                            <option value="Cirugía">Cirugía</option>
-                            <option value="Estética">Estética</option>
-                            <option value="Protesis">Prótesis</option>
+                        <label>Área / Especialidad Clínica *</label>
+                        <select id="srv-area">
+                            <option value="Odontología">Odontología</option>
+                            <option value="Medicina General">Medicina General</option>
+                            <option value="Laboratorio">Laboratorio</option>
+                            <option value="Rayos X e Imagen">Rayos X e Imagen</option>
+                            <option value="Cardiología">Cardiología</option>
+                            <option value="Ginecología">Ginecología</option>
+                            <option value="Pediatría">Pediatría</option>
+                            <option value="General">General / Policlínica</option>
                         </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Categoría / Subespecialidad *</label>
+                        <input type="text" id="srv-category" placeholder="ej: Endodoncia, Perfil 20, EKG, Cirugía" list="srv-category-list">
+                        <datalist id="srv-category-list">
+                            <option value="Consulta y Diagnóstico">
+                            <option value="Operatoria y Restauración">
+                            <option value="Endodoncia">
+                            <option value="Ortodoncia">
+                            <option value="Cirugía Bucal">
+                            <option value="Estética Dental">
+                            <option value="Laboratorio y Exámenes">
+                            <option value="Imagenología y Rayos X">
+                            <option value="Cardiología y EKG">
+                        </datalist>
                     </div>
                     <div class="form-group">
                         <label>Precio Base ($ USD) *</label>
@@ -6327,14 +6376,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=259"></script>
-    <script src="supabaseClient.js?v=259"></script>
-    <script src="odontogram.js?v=259"></script>
-    <script src="signature.js?v=259"></script>
-    <script src="whatsapp.js?v=259"></script>
-    <script src="kardex.js?v=259"></script>
-    <script src="app.js?v=259"></script>
-    <script src="clinicalERP.js?v=259"></script>
-    <script src="tutorial.js?v=259"></script>
+    <script src="seededData.js?v=260"></script>
+    <script src="supabaseClient.js?v=260"></script>
+    <script src="odontogram.js?v=260"></script>
+    <script src="signature.js?v=260"></script>
+    <script src="whatsapp.js?v=260"></script>
+    <script src="kardex.js?v=260"></script>
+    <script src="app.js?v=260"></script>
+    <script src="clinicalERP.js?v=260"></script>
+    <script src="tutorial.js?v=260"></script>
 </body>
 </html>

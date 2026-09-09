@@ -8062,20 +8062,42 @@ function renderSessionMaterialsList(inventory, container) {
 // ==========================================
 // INVENTORY KARDEX & PRICING TABLES WITH DELETE
 // ==========================================
-async function renderInventoryTable(filter = 'all', searchQuery = '') {
+window.currentInventoryAreaFilter = 'all';
+window.currentInventoryStatusFilter = 'all';
+
+async function renderInventoryTable(filter = null, searchQuery = null, areaFilter = null) {
     const tbody = document.getElementById('inventory-table-body');
     if (!tbody || !window.kardex) return;
+
+    if (filter !== null) window.currentInventoryStatusFilter = filter;
+    if (areaFilter !== null) window.currentInventoryAreaFilter = areaFilter;
+
+    const currentStatus = window.currentInventoryStatusFilter || 'all';
+    const currentArea = window.currentInventoryAreaFilter || 'all';
+    const searchVal = searchQuery !== null ? searchQuery : (document.getElementById('inventory-table-search') ? document.getElementById('inventory-table-search').value : '');
 
     tbody.innerHTML = '';
     let items = await SupabaseDataService.getInventory();
     const currentUser = getCurrentUser();
     const isAssistant = currentUser && currentUser.role.toLowerCase().includes('asistente');
 
-    // Apply Filter
-    if (filter !== 'all') {
-        if (filter === 'low_stock') {
+    // Ensure each item has a clinical area (inference engine fallback)
+    items.forEach(item => {
+        if (!item.area) {
+            item.area = detectClinicalArea(item.category, item.name);
+        }
+    });
+
+    // 1. Filter by Clinical Area
+    if (currentArea !== 'all') {
+        items = items.filter(item => (item.area || '').toLowerCase() === currentArea.toLowerCase());
+    }
+
+    // 2. Filter by Stock / Expiry Status
+    if (currentStatus !== 'all') {
+        if (currentStatus === 'low_stock') {
             items = items.filter(item => item.currentStock <= (item.minStock || 5));
-        } else if (filter === 'expired') {
+        } else if (currentStatus === 'expired') {
             const today = new Date();
             const threshold = new Date();
             threshold.setDate(today.getDate() + 30); // 30 days buffer
@@ -8087,18 +8109,19 @@ async function renderInventoryTable(filter = 'all', searchQuery = '') {
         }
     }
 
-    // Apply Search
-    if (searchQuery && searchQuery.trim() !== '') {
-        const q = searchQuery.toLowerCase();
+    // 3. Search Query Filter
+    if (searchVal && searchVal.trim() !== '') {
+        const q = searchVal.toLowerCase();
         items = items.filter(item => 
             (item.code && item.code.toLowerCase().includes(q)) ||
             (item.name && item.name.toLowerCase().includes(q)) ||
+            (item.area && item.area.toLowerCase().includes(q)) ||
             (item.category && item.category.toLowerCase().includes(q))
         );
     }
 
     if (items.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted" style="padding: 24px;">No se encontraron insumos con los filtros activos.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="text-center text-muted" style="padding: 24px;">No se encontraron insumos para los filtros seleccionados (Área: ${currentArea === 'all' ? 'Todas las Áreas' : currentArea}, Alerta: ${currentStatus === 'all' ? 'Todos' : currentStatus}).</td></tr>`;
         return;
     }
 
@@ -8123,11 +8146,18 @@ async function renderInventoryTable(filter = 'all', searchQuery = '') {
             minStockDisplay = `${item.minStock} ${baseUnit}`;
         }
 
+        const areaInfo = typeof getAreaIconInfo === 'function' ? getAreaIconInfo(item.area) : { icon: 'fa-hospital', color: '#64748b', bg: 'rgba(100,116,139,0.1)' };
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td><strong>${item.code}</strong></td>
-            <td>${item.name}</td>
-            <td>${item.category}</td>
+            <td>
+                <span class="badge-tag" style="background: ${areaInfo.bg}; color: ${areaInfo.color}; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
+                    <i class="fa-solid ${areaInfo.icon}"></i> ${item.area}
+                </span>
+            </td>
+            <td><strong>${item.name}</strong></td>
+            <td><span class="badge-tag gray" style="font-size: 0.72rem;">${item.category || 'General'}</span></td>
             <td>${stockDisplay}</td>
             <td>${minStockDisplay}</td>
             <td>${item.expiryDate || 'N/A'}</td>
@@ -8281,9 +8311,21 @@ async function renderPricingTable(filter = 'all', searchQuery = '') {
     const currentUser = getCurrentUser();
     const isAssistant = currentUser && currentUser.role.toLowerCase().includes('asistente');
 
-    // Apply Filter
+    // Ensure each service has an area assigned
+    baremo.forEach(p => {
+        if (!p.area) {
+            p.area = detectClinicalArea(p.category, p.name);
+        }
+    });
+
+    // Apply Filter by Area or Category
     if (filter !== 'all') {
-        baremo = baremo.filter(p => p.category === filter);
+        const fLower = filter.toLowerCase();
+        baremo = baremo.filter(p => 
+            (p.area && p.area.toLowerCase() === fLower) ||
+            (p.category && p.category.toLowerCase() === fLower) ||
+            (fLower === 'odontología' && (p.area === 'Odontología' || ['operatoria', 'endodoncia', 'cirugía', 'ortodoncia', 'estética', 'prótesis', 'prevención', 'diagnóstico'].includes((p.category || '').toLowerCase())))
+        );
     }
 
     // Apply Search
@@ -8292,24 +8334,31 @@ async function renderPricingTable(filter = 'all', searchQuery = '') {
         baremo = baremo.filter(p => 
             (p.code && p.code.toLowerCase().includes(q)) ||
             (p.name && p.name.toLowerCase().includes(q)) ||
+            (p.area && p.area.toLowerCase().includes(q)) ||
             (p.category && p.category.toLowerCase().includes(q))
         );
     }
 
     if (baremo.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="text-center text-muted" style="padding: 24px;">No se encontraron servicios con los filtros activos.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="10" class="text-center text-muted" style="padding: 24px;">No se encontraron servicios para el área o filtro "${filter}".</td></tr>`;
         return;
     }
 
     baremo.forEach(p => {
         const priceVES = (p.priceUSD * rate).toFixed(2);
         const deleteSrvBtn = isAssistant ? '' : `<button class="btn btn-xs btn-outline text-red" onclick="deletePricingService('${p.code}')" title="Eliminar Servicio"><i class="fa-solid fa-trash"></i></button>`;
+        const areaInfo = typeof getAreaIconInfo === 'function' ? getAreaIconInfo(p.area) : { icon: 'fa-hospital', color: '#64748b', bg: 'rgba(100,116,139,0.1)' };
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td><strong>${p.code}</strong></td>
-            <td><span class="badge-tag blue">${p.category}</span></td>
-            <td>${p.name}</td>
+            <td>
+                <span class="badge-tag" style="background: ${areaInfo.bg}; color: ${areaInfo.color}; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
+                    <i class="fa-solid ${areaInfo.icon}"></i> ${p.area}
+                </span>
+            </td>
+            <td><span class="badge-tag blue" style="font-size: 0.72rem;">${p.category || 'General'}</span></td>
+            <td><strong>${p.name}</strong></td>
             <td class="text-cyan"><strong>$${p.priceUSD.toFixed(2)}</strong></td>
             <td>Bs. ${priceVES}</td>
             <td><strong>$${(p.hygienistBonus || 0).toFixed(2)}</strong></td>
@@ -9170,7 +9219,8 @@ function initGlobalEvents() {
             e.preventDefault();
             const code = document.getElementById('mat-code').value.trim();
             const name = document.getElementById('mat-name').value.trim();
-            const category = document.getElementById('mat-category').value;
+            const area = document.getElementById('mat-area') ? document.getElementById('mat-area').value : 'Odontología';
+            const category = document.getElementById('mat-category').value.trim() || 'General';
             let unit = document.getElementById('mat-unit').value.trim() || 'Unidades';
             const stock = parseInt(document.getElementById('mat-stock').value) || 0;
             const minStock = parseInt(document.getElementById('mat-min-stock').value) || 5;
@@ -9188,11 +9238,11 @@ function initGlobalEvents() {
                 return;
             }
 
-            await SupabaseDataService.saveInventoryItem({ code, name, category, unit, currentStock: stock, minStock, expiryDate });
+            await SupabaseDataService.saveInventoryItem({ code, name, area, category, unit, currentStock: stock, minStock, expiryDate });
             closeModal('modal-material');
             await renderInventoryTable();
             await renderDashboard();
-            Swal.fire({ icon: 'success', title: '¡Insumo Guardado!', text: 'El material se registró en el inventario Kardex.', timer: 2000, showConfirmButton: false });
+            Swal.fire({ icon: 'success', title: '¡Insumo Guardado!', text: `El material se registró en ${area}.`, timer: 2000, showConfirmButton: false });
         };
     }
 
@@ -9206,7 +9256,8 @@ function initGlobalEvents() {
             e.preventDefault();
             const code = document.getElementById('srv-code').value.trim();
             const name = document.getElementById('srv-name').value.trim();
-            const category = document.getElementById('srv-category').value;
+            const area = document.getElementById('srv-area') ? document.getElementById('srv-area').value : 'Odontología';
+            const category = document.getElementById('srv-category').value.trim() || 'General';
             const priceUSD = parseFloat(document.getElementById('srv-price').value) || 0;
             const hygienistBonus = parseFloat(document.getElementById('srv-hygienist-bonus').value) || 0;
             const chairTimeMin = parseInt(document.getElementById('srv-time').value) || 30;
@@ -9216,11 +9267,11 @@ function initGlobalEvents() {
                 return;
             }
 
-            await SupabaseDataService.saveBaremoService({ code, name, category, priceUSD, chairTimeMin, materials: [], hygienistBonus });
+            await SupabaseDataService.saveBaremoService({ code, name, area, category, priceUSD, chairTimeMin, materials: [], hygienistBonus });
 
             closeModal('modal-service');
             await renderPricingTable();
-            Swal.fire({ icon: 'success', title: '¡Servicio Agregado!', text: 'Registrado exitosamente en la base de datos.', timer: 2000, showConfirmButton: false });
+            Swal.fire({ icon: 'success', title: '¡Servicio Agregado!', text: `Registrado en ${area} exitosamente.`, timer: 2000, showConfirmButton: false });
         };
     }
 
@@ -10165,21 +10216,30 @@ function initGlobalEvents() {
         });
     }
 
-    // Insumos / Inventory View Filters and Search Handler
-    document.querySelectorAll('#view-inventory .filter-btn').forEach(btn => {
+    // Insumos / Inventory View: Clinical Area Filters
+    document.querySelectorAll('#view-inventory [data-area-filter]').forEach(btn => {
         btn.onclick = async function() {
-            document.querySelectorAll('#view-inventory .filter-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('#view-inventory [data-area-filter]').forEach(b => b.classList.remove('active'));
             this.classList.add('active');
             const searchVal = document.getElementById('inventory-table-search') ? document.getElementById('inventory-table-search').value : '';
-            await renderInventoryTable(this.dataset.filter, searchVal);
+            await renderInventoryTable(null, searchVal, this.dataset.areaFilter);
         };
     });
+
+    // Insumos / Inventory View: Status Alerts Filters
+    document.querySelectorAll('#view-inventory [data-status-filter]').forEach(btn => {
+        btn.onclick = async function() {
+            document.querySelectorAll('#view-inventory [data-status-filter]').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            const searchVal = document.getElementById('inventory-table-search') ? document.getElementById('inventory-table-search').value : '';
+            await renderInventoryTable(this.dataset.statusFilter, searchVal, null);
+        };
+    });
+
     const inventorySearchInput = document.getElementById('inventory-table-search');
     if (inventorySearchInput) {
         inventorySearchInput.addEventListener('input', async (e) => {
-            const activeFilterBtn = document.querySelector('#view-inventory .filter-btn.active');
-            const activeFilter = activeFilterBtn ? activeFilterBtn.dataset.filter : 'all';
-            await renderInventoryTable(activeFilter, e.target.value);
+            await renderInventoryTable(null, e.target.value, null);
         });
     }
 
@@ -15955,15 +16015,19 @@ window.currentCFAreaPeriod = 'today';
 
 function detectClinicalArea(rawArea, concept = '') {
     const str = ((rawArea || '') + ' ' + (concept || '')).toLowerCase();
-    if (str.includes('odont') || str.includes('dent') || str.includes('endod') || str.includes('ortod') || str.includes('period') || str.includes('implante') || str.includes('resina') || str.includes('muela') || str.includes('profilaxis') || str.includes('diente') || str.includes('cirugía bucal')) return 'Odontología';
-    if (str.includes('lab') || str.includes('perfil') || str.includes('examen') || str.includes('hematolog') || str.includes('orina') || str.includes('heces') || str.includes('química')) return 'Laboratorio';
-    if (str.includes('rayos') || str.includes('rx') || str.includes('panorám') || str.includes('periapical') || str.includes('imagen') || str.includes('ecograf') || str.includes('tomograf')) return 'Rayos X e Imagen';
-    if (str.includes('cardio') || str.includes('electro') || str.includes('holter') || str.includes('tensión')) return 'Cardiología';
-    if (str.includes('gineco') || str.includes('obstet') || str.includes('citolog') || str.includes('prenatal')) return 'Ginecología';
-    if (str.includes('pediatr') || str.includes('niño') || str.includes('vacuna')) return 'Pediatría';
-    if (str.includes('traumat') || str.includes('ortop') || str.includes('yeso')) return 'Traumatología';
-    if (str.includes('oftalm') || str.includes('vista') || str.includes('ojo')) return 'Oftalmología';
-    return rawArea && rawArea.trim() && rawArea !== 'General' ? rawArea.trim() : 'Medicina General';
+    if (str.includes('odont') || str.includes('dent') || str.includes('endod') || str.includes('ortod') || str.includes('period') || str.includes('implante') || str.includes('resina') || str.includes('muela') || str.includes('profilaxis') || str.includes('diente') || str.includes('cirugía bucal') || str.includes('operatoria') || str.includes('prótesis') || str.includes('protesis') || str.includes('estética') || str.includes('estetica') || str.includes('blanqueamiento') || str.includes('conducto') || str.includes('cordal') || str.includes('exodoncia')) return 'Odontología';
+    if (str.includes('lab') || str.includes('perfil') || str.includes('examen') || str.includes('hematolog') || str.includes('orina') || str.includes('heces') || str.includes('química') || str.includes('sangre') || str.includes('reactivo') || str.includes('tubo')) return 'Laboratorio';
+    if (str.includes('rayos') || str.includes('rx') || str.includes('panorám') || str.includes('periapical') || str.includes('imagen') || str.includes('ecograf') || str.includes('tomograf') || str.includes('placa')) return 'Rayos X e Imagen';
+    if (str.includes('cardio') || str.includes('electro') || str.includes('holter') || str.includes('tensión') || str.includes('ekg') || str.includes('corazón')) return 'Cardiología';
+    if (str.includes('gineco') || str.includes('obstet') || str.includes('citolog') || str.includes('prenatal') || str.includes('embarazo')) return 'Ginecología';
+    if (str.includes('pediatr') || str.includes('niño') || str.includes('vacuna') || str.includes('bebé') || str.includes('infantil')) return 'Pediatría';
+    if (str.includes('traumat') || str.includes('ortop') || str.includes('yeso') || str.includes('fractura')) return 'Traumatología';
+    if (str.includes('oftalm') || str.includes('vista') || str.includes('ojo') || str.includes('lentes')) return 'Oftalmología';
+    if (str.includes('medicina general') || str.includes('médica general') || str.includes('consulta general') || str.includes('triaje') || str.includes('medicina interna') || str.includes('integral') || str.includes('consulta')) return 'Medicina General';
+    
+    const knownAreas = ['Odontología', 'Medicina General', 'Laboratorio', 'Rayos X e Imagen', 'Cardiología', 'Ginecología', 'Pediatría', 'Traumatología', 'Oftalmología'];
+    if (rawArea && knownAreas.includes(rawArea.trim())) return rawArea.trim();
+    return 'Medicina General';
 }
 
 function getAreaIconInfo(areaName) {
