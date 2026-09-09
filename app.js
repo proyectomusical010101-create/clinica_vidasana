@@ -9332,6 +9332,33 @@ function initGlobalEvents() {
         };
     }
 
+    // Unified Top Header Actions (Alerts & Direct Sale POS)
+    const btnNotifBell = document.getElementById('btn-notifications-bell');
+    if (btnNotifBell) {
+        btnNotifBell.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (typeof window.openBirthdaysHubModal === 'function') {
+                await window.openBirthdaysHubModal();
+            } else if (typeof openModal === 'function') {
+                openModal('modal-birthdays-hub');
+            }
+        });
+    }
+
+    const btnDirectSaleTop = document.getElementById('btn-direct-sale-top');
+    if (btnDirectSaleTop) {
+        btnDirectSaleTop.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (typeof window.openDirectSaleModal === 'function') {
+                await window.openDirectSaleModal();
+            } else if (typeof openModal === 'function') {
+                openModal('modal-direct-sale');
+            }
+        });
+    }
+
     const btnSendRemindersAll = document.getElementById('btn-send-reminders-all');
     if (btnSendRemindersAll) {
         btnSendRemindersAll.onclick = () => {
