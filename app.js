@@ -2488,6 +2488,19 @@ window.backToBudgetList = function() {
     renderBudgetListView();
 };
 
+window.getActivePatientTagRule = function(patientId) {
+    if (!patientId) return null;
+    try {
+        const raw = localStorage.getItem('dental_patients');
+        if (raw) {
+            const list = JSON.parse(raw);
+            const p = list.find(pat => String(pat.id) === String(patientId));
+            if (p) return p.tagRule || (p.metadata && p.metadata.tagRule) || null;
+        }
+    } catch(e) {}
+    return null;
+};
+
 window.onMedicalBudgetPatientChange = async function(patientId) {
     const infoBox = document.getElementById('med-budget-patient-info-box');
     if (!infoBox) return;
@@ -2598,7 +2611,16 @@ window.onMedicalBaremoSelected = function(code) {
     const opt = srvSelect ? srvSelect.options[srvSelect.selectedIndex] : null;
     const priceInput = document.getElementById('med-item-price');
     if (opt && priceInput) {
-        const price = parseFloat(opt.getAttribute('data-price') || 0);
+        let price = parseFloat(opt.getAttribute('data-price') || 0);
+        // Verificar regla de recargo comercial del paciente activo
+        const patId = document.getElementById('med-budget-patient-select')?.value;
+        if (patId && typeof window.getActivePatientTagRule === 'function') {
+            const rule = window.getActivePatientTagRule(patId);
+            if (rule && rule.type === 'surcharge') {
+                const surchargePct = parseFloat(rule.value) || 0;
+                price = price * (1 + surchargePct / 100);
+            }
+        }
         priceInput.value = price.toFixed(2);
     }
 };
@@ -2639,7 +2661,17 @@ window.addMedicalBudgetItem = function() {
     const qtyInput = document.getElementById('med-item-qty');
     if (qtyInput) qtyInput.value = '1';
     const discInput = document.getElementById('med-item-discount');
-    if (discInput) discInput.value = '0';
+    if (discInput) {
+        const patId = document.getElementById('med-budget-patient-select')?.value;
+        const rule = patId && typeof window.getActivePatientTagRule === 'function' ? window.getActivePatientTagRule(patId) : null;
+        if (rule && rule.type === 'discount') {
+            discInput.value = rule.value;
+        } else if (rule && rule.type === 'exonerated') {
+            discInput.value = '100';
+        } else {
+            discInput.value = '0';
+        }
+    }
 
     window.renderMedicalBudgetItems();
 };
@@ -3641,13 +3673,23 @@ function addProcedureToBudget(toothKeyObj, procedure) {
 
     const uniqueItemKey = `${toothNum}-${toothKeyObj.faceId || 'Gnl'}-${procedure.code || 'srv'}-${Date.now()}`;
 
+    let procPrice = procedure.priceUSD !== undefined ? procedure.priceUSD : (procedure.price || 0);
+    const activePatId = getActivePatientId();
+    if (activePatId && typeof window.getActivePatientTagRule === 'function') {
+        const rule = window.getActivePatientTagRule(activePatId);
+        if (rule && rule.type === 'surcharge') {
+            const surchargePct = parseFloat(rule.value) || 0;
+            procPrice = parseFloat((procPrice * (1 + surchargePct / 100)).toFixed(2));
+        }
+    }
+
     const newItem = {
         key: uniqueItemKey,
         tooth: toothNum,
         face: toothKeyObj.faceId || 'Gnl',
         serviceCode: procedure.code || '',
         name: itemName,
-        price: procedure.priceUSD !== undefined ? procedure.priceUSD : (procedure.price || 0),
+        price: procPrice,
         discount: 0
     };
 
