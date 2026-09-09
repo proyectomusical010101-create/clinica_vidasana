@@ -682,7 +682,7 @@
                                 <h4 style="margin: 0 0 10px 0; color: #059669; font-weight: 700; font-size: 1.25rem;" id="info-patient-name">Paciente</h4>
                                 <div style="font-size: 0.9rem; color: var(--text-main); display: flex; flex-direction: column; gap: 6px; line-height: 1.4;">
                                     <div>Cédula: <strong id="info-patient-cedula">V-00000000</strong></div>
-                                    <div>Categoría: <span id="info-patient-category" style="font-weight: 700; color: #0d9488;">Privado</span> • Especialista: <span id="info-patient-doctor" style="font-weight: 700; color: var(--text-main);">Dr. Rodrigo Navas</span></div>
+                                    <div>Categoría: <span id="info-patient-category" style="font-weight: 700; color: #0d9488;">Privado</span> • Especialista: <span id="info-patient-doctor" style="font-weight: 700; color: var(--text-main);">Dr. Especialista</span></div>
                                 </div>
                             </div>
                         </div>
@@ -1716,7 +1716,7 @@
                             </div>
                             <div class="card-body flex-column gap-15">
                                 <div class="form-group">
-                                    <label class="form-label" for="stat-logo-upload">Logo de la Clínica (Base64)</label>
+                                    <label class="form-label" for="stat-logo-upload">Logo de la Clínica (PNG / JPG / SVG)</label>
                                     <div style="display: flex; gap: 10px; align-items: center;">
                                         <input type="file" id="stat-logo-upload" class="form-control" accept="image/*" style="padding: 4px;">
                                         <button class="btn btn-xs btn-outline text-red" id="btn-clear-stat-logo" title="Eliminar Logo"><i class="fa-solid fa-trash"></i></button>
@@ -1726,24 +1726,63 @@
                                     </div>
                                 </div>
 
-                                <div class="form-group">
-                                    <label class="form-label" for="stat-header-text">Texto del Encabezado (Membrete)</label>
-                                    <textarea id="stat-header-text" class="form-control" rows="3" placeholder="DentalCare Pro - Clínica Odontológica Especializada&#10;Dr. Alejandro Silva - C.O.V-14920&#10;Av. Principal, Mérida - WhatsApp: +584141234567"></textarea>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                    <div class="form-group">
+                                        <label class="form-label" for="stat-clinic-name">Nombre de la Clínica / Centro</label>
+                                        <input type="text" id="stat-clinic-name" class="form-control" placeholder="Vida Sana Centro Médico Odontológico">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" for="stat-clinic-rif">RIF / C.I. Fiscal</label>
+                                        <input type="text" id="stat-clinic-rif" class="form-control" placeholder="J-50781755-5">
+                                    </div>
+                                </div>
+
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                    <div class="form-group">
+                                        <label class="form-label" for="stat-clinic-phone">Teléfono / WhatsApp</label>
+                                        <input type="tel" id="stat-clinic-phone" class="form-control" placeholder="0424-1894138">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" for="stat-clinic-email">Correo Electrónico</label>
+                                        <input type="email" id="stat-clinic-email" class="form-control" placeholder="recepcion.vidasana@gmail.com">
+                                    </div>
                                 </div>
 
                                 <div class="form-group">
-                                    <label class="form-label" for="stat-footer-text">Texto de Pie de Página Predeterminado</label>
-                                    <textarea id="stat-footer-text" class="form-control" rows="2" placeholder="Gracias por su confianza. Todo tratamiento dental requiere control periódico cada 6 meses."></textarea>
+                                    <label class="form-label" for="stat-clinic-address">Dirección Física Completa</label>
+                                    <textarea id="stat-clinic-address" class="form-control" rows="2" placeholder="Av. Libertador Con Calle Paraíso, Edif Torre Siclar Piso Local 1, Sector Libertador, Caracas"></textarea>
+                                </div>
+
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                    <div class="form-group">
+                                        <label class="form-label" for="stat-doctor-name">Médico / Especialista Predeterminado</label>
+                                        <input type="text" id="stat-doctor-name" class="form-control" placeholder="Dr. Alejandro Silva">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" for="stat-doctor-specialty">Especialidad Principal</label>
+                                        <input type="text" id="stat-doctor-specialty" class="form-control" placeholder="Odontología General / Especializada">
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label" for="stat-bank-info">Datos Bancarios / Pago Móvil (Facturas y Presupuestos)</label>
+                                    <textarea id="stat-bank-info" class="form-control" rows="2" placeholder="Banco Banesco / Pago Móvil: RIF J-50781755-5 | Teléfono: 0424-1894138"></textarea>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label" for="stat-footer-text">Pie de Página (Factura, Presupuesto y Recibo)</label>
+                                    <textarea id="stat-footer-text" class="form-control" rows="2" placeholder="Gracias por su confianza. Todo tratamiento requiere seguimiento médico periódico."></textarea>
                                 </div>
 
                                 <div class="form-group mb-15">
                                     <label class="form-label" for="stat-recipe-footer-text" style="font-weight: 700; color: #0d9488;">
-                                        <i class="fa-solid fa-prescription"></i> Pie de Página Récipes e Indicaciones
+                                        <i class="fa-solid fa-prescription"></i> Pie de Página (Récipes Médicos e Indicaciones)
                                     </label>
                                     <textarea id="stat-recipe-footer-text" class="form-control" rows="2" placeholder="Documento Clínico Oficial de Prescripción Médica y Recomendaciones para el Paciente."></textarea>
                                 </div>
 
-
+                                <!-- Compatibility field hidden -->
+                                <textarea id="stat-header-text" style="display: none;"></textarea>
 
                                 <button class="btn btn-primary" id="btn-save-stationery-config">
                                     <i class="fa-solid fa-save"></i> Guardar Configuración
@@ -3764,7 +3803,7 @@
         <div style="max-width: 800px; width: 100%; margin: 0 auto 30px auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); overflow: hidden; box-sizing: border-box;">
             <div style="background: #ffffff; border-bottom: 1px solid #e2e8f0; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; flex-wrap: wrap; gap: 8px;">
                 <div style="font-weight: 800; font-size: 1.05rem; color: #0891b2; display: flex; align-items: center; gap: 8px;">
-                    <i class="fa-solid fa-tooth text-cyan"></i> DENTALCARE PRO
+                    <i class="fa-solid fa-hospital text-cyan"></i> CLÍNICA VIDASANA
                 </div>
                 <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                     <button class="btn btn-sm btn-primary" id="btn-public-download-pdf" style="background: #0891b2 !important; color: #ffffff !important; border: none !important; font-weight: 600; padding: 7px 12px; font-size: 0.82rem; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 5px;"><i class="fa-solid fa-download"></i> Descargar PDF</button>
@@ -3901,7 +3940,7 @@
         <div style="max-width: 800px; margin: 0 auto 30px auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); overflow: hidden;">
             <div style="background: #ffffff; border-bottom: 1px solid #e2e8f0; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100;">
                 <div style="font-weight: 800; font-size: 1.1rem; color: #0891b2; display: flex; align-items: center; gap: 8px;">
-                    <i class="fa-solid fa-tooth text-cyan"></i> DENTALCARE PRO - RECIBO DE ATENCIÓN
+                    <i class="fa-solid fa-hospital text-cyan"></i> CLÍNICA VIDASANA - RECIBO DE ATENCIÓN
                 </div>
                 <div style="display: flex; gap: 10px;">
                     <button class="btn btn-sm btn-primary" id="btn-public-session-download-pdf" style="background: #0891b2 !important; color: #ffffff !important; border: none !important; font-weight: 600; padding: 8px 16px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 6px;"><i class="fa-solid fa-download"></i> Descargar PDF</button>

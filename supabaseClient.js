@@ -993,12 +993,12 @@ class SupabaseDataService {
     static async getStationeryConfig() {
         const defaultDoc = {
             id: 'default',
-            headerText: 'DentalCare Pro - Clínica Odontológica Especializada\nDr. Alejandro Silva - C.O.V-14920\nAv. Principal, Mérida - WhatsApp: +584141234567',
-            header_text: 'DentalCare Pro - Clínica Odontológica Especializada\nDr. Alejandro Silva - C.O.V-14920\nAv. Principal, Mérida - WhatsApp: +584141234567',
-            footerText: 'Gracias por su confianza. Todo tratamiento dental requiere control periódico cada 6 meses.',
-            footer_text: 'Gracias por su confianza. Todo tratamiento dental requiere control periódico cada 6 meses.',
-            recipeFooterText: 'Documento Clínico Oficial de Prescripción Médica y Recomendaciones para el Paciente.',
-            recipe_footer_text: 'Documento Clínico Oficial de Prescripción Médica y Recomendaciones para el Paciente.',
+            headerText: 'Vida Sana Centro Médico Odontológico\nRif- J-50781755-5\nAv. Libertador Con Calle Paraíso, Edif Torre Siclar Piso Local 1, Sector Libertador, Caracas\nTeléfono: 0424-1894138',
+            header_text: 'Vida Sana Centro Médico Odontológico\nRif- J-50781755-5\nAv. Libertador Con Calle Paraíso, Edif Torre Siclar Piso Local 1, Sector Libertador, Caracas\nTeléfono: 0424-1894138',
+            footerText: 'Correo: recepcion.vidasana@gmail.com\nInstagram: @Vidasanacmo\nGracias por su confianza. Todo tratamiento requiere seguimiento médico periódico.',
+            footer_text: 'Correo: recepcion.vidasana@gmail.com\nInstagram: @Vidasanacmo\nGracias por su confianza. Todo tratamiento requiere seguimiento médico periódico.',
+            recipeFooterText: 'Indicaciones y récipe médico válido bajo supervisión del especialista tratante.',
+            recipe_footer_text: 'Indicaciones y récipe médico válido bajo supervisión del especialista tratante.',
             logoUrl: '',
             logo_url: ''
         };

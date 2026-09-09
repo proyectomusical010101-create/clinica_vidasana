@@ -289,17 +289,24 @@ function applyClinicBrandingUI(config) {
     if (!config) return;
     
     // Parse business name if present in header_text or config
-    let busName = 'DentalCare Pro';
+    let busName = 'Vida Sana Centro Médico Odontológico';
     let busAddress = '';
     let busPhone = '';
+    let busRif = '';
     if (config.headerText || config.header_text) {
         try {
-            const raw = config.headerText || config.header_text;
+            const raw = String(config.headerText || config.header_text).trim();
             if (raw.startsWith('{')) {
                 const parsed = JSON.parse(raw);
-                if (parsed.name) busName = parsed.name;
-                if (parsed.address) busAddress = parsed.address;
-                if (parsed.phone) busPhone = parsed.phone;
+                if (parsed.name && parsed.name !== 'DentalCare Pro') busName = parsed.name;
+                if (parsed.address && !parsed.address.includes('Las Mercedes')) busAddress = parsed.address;
+                if (parsed.phone && !parsed.phone.includes('555-0192')) busPhone = parsed.phone;
+                if (parsed.rif) busRif = parsed.rif;
+            } else if (raw) {
+                const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+                if (lines.length > 0 && !lines[0].startsWith('{')) {
+                    busName = lines[0];
+                }
             }
         } catch(e) {}
     }
@@ -307,6 +314,7 @@ function applyClinicBrandingUI(config) {
     localStorage.setItem('dental_clinic_name', busName);
     if (busAddress) localStorage.setItem('dental_clinic_address', busAddress);
     if (busPhone) localStorage.setItem('dental_clinic_phone', busPhone);
+    if (busRif) localStorage.setItem('dental_clinic_rif', busRif);
 
     const logoUrl = config.logoUrl || config.logo_url || '';
 
@@ -11093,65 +11101,156 @@ document.addEventListener('DOMContentLoaded', () => {
 // 8. BILLING, FINANCE & STATIONERY MODULE CONTROLLERS
 // ==========================================================================
 
+function parseClinicHeaderString(raw) {
+    if (!raw) return {};
+    if (typeof raw === 'object') return raw;
+    const str = String(raw).trim();
+    if (!str) return {};
+    if (str.startsWith('{')) {
+        try {
+            return JSON.parse(str);
+        } catch(e) {}
+    }
+
+    const lines = str.split('\n').map(l => l.trim()).filter(Boolean);
+    const res = {};
+    const remainingLines = [];
+
+    for (let line of lines) {
+        // Match RIF: "Rif- J-50781755-5" or "RIF: J-50781755-5" or "J-50781755-5"
+        const rifMatch = line.match(/(?:rif|c\.?i\.?|r\.i\.f)[-:\s]+([JjVvGgEe][-\s]?[0-9]{7,9}[-\s]?[0-9]?)/i) ||
+                         line.match(/\b([JjVvGgEe]-[0-9]{7,9}-[0-9])\b/i);
+        if (rifMatch && !res.rif) {
+            res.rif = rifMatch[1].replace(/\s+/g, '').toUpperCase();
+            continue;
+        }
+
+        // Match Phone: "Teléfono: 0424-1894138" or "Tlf: +58 412..."
+        const phoneMatch = line.match(/(?:tel[ée]fono|tlf|cel|whatsapp|ws)[-:\s]+([+0-9\s()-]{7,25})/i);
+        if (phoneMatch && !res.phone) {
+            res.phone = phoneMatch[1].trim();
+            continue;
+        } else if (!res.phone && /^(?:\+?58\s?)?0?4[0-9]{2}[-\s]?[0-9]{7}$/.test(line)) {
+            res.phone = line.trim();
+            continue;
+        }
+
+        // Match Email: "recepcion.vidasana@gmail.com"
+        const emailMatch = line.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+        if (emailMatch && !res.email) {
+            res.email = emailMatch[0].trim();
+            continue;
+        }
+
+        // Match Doctor: "Dr. Rodrigo Navas" or "Dr. Alejandro Silva"
+        const docMatch = line.match(/(?:dr\.|dra\.|doctor|doctora)[-:\s]+([^\n]+)/i);
+        if (docMatch && !res.doctor) {
+            res.doctor = line.trim();
+            continue;
+        }
+
+        // Match Address keywords
+        if (!res.address && /(?:av\.|avenida|calle|carrera|edif|edificio|torre|piso|local|sector|urbanizaci[óo]n|urb\.|caracas|merida|m[ée]rida|distrito)/i.test(line)) {
+            res.address = line.trim();
+            continue;
+        }
+
+        remainingLines.push(line);
+    }
+
+    if (remainingLines.length > 0) {
+        res.name = remainingLines[0];
+        if (remainingLines.length > 1 && !res.address) {
+            res.address = remainingLines.slice(1).join(', ');
+        }
+    }
+
+    return res;
+}
+
 function formatHeaderText(raw) {
     if (!raw) return '';
     const str = String(raw).trim();
     if (str.startsWith('{')) {
         try {
             const parsed = JSON.parse(str);
-            const parts = [];
-            if (parsed.name) parts.push(parsed.name);
-            if (parsed.doctor) parts.push(parsed.doctor);
-            if (parsed.rif) parts.push(`RIF / C.I.: ${parsed.rif}`);
-            if (parsed.phone) parts.push(`Tlf: ${parsed.phone}`);
-            if (parsed.address) parts.push(parsed.address);
-            if (parts.length > 0) return parts.join('\n');
+            if (parsed.name) return parsed.name;
         } catch(e) {}
     }
-    return str;
+    const lines = str.split('\n').map(l => l.trim()).filter(Boolean);
+    return lines[0] || str;
 }
 
 function getClinicBusData(config) {
     let busData = {
-        name: 'Consultorio Odontológico',
-        doctor: 'Dr. Rodrigo Navas',
-        phone: '+58 (412) 555-0192',
-        email: 'contacto@dentalcare.com',
-        rif: 'J-12345678-9',
-        address: 'Av. Principal de Las Mercedes, Torre Consultorios, Piso 4, Caracas',
+        name: 'Vida Sana Centro Médico Odontológico',
+        doctor: 'Dr. Alejandro Silva',
+        doctorSpecialty: 'Odontología General / Especializada',
+        phone: '0424-1894138',
+        email: 'recepcion.vidasana@gmail.com',
+        rif: 'J-50781755-5',
+        address: 'Av. Libertador Con Calle Paraíso, Edif Torre Siclar Piso Local 1, Sector Libertador, Caracas',
         logoUrl: '',
-        footer: 'Gracias por su confianza. Todo tratamiento dental requiere control periódico cada 6 meses.',
-        bankInfo: 'Banco Banesco - Cuenta Corriente | N°: 0134-0000-00-0000000000<br>A nombre de: Consultorio Odontológico<br>Pago Móvil: C.I. 12.345.678 / Tlf: 0412-5550192'
+        footer: 'Correo: recepcion.vidasana@gmail.com | Instagram: @Vidasanacmo | Gracias por su confianza.',
+        recipeFooter: 'Indicaciones y récipe médico válido bajo supervisión del especialista tratante.',
+        bankInfo: 'Banco Banesco / Pago Móvil: RIF J-50781755-5 | Teléfono: 0424-1894138'
     };
 
+    // 1. Check localStorage caches (filter out old mock values)
+    const savedName = localStorage.getItem('dental_clinic_name');
+    if (savedName && savedName.trim() && !savedName.trim().startsWith('{') && savedName.trim() !== 'DentalCare Pro') {
+        busData.name = savedName.trim();
+    }
+    const savedAddr = localStorage.getItem('dental_clinic_address');
+    if (savedAddr && savedAddr.trim() && !savedAddr.includes('Las Mercedes')) {
+        busData.address = savedAddr.trim();
+    }
+    const savedPhone = localStorage.getItem('dental_clinic_phone');
+    if (savedPhone && savedPhone.trim() && !savedPhone.includes('555-0192')) {
+        busData.phone = savedPhone.trim();
+    }
+    const savedRif = localStorage.getItem('dental_clinic_rif');
+    if (savedRif && savedRif.trim()) busData.rif = savedRif.trim();
+    const savedEmail = localStorage.getItem('dental_clinic_email');
+    if (savedEmail && savedEmail.trim()) busData.email = savedEmail.trim();
+    const savedDoc = localStorage.getItem('dental_clinic_doctor');
+    if (savedDoc && savedDoc.trim() && !savedDoc.includes('Rodrigo Navas')) busData.doctor = savedDoc.trim();
+    const savedSpecialty = localStorage.getItem('dental_clinic_doctor_specialty');
+    if (savedSpecialty && savedSpecialty.trim()) busData.doctorSpecialty = savedSpecialty.trim();
+    const savedBank = localStorage.getItem('dental_clinic_bank_info');
+    if (savedBank && savedBank.trim()) busData.bankInfo = savedBank.trim();
+
+    // 2. Parse config from Supabase / argument
     if (config) {
         const raw = config.header_text || config.headerText;
         if (raw) {
-            try {
-                if (typeof raw === 'object') {
-                    Object.assign(busData, raw);
-                    if (raw.name) busData.name = raw.name;
-                } else if (typeof raw === 'string' && raw.trim().startsWith('{')) {
-                    const parsed = JSON.parse(raw);
-                    Object.assign(busData, parsed);
-                    if (parsed.name) busData.name = parsed.name;
-                } else {
-                    busData.name = formatHeaderText(raw);
-                }
-            } catch(e) {
-                busData.name = String(raw);
-            }
+            const parsed = parseClinicHeaderString(raw);
+            if (parsed.name && parsed.name !== 'DentalCare Pro') busData.name = parsed.name;
+            if (parsed.rif) busData.rif = parsed.rif;
+            if (parsed.phone && !parsed.phone.includes('555-0192')) busData.phone = parsed.phone;
+            if (parsed.address && !parsed.address.includes('Las Mercedes')) busData.address = parsed.address;
+            if (parsed.email) busData.email = parsed.email;
+            if (parsed.doctor && !parsed.doctor.includes('Rodrigo Navas')) busData.doctor = parsed.doctor;
+            if (parsed.doctorSpecialty) busData.doctorSpecialty = parsed.doctorSpecialty;
+            if (parsed.bankInfo) busData.bankInfo = parsed.bankInfo;
         }
         if (config.logo_url || config.logoUrl) busData.logoUrl = config.logo_url || config.logoUrl;
         if (config.footer_text || config.footerText) busData.footer = config.footer_text || config.footerText;
+        if (config.recipe_footer_text || config.recipeFooterText) busData.recipeFooter = config.recipe_footer_text || config.recipeFooterText;
+        if (config.bank_info || config.bankInfo) busData.bankInfo = config.bank_info || config.bankInfo;
+        if (config.rif) busData.rif = config.rif;
+        if (config.phone && !config.phone.includes('555-0192')) busData.phone = config.phone;
+        if (config.address && !config.address.includes('Las Mercedes')) busData.address = config.address;
+        if (config.email) busData.email = config.email;
+        if (config.doctor && !config.doctor.includes('Rodrigo Navas')) busData.doctor = config.doctor;
     }
 
-    const savedName = localStorage.getItem('dental_clinic_name');
-    if (savedName && savedName.trim() && !savedName.trim().startsWith('{')) busData.name = savedName.trim();
-    const savedAddr = localStorage.getItem('dental_clinic_address');
-    if (savedAddr && savedAddr.trim()) busData.address = savedAddr.trim();
-    const savedPhone = localStorage.getItem('dental_clinic_phone');
-    if (savedPhone && savedPhone.trim()) busData.phone = savedPhone.trim();
+    // 3. Logged-in user context
+    const u = getCurrentUser();
+    if (u && u.fullname && (u.role === 'dentist' || u.role === 'doctor')) {
+        busData.currentDoctor = u.fullname;
+        if (u.phone) busData.currentDoctorPhone = u.phone;
+    }
 
     return busData;
 }
@@ -11164,14 +11263,16 @@ function buildMedicalDocumentHTML(opts) {
         controlNumber = 'FC-2026-00892',
         paymentMethod = 'Transferencia / PAGO MÓVIL',
         
-        clinicName = 'Consultorio Odontológico',
-        clinicPhone = '+58 (412) 555-0192',
-        clinicAddress = 'Av. Principal, Torre Consultorios, Caracas',
+        clinicName = '',
+        clinicRif = '',
+        clinicPhone = '',
+        clinicEmail = '',
+        clinicAddress = '',
         logoUrl = '',
         
-        doctorName = 'Dr. Rodrigo Navas',
-        doctorSpecialty = 'Odontología General / Rehabilitación Oral',
-        doctorPhone = '+58 (414) 123-4567',
+        doctorName = '',
+        doctorSpecialty = 'Odontología General / Especializada',
+        doctorPhone = '',
         doctorSig = '',
         
         patientName = 'Carlos Eduardo Mendoza',
@@ -11189,11 +11290,22 @@ function buildMedicalDocumentHTML(opts) {
         approvedAmountUSD = 0,
         
         paymentTerms = 'Contado / Pago inmediato al momento de la consulta.',
-        bankingDetails = 'Banco Banesco - Cuenta Corriente | N°: 0134-0000-00-0000000000<br>A nombre de: Consultorio Odontológico<br>Pago Móvil: C.I. 12.345.678 / Tlf: 0412-5550192',
+        bankingDetails = '',
         observations = 'El paciente presenta evolución favorable. Se recomienda mantener tratamiento y esquema preventivo indicado, evitar esfuerzos intensos durante las próximas 48 horas y acudir a control preventivo en 30 días.',
         consentText = 'Por medio de la presente, el paciente declara haber recibido explicación clara y detallada acerca de los procedimientos diagnosticados y realizados en esta consulta, aceptando de manera voluntaria la atención prestada y expresando su conformidad con los cobros administrativos y honorarios detallados en este documento.',
         footerNote = ''
     } = opts;
+
+    const baseBus = getClinicBusData();
+    const parsedFromClinicName = parseClinicHeaderString(clinicName);
+    const finalClinicName = formatHeaderText(parsedFromClinicName.name || clinicName || baseBus.name);
+    const finalClinicRif = clinicRif || parsedFromClinicName.rif || baseBus.rif;
+    const finalClinicPhone = (clinicPhone && !clinicPhone.includes('555-0192')) ? clinicPhone : (parsedFromClinicName.phone || baseBus.phone);
+    const finalClinicEmail = clinicEmail || parsedFromClinicName.email || baseBus.email;
+    const finalClinicAddress = (clinicAddress && !clinicAddress.includes('Las Mercedes')) ? clinicAddress : (parsedFromClinicName.address || baseBus.address);
+    const finalDoctorName = doctorName || (getCurrentUser() && getCurrentUser().fullname) || baseBus.doctor || 'Dr. Alejandro Silva';
+    const finalDoctorPhone = (doctorPhone && !doctorPhone.includes('123-4567') && !doctorPhone.includes('555-0192')) ? doctorPhone : (baseBus.phone || '');
+    const finalBankingDetails = bankingDetails || baseBus.bankInfo || 'Banco Banesco / Pago Móvil: RIF J-50781755-5 | Teléfono: 0424-1894138';
 
     // Double-check & resolve Doctor Signature fallback
     try {
@@ -11260,7 +11372,6 @@ function buildMedicalDocumentHTML(opts) {
     }
 
     const effectiveApproved = (approvedAmountUSD > 0) ? approvedAmountUSD : totalUSD;
-    const cleanClinicName = formatHeaderText(clinicName);
 
     return `
         <div class="medical-doc-container" style="background: #ffffff; color: #1e293b; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 0.76rem; line-height: 1.25; width: 100%; max-width: 780px; margin: 0 auto; padding: 12px 18px; box-sizing: border-box; page-break-inside: avoid !important; break-inside: avoid !important;">
@@ -11288,26 +11399,28 @@ function buildMedicalDocumentHTML(opts) {
 
             <!-- 2. 3-Column Info Cards (Horizontal Row) -->
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 6px; font-size: 0.74rem;">
-                <!-- Col 1: Consultorio -->
+                <!-- Col 1: Consultorio / Centro Médico -->
                 <div>
-                    <div style="font-size: 0.64rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1px;">CONSULTORIO ODONTOLÓGICO</div>
-                    <strong style="font-size: 0.80rem; color: #0f172a; display: block; white-space: pre-line; line-height: 1.2;">${cleanClinicName}</strong>
-                    <div style="color: #475569;">Tlf: ${clinicPhone}</div>
-                    <div style="color: #64748b; font-size: 0.70rem;">${clinicAddress}</div>
+                    <div style="font-size: 0.64rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">CENTRO MÉDICO ODONTOLÓGICO</div>
+                    <strong style="font-size: 0.82rem; color: #0f172a; display: block; line-height: 1.25; margin-bottom: 2px;">${finalClinicName}</strong>
+                    ${finalClinicRif ? `<div style="color: #475569; font-weight: 600; font-size: 0.72rem;">RIF: ${finalClinicRif}</div>` : ''}
+                    ${finalClinicPhone ? `<div style="color: #475569; font-size: 0.72rem;">Tlf: ${finalClinicPhone}</div>` : ''}
+                    ${finalClinicEmail ? `<div style="color: #475569; font-size: 0.70rem;">${finalClinicEmail}</div>` : ''}
+                    ${finalClinicAddress ? `<div style="color: #64748b; font-size: 0.70rem; line-height: 1.2; margin-top: 1px;">${finalClinicAddress}</div>` : ''}
                 </div>
 
-                <!-- Col 2: Odontólogo Tratante -->
+                <!-- Col 2: Odontólogo / Médico Tratante -->
                 <div>
-                    <div style="font-size: 0.64rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1px;">MÉDICO / ODONTÓLOGO TRATANTE</div>
-                    <strong style="font-size: 0.80rem; color: #0f172a; display: block;">${doctorName}</strong>
+                    <div style="font-size: 0.64rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">MÉDICO / ODONTÓLOGO TRATANTE</div>
+                    <strong style="font-size: 0.80rem; color: #0f172a; display: block; margin-bottom: 2px;">${finalDoctorName.startsWith('Dr') ? finalDoctorName : `Dr(a). ${finalDoctorName}`}</strong>
                     <div style="color: #475569;">Especialidad: ${doctorSpecialty}</div>
-                    <div style="color: #475569;">Tlf: ${doctorPhone}</div>
+                    ${finalDoctorPhone ? `<div style="color: #475569;">Tlf: ${finalDoctorPhone}</div>` : ''}
                 </div>
 
                 <!-- Col 3: Datos del Paciente -->
                 <div>
-                    <div style="font-size: 0.64rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1px;">DATOS DEL PACIENTE</div>
-                    <strong style="font-size: 0.80rem; color: #0f172a; display: block;">${patientName}</strong>
+                    <div style="font-size: 0.64rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">DATOS DEL PACIENTE</div>
+                    <strong style="font-size: 0.80rem; color: #0f172a; display: block; margin-bottom: 2px;">${patientName}</strong>
                     <div style="color: #475569;">C.I.: ${patientId}</div>
                     <div style="color: #475569;">Tlf: ${patientPhone}</div>
                 </div>
@@ -11338,7 +11451,7 @@ function buildMedicalDocumentHTML(opts) {
                     </div>
                     <div style="font-weight: 600; color: #334155; margin-bottom: 1px;">Datos Bancarios:</div>
                     <div style="color: #475569; font-size: 0.68rem; line-height: 1.2;">
-                        ${bankingDetails}
+                        ${finalBankingDetails}
                     </div>
                 </div>
 
@@ -11422,15 +11535,17 @@ function buildRecipeDocumentHTML(opts) {
         controlNumber = 'REC-2026-0001',
         treatmentLinked = 'General / Consulta Externa',
 
-        clinicName = 'Consultorio Odontológico',
-        clinicPhone = '+58 (412) 555-0192',
-        clinicAddress = 'Av. Principal, Torre Consultorios, Caracas',
+        clinicName = '',
+        clinicRif = '',
+        clinicPhone = '',
+        clinicEmail = '',
+        clinicAddress = '',
         logoUrl = '',
 
-        doctorName = 'Dr. Odontólogo Especialista',
-        doctorSpecialty = 'Odontología General / Especialista',
+        doctorName = '',
+        doctorSpecialty = 'Odontología General / Especializada',
         doctorLicense = '',
-        doctorPhone = '+58 (414) 123-4567',
+        doctorPhone = '',
         doctorSig = '',
 
         patientName = 'Carlos Eduardo Mendoza',
@@ -11442,6 +11557,16 @@ function buildRecipeDocumentHTML(opts) {
         indications = '',
         footerNote = ''
     } = opts;
+
+    const baseBus = getClinicBusData();
+    const parsedFromClinicName = parseClinicHeaderString(clinicName);
+    const finalClinicName = formatHeaderText(parsedFromClinicName.name || clinicName || baseBus.name);
+    const finalClinicRif = clinicRif || parsedFromClinicName.rif || baseBus.rif;
+    const finalClinicPhone = (clinicPhone && !clinicPhone.includes('555-0192')) ? clinicPhone : (parsedFromClinicName.phone || baseBus.phone);
+    const finalClinicEmail = clinicEmail || parsedFromClinicName.email || baseBus.email;
+    const finalClinicAddress = (clinicAddress && !clinicAddress.includes('Las Mercedes')) ? clinicAddress : (parsedFromClinicName.address || baseBus.address);
+    const finalDoctorName = doctorName || (getCurrentUser() && getCurrentUser().fullname) || baseBus.doctor || 'Dr. Alejandro Silva';
+    const finalDoctorPhone = (doctorPhone && !doctorPhone.includes('123-4567') && !doctorPhone.includes('555-0192')) ? doctorPhone : (baseBus.phone || '');
 
     let medsList = '';
     if (medicines && medicines.length > 0) {
@@ -11463,8 +11588,6 @@ function buildRecipeDocumentHTML(opts) {
             </tr>
         `;
     }
-
-    const cleanClinicName = (typeof formatHeaderText === 'function') ? formatHeaderText(clinicName) : clinicName;
 
     return `
         <div class="medical-doc-container" style="background: #ffffff; color: #1e293b; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 0.76rem; line-height: 1.25; width: 100%; max-width: 780px; margin: 0 auto; padding: 12px 18px; box-sizing: border-box; page-break-inside: avoid !important; break-inside: avoid !important;">
@@ -11492,27 +11615,29 @@ function buildRecipeDocumentHTML(opts) {
 
             <!-- 2. 3-Column Info Cards (Horizontal Row) -->
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 8px; font-size: 0.74rem;">
-                <!-- Col 1: Consultorio -->
+                <!-- Col 1: Consultorio / Centro Médico -->
                 <div>
-                    <div style="font-size: 0.64rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1px;">CONSULTORIO ODONTOLÓGICO</div>
-                    <strong style="font-size: 0.80rem; color: #0f172a; display: block; white-space: pre-line; line-height: 1.2;">${cleanClinicName}</strong>
-                    <div style="color: #475569;">Tlf: ${clinicPhone}</div>
-                    <div style="color: #64748b; font-size: 0.70rem;">${clinicAddress}</div>
+                    <div style="font-size: 0.64rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">CENTRO MÉDICO ODONTOLÓGICO</div>
+                    <strong style="font-size: 0.82rem; color: #0f172a; display: block; line-height: 1.25; margin-bottom: 2px;">${finalClinicName}</strong>
+                    ${finalClinicRif ? `<div style="color: #475569; font-weight: 600; font-size: 0.72rem;">RIF: ${finalClinicRif}</div>` : ''}
+                    ${finalClinicPhone ? `<div style="color: #475569; font-size: 0.72rem;">Tlf: ${finalClinicPhone}</div>` : ''}
+                    ${finalClinicEmail ? `<div style="color: #475569; font-size: 0.70rem;">${finalClinicEmail}</div>` : ''}
+                    ${finalClinicAddress ? `<div style="color: #64748b; font-size: 0.70rem; line-height: 1.2; margin-top: 1px;">${finalClinicAddress}</div>` : ''}
                 </div>
 
-                <!-- Col 2: Odontólogo Tratante -->
+                <!-- Col 2: Odontólogo / Médico Tratante -->
                 <div>
-                    <div style="font-size: 0.64rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1px;">MÉDICO / ODONTÓLOGO TRATANTE</div>
-                    <strong style="font-size: 0.80rem; color: #0f172a; display: block;">${doctorName.startsWith('Dr') ? doctorName : `Dr(a). ${doctorName}`}</strong>
-                    <div style="color: #475569;">Especialidad: ${doctorSpecialty || 'Odontología General'}</div>
+                    <div style="font-size: 0.64rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">MÉDICO / ODONTÓLOGO TRATANTE</div>
+                    <strong style="font-size: 0.80rem; color: #0f172a; display: block; margin-bottom: 2px;">${finalDoctorName.startsWith('Dr') ? finalDoctorName : `Dr(a). ${finalDoctorName}`}</strong>
+                    <div style="color: #475569;">Especialidad: ${doctorSpecialty || 'Odontología General / Especializada'}</div>
                     ${doctorLicense ? `<div style="color: #0066f5; font-weight: 600;">Colegiado/Lic: ${doctorLicense}</div>` : ''}
-                    <div style="color: #475569;">Tlf: ${doctorPhone}</div>
+                    ${finalDoctorPhone ? `<div style="color: #475569;">Tlf: ${finalDoctorPhone}</div>` : ''}
                 </div>
 
                 <!-- Col 3: Datos del Paciente -->
                 <div>
-                    <div style="font-size: 0.64rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1px;">DATOS DEL PACIENTE</div>
-                    <strong style="font-size: 0.80rem; color: #0f172a; display: block;">${patientName}</strong>
+                    <div style="font-size: 0.64rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">DATOS DEL PACIENTE</div>
+                    <strong style="font-size: 0.80rem; color: #0f172a; display: block; margin-bottom: 2px;">${patientName}</strong>
                     <div style="color: #475569;">C.I.: ${patientId}</div>
                     <div style="color: #475569;">Tlf: ${patientPhone}</div>
                 </div>
@@ -12919,92 +13044,210 @@ let currentPreviewTemplate = 'factura';
 async function renderStationeryView() {
     const headerTextarea = document.getElementById('stat-header-text');
     const footerTextarea = document.getElementById('stat-footer-text');
+    const recipeFooterTextarea = document.getElementById('stat-recipe-footer-text');
     const logoUpload = document.getElementById('stat-logo-upload');
     const clearLogoBtn = document.getElementById('btn-clear-stat-logo');
-
-    if (!headerTextarea) return;
-
-    const config = await SupabaseDataService.getStationeryConfig();
-    headerTextarea.value = config.headerText || '';
-    footerTextarea.value = config.footerText || '';
-
-    const recipeFooterTextarea = document.getElementById('stat-recipe-footer-text');
-    if (recipeFooterTextarea) {
-        recipeFooterTextarea.value = config.recipeFooterText || '';
-    }
-
     const previewImg = document.getElementById('stat-logo-preview-img');
     const previewContainer = document.getElementById('stat-logo-preview-img-container');
-    if (config.logoUrl) {
-        previewImg.src = config.logoUrl;
-        previewContainer.classList.remove('hidden');
-    } else {
-        previewImg.src = '';
-        previewContainer.classList.add('hidden');
+
+    const config = await SupabaseDataService.getStationeryConfig();
+    const busData = getClinicBusData(config);
+
+    if (document.getElementById('stat-clinic-name')) {
+        document.getElementById('stat-clinic-name').value = busData.name || '';
+    }
+    if (document.getElementById('stat-clinic-rif')) {
+        document.getElementById('stat-clinic-rif').value = busData.rif || '';
+    }
+    if (document.getElementById('stat-clinic-phone')) {
+        document.getElementById('stat-clinic-phone').value = busData.phone || '';
+    }
+    if (document.getElementById('stat-clinic-email')) {
+        document.getElementById('stat-clinic-email').value = busData.email || '';
+    }
+    if (document.getElementById('stat-clinic-address')) {
+        document.getElementById('stat-clinic-address').value = busData.address || '';
+    }
+    if (document.getElementById('stat-doctor-name')) {
+        document.getElementById('stat-doctor-name').value = busData.doctor || '';
+    }
+    if (document.getElementById('stat-doctor-specialty')) {
+        document.getElementById('stat-doctor-specialty').value = busData.doctorSpecialty || 'Odontología General / Especializada';
+    }
+    if (document.getElementById('stat-bank-info')) {
+        document.getElementById('stat-bank-info').value = busData.bankInfo || '';
+    }
+    if (footerTextarea) {
+        footerTextarea.value = config.footerText || config.footer_text || busData.footer || '';
+    }
+    if (recipeFooterTextarea) {
+        recipeFooterTextarea.value = config.recipeFooterText || config.recipe_footer_text || busData.recipeFooter || '';
+    }
+    if (headerTextarea) {
+        headerTextarea.value = config.headerText || config.header_text || '';
     }
 
-    logoUpload.onchange = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = async (event) => {
-                const base64 = event.target.result;
-                previewImg.src = base64;
-                previewContainer.classList.remove('hidden');
-                config.logoUrl = base64;
+    if (config.logoUrl || config.logo_url) {
+        const logo = config.logoUrl || config.logo_url;
+        if (previewImg) previewImg.src = logo;
+        if (previewContainer) previewContainer.classList.remove('hidden');
+    } else {
+        if (previewImg) previewImg.src = '';
+        if (previewContainer) previewContainer.classList.add('hidden');
+    }
+
+    if (logoUpload) {
+        logoUpload.onchange = (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    const base64 = event.target.result;
+                    if (previewImg) previewImg.src = base64;
+                    if (previewContainer) previewContainer.classList.remove('hidden');
+                    config.logoUrl = base64;
+                };
+                reader.readAsDataURL(file);
+            }
+        };
+    }
+
+    if (clearLogoBtn) {
+        clearLogoBtn.onclick = async () => {
+            if (logoUpload) logoUpload.value = '';
+            if (previewImg) previewImg.src = '';
+            if (previewContainer) previewContainer.classList.add('hidden');
+            config.logoUrl = '';
+        };
+    }
+
+    const saveBtn = document.getElementById('btn-save-stationery-config');
+    if (saveBtn) {
+        saveBtn.onclick = async () => {
+            const clinicName = (document.getElementById('stat-clinic-name') ? document.getElementById('stat-clinic-name').value.trim() : '') || 'Vida Sana Centro Médico Odontológico';
+            const clinicRif = (document.getElementById('stat-clinic-rif') ? document.getElementById('stat-clinic-rif').value.trim() : '') || 'J-50781755-5';
+            const clinicPhone = (document.getElementById('stat-clinic-phone') ? document.getElementById('stat-clinic-phone').value.trim() : '') || '0424-1894138';
+            const clinicEmail = (document.getElementById('stat-clinic-email') ? document.getElementById('stat-clinic-email').value.trim() : '') || 'recepcion.vidasana@gmail.com';
+            const clinicAddress = (document.getElementById('stat-clinic-address') ? document.getElementById('stat-clinic-address').value.trim() : '') || 'Av. Libertador Con Calle Paraíso, Edif Torre Siclar Piso Local 1, Sector Libertador, Caracas';
+            const doctorName = (document.getElementById('stat-doctor-name') ? document.getElementById('stat-doctor-name').value.trim() : '') || 'Dr. Alejandro Silva';
+            const doctorSpecialty = (document.getElementById('stat-doctor-specialty') ? document.getElementById('stat-doctor-specialty').value.trim() : '') || 'Odontología General / Especializada';
+            const bankInfo = (document.getElementById('stat-bank-info') ? document.getElementById('stat-bank-info').value.trim() : '') || 'Banco Banesco / Pago Móvil: RIF J-50781755-5 | Teléfono: 0424-1894138';
+            const footerText = (footerTextarea ? footerTextarea.value.trim() : '') || 'Correo: recepcion.vidasana@gmail.com | Instagram: @Vidasanacmo | Gracias por su confianza.';
+            const recipeFooterText = (recipeFooterTextarea ? recipeFooterTextarea.value.trim() : '') || 'Indicaciones y récipe médico válido bajo supervisión del especialista tratante.';
+            const logoUrl = previewImg ? (previewImg.src || '') : '';
+
+            const busObj = {
+                name: clinicName,
+                rif: clinicRif,
+                phone: clinicPhone,
+                email: clinicEmail,
+                address: clinicAddress,
+                doctor: doctorName,
+                doctorSpecialty: doctorSpecialty,
+                bankInfo: bankInfo,
+                footer: footerText,
+                recipeFooter: recipeFooterText
             };
-            reader.readAsDataURL(file);
-        }
-    };
 
-    clearLogoBtn.onclick = async () => {
-        logoUpload.value = '';
-        previewImg.src = '';
-        previewContainer.classList.add('hidden');
-        config.logoUrl = '';
-    };
+            const headerJson = JSON.stringify(busObj);
+            if (headerTextarea) headerTextarea.value = headerJson;
 
-    document.getElementById('btn-save-stationery-config').onclick = async () => {
-        const headerText = headerTextarea.value.trim();
-        const footerText = footerTextarea.value.trim();
-        const recipeFooterText = recipeFooterTextarea ? recipeFooterTextarea.value.trim() : '';
-        const logoUrl = previewImg ? (previewImg.src || '') : '';
+            // Save to localStorage
+            localStorage.setItem('dental_clinic_name', clinicName);
+            localStorage.setItem('dental_clinic_rif', clinicRif);
+            localStorage.setItem('dental_clinic_phone', clinicPhone);
+            localStorage.setItem('dental_clinic_email', clinicEmail);
+            localStorage.setItem('dental_clinic_address', clinicAddress);
+            localStorage.setItem('dental_clinic_doctor', doctorName);
+            localStorage.setItem('dental_clinic_doctor_specialty', doctorSpecialty);
+            localStorage.setItem('dental_clinic_bank_info', bankInfo);
 
-        await SupabaseDataService.saveStationeryConfig({
-            id: 'default',
-            headerText,
-            footerText,
-            recipeFooterText,
-            logoUrl
-        });
+            // Sync with settings form if open
+            if (document.getElementById('set-bus-name')) document.getElementById('set-bus-name').value = clinicName;
+            if (document.getElementById('set-bus-rif')) document.getElementById('set-bus-rif').value = clinicRif;
+            if (document.getElementById('set-bus-phone')) document.getElementById('set-bus-phone').value = clinicPhone;
+            if (document.getElementById('set-bus-email')) document.getElementById('set-bus-email').value = clinicEmail;
+            if (document.getElementById('set-bus-address')) document.getElementById('set-bus-address').value = clinicAddress;
 
-        applyClinicBrandingUI({
-            headerText,
-            footerText,
-            recipeFooterText,
-            logoUrl
-        });
+            try {
+                await SupabaseDataService.saveStationeryConfig({
+                    id: 'default',
+                    header_text: headerJson,
+                    headerText: headerJson,
+                    footer_text: footerText,
+                    footerText: footerText,
+                    recipe_footer_text: recipeFooterText,
+                    recipeFooterText: recipeFooterText,
+                    logo_url: logoUrl,
+                    logoUrl: logoUrl
+                });
 
-        renderBudgetTable();
+                applyClinicBrandingUI({
+                    headerText: headerJson,
+                    footerText: footerText,
+                    recipeFooterText: recipeFooterText,
+                    logoUrl: logoUrl
+                });
 
-        Swal.fire({ icon: 'success', title: 'Configuración guardada', text: 'Se actualizaron el logo, membretes y récipes e indicaciones en el sistema.', timer: 2000, showConfirmButton: false });
-    };
+                if (typeof renderBudgetTable === 'function') {
+                    renderBudgetTable();
+                }
+
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Configuración Guardada',
+                    text: 'Se actualizaron los datos clínicos, membrete, cuentas bancarias y pie de página en todo el sistema.',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+            } catch(err) {
+                console.error("Error saving stationery configuration:", err);
+                Swal.fire({ icon: 'error', title: 'Error al Guardar', text: err.message || err });
+            }
+        };
+    }
 }
 
 async function handleStationeryAction(templateType, action) {
     try {
-        const headerText = document.getElementById('stat-header-text') ? document.getElementById('stat-header-text').value : '';
-        const footerText = document.getElementById('stat-footer-text') ? document.getElementById('stat-footer-text').value : '';
-        const recipeFooterText = document.getElementById('stat-recipe-footer-text') ? document.getElementById('stat-recipe-footer-text').value : '';
-        
+        const config = await SupabaseDataService.getStationeryConfig();
+        const busData = getClinicBusData(config);
+
+        // Read current form inputs if available (allows instant preview of unsaved edits)
+        if (document.getElementById('stat-clinic-name') && document.getElementById('stat-clinic-name').value.trim()) {
+            busData.name = document.getElementById('stat-clinic-name').value.trim();
+        }
+        if (document.getElementById('stat-clinic-rif') && document.getElementById('stat-clinic-rif').value.trim()) {
+            busData.rif = document.getElementById('stat-clinic-rif').value.trim();
+        }
+        if (document.getElementById('stat-clinic-phone') && document.getElementById('stat-clinic-phone').value.trim()) {
+            busData.phone = document.getElementById('stat-clinic-phone').value.trim();
+        }
+        if (document.getElementById('stat-clinic-email') && document.getElementById('stat-clinic-email').value.trim()) {
+            busData.email = document.getElementById('stat-clinic-email').value.trim();
+        }
+        if (document.getElementById('stat-clinic-address') && document.getElementById('stat-clinic-address').value.trim()) {
+            busData.address = document.getElementById('stat-clinic-address').value.trim();
+        }
+        if (document.getElementById('stat-doctor-name') && document.getElementById('stat-doctor-name').value.trim()) {
+            busData.doctor = document.getElementById('stat-doctor-name').value.trim();
+        }
+        if (document.getElementById('stat-doctor-specialty') && document.getElementById('stat-doctor-specialty').value.trim()) {
+            busData.doctorSpecialty = document.getElementById('stat-doctor-specialty').value.trim();
+        }
+        if (document.getElementById('stat-bank-info') && document.getElementById('stat-bank-info').value.trim()) {
+            busData.bankInfo = document.getElementById('stat-bank-info').value.trim();
+        }
+        const footerText = (document.getElementById('stat-footer-text') && document.getElementById('stat-footer-text').value.trim()) || busData.footer || '';
+        const recipeFooterText = (document.getElementById('stat-recipe-footer-text') && document.getElementById('stat-recipe-footer-text').value.trim()) || busData.recipeFooter || '';
+
         const previewImg = document.getElementById('stat-logo-preview-img');
-        const rawLogoSrc = (previewImg && previewImg.getAttribute('src')) ? previewImg.getAttribute('src') : '';
+        const rawLogoSrc = (previewImg && previewImg.getAttribute('src')) ? previewImg.getAttribute('src') : (busData.logoUrl || '');
         const logoSrc = (rawLogoSrc && rawLogoSrc !== window.location.href) ? rawLogoSrc : '';
 
-        const busData = getClinicBusData({ header_text: headerText, logo_url: logoSrc, footer_text: footerText });
         let logoBase64 = '';
-        if (busData.logoUrl && busData.logoUrl !== window.location.href) {
-            logoBase64 = busData.logoUrl.startsWith('data:') ? busData.logoUrl : await toDataURL(busData.logoUrl);
+        if (logoSrc) {
+            logoBase64 = logoSrc.startsWith('data:') ? logoSrc : await toDataURL(logoSrc);
         }
 
         let docHtml = '';
@@ -13014,21 +13257,23 @@ async function handleStationeryAction(templateType, action) {
                 docType: 'factura',
                 docTitle: 'Factura Digital',
                 emissionDate: new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' }),
-                controlNumber: 'FC-2026-00892',
+                controlNumber: `FC-2026-${Date.now().toString().slice(-5)}`,
                 paymentMethod: 'Transferencia / PAGO MÓVIL',
-                clinicName: busData.name || 'Consultorio Médico',
-                clinicPhone: busData.phone || '+58 (412) 555-0192',
-                clinicAddress: busData.address || 'Av. Principal de Las Mercedes, Torre Consultorios, Piso 4, Off. 4B, Caracas',
+                clinicName: busData.name,
+                clinicRif: busData.rif,
+                clinicPhone: busData.phone,
+                clinicEmail: busData.email,
+                clinicAddress: busData.address,
                 logoUrl: logoBase64,
-                doctorName: busData.doctor || 'Dr. Rodrigo Navas',
-                doctorSpecialty: 'Odontología General / Rehabilitación Oral',
-                doctorPhone: '+58 (414) 123-4567',
+                doctorName: busData.doctor || 'Dr. Alejandro Silva',
+                doctorSpecialty: busData.doctorSpecialty || 'Odontología General / Rehabilitación Oral',
+                doctorPhone: busData.phone,
                 patientName: 'Carlos Eduardo Mendoza',
                 patientId: 'V-18.452.910',
                 patientPhone: '+58 (416) 987-6543',
                 items: [
-                    { name: 'Consulta Médica Especializada', description: 'Evaluación clínica integral y revisión de antecedentes', qty: 1, price: 60.00, total: 60.00 },
-                    { name: 'Limpieza Ultrasónica + Profilaxis', description: 'Eliminación de cálculo dental y pulido coronario', qty: 1, price: 40.00, total: 40.00 }
+                    { name: 'Consulta Médica Especializada', description: 'Evaluación clínica integral y diagnóstico general', qty: 1, price: 60.00, total: 60.00 },
+                    { name: 'Limpieza Ultrasónica + Profilaxis', description: 'Eliminación de cálculo y pulido coronario', qty: 1, price: 40.00, total: 40.00 }
                 ],
                 subtotalUSD: 100.00,
                 discountPct: 0,
@@ -13038,23 +13283,25 @@ async function handleStationeryAction(templateType, action) {
                 totalVES: 'Bs. 3.650,00',
                 paymentTerms: 'Contado / Pago inmediato al momento de la consulta.',
                 bankingDetails: busData.bankInfo,
-                observations: 'Paciente presenta evolución favorable. Se recomienda control preventivo cada 6 meses.',
-                footerNote: footerText || busData.footer
+                observations: 'Paciente presenta evolución favorable. Se recomienda control preventivo periódico.',
+                footerNote: footerText
             });
         } else if (templateType === 'cotizacion') {
             docHtml = buildMedicalDocumentHTML({
                 docType: 'presupuesto',
                 docTitle: 'Presupuesto Odontológico',
                 emissionDate: new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' }),
-                controlNumber: 'PR-2026-00341',
+                controlNumber: `PR-2026-${Date.now().toString().slice(-5)}`,
                 paymentMethod: 'Por Sesiones / Efectivo USD',
-                clinicName: busData.name || 'Consultorio Odontológico Especializado',
-                clinicPhone: busData.phone || '+58 (412) 555-0192',
-                clinicAddress: busData.address || 'Av. Principal de Las Mercedes, Torre Consultorios, Piso 4, Caracas',
+                clinicName: busData.name,
+                clinicRif: busData.rif,
+                clinicPhone: busData.phone,
+                clinicEmail: busData.email,
+                clinicAddress: busData.address,
                 logoUrl: logoBase64,
-                doctorName: busData.doctor || 'Dr. Rodrigo Navas',
-                doctorSpecialty: 'Odontología Estética y Prótesis',
-                doctorPhone: '+58 (414) 123-4567',
+                doctorName: busData.doctor || 'Dr. Alejandro Silva',
+                doctorSpecialty: busData.doctorSpecialty || 'Odontología Estética y Prótesis',
+                doctorPhone: busData.phone,
                 patientName: 'Carlos Eduardo Mendoza',
                 patientId: 'V-18.452.910',
                 patientPhone: '+58 (416) 987-6543',
@@ -13072,22 +13319,24 @@ async function handleStationeryAction(templateType, action) {
                 paymentTerms: 'Validez del presupuesto: 15 días continuos.',
                 bankingDetails: busData.bankInfo,
                 observations: 'Plan integral de rehabilitación oral.',
-                footerNote: footerText || busData.footer
+                footerNote: footerText
             });
         } else if (templateType === 'recibo') {
             docHtml = buildMedicalDocumentHTML({
                 docType: 'recibo',
                 docTitle: 'Recibo de Atención Clínica',
                 emissionDate: new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' }),
-                controlNumber: 'REC-2026-00215',
+                controlNumber: `REC-2026-${Date.now().toString().slice(-5)}`,
                 paymentMethod: 'Transferencia / PAGO MÓVIL',
-                clinicName: busData.name || 'Consultorio Odontológico',
-                clinicPhone: busData.phone || '+58 (412) 555-0192',
-                clinicAddress: busData.address || 'Av. Principal de Las Mercedes, Torre Consultorios, Piso 4, Caracas',
+                clinicName: busData.name,
+                clinicRif: busData.rif,
+                clinicPhone: busData.phone,
+                clinicEmail: busData.email,
+                clinicAddress: busData.address,
                 logoUrl: logoBase64,
-                doctorName: busData.doctor || 'Dr. Rodrigo Navas',
-                doctorSpecialty: 'Odontología General',
-                doctorPhone: '+58 (414) 123-4567',
+                doctorName: busData.doctor || 'Dr. Alejandro Silva',
+                doctorSpecialty: busData.doctorSpecialty || 'Odontología General',
+                doctorPhone: busData.phone,
                 patientName: 'Carlos Eduardo Mendoza',
                 patientId: 'V-18.452.910',
                 patientPhone: '+58 (416) 987-6543',
@@ -13103,23 +13352,25 @@ async function handleStationeryAction(templateType, action) {
                 paymentTerms: 'Abono en consulta. Comprobante de cancelación.',
                 bankingDetails: busData.bankInfo,
                 observations: 'Paciente atendido satisfactoriamente.',
-                footerNote: footerText || busData.footer
+                footerNote: footerText
             });
         } else if (templateType === 'recipe') {
             const footerNote = recipeFooterText || footerText || 'Documento Clínico Oficial de Prescripción Médica y Recomendaciones.';
             docHtml = buildRecipeDocumentHTML({
                 docTitle: 'Prescripción Médica y Récipe',
                 emissionDate: new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' }),
-                controlNumber: 'REC-2026-00104',
+                controlNumber: `REC-2026-${Date.now().toString().slice(-5)}`,
                 treatmentLinked: 'Sesión #1: Restauración Resina Estética (Pieza 16)',
-                clinicName: busData.name || 'Consultorio Odontológico Especializado',
-                clinicPhone: busData.phone || '+58 (412) 555-0192',
-                clinicAddress: busData.address || 'Av. Principal de Las Mercedes, Torre Consultorios, Piso 4, Caracas',
+                clinicName: busData.name,
+                clinicRif: busData.rif,
+                clinicPhone: busData.phone,
+                clinicEmail: busData.email,
+                clinicAddress: busData.address,
                 logoUrl: logoBase64,
-                doctorName: busData.doctor || 'Dr. Rodrigo Navas',
-                doctorSpecialty: 'Odontología General / Rehabilitación Oral',
+                doctorName: busData.doctor || 'Dr. Alejandro Silva',
+                doctorSpecialty: busData.doctorSpecialty || 'Odontología General / Rehabilitación Oral',
                 doctorLicense: 'MPPS-98402 / C.O.V-20104',
-                doctorPhone: '+58 (414) 123-4567',
+                doctorPhone: busData.phone,
                 doctorSig: '',
                 patientName: 'Carlos Eduardo Mendoza',
                 patientId: 'V-18.452.910',
@@ -13204,23 +13455,28 @@ function getPaymentMethodLabel(method) {
 }
 
 async function generatePDFFromElement(element, filename) {
-    element.style.position = 'relative';
-    element.style.width = '720px';
-    element.style.maxWidth = '720px';
-    element.style.margin = '0 auto';
+    element.style.position = 'fixed';
+    element.style.top = '0';
+    element.style.left = '0';
+    element.style.width = '794px';
+    element.style.maxWidth = '794px';
+    element.style.margin = '0';
     element.style.backgroundColor = '#ffffff';
     element.style.color = '#1e293b';
     element.style.display = 'block';
     element.style.visibility = 'visible';
-    element.style.padding = '10px 15px';
+    element.style.padding = '15px 20px';
     element.style.boxSizing = 'border-box';
+    element.style.zIndex = '99999';
 
     const innerDoc = element.querySelector('.medical-doc-container');
     if (innerDoc) {
         innerDoc.style.maxWidth = '100%';
-        innerDoc.style.padding = '10px 15px';
+        innerDoc.style.width = '100%';
+        innerDoc.style.padding = '0';
         innerDoc.style.margin = '0';
         innerDoc.style.boxShadow = 'none';
+        innerDoc.style.background = '#ffffff';
     }
 
     if (!document.body.contains(element)) {
@@ -13235,6 +13491,17 @@ async function generatePDFFromElement(element, filename) {
         } catch (e) {}
     };
 
+    // Pre-load all images inside element before capturing
+    const imgs = Array.from(element.querySelectorAll('img'));
+    await Promise.all(imgs.map(img => {
+        if (img.complete && img.naturalHeight > 0) return Promise.resolve();
+        return new Promise(res => {
+            img.onload = () => res();
+            img.onerror = () => res();
+            setTimeout(res, 800);
+        });
+    }));
+
     let isCancelled = false;
 
     return new Promise((resolve) => {
@@ -13242,10 +13509,10 @@ async function generatePDFFromElement(element, filename) {
             title: 'Generando Documento PDF...',
             html: `
                 <div style="margin-bottom: 10px; font-weight: bold; color: #0284c7;">
-                    <i class="fa-solid fa-circle-notch fa-spin"></i> Ajustando márgenes y compilando documento...
+                    <i class="fa-solid fa-circle-notch fa-spin"></i> Compilando documento en alta resolución...
                 </div>
                 <div style="font-size: 0.82rem; color: #64748b;">
-                    Generando documento en alta resolución.<br>
+                    Por favor espere mientras se descarga el archivo.<br>
                     <span style="font-size: 0.76rem; color: #94a3b8;">Haga clic afuera, presione <b>Escape</b> o pulse <b>Cancelar</b> para detener.</span>
                 </div>
             `,
@@ -13268,12 +13535,21 @@ async function generatePDFFromElement(element, filename) {
                     try {
                         if (typeof window.html2pdf === 'function') {
                             const opt = {
-                                margin: [5, 6, 5, 6],
+                                margin: [6, 8, 6, 8],
                                 filename: filename,
                                 image: { type: 'jpeg', quality: 0.98 },
-                                html2canvas: { scale: 2, useCORS: true, letterRendering: true, backgroundColor: '#ffffff', logging: false, width: 720 },
+                                html2canvas: { 
+                                    scale: 2, 
+                                    useCORS: true, 
+                                    letterRendering: true, 
+                                    backgroundColor: '#ffffff', 
+                                    logging: false, 
+                                    width: 794,
+                                    scrollY: 0,
+                                    scrollX: 0
+                                },
                                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-                                pagebreak: { mode: ['css', 'legacy'] }
+                                pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
                             };
                             if (isCancelled) {
                                 cleanupElement();
@@ -13291,17 +13567,24 @@ async function generatePDFFromElement(element, filename) {
                                 resolve(false);
                                 return;
                             }
-                            const canvas = await window.html2canvas(element, { scale: 2, useCORS: true, backgroundColor: '#ffffff', width: 720 });
+                            const canvas = await window.html2canvas(element, { 
+                                scale: 2, 
+                                useCORS: true, 
+                                backgroundColor: '#ffffff', 
+                                width: 794,
+                                scrollY: 0,
+                                scrollX: 0
+                            });
                             if (isCancelled) {
                                 cleanupElement();
                                 resolve(false);
                                 return;
                             }
-                            const imgString = canvas.toDataURL('image/jpeg', 0.95);
+                            const imgString = canvas.toDataURL('image/jpeg', 0.98);
                             const pdf = new jsPDFClass('p', 'mm', 'a4');
-                            const imgWidth = 210;
-                            const imgHeight = (canvas.height * imgWidth) / canvas.width;
-                            pdf.addImage(imgString, 'JPEG', 0, 0, imgWidth, imgHeight);
+                            const pdfWidth = 210;
+                            const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+                            pdf.addImage(imgString, 'JPEG', 0, 0, pdfWidth, pdfHeight);
                             if (isCancelled) {
                                 cleanupElement();
                                 resolve(false);
@@ -13315,8 +13598,8 @@ async function generatePDFFromElement(element, filename) {
                         if (!isCancelled) {
                             Swal.fire({
                                 icon: 'success',
-                                title: '¡PDF Generado!',
-                                text: `Se ha descargado ${filename}`,
+                                title: '¡PDF Descargado!',
+                                text: `Se ha descargado ${filename} correctamente.`,
                                 timer: 2000,
                                 showConfirmButton: false
                             });
@@ -13336,7 +13619,7 @@ async function generatePDFFromElement(element, filename) {
                         Swal.fire({
                             icon: 'info',
                             title: 'Ventana de Impresión / Guardar PDF',
-                            text: `Abriendo vista de impresión para guardar como PDF...`,
+                            text: `Abriendo vista previa para guardar como PDF...`,
                             showCancelButton: true,
                             cancelButtonText: 'Cerrar',
                             confirmButtonText: 'Abrir'
@@ -13349,45 +13632,33 @@ async function generatePDFFromElement(element, filename) {
                                             <head>
                                                 <title>${filename}</title>
                                                 <style>
-                                                    body { margin: 30px; font-family: 'Inter', Arial, sans-serif; background: #fff; color: #000; }
-                                                    table { width: 100%; border-collapse: collapse; }
-                                                    th, td { padding: 8px; text-align: left; border-bottom: 1px dashed #ccc; }
-                                                    @media print {
-                                                        body { margin: 0; }
-                                                    }
+                                                    @page { size: A4 portrait; margin: 10mm; }
+                                                    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #ffffff; color: #1e293b; margin: 0; padding: 0; }
+                                                    .medical-doc-container { width: 100% !important; max-width: 100% !important; box-shadow: none !important; border: none !important; }
                                                 </style>
                                             </head>
                                             <body>
                                                 ${element.innerHTML}
                                                 <script>
                                                     window.onload = function() {
-                                                        window.print();
-                                                        window.close();
+                                                        setTimeout(function() {
+                                                            window.print();
+                                                        }, 500);
                                                     };
                                                 <\/script>
                                             </body>
                                         </html>
                                     `);
                                     printWindow.document.close();
-                                } else {
-                                    Swal.fire({
-                                        icon: 'error',
-                                        title: 'Bloqueador de Ventanas Activo',
-                                        text: 'Por favor permita las ventanas emergentes en este sitio.'
-                                    });
                                 }
                             }
-                            resolve(false);
                         });
+                        resolve(false);
                     }
-                }, 600);
-            },
-            willClose: () => {
-                isCancelled = true;
-                cleanupElement();
+                }, 350);
             }
         }).then((result) => {
-            if (result.dismiss) {
+            if (result.dismiss === Swal.DismissReason.cancel || result.dismiss === Swal.DismissReason.backdrop || result.dismiss === Swal.DismissReason.esc) {
                 isCancelled = true;
                 cleanupElement();
                 resolve(false);
