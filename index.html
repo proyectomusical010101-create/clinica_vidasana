@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=264">
+    <link rel="stylesheet" href="styles.css?v=265">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -5903,7 +5903,7 @@
                     <!-- LEFT COLUMN: Patient & Services -->
                     <div style="display: flex; flex-direction: column; gap: 16px;">
                         
-                        <!-- Step 1: Patient Selection -->
+                        <!-- Step 1: Patient Selection & Clinical Staff -->
                         <div style="background: rgba(248, 250, 252, 0.8); border: 1px solid var(--border-color); border-radius: 10px; padding: 14px;">
                             <label class="form-label" style="font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
                                 <i class="fa-solid fa-user-check text-cyan"></i> 1. Paciente a Facturar / Cobrar *
@@ -5915,6 +5915,22 @@
                             <!-- Live Patient Info & Tag Preview -->
                             <div id="ds-patient-info-box" style="margin-top: 8px; font-size: 0.82rem; color: #64748b;">
                                 <em>Seleccione un paciente registrado para cargar sus datos y convenios.</em>
+                            </div>
+
+                            <!-- Professional & Assistant Selectors (generous width in left column) -->
+                            <div class="ds-staff-row" style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed #cbd5e1;">
+                                <div>
+                                    <label style="font-size: 0.78rem; font-weight: 700; color: #475569; display: block; margin-bottom: 4px;">Doctor / Especialista *</label>
+                                    <select id="ds-doctor-select" class="form-control" style="height: 38px; border-radius: 8px; font-size: 0.85rem;">
+                                        <!-- Doctors loaded dynamically -->
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style="font-size: 0.78rem; font-weight: 700; color: #475569; display: block; margin-bottom: 4px;">Asistente de Turno</label>
+                                    <select id="ds-assistant-select" class="form-control" style="height: 38px; border-radius: 8px; font-size: 0.85rem;">
+                                        <!-- Assistants loaded dynamically -->
+                                    </select>
+                                </div>
                             </div>
                         </div>
 
@@ -6019,26 +6035,10 @@
                             </div>
                         </div>
 
-                        <!-- Professional & Assistant Selectors -->
-                        <div class="ds-staff-row">
-                            <div>
-                                <label style="font-size: 0.78rem; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Doctor / Especialista *</label>
-                                <select id="ds-doctor-select" class="form-control" style="height: 36px; border-radius: 6px; font-size: 0.82rem;">
-                                    <!-- Doctors loaded dynamically -->
-                                </select>
-                            </div>
-                            <div>
-                                <label style="font-size: 0.78rem; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Asistente de Turno</label>
-                                <select id="ds-assistant-select" class="form-control" style="height: 36px; border-radius: 6px; font-size: 0.82rem;">
-                                    <!-- Assistants loaded dynamically -->
-                                </select>
-                            </div>
-                        </div>
-
                         <!-- Payment Method -->
                         <div>
-                            <label style="font-size: 0.78rem; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Método de Pago *</label>
-                            <select id="ds-payment-method" class="form-control" onchange="window.onDirectSalePaymentMethodChange(this.value)" style="height: 36px; border-radius: 6px; font-size: 0.85rem; font-weight: 600;">
+                            <label style="font-size: 0.8rem; font-weight: 700; color: #334155; display: block; margin-bottom: 4px;">Método de Pago *</label>
+                            <select id="ds-payment-method" class="form-control" onchange="window.onDirectSalePaymentMethodChange(this.value)" style="height: 38px; border-radius: 8px; font-size: 0.88rem; font-weight: 600; width: 100%;">
                                 <option value="pagomovil">Pago Móvil</option>
                                 <option value="cash">Efectivo (Dólares o Bs.)</option>
                                 <option value="pos">Punto de Venta / Débito</option>
@@ -6135,7 +6135,7 @@
                         <!-- Notes -->
                         <div>
                             <label style="font-size: 0.78rem; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Observaciones / Indicaciones (Opcional):</label>
-                            <input type="text" id="ds-notes" class="form-control" placeholder="ej: Control a los 15 días, primera sesión completada" style="height: 34px; border-radius: 6px; font-size: 0.82rem;">
+                            <input type="text" id="ds-notes" class="form-control" placeholder="ej: Control en 15 días, primera sesión..." style="height: 36px; border-radius: 8px; font-size: 0.85rem; width: 100%; box-sizing: border-box;">
                         </div>
 
                         <!-- Checkout Action Button -->
@@ -6483,14 +6483,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=264"></script>
-    <script src="supabaseClient.js?v=264"></script>
-    <script src="odontogram.js?v=264"></script>
-    <script src="signature.js?v=264"></script>
-    <script src="whatsapp.js?v=264"></script>
-    <script src="kardex.js?v=264"></script>
-    <script src="app.js?v=264"></script>
-    <script src="clinicalERP.js?v=264"></script>
-    <script src="tutorial.js?v=264"></script>
+    <script src="seededData.js?v=265"></script>
+    <script src="supabaseClient.js?v=265"></script>
+    <script src="odontogram.js?v=265"></script>
+    <script src="signature.js?v=265"></script>
+    <script src="whatsapp.js?v=265"></script>
+    <script src="kardex.js?v=265"></script>
+    <script src="app.js?v=265"></script>
+    <script src="clinicalERP.js?v=265"></script>
+    <script src="tutorial.js?v=265"></script>
 </body>
 </html>

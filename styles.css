@@ -5069,11 +5069,17 @@ select, .form-select, select.form-control {
 /* Direct Sale 2-Column Responsive Grid */
 .direct-sale-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.95fr);
-    gap: 20px;
+    grid-template-columns: minmax(0, 1.2fr) minmax(350px, 1fr);
+    gap: 22px;
     width: 100%;
     box-sizing: border-box;
     align-items: start;
+}
+
+.modal-header p,
+.modal-header .subtitle,
+.modal-header small {
+    color: rgba(255, 255, 255, 0.82) !important;
 }
 
 .direct-sale-grid > div {
