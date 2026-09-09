@@ -4326,6 +4326,8 @@ async function renderPatientsTable(filter = 'all', searchQuery = '') {
             <td><span class="badge-tag ${statusClass}">${p.status}</span></td>
             <td>
                 <div class="actions-cell-group">
+                    <button class="btn btn-xs btn-outline" style="border-color:#10b981; color:#059669; font-weight:700;" onclick="window.openDirectSaleModal('${p.id}')" title="Venta Directa / Cobro Rápido sin Presupuesto"><i class="fa-solid fa-bolt"></i> <span class="btn-text-full">Cobrar</span></button>
+                    <button class="btn btn-xs btn-outline" style="border-color:#8b5cf6; color:#7c3aed; font-weight:700;" onclick="window.openPatientReceiptsHub('${p.id}')" title="Historial de Comprobantes, Facturas y Recibos"><i class="fa-solid fa-receipt"></i> <span class="btn-text-full">Recibos</span></button>
                     <button class="btn btn-xs btn-outline" style="border-color:#0891b2; color:#0891b2;" onclick="window.editPatient('${p.id}')" title="Editar Ficha / Historia"><i class="fa-solid fa-pen-to-square"></i> <span class="btn-text-full">Editar</span></button>
                     <button class="btn btn-xs btn-success" style="background:#10b981; border:none; color:#fff;" onclick="window.finalizePatientTreatment('${p.id}')" title="Finalizar Tratamiento / Presupuesto"><i class="fa-solid fa-circle-check"></i> <span class="btn-text-full">Finalizar</span></button>
                     <button class="btn btn-xs btn-primary" onclick="selectPatientForOdontogram('${p.id}')" title="Emitir Presupuesto"><i class="fa-solid fa-tooth"></i> Presupuesto</button>
@@ -4882,6 +4884,782 @@ window.selectPatientForOdontogram = async function(patientId) {
 window.openEHRForPatient = function(patientId) {
     setActivePatientId(patientId);
     document.querySelector('.nav-item[data-tab="ehr"]').click();
+};
+
+// ============================================================================
+// MÓDULO DE VENTA DIRECTA & COBRO RÁPIDO DE SERVICIOS (POS CLÍNICO)
+// ============================================================================
+
+window.currentDirectSaleItems = [];
+window.lastProcessedDirectSaleDoc = null;
+window.currentReceiptsHubPatientId = null;
+
+window.openDirectSaleModal = async function(preselectedPatientId = null) {
+    window.currentDirectSaleItems = [];
+    window.lastProcessedDirectSaleDoc = null;
+
+    // Reset UI
+    const overlay = document.getElementById('ds-success-overlay');
+    if (overlay) overlay.style.display = 'none';
+
+    openModal('modal-direct-sale');
+
+    // 1. Populate Patients Dropdown
+    const patientSelect = document.getElementById('ds-patient-select');
+    if (patientSelect) {
+        const patients = await SupabaseDataService.getPatients();
+        patientSelect.innerHTML = '<option value="">-- Seleccionar Paciente --</option>' +
+            patients.map(p => {
+                const tagInfo = p.tagName ? ` [🏷️ ${p.tagName}]` : '';
+                return `<option value="${p.id}">${p.fullname} (${p.id})${tagInfo}</option>`;
+            }).join('');
+        
+        if (preselectedPatientId) {
+            patientSelect.value = preselectedPatientId;
+            await window.onDirectSalePatientChange(preselectedPatientId);
+        } else {
+            const infoBox = document.getElementById('ds-patient-info-box');
+            if (infoBox) infoBox.innerHTML = '<em>Seleccione un paciente registrado para cargar sus datos y convenios.</em>';
+        }
+    }
+
+    // 2. Populate Doctors & Assistants
+    const doctorSelect = document.getElementById('ds-doctor-select');
+    const assistantSelect = document.getElementById('ds-assistant-select');
+    const users = await SupabaseDataService.getUsers();
+    
+    if (doctorSelect) {
+        const doctors = users.filter(u => !u.role.toLowerCase().includes('asistente'));
+        doctorSelect.innerHTML = doctors.map(d => `<option value="${d.fullname}">${d.fullname} (${d.role})</option>`).join('');
+    }
+
+    if (assistantSelect) {
+        const assistants = users.filter(u => u.role.toLowerCase().includes('asistente'));
+        assistantSelect.innerHTML = '<option value="">Sin Asistente Asignado</option>' + 
+            assistants.map(a => `<option value="${a.fullname}">${a.fullname}</option>`).join('');
+    }
+
+    // 3. Populate Baremo Services
+    await window.onDirectSaleSpecialtyChange('all');
+
+    // 4. Reset Inputs & Render empty items table
+    const qtyIn = document.getElementById('ds-item-qty');
+    if (qtyIn) qtyIn.value = '1';
+    const priceIn = document.getElementById('ds-item-price');
+    if (priceIn) priceIn.value = '';
+    const discIn = document.getElementById('ds-item-discount');
+    if (discIn) discIn.value = '0';
+    const notesIn = document.getElementById('ds-notes');
+    if (notesIn) notesIn.value = '';
+    const splitContainer = document.getElementById('ds-split-container');
+    if (splitContainer) splitContainer.style.display = 'none';
+
+    window.renderDirectSaleItems();
+    window.calculateDirectSaleTotals();
+};
+
+window.resetDirectSaleForm = function() {
+    const overlay = document.getElementById('ds-success-overlay');
+    if (overlay) overlay.style.display = 'none';
+    window.currentDirectSaleItems = [];
+    window.lastProcessedDirectSaleDoc = null;
+    window.renderDirectSaleItems();
+    window.calculateDirectSaleTotals();
+    const qtyIn = document.getElementById('ds-item-qty');
+    if (qtyIn) qtyIn.value = '1';
+    const priceIn = document.getElementById('ds-item-price');
+    if (priceIn) priceIn.value = '';
+    const notesIn = document.getElementById('ds-notes');
+    if (notesIn) notesIn.value = '';
+};
+
+window.onDirectSalePatientChange = async function(patientId) {
+    const infoBox = document.getElementById('ds-patient-info-box');
+    const discIn = document.getElementById('ds-item-discount');
+    if (!infoBox) return;
+
+    if (!patientId) {
+        infoBox.innerHTML = '<em>Seleccione un paciente registrado para cargar sus datos y convenios.</em>';
+        if (discIn) discIn.value = '0';
+        return;
+    }
+
+    const patients = await SupabaseDataService.getPatients();
+    const p = patients.find(pat => String(pat.id) === String(patientId));
+    if (!p) {
+        infoBox.innerHTML = '<span class="text-red">Paciente no encontrado.</span>';
+        return;
+    }
+
+    let tagBadge = '';
+    const pTag = p.tagName || (p.metadata && p.metadata.tagName);
+    const pTagRule = p.tagRule || (p.metadata && p.metadata.tagRule);
+    const pTagColor = p.tagColor || (p.metadata && p.metadata.tagColor) || '#10b981';
+
+    if (pTag) {
+        let ruleText = '';
+        if (pTagRule) {
+            if (pTagRule.type === 'discount') {
+                ruleText = ` (-${pTagRule.value}%)`;
+                if (discIn) discIn.value = pTagRule.value;
+            } else if (pTagRule.type === 'surcharge') {
+                ruleText = ` (+${pTagRule.value}%)`;
+                if (discIn) discIn.value = '0';
+            } else if (pTagRule.type === 'exonerated') {
+                ruleText = ' (100% Exonerado)';
+                if (discIn) discIn.value = '100';
+            } else {
+                if (discIn) discIn.value = '0';
+            }
+        }
+        tagBadge = `<span style="font-size:0.75rem; padding:2px 8px; border-radius:4px; background:${pTagColor}20; color:${pTagColor}; border:1px solid ${pTagColor}50; font-weight:700; margin-left:6px;"><i class="fa-solid fa-tags"></i> ${pTag}${ruleText}</span>`;
+    } else {
+        if (discIn) discIn.value = '0';
+    }
+
+    infoBox.innerHTML = `
+        <div style="background:#fff; border:1px solid #e2e8f0; border-radius:6px; padding:8px 12px; margin-top:4px;">
+            <div style="font-weight:700; color:#0f172a; font-size:0.88rem; display:flex; align-items:center; flex-wrap:wrap;">
+                ${p.fullname} ${tagBadge}
+            </div>
+            <div style="font-size:0.78rem; color:#64748b; margin-top:2px;">
+                Cédula: <strong>${p.id}</strong> • Teléfono: <strong>${p.phone || 'N/A'}</strong> • Edad: <strong>${p.birthdate ? calculateAge(p.birthdate) + ' años' : 'N/A'}</strong>
+            </div>
+        </div>
+    `;
+};
+
+window.onDirectSaleSpecialtyChange = async function(specialty) {
+    const baremoSelect = document.getElementById('ds-baremo-select');
+    if (!baremoSelect) return;
+
+    baremoSelect.innerHTML = '<option value="">Cargando servicios...</option>';
+    const baremo = await SupabaseDataService.getBaremo();
+
+    let filtered = baremo;
+    if (specialty && specialty !== 'all') {
+        filtered = baremo.filter(s => {
+            const cat = (s.category || '').toLowerCase();
+            const spec = specialty.toLowerCase();
+            return cat.includes(spec) || spec.includes(cat);
+        });
+    }
+
+    if (filtered.length === 0) {
+        filtered = baremo;
+    }
+
+    baremoSelect.innerHTML = '<option value="">-- Seleccionar Servicio del Baremo --</option>' +
+        filtered.map(s => {
+            const price = parseFloat(s.priceUSD || s.price || 0).toFixed(2);
+            return `<option value="${s.code || s.name}" data-name="${s.name}" data-price="${price}" data-spec="${s.category || specialty}">[${s.code || 'SRV'}] ${s.name} ($${price})</option>`;
+        }).join('');
+};
+
+window.onDirectSaleBaremoSelected = function(val) {
+    const srvSelect = document.getElementById('ds-baremo-select');
+    const opt = srvSelect ? srvSelect.options[srvSelect.selectedIndex] : null;
+    const priceInput = document.getElementById('ds-item-price');
+    if (!opt || !opt.value) return;
+
+    let price = parseFloat(opt.getAttribute('data-price') || 0);
+
+    // Apply surcharge if patient has surcharge tag rule
+    const patId = document.getElementById('ds-patient-select')?.value;
+    if (patId && typeof window.getActivePatientTagRule === 'function') {
+        const rule = window.getActivePatientTagRule(patId);
+        if (rule && rule.type === 'surcharge') {
+            const surchargePct = parseFloat(rule.value) || 0;
+            price = price * (1 + surchargePct / 100);
+        }
+    }
+
+    if (priceInput) priceInput.value = price.toFixed(2);
+};
+
+window.addDirectSaleService = function() {
+    const srvSelect = document.getElementById('ds-baremo-select');
+    const opt = srvSelect ? srvSelect.options[srvSelect.selectedIndex] : null;
+    const priceIn = document.getElementById('ds-item-price');
+    const qtyIn = document.getElementById('ds-item-qty');
+    const discIn = document.getElementById('ds-item-discount');
+
+    const name = opt && opt.value ? (opt.getAttribute('data-name') || opt.text) : 'Servicio Clínico';
+    const code = opt && opt.value ? opt.value : 'SRV-' + Date.now().toString().slice(-4);
+    const specialty = opt && opt.getAttribute('data-spec') ? opt.getAttribute('data-spec') : document.getElementById('ds-specialty-select')?.value || 'General';
+
+    const price = parseFloat(priceIn?.value) || 0;
+    const qty = parseInt(qtyIn?.value) || 1;
+    const discount = parseFloat(discIn?.value) || 0;
+
+    if (price <= 0 && discount < 100) {
+        Swal.fire({ icon: 'warning', title: 'Precio Inválido', text: 'Indique un precio válido para el servicio.' });
+        return;
+    }
+
+    const rate = getExchangeRate();
+    const itemSubtotal = price * qty;
+    const itemTotalUSD = Math.max(0, itemSubtotal * (1 - discount / 100));
+    const itemTotalBs = itemTotalUSD * rate;
+
+    window.currentDirectSaleItems.push({
+        code,
+        name,
+        specialty,
+        price,
+        qty,
+        discount,
+        totalUSD: itemTotalUSD,
+        totalBs: itemTotalBs
+    });
+
+    // Reset service selector and price
+    if (srvSelect) srvSelect.value = '';
+    if (priceIn) priceIn.value = '';
+    if (qtyIn) qtyIn.value = '1';
+
+    window.renderDirectSaleItems();
+    window.calculateDirectSaleTotals();
+};
+
+window.removeDirectSaleService = function(index) {
+    window.currentDirectSaleItems.splice(index, 1);
+    window.renderDirectSaleItems();
+    window.calculateDirectSaleTotals();
+};
+
+window.renderDirectSaleItems = function() {
+    const tbody = document.getElementById('ds-items-tbody');
+    const countLabel = document.getElementById('ds-items-count');
+    if (!tbody) return;
+
+    if (countLabel) countLabel.innerText = window.currentDirectSaleItems.length;
+
+    if (window.currentDirectSaleItems.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding: 24px;">No hay servicios agregados a la venta todavía.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = window.currentDirectSaleItems.map((item, idx) => {
+        return `
+            <tr style="font-size:0.85rem; border-bottom:1px solid var(--border-color);">
+                <td>
+                    <strong>${item.name}</strong>
+                    <small style="display:block; color:#64748b;">${item.specialty}</small>
+                </td>
+                <td class="text-center"><strong>${item.qty}</strong></td>
+                <td class="text-right">$${item.price.toFixed(2)}</td>
+                <td class="text-right" style="font-weight:700; color:#0f172a;">$${item.totalUSD.toFixed(2)}</td>
+                <td class="text-right" style="color:#0284c7; font-weight:600;">Bs. ${item.totalBs.toFixed(2)}</td>
+                <td class="text-center">
+                    <button type="button" class="btn btn-xs btn-outline text-red" onclick="window.removeDirectSaleService(${idx})" title="Eliminar servicio"><i class="fa-solid fa-trash"></i></button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+};
+
+window.calculateDirectSaleTotals = function() {
+    let subtotalUSD = 0;
+    let totalDiscountUSD = 0;
+    let totalUSD = 0;
+    const rate = getExchangeRate();
+
+    window.currentDirectSaleItems.forEach(item => {
+        const itemGross = item.price * item.qty;
+        const itemDisc = itemGross * (item.discount / 100);
+        subtotalUSD += itemGross;
+        totalDiscountUSD += itemDisc;
+        totalUSD += item.totalUSD;
+    });
+
+    const totalBs = totalUSD * rate;
+
+    const subtotalEl = document.getElementById('ds-subtotal-val');
+    const discountEl = document.getElementById('ds-discount-val');
+    const totalUsdEl = document.getElementById('ds-total-usd-display');
+    const totalBsEl = document.getElementById('ds-total-bs-display');
+    const rateLabel = document.getElementById('ds-bcv-rate-label');
+
+    if (subtotalEl) subtotalEl.innerText = `$${subtotalUSD.toFixed(2)}`;
+    if (discountEl) discountEl.innerText = `-$${totalDiscountUSD.toFixed(2)}`;
+    if (totalUsdEl) totalUsdEl.innerText = `$${totalUSD.toFixed(2)} USD`;
+    if (totalBsEl) totalBsEl.innerText = `Bs. ${totalBs.toFixed(2)}`;
+    if (rateLabel) rateLabel.innerText = `Tasa BCV: Bs. ${rate.toFixed(2)}`;
+
+    // Set default amount paid to 100% if empty
+    const amountPaidIn = document.getElementById('ds-amount-paid');
+    if (amountPaidIn && (!amountPaidIn.value || parseFloat(amountPaidIn.value) === 0 || amountPaidIn.dataset.autoFilled === 'true')) {
+        amountPaidIn.value = totalUSD.toFixed(2);
+        amountPaidIn.dataset.autoFilled = 'true';
+    }
+
+    window.updateDirectSaleDocIndicator(totalUSD);
+};
+
+window.setDirectSaleFullPayment = function() {
+    let totalUSD = 0;
+    window.currentDirectSaleItems.forEach(item => totalUSD += item.totalUSD);
+    const amountPaidIn = document.getElementById('ds-amount-paid');
+    if (amountPaidIn) {
+        amountPaidIn.value = totalUSD.toFixed(2);
+        amountPaidIn.dataset.autoFilled = 'true';
+    }
+    window.updateDirectSaleDocIndicator(totalUSD);
+};
+
+window.onDirectSaleAmountPaidChange = function(val) {
+    const amountPaidIn = document.getElementById('ds-amount-paid');
+    if (amountPaidIn) amountPaidIn.dataset.autoFilled = 'false';
+    let totalUSD = 0;
+    window.currentDirectSaleItems.forEach(item => totalUSD += item.totalUSD);
+    window.updateDirectSaleDocIndicator(totalUSD);
+};
+
+window.updateDirectSaleDocIndicator = function(totalUSD) {
+    const indicator = document.getElementById('ds-doc-indicator');
+    const amountPaidIn = document.getElementById('ds-amount-paid');
+    if (!indicator || !amountPaidIn) return;
+
+    const paid = parseFloat(amountPaidIn.value) || 0;
+    const balance = Math.max(0, totalUSD - paid);
+
+    if (paid >= totalUSD && totalUSD > 0) {
+        indicator.innerHTML = `
+            <span class="badge-tag green" style="font-size:0.8rem; font-weight:700; display:inline-flex; align-items:center; gap:4px;">
+                <i class="fa-solid fa-file-invoice"></i> Emite Factura Oficial (100% Pagado Completo)
+            </span>
+        `;
+    } else if (paid > 0 && paid < totalUSD) {
+        indicator.innerHTML = `
+            <span class="badge-tag amber" style="font-size:0.8rem; font-weight:700; display:inline-flex; align-items:center; gap:4px;">
+                <i class="fa-solid fa-receipt"></i> Emite Recibo de Abono Parcial (Saldo pendiente: $${balance.toFixed(2)} USD)
+            </span>
+        `;
+    } else {
+        indicator.innerHTML = `
+            <span class="badge-tag blue" style="font-size:0.8rem; font-weight:700; display:inline-flex; align-items:center; gap:4px;">
+                <i class="fa-solid fa-info-circle"></i> Indique el monto recibido para calcular Factura o Abono
+            </span>
+        `;
+    }
+};
+
+window.onDirectSalePaymentMethodChange = function(method) {
+    const splitContainer = document.getElementById('ds-split-container');
+    if (splitContainer) {
+        splitContainer.style.display = method === 'split' ? 'block' : 'none';
+    }
+};
+
+window.processDirectSale = async function() {
+    const patientSelect = document.getElementById('ds-patient-select');
+    const patientId = patientSelect ? patientSelect.value : null;
+
+    if (!patientId) {
+        Swal.fire({ icon: 'warning', title: 'Paciente Requerido', text: 'Seleccione el paciente a quien se le realiza la venta.' });
+        return;
+    }
+
+    if (window.currentDirectSaleItems.length === 0) {
+        Swal.fire({ icon: 'warning', title: 'Sin Servicios', text: 'Agregue al menos un servicio a la venta.' });
+        return;
+    }
+
+    const patients = await SupabaseDataService.getPatients();
+    const patient = patients.find(p => String(p.id) === String(patientId));
+    const patientName = patient ? patient.fullname : `Paciente (${patientId})`;
+
+    let totalUSD = 0;
+    window.currentDirectSaleItems.forEach(i => totalUSD += i.totalUSD);
+    const rate = getExchangeRate();
+    const totalBs = totalUSD * rate;
+
+    const amountPaidIn = document.getElementById('ds-amount-paid');
+    const paidUSD = parseFloat(amountPaidIn ? amountPaidIn.value : 0) || 0;
+    const paidBs = paidUSD * rate;
+
+    const isFull = paidUSD >= totalUSD;
+    const docPrefix = isFull ? 'FAC-' : 'REC-';
+    const docId = docPrefix + Date.now().toString().slice(-6);
+
+    const paymentMethod = document.getElementById('ds-payment-method')?.value || 'pagomovil';
+    const doctor = document.getElementById('ds-doctor-select')?.value || 'Dr. Médico Tratante';
+    const assistant = document.getElementById('ds-assistant-select')?.value || '';
+    const notes = document.getElementById('ds-notes')?.value || '';
+
+    let splitDetails = null;
+    if (paymentMethod === 'split') {
+        splitDetails = {
+            pagomovil: parseFloat(document.getElementById('ds-split-pm')?.value || 0),
+            cash: parseFloat(document.getElementById('ds-split-cash')?.value || 0),
+            zelle: parseFloat(document.getElementById('ds-split-zelle')?.value || 0),
+            pos: parseFloat(document.getElementById('ds-split-pos')?.value || 0)
+        };
+    }
+
+    const specialtyPrimary = window.currentDirectSaleItems[0]?.specialty || 'General';
+
+    const salePayload = {
+        id: docId,
+        patientId,
+        patientName,
+        date: new Date().toISOString().split('T')[0],
+        paymentMethod,
+        paymentTerms: isFull ? 'Contado' : 'Abono Parcial',
+        items: [...window.currentDirectSaleItems],
+        totalUSD,
+        totalBs,
+        paidUSD,
+        paidBs,
+        isFullPayment: isFull,
+        doctor,
+        assistant,
+        specialty: specialtyPrimary,
+        notes,
+        splitDetails
+    };
+
+    try {
+        Swal.fire({
+            title: 'Procesando Venta...',
+            text: 'Guardando comprobante en la nube y actualizando historia clínica...',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        const invoiceDoc = await SupabaseDataService.registerDirectSale(salePayload);
+        window.lastProcessedDirectSaleDoc = invoiceDoc;
+
+        Swal.close();
+
+        // Show Success Overlay inside modal
+        const overlay = document.getElementById('ds-success-overlay');
+        const titleEl = document.getElementById('ds-success-title');
+        const subtitleEl = document.getElementById('ds-success-subtitle');
+        const docIdEl = document.getElementById('ds-success-doc-id');
+        const patNameEl = document.getElementById('ds-success-patient-name');
+        const amountEl = document.getElementById('ds-success-amount');
+
+        if (titleEl) titleEl.innerText = isFull ? '¡Factura Oficial Emitida!' : '¡Recibo de Abono Emitido!';
+        if (subtitleEl) subtitleEl.innerText = isFull 
+            ? `Se procesó el pago total de $${paidUSD.toFixed(2)} USD y se asentó en la historia médica.` 
+            : `Se registró el abono de $${paidUSD.toFixed(2)} USD (Saldo restante: $${(totalUSD - paidUSD).toFixed(2)} USD).`;
+        if (docIdEl) docIdEl.innerText = docId;
+        if (patNameEl) patNameEl.innerText = patientName;
+        if (amountEl) amountEl.innerText = `$${paidUSD.toFixed(2)} USD (Bs. ${paidBs.toFixed(2)})`;
+
+        if (overlay) overlay.style.display = 'flex';
+
+    } catch(err) {
+        console.error('Error in processDirectSale:', err);
+        Swal.fire({ icon: 'error', title: 'Error al Procesar', text: `No se pudo registrar la venta: ${err.message || err}` });
+    }
+};
+
+window.printDirectSaleReceipt = async function(docId = null) {
+    let doc = window.lastProcessedDirectSaleDoc;
+    if (docId) {
+        const invoices = await SupabaseDataService.getInvoices();
+        doc = invoices.find(i => String(i.id) === String(docId));
+    }
+
+    if (!doc) {
+        Swal.fire({ icon: 'warning', title: 'Comprobante no encontrado', text: 'No se encontraron datos para imprimir.' });
+        return;
+    }
+
+    const patients = await SupabaseDataService.getPatients();
+    const p = patients.find(pat => String(pat.id) === String(doc.patientId));
+    const clinicName = (typeof SupabaseDataService !== 'undefined' && SupabaseDataService._clinicConfig?.clinic_name) || 'Clínica VidaSana';
+    const rate = getExchangeRate();
+
+    const isFull = doc.status === 'Pagado' || doc.id.startsWith('FAC-');
+    const docTitle = isFull ? 'FACTURA OFICIAL' : 'RECIBO DE ABONO';
+
+    const itemsHtml = (doc.items || []).map((it, idx) => `
+        <tr style="border-bottom: 1px solid #e2e8f0; font-size: 11pt;">
+            <td style="padding: 8px 6px;">${it.name || it.description}</td>
+            <td style="padding: 8px 6px; text-align: center;">${it.qty || 1}</td>
+            <td style="padding: 8px 6px; text-align: right;">$${parseFloat(it.price || 0).toFixed(2)}</td>
+            <td style="padding: 8px 6px; text-align: right; font-weight: bold;">$${parseFloat(it.totalUSD || (it.price * (it.qty || 1))).toFixed(2)}</td>
+        </tr>
+    `).join('');
+
+    const paidVal = doc.paidRef !== undefined ? doc.paidRef : (doc.metadata?.paidUSD || doc.totalRef || 0);
+    const balanceVal = doc.balanceRef !== undefined ? doc.balanceRef : (doc.metadata?.balanceUSD || 0);
+
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+        Swal.fire({ icon: 'warning', title: 'Ventana bloqueada', text: 'Por favor permita ventanas emergentes para imprimir.' });
+        return;
+    }
+
+    printWin.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>${docTitle} - ${doc.id}</title>
+            <style>
+                body { font-family: 'Segoe UI', Arial, sans-serif; margin: 30px; color: #1e293b; line-height: 1.4; }
+                .header-table { width: 100%; border-bottom: 2px solid #0d9488; padding-bottom: 12px; margin-bottom: 20px; }
+                .doc-badge { background: #0d9488; color: white; padding: 4px 10px; border-radius: 6px; font-weight: bold; font-size: 13pt; }
+                .box { border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; margin-bottom: 16px; font-size: 10.5pt; }
+                table.data { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                table.data th { background: #f8fafc; border-bottom: 2px solid #cbd5e1; padding: 8px 6px; text-align: left; font-size: 10pt; text-transform: uppercase; }
+                .totals-box { margin-top: 20px; float: right; width: 280px; font-size: 11pt; }
+                .totals-box div { display: flex; justify-content: space-between; padding: 4px 0; }
+                .footer { clear: both; margin-top: 50px; text-align: center; font-size: 9.5pt; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 12px; }
+            </style>
+        </head>
+        <body>
+            <table class="header-table">
+                <tr>
+                    <td>
+                        <h2 style="margin: 0; color: #0d9488; font-size: 18pt;">${clinicName}</h2>
+                        <div style="font-size: 9pt; color: #64748b; margin-top: 2px;">Centro Médico y Odontológico Integral</div>
+                    </td>
+                    <td style="text-align: right;">
+                        <span class="doc-badge">${docTitle}</span>
+                        <div style="font-weight: bold; font-size: 12pt; margin-top: 4px; color: #0f172a;">N° ${doc.id}</div>
+                        <div style="font-size: 9.5pt; color: #64748b;">Fecha: ${doc.invoiceDate || new Date().toISOString().split('T')[0]}</div>
+                    </td>
+                </tr>
+            </table>
+
+            <div class="box">
+                <strong>Datos del Paciente:</strong><br>
+                Nombre Completo: <strong>${p ? p.fullname : (doc.patientName || doc.patientId)}</strong><br>
+                Cédula / ID: <strong>${doc.patientId}</strong> • Teléfono: <strong>${p ? p.phone : 'N/A'}</strong><br>
+                Médico / Especialista: <strong>${doc.doctor || 'Dr. Médico Tratante'}</strong>
+            </div>
+
+            <table class="data">
+                <thead>
+                    <tr>
+                        <th>Descripción del Servicio</th>
+                        <th style="text-align: center;">Cant</th>
+                        <th style="text-align: right;">Precio Unit. ($)</th>
+                        <th style="text-align: right;">Total ($)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${itemsHtml}
+                </tbody>
+            </table>
+
+            <div class="totals-box">
+                <div><span>Total Servicios:</span> <strong>$${parseFloat(doc.totalRef || 0).toFixed(2)} USD</strong></div>
+                <div><span>Tasa BCV Oficial:</span> <span>Bs. ${rate.toFixed(2)}</span></div>
+                <div><span>Equivalente en Bs:</span> <span style="color:#0284c7; font-weight:bold;">Bs. ${(parseFloat(doc.totalRef || 0) * rate).toFixed(2)}</span></div>
+                <hr style="border: none; border-top: 1px solid #cbd5e1; margin: 6px 0;">
+                <div style="font-size: 12pt; color: #059669;"><span>Monto Cobrado / Pagado:</span> <strong>$${parseFloat(paidVal).toFixed(2)} USD</strong></div>
+                ${balanceVal > 0 ? `<div style="font-size: 11pt; color: #e11d48;"><span>Saldo Restante Pendiente:</span> <strong>$${parseFloat(balanceVal).toFixed(2)} USD</strong></div>` : ''}
+            </div>
+
+            <div class="footer">
+                ${doc.footerText ? `<p style="margin-bottom: 8px;"><em>${doc.footerText}</em></p>` : ''}
+                ¡Gracias por su confianza! Comprobante emitido válidamente por el sistema clínico.
+            </div>
+            <script>
+                window.onload = function() { window.print(); };
+            </script>
+        </body>
+        </html>
+    `);
+    printWin.document.close();
+};
+
+window.downloadDirectSaleReceiptPDF = async function(docId = null) {
+    window.printDirectSaleReceipt(docId);
+};
+
+window.sendDirectSaleReceiptWhatsApp = async function(docId = null) {
+    let doc = window.lastProcessedDirectSaleDoc;
+    if (docId) {
+        const invoices = await SupabaseDataService.getInvoices();
+        doc = invoices.find(i => String(i.id) === String(docId));
+    }
+
+    if (!doc) {
+        Swal.fire({ icon: 'warning', title: 'Comprobante no encontrado', text: 'No se encontraron datos para enviar.' });
+        return;
+    }
+
+    const patients = await SupabaseDataService.getPatients();
+    const p = patients.find(pat => String(pat.id) === String(doc.patientId));
+    const phone = p ? p.phone : '';
+    const cleanPhone = window.formatCleanPhoneForWhatsApp(phone);
+
+    if (!cleanPhone) {
+        Swal.fire({ icon: 'warning', title: 'Sin Teléfono', text: 'El paciente no tiene un número telefónico registrado.' });
+        return;
+    }
+
+    const isFull = doc.status === 'Pagado' || doc.id.startsWith('FAC-');
+    const docTypeLabel = isFull ? 'Factura de Atención' : 'Recibo de Abono';
+    const rate = getExchangeRate();
+    const totalBs = (parseFloat(doc.totalRef || 0) * rate).toFixed(2);
+    const paidVal = doc.paidRef !== undefined ? doc.paidRef : (doc.metadata?.paidUSD || doc.totalRef || 0);
+    const balanceVal = doc.balanceRef !== undefined ? doc.balanceRef : (doc.metadata?.balanceUSD || 0);
+
+    const srvList = (doc.items || []).map(i => `• ${i.qty || 1}x ${i.name || i.description} ($${parseFloat(i.totalUSD || i.price || 0).toFixed(2)})`).join('\n');
+
+    let msg = `¡Hola ${p ? p.fullname : 'Paciente'}! 🧾\n\n`;
+    msg += `Desde *Clínica VidaSana* le enviamos el comprobante digital de su atención:\n`;
+    msg += `📄 *${docTypeLabel} N°:* ${doc.id}\n`;
+    msg += `📅 *Fecha:* ${doc.invoiceDate || new Date().toISOString().split('T')[0]}\n\n`;
+    msg += `*Servicios Realizados:*\n${srvList}\n\n`;
+    msg += `💰 *Total Servicios:* $${parseFloat(doc.totalRef || 0).toFixed(2)} USD (Bs. ${totalBs})\n`;
+    msg += `✅ *Monto Pagado:* $${parseFloat(paidVal).toFixed(2)} USD\n`;
+    if (balanceVal > 0) {
+        msg += `⏳ *Saldo Restante:* $${parseFloat(balanceVal).toFixed(2)} USD\n`;
+    }
+    msg += `\n¡Agradecemos su preferencia y quedamos a su entera orden para su próximo control!`;
+
+    const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
+    window.open(waUrl, '_blank');
+};
+
+// ============================================================================
+// CENTRO HISTÓRICO UNIFICADO DE COMPROBANTES DEL PACIENTE
+// ============================================================================
+
+window.openPatientReceiptsHub = async function(patientId) {
+    if (!patientId) return;
+    window.currentReceiptsHubPatientId = patientId;
+
+    const patients = await SupabaseDataService.getPatients();
+    const p = patients.find(pat => String(pat.id) === String(patientId));
+
+    const nameEl = document.getElementById('prh-patient-fullname');
+    const ciEl = document.getElementById('prh-patient-ci');
+    if (nameEl) nameEl.innerText = p ? p.fullname : `Paciente (${patientId})`;
+    if (ciEl) ciEl.innerText = patientId;
+
+    openModal('modal-patient-receipts-hub');
+
+    // Reset filter active
+    const btnAll = document.getElementById('prh-filter-all');
+    if (btnAll) {
+        document.querySelectorAll('#modal-patient-receipts-hub .filter-btn').forEach(b => b.classList.remove('active'));
+        btnAll.classList.add('active');
+    }
+
+    await window.renderPatientReceiptsHub(patientId, 'all');
+};
+
+window.filterPatientReceipts = function(filter, btn) {
+    if (btn) {
+        document.querySelectorAll('#modal-patient-receipts-hub .filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    }
+    if (window.currentReceiptsHubPatientId) {
+        window.renderPatientReceiptsHub(window.currentReceiptsHubPatientId, filter);
+    }
+};
+
+window.renderPatientReceiptsHub = async function(patientId, filter = 'all') {
+    const tbody = document.getElementById('prh-table-tbody');
+    if (!tbody) return;
+
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding: 24px;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando comprobantes...</td></tr>';
+
+    const invoices = await SupabaseDataService.getInvoices(true);
+    const patientDocs = invoices.filter(inv => String(inv.patientId) === String(patientId));
+
+    // Calculate categories
+    const invoicesList = patientDocs.filter(d => String(d.id).startsWith('FAC-') || d.docType === 'Factura' || d.status === 'Pagado');
+    const receiptsList = patientDocs.filter(d => String(d.id).startsWith('REC-') || d.docType === 'Recibo de Abono' || d.status === 'Abono Parcial');
+    const budgetsList = patientDocs.filter(d => String(d.id).startsWith('PRE-') || (!String(d.id).startsWith('FAC-') && !String(d.id).startsWith('REC-')));
+
+    // Update filter counts
+    const countAll = document.getElementById('prh-count-all');
+    const countInvs = document.getElementById('prh-count-invoices');
+    const countRecs = document.getElementById('prh-count-receipts');
+    const countBuds = document.getElementById('prh-count-budgets');
+
+    if (countAll) countAll.innerText = patientDocs.length;
+    if (countInvs) countInvs.innerText = invoicesList.length;
+    if (countRecs) countRecs.innerText = receiptsList.length;
+    if (countBuds) countBuds.innerText = budgetsList.length;
+
+    let displayList = patientDocs;
+    if (filter === 'invoices') displayList = invoicesList;
+    else if (filter === 'receipts') displayList = receiptsList;
+    else if (filter === 'budgets') displayList = budgetsList;
+
+    // Sort descending by date
+    displayList.sort((a, b) => new Date(b.invoiceDate || b.createdAt || 0) - new Date(a.invoiceDate || a.createdAt || 0));
+
+    if (displayList.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding: 28px;"><i class="fa-solid fa-folder-open" style="font-size:1.8rem; display:block; margin-bottom:8px; opacity:0.5;"></i>No se encontraron comprobantes registrados en este filtro.</td></tr>';
+        return;
+    }
+
+    const rate = getExchangeRate();
+
+    tbody.innerHTML = displayList.map(doc => {
+        const isFactura = String(doc.id).startsWith('FAC-') || doc.docType === 'Factura';
+        const isRecibo = String(doc.id).startsWith('REC-') || doc.docType === 'Recibo de Abono';
+        
+        let typeBadge = '';
+        if (isFactura) {
+            typeBadge = '<span class="badge-tag green" style="font-size:0.75rem; font-weight:700;"><i class="fa-solid fa-file-invoice"></i> Factura Total</span>';
+        } else if (isRecibo) {
+            typeBadge = '<span class="badge-tag amber" style="font-size:0.75rem; font-weight:700;"><i class="fa-solid fa-receipt"></i> Recibo de Abono</span>';
+        } else {
+            typeBadge = '<span class="badge-tag blue" style="font-size:0.75rem; font-weight:700;"><i class="fa-solid fa-calculator"></i> Presupuesto</span>';
+        }
+
+        const itemsSummary = (doc.items || []).map(i => i.name || i.description).join(', ') || doc.specialty || 'Servicios Varios';
+        const totalUSD = parseFloat(doc.totalRef || 0);
+        const totalBs = totalUSD * rate;
+        const paidUSD = doc.paidRef !== undefined ? parseFloat(doc.paidRef) : (doc.metadata?.paidUSD !== undefined ? parseFloat(doc.metadata.paidUSD) : (isFactura ? totalUSD : 0));
+        const balanceUSD = doc.balanceRef !== undefined ? parseFloat(doc.balanceRef) : (doc.metadata?.balanceUSD !== undefined ? parseFloat(doc.metadata.balanceUSD) : 0);
+
+        let statusHtml = '';
+        if (balanceUSD <= 0 || isFactura) {
+            statusHtml = '<span class="badge-tag green" style="font-size:0.75rem;">✓ Pagado</span>';
+        } else {
+            statusHtml = `<span class="badge-tag amber" style="font-size:0.75rem;">Abonado: $${paidUSD.toFixed(2)}<br><small style="color:#b91c1c; font-weight:bold;">Saldo: $${balanceUSD.toFixed(2)}</small></span>`;
+        }
+
+        return `
+            <tr style="font-size:0.85rem; border-bottom:1px solid var(--border-color);">
+                <td>${doc.invoiceDate || 'N/A'}</td>
+                <td><strong style="font-family: monospace; color: var(--primary-cyan); font-size: 0.88rem;">${doc.id}</strong></td>
+                <td>${typeBadge}</td>
+                <td>
+                    <div style="max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${itemsSummary}">
+                        <strong>${doc.specialty || doc.category || 'General'}:</strong> ${itemsSummary}
+                    </div>
+                </td>
+                <td class="text-right">
+                    <strong>$${totalUSD.toFixed(2)}</strong>
+                    <small style="display:block; color:#0284c7;">Bs. ${totalBs.toFixed(2)}</small>
+                </td>
+                <td class="text-center">${statusHtml}</td>
+                <td class="text-center">
+                    <div style="display: flex; gap: 4px; justify-content: center;">
+                        <button type="button" class="btn btn-xs btn-outline" onclick="window.printDirectSaleReceipt('${doc.id}')" title="Reimprimir Comprobante"><i class="fa-solid fa-print"></i></button>
+                        <button type="button" class="btn btn-xs btn-outline" onclick="window.downloadDirectSaleReceiptPDF('${doc.id}')" title="Descargar PDF"><i class="fa-solid fa-file-pdf text-blue"></i></button>
+                        <button type="button" class="btn btn-xs btn-outline" style="color:#15803d; border-color:#22c55e;" onclick="window.sendDirectSaleReceiptWhatsApp('${doc.id}')" title="Reenviar por WhatsApp"><i class="fa-brands fa-whatsapp"></i></button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+};
+
+window.openDirectSaleForCurrentReceiptPatient = function() {
+    const patId = window.currentReceiptsHubPatientId;
+    closeModal('modal-patient-receipts-hub');
+    if (patId) {
+        window.openDirectSaleModal(patId);
+    } else {
+        window.openDirectSaleModal();
+    }
 };
 
 // ==========================================

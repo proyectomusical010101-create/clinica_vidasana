@@ -941,6 +941,91 @@ class SupabaseDataService {
         this.notifyDataChanged('invoices', invoiceId);
     }
 
+    static async registerDirectSale(saleData) {
+        const isFull = saleData.isFullPayment !== undefined ? saleData.isFullPayment : (parseFloat(saleData.paidUSD || 0) >= parseFloat(saleData.totalUSD || 0));
+        const docPrefix = isFull ? 'FAC-' : 'REC-';
+        const docId = saleData.id || (docPrefix + Date.now().toString().slice(-6));
+        
+        const invoiceObj = {
+            id: docId,
+            patientId: saleData.patientId,
+            patientName: saleData.patientName,
+            invoiceDate: saleData.date || new Date().toISOString().split('T')[0],
+            paymentMethod: saleData.paymentMethod || 'Efectivo USD',
+            paymentTerms: saleData.paymentTerms || (isFull ? 'Contado' : 'Abono Parcial'),
+            currency: saleData.currency || 'REF',
+            items: saleData.items || [],
+            totalRef: parseFloat(saleData.totalUSD || 0),
+            totalBcv: parseFloat(saleData.totalBs || 0),
+            paidRef: parseFloat(saleData.paidUSD || 0),
+            paidBcv: parseFloat(saleData.paidBs || 0),
+            balanceRef: Math.max(0, parseFloat(saleData.totalUSD || 0) - parseFloat(saleData.paidUSD || 0)),
+            status: isFull ? 'Pagado' : 'Abono Parcial',
+            doctor: saleData.doctor || 'Dr. Médico Tratante',
+            specialty: saleData.specialty || 'General',
+            category: saleData.specialty || 'General',
+            notes: saleData.notes || '',
+            footerText: saleData.notes || '',
+            isDirectSale: true,
+            docType: isFull ? 'Factura' : 'Recibo de Abono',
+            splitDetails: saleData.splitDetails || null,
+            metadata: {
+                isDirectSale: true,
+                docType: isFull ? 'Factura' : 'Recibo de Abono',
+                paidUSD: parseFloat(saleData.paidUSD || 0),
+                balanceUSD: Math.max(0, parseFloat(saleData.totalUSD || 0) - parseFloat(saleData.paidUSD || 0)),
+                doctor: saleData.doctor || '',
+                assistant: saleData.assistant || '',
+                splitDetails: saleData.splitDetails || null,
+                notes: saleData.notes || ''
+            }
+        };
+
+        // 1. Save invoice to Cloud
+        await this.saveInvoice(invoiceObj);
+
+        // 2. Link payment and service into patient's medical history (EHR) and finance ledger
+        try {
+            const patients = await this.getPatients();
+            const p = patients.find(pat => String(pat.id) === String(saleData.patientId));
+            if (p) {
+                p.payments = p.payments || [];
+                p.payments.push({
+                    id: docId,
+                    date: invoiceObj.invoiceDate,
+                    concept: `${invoiceObj.docType} (${docId}): ${(saleData.items || []).map(i => i.name).join(', ')}`,
+                    method: saleData.paymentMethod,
+                    bank: saleData.paymentMethodLabel || saleData.paymentMethod,
+                    reference: docId,
+                    totalUSD: invoiceObj.totalRef,
+                    paidUSD: invoiceObj.paidRef,
+                    balanceUSD: invoiceObj.balanceRef,
+                    status: invoiceObj.status
+                });
+
+                p.sessions = p.sessions || [];
+                const nextSessNum = p.sessions.length + 1;
+                p.sessions.push({
+                    sessionNum: nextSessNum,
+                    datetime: new Date().toLocaleString('es-VE'),
+                    procedure: `[${saleData.specialty || 'Servicio'}] ${(saleData.items || []).map(i => `${i.qty || 1}x ${i.name}`).join(' + ')}`,
+                    specialist: saleData.doctor || 'Dr. Médico Tratante',
+                    indications: saleData.notes || 'Venta directa de servicios atendida y cobrada.',
+                    paymentUSD: invoiceObj.paidRef,
+                    paymentMethodLabel: saleData.paymentMethodLabel || saleData.paymentMethod,
+                    isDirectSale: true,
+                    docId: docId
+                });
+
+                await this.savePatient(p);
+            }
+        } catch(pErr) {
+            console.warn('Error recording direct sale in patient history:', pErr);
+        }
+
+        return invoiceObj;
+    }
+
     // ==========================================
     // 7. PROVIDER BILLS (CUENTAS POR PAGAR)
     // ==========================================

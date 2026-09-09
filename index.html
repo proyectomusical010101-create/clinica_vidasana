@@ -322,6 +322,11 @@
                         <span>$ <strong>0.00 Bs.</strong></span>
                     </button>
 
+                    <!-- Direct Sale / Fast Checkout Button -->
+                    <button class="btn btn-sm btn-success" id="btn-direct-sale-top" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; font-weight: 700; border-radius: 8px; padding: 6px 13px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; box-shadow: 0 2px 4px rgba(16, 185, 129, 0.25);" onclick="window.openDirectSaleModal()" title="Cobro Rápido / Venta Directa de Servicios sin Presupuesto">
+                        <i class="fa-solid fa-bolt"></i> <span>Venta Directa</span>
+                    </button>
+
                     <button class="btn btn-primary btn-quick-patient-main" id="btn-quick-patient">
                         <i class="fa-solid fa-user-plus"></i> <span>Nuevo Paciente</span>
                     </button>
@@ -497,6 +502,9 @@
                                 <i class="fa-solid fa-file-import text-cyan"></i> Importar Excel
                             </button>
                             <input type="file" id="import-patients-file" accept=".xlsx, .xls" style="display: none;">
+                            <button class="btn btn-success" id="btn-direct-sale-patients-view" onclick="window.openDirectSaleModal()" title="Venta Directa de Servicios sin Presupuesto" style="background: #10b981; color: white; border: none; font-weight: 600;">
+                                <i class="fa-solid fa-bolt"></i> Nueva Venta
+                            </button>
                             <button class="btn btn-primary" id="btn-new-patient-modal">
                                 <i class="fa-solid fa-plus"></i> Registrar Paciente
                             </button>
@@ -5539,15 +5547,361 @@
         </div>
     </div>
 
+    <!-- MODAL 1: VENTA DIRECTA & COBRO RÁPIDO DE SERVICIOS (POS CLÍNICO) -->
+    <div id="modal-direct-sale" class="modal-overlay hidden" style="z-index: 10600;">
+        <div class="modal-dialog" style="max-width: 1020px; width: 96%; max-height: 92vh; display: flex; flex-direction: column; background: var(--bg-card); border-radius: 14px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.28);">
+            <!-- Modal Header -->
+            <div class="modal-header" style="padding: 16px 24px; border-bottom: 1px solid var(--border-color); background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(13, 148, 136, 0.08) 100%); display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(16, 185, 129, 0.15); display: flex; align-items: center; justify-content: center; color: #10b981; font-size: 1.4rem;">
+                        <i class="fa-solid fa-bolt"></i>
+                    </div>
+                    <div>
+                        <h3 style="margin: 0; font-size: 1.18rem; color: #0f172a; font-weight: 800; display: flex; align-items: center; gap: 8px;">
+                            Venta Directa & Cobro Rápido de Servicios
+                        </h3>
+                        <p style="margin: 2px 0 0 0; font-size: 0.82rem; color: #64748b;">
+                            Facturación o emisión de Recibo de Abono al instante sin presupuesto previo.
+                        </p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" onclick="closeModal('modal-direct-sale')" style="background: none; border: none; font-size: 1.25rem; color: #64748b; cursor: pointer; padding: 6px 10px; border-radius: 6px;">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Modal Body: 2 Columns (Services Selection & Checkout) -->
+            <div class="modal-body" style="padding: 20px 24px; overflow-y: auto; flex: 1; position: relative;">
+                
+                <div style="display: grid; grid-template-columns: 1.25fr 0.95fr; gap: 24px;" class="direct-sale-grid">
+                    
+                    <!-- LEFT COLUMN: Patient & Services -->
+                    <div style="display: flex; flex-direction: column; gap: 16px;">
+                        
+                        <!-- Step 1: Patient Selection -->
+                        <div style="background: rgba(248, 250, 252, 0.8); border: 1px solid var(--border-color); border-radius: 10px; padding: 14px;">
+                            <label class="form-label" style="font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+                                <i class="fa-solid fa-user-check text-cyan"></i> 1. Paciente a Facturar / Cobrar *
+                            </label>
+                            <select id="ds-patient-select" class="form-control" onchange="window.onDirectSalePatientChange(this.value)" style="height: 40px; border-radius: 8px; font-weight: 600;">
+                                <option value="">-- Seleccionar Paciente --</option>
+                            </select>
+
+                            <!-- Live Patient Info & Tag Preview -->
+                            <div id="ds-patient-info-box" style="margin-top: 8px; font-size: 0.82rem; color: #64748b;">
+                                <em>Seleccione un paciente registrado para cargar sus datos y convenios.</em>
+                            </div>
+                        </div>
+
+                        <!-- Step 2: Specialty & Services Selection -->
+                        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 14px;">
+                            <label class="form-label" style="font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 6px; margin-bottom: 10px;">
+                                <i class="fa-solid fa-stethoscope text-cyan"></i> 2. Especialidad y Servicios a Vender
+                            </label>
+
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                                <div>
+                                    <label style="font-size: 0.78rem; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Especialidad / Área:</label>
+                                    <select id="ds-specialty-select" class="form-control" onchange="window.onDirectSaleSpecialtyChange(this.value)" style="height: 38px; border-radius: 6px; font-size: 0.85rem;">
+                                        <option value="all">Todas las Especialidades</option>
+                                        <option value="Odontología">Odontología & Bucal</option>
+                                        <option value="Consultas Médicas">Consultas Médicas</option>
+                                        <option value="Rayos X & Imagenología">Rayos X & Imagenología</option>
+                                        <option value="Laboratorio Clínico">Laboratorio Clínico</option>
+                                        <option value="Procedimientos Ambulatorios">Procedimientos Ambulatorios</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style="font-size: 0.78rem; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Servicio del Baremo:</label>
+                                    <select id="ds-baremo-select" class="form-control" onchange="window.onDirectSaleBaremoSelected(this.value)" style="height: 38px; border-radius: 6px; font-size: 0.85rem;">
+                                        <option value="">-- Seleccionar Servicio --</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Inline Service Options: Qty, Price, Discount -->
+                            <div style="display: grid; grid-template-columns: 80px 1fr 90px auto; gap: 10px; align-items: flex-end;">
+                                <div>
+                                    <label style="font-size: 0.75rem; font-weight: 600; color: #64748b; display: block; margin-bottom: 4px;">Cant.</label>
+                                    <input type="number" id="ds-item-qty" class="form-control" min="1" value="1" style="height: 36px; border-radius: 6px; font-size: 0.85rem; text-align: center;">
+                                </div>
+                                <div>
+                                    <label style="font-size: 0.75rem; font-weight: 600; color: #64748b; display: block; margin-bottom: 4px;">Precio ($ USD)</label>
+                                    <input type="number" id="ds-item-price" class="form-control" min="0" step="0.01" placeholder="0.00" style="height: 36px; border-radius: 6px; font-size: 0.85rem; font-weight: 700;">
+                                </div>
+                                <div>
+                                    <label style="font-size: 0.75rem; font-weight: 600; color: #64748b; display: block; margin-bottom: 4px;">Desc. %</label>
+                                    <input type="number" id="ds-item-discount" class="form-control" min="0" max="100" value="0" style="height: 36px; border-radius: 6px; font-size: 0.85rem; text-align: center;">
+                                </div>
+                                <div>
+                                    <button type="button" class="btn btn-primary" onclick="window.addDirectSaleService()" style="height: 36px; border-radius: 6px; font-weight: 700; padding: 0 16px; display: inline-flex; align-items: center; gap: 6px;">
+                                        <i class="fa-solid fa-plus"></i> Agregar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 3: Items Table in Direct Sale -->
+                        <div style="border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden; background: var(--bg-card);">
+                            <div style="padding: 8px 14px; background: rgba(0,0,0,0.02); font-weight: 700; font-size: 0.82rem; color: #475569; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                                <span><i class="fa-solid fa-cart-shopping"></i> Servicios en esta Venta (<span id="ds-items-count">0</span>)</span>
+                                <small class="text-muted">Calculado con tasa oficial BCV</small>
+                            </div>
+                            <div style="max-height: 230px; overflow-y: auto;">
+                                <table class="table table-compact" style="width: 100%; margin: 0;">
+                                    <thead style="position: sticky; top: 0; background: var(--bg-card); z-index: 1;">
+                                        <tr style="font-size: 0.78rem; text-transform: uppercase;">
+                                            <th>Servicio</th>
+                                            <th class="text-center">Cant</th>
+                                            <th class="text-right">Precio ($)</th>
+                                            <th class="text-right">Total ($)</th>
+                                            <th class="text-right">Total (Bs.)</th>
+                                            <th class="text-center" style="width: 40px;"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="ds-items-tbody">
+                                        <tr><td colspan="6" class="text-center text-muted" style="padding: 24px;">No hay servicios agregados a la venta todavía.</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- RIGHT COLUMN: Payment & Checkout -->
+                    <div style="display: flex; flex-direction: column; gap: 14px; background: rgba(248, 250, 252, 0.85); border: 1px solid var(--border-color); border-radius: 12px; padding: 18px;">
+                        
+                        <!-- Financial Summary Box -->
+                        <div style="background: var(--bg-card); border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px;">
+                            <div style="display: flex; justify-content: space-between; font-size: 0.88rem; color: #64748b;">
+                                <span>Subtotal General:</span>
+                                <span id="ds-subtotal-val" style="font-weight: 600;">$0.00</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; font-size: 0.88rem; color: #15803d;">
+                                <span>Descuento Aplicado:</span>
+                                <span id="ds-discount-val" style="font-weight: 600;">-$0.00</span>
+                            </div>
+                            <div style="height: 1px; background: #e2e8f0; margin: 4px 0;"></div>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <span style="font-size: 0.78rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Total a Cobrar</span>
+                                    <div id="ds-total-usd-display" style="font-size: 1.45rem; font-weight: 800; color: #0f172a;">$0.00 USD</div>
+                                </div>
+                                <div style="text-align: right;">
+                                    <span style="font-size: 0.75rem; color: #64748b;" id="ds-bcv-rate-label">Tasa BCV: Bs. 0.00</span>
+                                    <div id="ds-total-bs-display" style="font-size: 1.15rem; font-weight: 800; color: #0284c7;">Bs. 0.00</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Professional & Assistant Selectors -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <div>
+                                <label style="font-size: 0.78rem; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Doctor / Especialista *</label>
+                                <select id="ds-doctor-select" class="form-control" style="height: 36px; border-radius: 6px; font-size: 0.82rem;">
+                                    <!-- Doctors loaded dynamically -->
+                                </select>
+                            </div>
+                            <div>
+                                <label style="font-size: 0.78rem; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Asistente de Turno</label>
+                                <select id="ds-assistant-select" class="form-control" style="height: 36px; border-radius: 6px; font-size: 0.82rem;">
+                                    <!-- Assistants loaded dynamically -->
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Payment Method -->
+                        <div>
+                            <label style="font-size: 0.78rem; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Método de Pago *</label>
+                            <select id="ds-payment-method" class="form-control" onchange="window.onDirectSalePaymentMethodChange(this.value)" style="height: 36px; border-radius: 6px; font-size: 0.85rem; font-weight: 600;">
+                                <option value="pagomovil">Pago Móvil</option>
+                                <option value="cash">Efectivo (Dólares o Bs.)</option>
+                                <option value="pos">Punto de Venta / Débito</option>
+                                <option value="zelle">Zelle</option>
+                                <option value="binance">Binance USDT</option>
+                                <option value="split">Mixto (Dividido)</option>
+                            </select>
+                        </div>
+
+                        <!-- Split Payment Details (Hidden unless 'split') -->
+                        <div id="ds-split-container" style="display: none; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px;">
+                            <div style="font-size: 0.78rem; font-weight: 700; color: #334155; margin-bottom: 6px;">Distribución Mixta ($ USD):</div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                                <div><small>Pago Móvil ($):</small><input type="number" id="ds-split-pm" class="form-control btn-xs" value="0" min="0" step="0.01"></div>
+                                <div><small>Efectivo ($):</small><input type="number" id="ds-split-cash" class="form-control btn-xs" value="0" min="0" step="0.01"></div>
+                                <div><small>Zelle ($):</small><input type="number" id="ds-split-zelle" class="form-control btn-xs" value="0" min="0" step="0.01"></div>
+                                <div><small>Punto / Tarjeta ($):</small><input type="number" id="ds-split-pos" class="form-control btn-xs" value="0" min="0" step="0.01"></div>
+                            </div>
+                        </div>
+
+                        <!-- Amount Paid & Full / Partial Toggle -->
+                        <div style="background: #fff; border: 1px solid #cbd5e1; border-radius: 10px; padding: 12px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                <label style="font-size: 0.82rem; font-weight: 700; color: #0f172a; margin: 0;">Monto Abonado / Pagado Hoy ($)</label>
+                                <button type="button" class="btn btn-xs btn-outline" onclick="window.setDirectSaleFullPayment()" style="font-size: 0.75rem; padding: 2px 8px; font-weight: 700;">
+                                    Pago Total (100%)
+                                </button>
+                            </div>
+                            <input type="number" id="ds-amount-paid" class="form-control" min="0" step="0.01" value="0.00" oninput="window.onDirectSaleAmountPaidChange(this.value)" style="height: 40px; font-size: 1.15rem; font-weight: 800; color: #0f172a; border-radius: 6px;">
+                            
+                            <!-- Smart Status Indicator (Factura vs Recibo de Abono) -->
+                            <div id="ds-doc-indicator" style="margin-top: 8px;">
+                                <span class="badge-tag green" style="font-size: 0.8rem; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
+                                    <i class="fa-solid fa-file-invoice"></i> Emite Factura Oficial (Pagado Completo)
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Notes -->
+                        <div>
+                            <label style="font-size: 0.78rem; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Observaciones / Indicaciones (Opcional):</label>
+                            <input type="text" id="ds-notes" class="form-control" placeholder="ej: Control a los 15 días, primera sesión completada" style="height: 34px; border-radius: 6px; font-size: 0.82rem;">
+                        </div>
+
+                        <!-- Checkout Action Button -->
+                        <button type="button" id="btn-process-direct-sale" class="btn btn-success btn-lg" onclick="window.processDirectSale()" style="width: 100%; height: 46px; border-radius: 8px; font-weight: 800; font-size: 1rem; background: linear-gradient(135deg, #10b981 0%, #059669 100%); border: none; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.3);">
+                            <i class="fa-solid fa-check-circle"></i> Procesar Venta y Cobrar
+                        </button>
+
+                    </div>
+
+                </div>
+
+                <!-- SUCCESS & DELIVERY OVERLAY (Triggered after sale processed) -->
+                <div id="ds-success-overlay" style="display: none; position: absolute; inset: 0; background: rgba(255, 255, 255, 0.98); z-index: 10; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center;">
+                    <div style="width: 72px; height: 72px; border-radius: 50%; background: #dcfce7; color: #16a34a; font-size: 2.5rem; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; box-shadow: 0 10px 15px -3px rgba(22, 163, 74, 0.2);">
+                        <i class="fa-solid fa-check"></i>
+                    </div>
+                    <h2 id="ds-success-title" style="margin: 0 0 6px 0; color: #0f172a; font-size: 1.45rem; font-weight: 800;">
+                        ¡Venta Procesada Exitosamente!
+                    </h2>
+                    <p id="ds-success-subtitle" style="margin: 0 0 20px 0; color: #64748b; font-size: 0.95rem; max-width: 500px;">
+                        El comprobante quedó registrado en la base de datos y asentado en la historia clínica del paciente.
+                    </p>
+
+                    <!-- Document KPI Box -->
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 24px; margin-bottom: 24px; display: inline-flex; gap: 24px; text-align: left;">
+                        <div>
+                            <span style="font-size: 0.75rem; color: #64748b; font-weight: 700; text-transform: uppercase;">N° Comprobante</span>
+                            <div id="ds-success-doc-id" style="font-size: 1.15rem; font-weight: 800; color: var(--primary-cyan);">FAC-000000</div>
+                        </div>
+                        <div>
+                            <span style="font-size: 0.75rem; color: #64748b; font-weight: 700; text-transform: uppercase;">Paciente</span>
+                            <div id="ds-success-patient-name" style="font-size: 1.15rem; font-weight: 800; color: #0f172a;">Paciente</div>
+                        </div>
+                        <div>
+                            <span style="font-size: 0.75rem; color: #64748b; font-weight: 700; text-transform: uppercase;">Monto Cobrado</span>
+                            <div id="ds-success-amount" style="font-size: 1.15rem; font-weight: 800; color: #16a34a;">$0.00 USD</div>
+                        </div>
+                    </div>
+
+                    <!-- Immediate Action Delivery Buttons -->
+                    <div style="display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-bottom: 20px;">
+                        <button type="button" class="btn btn-success" onclick="window.printDirectSaleReceipt()" style="padding: 10px 20px; font-weight: 700; border-radius: 8px; display: inline-flex; align-items: center; gap: 8px;">
+                            <i class="fa-solid fa-print"></i> Imprimir Comprobante
+                        </button>
+                        <button type="button" class="btn btn-primary" onclick="window.downloadDirectSaleReceiptPDF()" style="padding: 10px 20px; font-weight: 700; border-radius: 8px; display: inline-flex; align-items: center; gap: 8px;">
+                            <i class="fa-solid fa-file-pdf"></i> Descargar PDF
+                        </button>
+                        <button type="button" class="btn btn-outline" onclick="window.sendDirectSaleReceiptWhatsApp()" style="border-color: #10b981; color: #059669; padding: 10px 20px; font-weight: 700; border-radius: 8px; display: inline-flex; align-items: center; gap: 8px;">
+                            <i class="fa-brands fa-whatsapp"></i> Enviar por WhatsApp
+                        </button>
+                    </div>
+
+                    <div style="display: flex; gap: 12px;">
+                        <button type="button" class="btn btn-outline" onclick="window.resetDirectSaleForm()">
+                            <i class="fa-solid fa-bolt"></i> Realizar Otra Venta
+                        </button>
+                        <button type="button" class="btn btn-outline" onclick="closeModal('modal-direct-sale')">
+                            Cerrar
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: CENTRO DE HISTORIAL DE COMPROBANTES DEL PACIENTE -->
+    <div id="modal-patient-receipts-hub" class="modal-overlay hidden" style="z-index: 10550;">
+        <div class="modal-dialog" style="max-width: 950px; width: 95%; max-height: 90vh; display: flex; flex-direction: column; background: var(--bg-card); border-radius: 14px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+            <!-- Modal Header -->
+            <div class="modal-header" style="padding: 16px 24px; border-bottom: 1px solid var(--border-color); background: linear-gradient(135deg, rgba(8, 145, 178, 0.08) 0%, rgba(13, 148, 136, 0.08) 100%); display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(8, 145, 178, 0.15); display: flex; align-items: center; justify-content: center; color: #0891b2; font-size: 1.4rem;">
+                        <i class="fa-solid fa-folder-open"></i>
+                    </div>
+                    <div>
+                        <h3 style="margin: 0; font-size: 1.15rem; color: #0f172a; font-weight: 800; display: flex; align-items: center; gap: 8px;">
+                            Historial de Comprobantes & Servicios
+                        </h3>
+                        <p style="margin: 2px 0 0 0; font-size: 0.82rem; color: #64748b;">
+                            Comprobantes de: <strong id="prh-patient-fullname" style="color: var(--primary-cyan);">Cargando...</strong> (C.I: <span id="prh-patient-ci">--</span>)
+                        </p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" onclick="closeModal('modal-patient-receipts-hub')" style="background: none; border: none; font-size: 1.25rem; color: #64748b; cursor: pointer; padding: 6px 10px; border-radius: 6px;">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="modal-body" style="padding: 20px 24px; overflow-y: auto; flex: 1;">
+                
+                <!-- Filter Pills -->
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 16px;">
+                    <div class="filter-group" style="display: flex; gap: 6px;">
+                        <button class="filter-btn active" id="prh-filter-all" onclick="window.filterPatientReceipts('all', this)">Todos (<span id="prh-count-all">0</span>)</button>
+                        <button class="filter-btn" id="prh-filter-invoices" onclick="window.filterPatientReceipts('invoices', this)">Facturas (<span id="prh-count-invoices">0</span>)</button>
+                        <button class="filter-btn" id="prh-filter-receipts" onclick="window.filterPatientReceipts('receipts', this)">Recibos de Abono (<span id="prh-count-receipts">0</span>)</button>
+                        <button class="filter-btn" id="prh-filter-budgets" onclick="window.filterPatientReceipts('budgets', this)">Presupuestos (<span id="prh-count-budgets">0</span>)</button>
+                    </div>
+
+                    <button type="button" class="btn btn-xs btn-success" onclick="window.openDirectSaleForCurrentReceiptPatient()" style="font-weight: 700; padding: 6px 14px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px;">
+                        <i class="fa-solid fa-bolt"></i> Nueva Venta para este Paciente
+                    </button>
+                </div>
+
+                <!-- Table Container -->
+                <div class="table-responsive" style="border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden; background: var(--bg-card);">
+                    <table class="table table-compact" style="width: 100%; margin: 0;">
+                        <thead style="position: sticky; top: 0; background: var(--bg-card); z-index: 1;">
+                            <tr style="font-size: 0.78rem; text-transform: uppercase;">
+                                <th>Fecha</th>
+                                <th>Documento / N°</th>
+                                <th>Tipo</th>
+                                <th>Especialidad / Servicios</th>
+                                <th class="text-right">Total ($ / Bs.)</th>
+                                <th class="text-center">Estado / Saldo</th>
+                                <th class="text-center" style="width: 130px;">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="prh-table-tbody">
+                            <tr><td colspan="7" class="text-center text-muted" style="padding: 24px;">Cargando historial de comprobantes...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="modal-footer" style="padding: 14px 24px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; background: var(--bg-card);">
+                <button type="button" class="btn btn-outline" onclick="closeModal('modal-patient-receipts-hub')">
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=256"></script>
-    <script src="supabaseClient.js?v=256"></script>
-    <script src="odontogram.js?v=256"></script>
-    <script src="signature.js?v=256"></script>
-    <script src="whatsapp.js?v=256"></script>
-    <script src="kardex.js?v=256"></script>
-    <script src="app.js?v=256"></script>
-    <script src="clinicalERP.js?v=256"></script>
-    <script src="tutorial.js?v=256"></script>
+    <script src="seededData.js?v=257"></script>
+    <script src="supabaseClient.js?v=257"></script>
+    <script src="odontogram.js?v=257"></script>
+    <script src="signature.js?v=257"></script>
+    <script src="whatsapp.js?v=257"></script>
+    <script src="kardex.js?v=257"></script>
+    <script src="app.js?v=257"></script>
+    <script src="clinicalERP.js?v=257"></script>
+    <script src="tutorial.js?v=257"></script>
 </body>
 </html>
