@@ -896,8 +896,8 @@ function checkAuthSession() {
 function applyRolePermissionsUI(role) {
     const r = (role || '').toLowerCase();
     const isAdmin = r.includes('admin') || r.includes('super') || r.includes('director');
-    const isDoctor = r.includes('medico') || r.includes('odont') || r.includes('doctor') || r.includes('dentista') || r.includes('médico');
-    const isAssistant = r.includes('asistente') || r.includes('recep');
+    const isDoctor = r.includes('medico') || r.includes('odont') || r.includes('doctor') || r.includes('dentista') || r.includes('médico') || r.includes('cirujano') || r.includes('especialista');
+    const isAssistant = r.includes('asistente') || r.includes('recep') || r.includes('caja') || r.includes('auxiliar');
 
     const roleType = isAdmin ? 'admin' : (isDoctor ? 'doctor' : 'assistant');
 
@@ -5804,12 +5804,181 @@ async function renderUsersTable(filter = 'all', searchQuery = '') {
             <td><span class="badge-tag green">${u.status}</span></td>
             <td>${u.createdAt}</td>
             <td>
+                <button class="btn btn-xs btn-outline text-cyan" onclick="editUser('${u.id}')" title="Editar Usuario" style="margin-right: 4px;"><i class="fa-solid fa-user-pen"></i></button>
                 <button class="btn btn-xs btn-outline text-red" onclick="deleteUser('${u.id}')" title="Eliminar"><i class="fa-solid fa-user-xmark"></i></button>
             </td>
         `;
         tbody.appendChild(tr);
     });
 }
+
+function updateRoleScopeHint(role) {
+    const hintEl = document.getElementById('u-role-scope-hint');
+    if (!hintEl) return;
+
+    const r = (role || '').toLowerCase();
+    const isAdmin = r.includes('admin') || r.includes('super') || r.includes('director');
+    const isDoctor = r.includes('medico') || r.includes('odont') || r.includes('doctor') || r.includes('dentista') || r.includes('médico') || r.includes('cirujano') || r.includes('especialista');
+    const isAssistant = r.includes('asistente') || r.includes('auxiliar');
+
+    if (isAdmin) {
+        hintEl.innerHTML = `
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px; font-weight:700; color:#0284c7;">
+                <i class="fa-solid fa-crown"></i> Super Administrador / Dirección (Acceso Total)
+            </div>
+            <p style="margin:0 0 6px 0; font-size:0.82rem;"><strong>Alcance:</strong> Control total sobre los 16 módulos del sistema.</p>
+            <ul style="margin:0; padding-left:18px; font-size:0.79rem; color:var(--text-color); line-height:1.4;">
+                <li>Creación, edición y borrado de usuarios y asignación de credenciales.</li>
+                <li>Nómina fija y a destajo, arqueo y balances contables de la clínica.</li>
+                <li>Configuración de consultorios, baremos de precios y papelería.</li>
+            </ul>
+        `;
+    } else if (isDoctor) {
+        hintEl.innerHTML = `
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px; font-weight:700; color:#0d9488;">
+                <i class="fa-solid fa-user-doctor"></i> Médico / Odontólogo Especialista (Área Asistencial)
+            </div>
+            <p style="margin:0 0 6px 0; font-size:0.82rem;"><strong>Alcance:</strong> Diagnóstico clínico, historias médicas y evolución de tratamientos.</p>
+            <ul style="margin:0; padding-left:18px; font-size:0.79rem; color:var(--text-color); line-height:1.4;">
+                <li>Ficha de paciente, Odontograma interactivo y expediente clínico (EHR).</li>
+                <li>Emisión de récipes con código QR y firma digital.</li>
+                <li>Agenda médica propia y comisiones según baremo asignado.</li>
+                <li><span style="color:#e11d48; font-weight:600;">Restricción:</span> Sin acceso a crear usuarios ni alterar precios o balances generales.</li>
+            </ul>
+        `;
+    } else if (isAssistant) {
+        hintEl.innerHTML = `
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px; font-weight:700; color:#16a34a;">
+                <i class="fa-solid fa-hand-holding-medical"></i> Asistente Dental / Auxiliar Clínico
+            </div>
+            <p style="margin:0 0 6px 0; font-size:0.82rem;"><strong>Alcance:</strong> Apoyo asistencial en sillón, inventario y recepción.</p>
+            <ul style="margin:0; padding-left:18px; font-size:0.79rem; color:var(--text-color); line-height:1.4;">
+                <li>Admisión y búsqueda de pacientes registrados.</li>
+                <li>Registro de insumos consumidos en procedimientos.</li>
+                <li>Consulta de agenda y confirmación de citas.</li>
+                <li><span style="color:#e11d48; font-weight:600;">Restricción:</span> No puede alterar diagnósticos ni emitir recetas médicas.</li>
+            </ul>
+        `;
+    } else {
+        hintEl.innerHTML = `
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px; font-weight:700; color:#d97706;">
+                <i class="fa-solid fa-cash-register"></i> Recepción / Administración / Caja
+            </div>
+            <p style="margin:0 0 6px 0; font-size:0.82rem;"><strong>Alcance:</strong> Admisión, agendamiento de citas, caja y facturación.</p>
+            <ul style="margin:0; padding-left:18px; font-size:0.79rem; color:var(--text-color); line-height:1.4;">
+                <li>Admisión de pacientes y envío de citas/recordatorios por WhatsApp.</li>
+                <li>Facturación y cobro en caja ($ / Bs / Zelle / Cashea cuotas a crédito).</li>
+                <li>Generación de recibos y facturas en papelería.</li>
+                <li><span style="color:#e11d48; font-weight:600;">Restricción:</span> Sin acceso a modificar historias clínicas ni nóminas.</li>
+            </ul>
+        `;
+    }
+}
+window.updateRoleScopeHint = updateRoleScopeHint;
+
+window.openCreateUserModal = async function() {
+    const form = document.getElementById('form-user');
+    if (form) form.reset();
+
+    const userIdInput = document.getElementById('u-user-id');
+    if (userIdInput) userIdInput.value = '';
+
+    const title = document.getElementById('modal-user-title');
+    if (title) title.innerHTML = '<i class="fa-solid fa-user-gear text-cyan"></i> Registrar Nuevo Usuario del Consultorio';
+
+    const saveBtn = document.getElementById('btn-save-user');
+    if (saveBtn) saveBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Guardar Usuario';
+
+    const passInput = document.getElementById('u-password');
+    if (passInput) {
+        passInput.required = true;
+        passInput.placeholder = '••••••••';
+        passInput.value = '';
+    }
+    const passHint = document.getElementById('u-password-hint');
+    if (passHint) passHint.classList.add('hidden');
+
+    await populateDoctorServicesSelect();
+
+    const roleSelect = document.getElementById('u-role');
+    if (roleSelect) {
+        roleSelect.dispatchEvent(new Event('change'));
+    }
+
+    openModal('modal-user');
+};
+
+window.editUser = async function(userId) {
+    const users = await SupabaseDataService.getUsers();
+    const user = users.find(u => String(u.id) === String(userId));
+    if (!user) {
+        Swal.fire({ icon: 'error', title: 'Error', text: 'No se encontró el usuario seleccionado.' });
+        return;
+    }
+
+    const form = document.getElementById('form-user');
+    if (form) form.reset();
+
+    const userIdInput = document.getElementById('u-user-id');
+    if (userIdInput) userIdInput.value = user.id;
+
+    const title = document.getElementById('modal-user-title');
+    if (title) title.innerHTML = '<i class="fa-solid fa-user-pen text-cyan"></i> Editar Usuario del Consultorio';
+
+    const saveBtn = document.getElementById('btn-save-user');
+    if (saveBtn) saveBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Guardar Cambios';
+
+    document.getElementById('u-fullname').value = user.fullname || '';
+    document.getElementById('u-email').value = user.email || '';
+
+    const passInput = document.getElementById('u-password');
+    if (passInput) {
+        passInput.required = false;
+        passInput.placeholder = '(Dejar vacío para conservar actual)';
+        passInput.value = '';
+    }
+    const passHint = document.getElementById('u-password-hint');
+    if (passHint) passHint.classList.remove('hidden');
+
+    const roleSelect = document.getElementById('u-role');
+    if (roleSelect) {
+        roleSelect.value = user.role;
+        if (!roleSelect.value && user.role) {
+            for (let i = 0; i < roleSelect.options.length; i++) {
+                if (roleSelect.options[i].value.toLowerCase().includes(user.role.toLowerCase())) {
+                    roleSelect.selectedIndex = i;
+                    break;
+                }
+            }
+        }
+    }
+
+    const licInput = document.getElementById('u-license');
+    if (licInput) licInput.value = (user.license && user.license !== 'N/A') ? user.license : '';
+
+    await populateDoctorServicesSelect();
+
+    if (roleSelect) {
+        roleSelect.dispatchEvent(new Event('change'));
+    }
+
+    const docProf = user.doctorProfile || user.doctor_profile || {};
+    if (docProf) {
+        if (docProf.schedule && document.getElementById('u-schedule')) document.getElementById('u-schedule').value = docProf.schedule;
+        if (docProf.commission && document.getElementById('u-commission')) document.getElementById('u-commission').value = docProf.commission;
+        if (docProf.availability && document.getElementById('u-availability')) document.getElementById('u-availability').value = docProf.availability;
+        if (Array.isArray(docProf.assignedServices)) {
+            const srvSelect = document.getElementById('u-services');
+            if (srvSelect) {
+                Array.from(srvSelect.options).forEach(opt => {
+                    opt.selected = docProf.assignedServices.includes(opt.value);
+                });
+            }
+        }
+    }
+
+    openModal('modal-user');
+};
 
 window.deleteUser = async function(userId) {
     const user = getCurrentUser();
@@ -5841,6 +6010,20 @@ window.deleteUser = async function(userId) {
     });
 };
 
+async function populateDoctorServicesSelect() {
+    const select = document.getElementById('u-services');
+    if (!select) return;
+    select.innerHTML = '';
+    const baremo = await SupabaseDataService.getBaremo();
+    baremo.forEach(proc => {
+        const opt = document.createElement('option');
+        opt.value = proc.code;
+        opt.innerText = `${proc.name} ($${proc.priceUSD})`;
+        select.appendChild(opt);
+    });
+}
+window.populateDoctorServicesSelect = populateDoctorServicesSelect;
+
 // ==========================================
 // GLOBAL EVENTS & MODALS BINDING
 // ==========================================
@@ -5852,19 +6035,18 @@ function initGlobalEvents() {
     const uRoleSelect = document.getElementById('u-role');
     const docFieldsDiv = document.getElementById('doctor-profile-fields');
     if (uRoleSelect && docFieldsDiv) {
-        // Populating doctor services select on opening
         const btnNewUM = document.getElementById('btn-new-user-modal');
         if (btnNewUM) {
-            const originalClick = btnNewUM.onclick;
             btnNewUM.onclick = async (e) => {
-                if (originalClick) originalClick(e);
-                await populateDoctorServicesSelect();
+                e.preventDefault();
+                await openCreateUserModal();
             };
         }
 
         uRoleSelect.onchange = () => {
             const role = uRoleSelect.value;
-            const isDoctor = role.includes('Odontólogo') || role.includes('Especialista') || role.includes('Cirujano');
+            const r = (role || '').toLowerCase();
+            const isDoctor = r.includes('odont') || r.includes('especialista') || r.includes('cirujano') || r.includes('médico') || r.includes('medico') || r.includes('doctor');
             const licGroup = document.getElementById('u-license-group');
             if (isDoctor) {
                 docFieldsDiv.classList.remove('hidden');
@@ -5879,6 +6061,7 @@ function initGlobalEvents() {
                 document.getElementById('u-schedule').removeAttribute('required');
                 document.getElementById('u-commission').removeAttribute('required');
             }
+            updateRoleScopeHint(role);
         };
     }
 
@@ -7425,18 +7608,25 @@ function initGlobalEvents() {
     if (saveUserBtn) {
         saveUserBtn.onclick = async (e) => {
             e.preventDefault();
+            const existingUserId = document.getElementById('u-user-id')?.value;
             const fullname = document.getElementById('u-fullname').value.trim();
             const email = document.getElementById('u-email').value.trim();
             const password = document.getElementById('u-password').value.trim();
             const role = document.getElementById('u-role').value;
             const rawLicense = document.getElementById('u-license').value.trim();
 
-            if (!fullname || !email || !password) {
-                Swal.fire({ icon: 'warning', title: 'Campos requeridos', text: 'Por favor complete los campos obligatorios (*)' });
+            if (!fullname || !email) {
+                Swal.fire({ icon: 'warning', title: 'Campos requeridos', text: 'Por favor ingrese el Nombre Completo y el Correo Electrónico.' });
                 return;
             }
 
-            const isDoctor = role.includes('Odontólogo') || role.includes('Especialista') || role.includes('Cirujano');
+            if (!existingUserId && !password) {
+                Swal.fire({ icon: 'warning', title: 'Contraseña requerida', text: 'Por favor ingrese una contraseña para el nuevo usuario.' });
+                return;
+            }
+
+            const r = (role || '').toLowerCase();
+            const isDoctor = r.includes('odont') || r.includes('especialista') || r.includes('cirujano') || r.includes('médico') || r.includes('medico') || r.includes('doctor');
             const license = isDoctor ? (rawLicense || 'N/A') : 'N/A';
             let doctorProfile = null;
 
@@ -7454,24 +7644,57 @@ function initGlobalEvents() {
                 };
             }
 
-            const newUser = {
-                id: 'usr-' + Date.now(),
-                fullname,
-                email,
-                password,
-                role,
-                license,
-                status: 'Activo',
-                createdAt: new Date().toISOString().split('T')[0],
-                doctorProfile: doctorProfile || {},
-                doctor_profile: doctorProfile || {}
-            };
+            let userObj = null;
+            if (existingUserId) {
+                const users = await SupabaseDataService.getUsers();
+                const existing = users.find(u => String(u.id) === String(existingUserId));
+                userObj = {
+                    ...(existing || {}),
+                    id: existingUserId,
+                    fullname,
+                    email,
+                    password: password || (existing ? existing.password : '123456'),
+                    role,
+                    license,
+                    status: existing ? (existing.status || 'Activo') : 'Activo',
+                    createdAt: existing ? existing.createdAt : new Date().toISOString().split('T')[0],
+                    doctorProfile: doctorProfile || (existing ? existing.doctorProfile : {}),
+                    doctor_profile: doctorProfile || (existing ? existing.doctor_profile : {})
+                };
+            } else {
+                userObj = {
+                    id: 'usr-' + Date.now(),
+                    fullname,
+                    email,
+                    password,
+                    role,
+                    license,
+                    status: 'Activo',
+                    createdAt: new Date().toISOString().split('T')[0],
+                    doctorProfile: doctorProfile || {},
+                    doctor_profile: doctorProfile || {}
+                };
+            }
 
-            await SupabaseDataService.saveUser(newUser);
-
-            closeModal('modal-user');
-            await renderUsersTable();
-            Swal.fire({ icon: 'success', title: '¡Usuario Registrado!', text: `Se creó la cuenta para ${fullname} exitosamente en la base de datos.`, timer: 2000, showConfirmButton: false });
+            try {
+                await SupabaseDataService.saveUser(userObj);
+                closeModal('modal-user');
+                await renderUsersTable();
+                Swal.fire({
+                    icon: 'success',
+                    title: existingUserId ? '¡Usuario Actualizado!' : '¡Usuario Registrado!',
+                    text: `La cuenta de ${fullname} se guardó exitosamente en la base de datos.`,
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+            } catch (err) {
+                console.error('Error guardando usuario:', err);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error al guardar',
+                    text: 'Ocurrió un inconveniente al guardar el usuario en la base de datos: ' + (err.message || err)
+                });
+            }
         };
     }
 

@@ -1298,9 +1298,45 @@
                             <h1>Gestión de Usuarios del Consultorio</h1>
                             <p class="subtitle">Administración de médicos, especialistas, asistentes y personal administrativo con acceso al sistema.</p>
                         </div>
-                        <button class="btn btn-primary" id="btn-new-user-modal">
-                            <i class="fa-solid fa-user-plus"></i> + Crear Nuevo Usuario
-                        </button>
+                        <div class="action-buttons-group" style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <button class="btn btn-outline" id="btn-view-roles-guide" onclick="openModal('modal-roles-guide')">
+                                <i class="fa-solid fa-shield-halved text-cyan"></i> Alcance de Roles y Permisos
+                            </button>
+                            <button class="btn btn-primary" id="btn-new-user-modal" onclick="openCreateUserModal()">
+                                <i class="fa-solid fa-user-plus"></i> + Crear Nuevo Usuario
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Banner Informativo: Alcance de Roles y Permisos (RBAC) -->
+                    <div class="card" style="margin-bottom: 20px; background: linear-gradient(135deg, rgba(8, 145, 178, 0.05) 0%, rgba(20, 184, 166, 0.05) 100%); border-left: 4px solid var(--primary-cyan); padding: 16px 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                            <div>
+                                <h3 style="margin: 0 0 6px 0; font-size: 1.05rem; display: flex; align-items: center; gap: 8px;">
+                                    <i class="fa-solid fa-user-shield text-cyan"></i> Estructura y Alcance de Funciones por Rol
+                                </h3>
+                                <p style="margin: 0; font-size: 0.86rem; color: var(--text-muted);">
+                                    El sistema aplica control de acceso por roles para proteger la confidencialidad médica, los récipes y la contabilidad general.
+                                </p>
+                            </div>
+                            <button class="btn btn-sm btn-outline" onclick="openModal('modal-roles-guide')">
+                                <i class="fa-solid fa-table-list"></i> Ver Matriz Completa de Permisos
+                            </button>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 14px;">
+                            <div style="background: var(--card-bg, #ffffff); padding: 12px 14px; border-radius: 8px; border: 1px solid var(--border-color, #e2e8f0); box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                                <span class="badge-tag blue" style="margin-bottom: 6px; display: inline-block;"><i class="fa-solid fa-crown"></i> Super Administrador</span>
+                                <p style="font-size: 0.8rem; margin: 4px 0 0 0; color: var(--text-color);">Acceso total sin restricciones a los 16 módulos, auditoría de usuarios, configuración, nóminas y finanzas.</p>
+                            </div>
+                            <div style="background: var(--card-bg, #ffffff); padding: 12px 14px; border-radius: 8px; border: 1px solid var(--border-color, #e2e8f0); box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                                <span class="badge-tag teal" style="margin-bottom: 6px; display: inline-block;"><i class="fa-solid fa-user-doctor"></i> Médicos & Especialistas</span>
+                                <p style="font-size: 0.8rem; margin: 4px 0 0 0; color: var(--text-color);">Área asistencial: Historias clínicas (EHR), odontograma, evolución, recetas médicas, citas y comisiones.</p>
+                            </div>
+                            <div style="background: var(--card-bg, #ffffff); padding: 12px 14px; border-radius: 8px; border: 1px solid var(--border-color, #e2e8f0); box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                                <span class="badge-tag green" style="margin-bottom: 6px; display: inline-block;"><i class="fa-solid fa-headset"></i> Recepción & Facturación</span>
+                                <p style="font-size: 0.8rem; margin: 4px 0 0 0; color: var(--text-color);">Admisión, citas por WhatsApp, caja, facturas, seguimiento Cashea a crédito e insumos.</p>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Filters bar -->
@@ -2817,13 +2853,14 @@
 
     <!-- MODAL: CREAR/EDITAR USUARIO -->
     <div class="modal-overlay hidden" id="modal-user">
-        <div class="modal-dialog">
+        <div class="modal-dialog" style="max-width: 680px; width: 95vw;">
             <div class="modal-header">
-                <h3><i class="fa-solid fa-user-gear"></i> Registrar Nuevo Usuario del Consultorio</h3>
+                <h3 id="modal-user-title"><i class="fa-solid fa-user-gear text-cyan"></i> Registrar Nuevo Usuario del Consultorio</h3>
                 <button class="modal-close" data-close="modal-user">&times;</button>
             </div>
             <div class="modal-body">
                 <form id="form-user" class="grid-form">
+                    <input type="hidden" id="u-user-id" value="">
                     <div class="form-group span-2">
                         <label>Nombre y Apellido *</label>
                         <input type="text" id="u-fullname" required placeholder="Dra. Sofía Mendoza">
@@ -2833,31 +2870,37 @@
                         <input type="email" id="u-email" required placeholder="sofia.mendoza@dentalcare.com">
                     </div>
                     <div class="form-group">
-                        <label>Contraseña de Acceso *</label>
+                        <label id="lbl-u-password">Contraseña de Acceso *</label>
                         <input type="password" id="u-password" required placeholder="••••••••">
+                        <small class="text-muted hidden" id="u-password-hint" style="font-size: 0.78rem; display: block; margin-top: 4px;">Dejar en blanco para mantener la contraseña actual.</small>
                     </div>
-                    <div class="form-group">
-                        <label>Rol / Cargo *</label>
+                    <div class="form-group span-2">
+                        <label>Rol / Cargo Asignado *</label>
                         <select id="u-role" required>
-                            <option value="Super Administrador">Super Administrador (Acceso Total)</option>
-                            <option value="Odontólogo Principal">Odontólogo Principal (Médico)</option>
-                            <option value="Odontólogo General">Odontólogo General (Médico)</option>
+                            <option value="Super Administrador">Super Administrador (Acceso Total & Dirección)</option>
+                            <option value="Odontólogo Principal">Odontólogo Principal (Médico / Dental)</option>
+                            <option value="Odontólogo General">Odontólogo General (Médico / Dental)</option>
                             <option value="Especialista (Endodoncia/Ortodoncia)">Especialista (Endodoncia/Ortodoncia)</option>
                             <option value="Cirujano Maxilofacial">Cirujano Maxilofacial</option>
-                            <option value="Asistente Dental">Asistente Dental</option>
-                            <option value="Recepcionista / Administración">Recepcionista / Administración</option>
+                            <option value="Médico Especialista">Médico Especialista (Cardiología, Pediatría, Ginecología, etc.)</option>
+                            <option value="Asistente Dental">Asistente Dental / Auxiliar Clínico</option>
+                            <option value="Recepcionista / Administración">Recepcionista / Administración / Caja</option>
                         </select>
+                        <!-- Live scope helper / indicator for the chosen role -->
+                        <div id="u-role-scope-hint" style="margin-top: 10px; padding: 12px 14px; border-radius: 8px; font-size: 0.84rem; line-height: 1.45; background: rgba(8, 145, 178, 0.06); border: 1px solid rgba(8, 145, 178, 0.2); border-left: 4px solid var(--primary-cyan);">
+                            <!-- Populated dynamically -->
+                        </div>
                     </div>
-                    <div class="form-group hidden" id="u-license-group">
+                    <div class="form-group span-2 hidden" id="u-license-group">
                         <label>Nº Colegiado / Matrícula Sanitaria</label>
                         <input type="text" id="u-license" placeholder="MPPS-98402 / C.O.V-20104">
                     </div>
-                    <div id="doctor-profile-fields" class="span-2 hidden" style="border: 1px solid var(--border-color); padding: 12px; border-radius: 6px; background-color: rgba(0,0,0,0.02); margin-top: 10px;">
-                        <h4 style="margin-top: 0; margin-bottom: 10px; color: var(--primary-cyan);"><i class="fa-solid fa-user-md"></i> Perfil Clínico / Datos de Médico</h4>
+                    <div id="doctor-profile-fields" class="span-2 hidden" style="border: 1px solid var(--border-color); padding: 14px; border-radius: 8px; background-color: rgba(0,0,0,0.02); margin-top: 10px;">
+                        <h4 style="margin-top: 0; margin-bottom: 10px; color: var(--primary-cyan); font-size: 0.95rem;"><i class="fa-solid fa-user-md"></i> Perfil Clínico / Asignación Médica</h4>
                         <div class="grid-form" style="grid-template-columns: 1fr 1fr; gap: 10px;">
                             <div class="form-group span-2">
                                 <label>Asignación de Servicios (Seleccione múltiples del Baremo) *</label>
-                                <select id="u-services" class="form-control" multiple style="height: 100px;">
+                                <select id="u-services" class="form-control" multiple style="height: 105px;">
                                     <!-- Populated dynamically from baremo -->
                                 </select>
                                 <small class="text-muted">Mantenga presionado Ctrl (o Cmd) para seleccionar múltiples servicios.</small>
@@ -2872,7 +2915,7 @@
                             </div>
                             <div class="form-group span-2">
                                 <label>Disponibilidad por Servicio / Observaciones:</label>
-                                <input type="text" id="u-availability" placeholder="ej: Solo disponible para Endodoncias los Miércoles por la tarde">
+                                <input type="text" id="u-availability" placeholder="ej: Consultas los Miércoles por la tarde">
                             </div>
                         </div>
                     </div>
@@ -2880,7 +2923,182 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-outline" data-close="modal-user">Cancelar</button>
-                <button class="btn btn-primary" id="btn-save-user">Guardar Usuario</button>
+                <button class="btn btn-primary" id="btn-save-user"><i class="fa-solid fa-floppy-disk"></i> Guardar Usuario</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: GUÍA DE ALCANCE DE ROLES Y PERMISOS -->
+    <div class="modal-overlay hidden" id="modal-roles-guide">
+        <div class="modal-dialog" style="max-width: 880px; width: 95vw;">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-shield-halved text-cyan"></i> Alcance de Funciones y Matriz de Permisos por Rol</h3>
+                <button class="modal-close" data-close="modal-roles-guide">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px; max-height: 80vh; overflow-y: auto;">
+                <p class="text-muted" style="margin-top: 0; font-size: 0.9rem; line-height: 1.5;">
+                    El sistema clínico implementa un modelo de <strong>Control de Acceso Basado en Roles (RBAC)</strong>. Cada usuario accede únicamente a los módulos e información pertinentes a su función profesional, garantizando la confidencialidad médica y la integridad financiera.
+                </p>
+
+                <!-- Cards de los 3 grandes grupos de roles -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; margin-bottom: 24px;">
+                    <!-- Card 1: Admin -->
+                    <div style="background: rgba(8, 145, 178, 0.04); border: 1px solid rgba(8, 145, 178, 0.25); border-radius: 10px; padding: 16px;">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                            <span style="background: #0284c7; color: #fff; width: 34px; height: 34px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem;"><i class="fa-solid fa-crown"></i></span>
+                            <div>
+                                <h4 style="margin: 0; font-size: 0.95rem; color: #0369a1;">Super Administrador</h4>
+                                <small style="color: var(--text-muted);">Director / Gerencia General</small>
+                            </div>
+                        </div>
+                        <p style="font-size: 0.82rem; margin: 0 0 8px 0; font-weight: 600; color: #0284c7;">Acceso Total (16 Módulos)</p>
+                        <ul style="margin: 0; padding-left: 18px; font-size: 0.8rem; line-height: 1.45; color: var(--text-color);">
+                            <li>Creación, edición y borrado de usuarios y contraseñas.</li>
+                            <li>Configuración de consultorios, áreas y especialidades.</li>
+                            <li>Nómina fija y honorarios a destajo de especialistas.</li>
+                            <li>Control de baremo de precios, costos e insumos.</li>
+                            <li>Arqueos de caja, finanzas y reportes ejecutivos.</li>
+                        </ul>
+                    </div>
+
+                    <!-- Card 2: Médicos -->
+                    <div style="background: rgba(13, 148, 136, 0.04); border: 1px solid rgba(13, 148, 136, 0.25); border-radius: 10px; padding: 16px;">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                            <span style="background: #0d9488; color: #fff; width: 34px; height: 34px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem;"><i class="fa-solid fa-user-doctor"></i></span>
+                            <div>
+                                <h4 style="margin: 0; font-size: 0.95rem; color: #0f766e;">Médicos & Odontólogos</h4>
+                                <small style="color: var(--text-muted);">Especialistas Clínicos</small>
+                            </div>
+                        </div>
+                        <p style="font-size: 0.82rem; margin: 0 0 8px 0; font-weight: 600; color: #0d9488;">Área Asistencial y Diagnóstica</p>
+                        <ul style="margin: 0; padding-left: 18px; font-size: 0.8rem; line-height: 1.45; color: var(--text-color);">
+                            <li>Historias clínicas electrónicas (EHR) y diagnósticos.</li>
+                            <li>Odontograma 2D/3D con registro de evoluciones.</li>
+                            <li>Emisión de récipes e indicaciones médicas con QR.</li>
+                            <li>Agenda médica propia y seguimiento de pacientes.</li>
+                            <li>Cálculo de comisión según baremo y turnos.</li>
+                        </ul>
+                    </div>
+
+                    <!-- Card 3: Asistentes / Caja -->
+                    <div style="background: rgba(22, 163, 74, 0.04); border: 1px solid rgba(22, 163, 74, 0.25); border-radius: 10px; padding: 16px;">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                            <span style="background: #16a34a; color: #fff; width: 34px; height: 34px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem;"><i class="fa-solid fa-headset"></i></span>
+                            <div>
+                                <h4 style="margin: 0; font-size: 0.95rem; color: #15803d;">Recepción, Asistentes & Caja</h4>
+                                <small style="color: var(--text-muted);">Administración Operativa</small>
+                            </div>
+                        </div>
+                        <p style="font-size: 0.82rem; margin: 0 0 8px 0; font-weight: 600; color: #16a34a;">Operaciones y Cobranzas</p>
+                        <ul style="margin: 0; padding-left: 18px; font-size: 0.8rem; line-height: 1.45; color: var(--text-color);">
+                            <li>Admisión de pacientes y registro de datos personales.</li>
+                            <li>Agendamiento de citas y confirmaciones WhatsApp.</li>
+                            <li>Facturación, cobro en caja ($ / Bs / Zelle / Cashea).</li>
+                            <li>Monitoreo de cuotas a crédito y abonos de pacientes.</li>
+                            <li>Descarga e impresión de recibos y presupuestos.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Tabla Comparativa Detallada -->
+                <h4 style="margin: 20px 0 10px 0; font-size: 0.95rem; color: var(--text-color); display: flex; align-items: center; gap: 8px;">
+                    <i class="fa-solid fa-table-list text-cyan"></i> Matriz Detallada de Permisos por Módulo
+                </h4>
+                <div class="table-responsive" style="border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden;">
+                    <table class="table" style="margin: 0; font-size: 0.82rem;">
+                        <thead style="background: rgba(0,0,0,0.03);">
+                            <tr>
+                                <th>Módulo / Funcionalidad</th>
+                                <th class="text-center" style="width: 25%;">Super Admin</th>
+                                <th class="text-center" style="width: 25%;">Médico / Especialista</th>
+                                <th class="text-center" style="width: 25%;">Recepción / Asistente</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Directorio de Pacientes</strong></td>
+                                <td class="text-center"><span class="badge-tag green"><i class="fa-solid fa-check"></i> Total</span></td>
+                                <td class="text-center"><span class="badge-tag green"><i class="fa-solid fa-check"></i> Asignados</span></td>
+                                <td class="text-center"><span class="badge-tag green"><i class="fa-solid fa-check"></i> Admisión y Registro</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Agenda de Citas & WhatsApp</strong></td>
+                                <td class="text-center"><span class="badge-tag green"><i class="fa-solid fa-check"></i> Total</span></td>
+                                <td class="text-center"><span class="badge-tag green"><i class="fa-solid fa-check"></i> Citas Propias</span></td>
+                                <td class="text-center"><span class="badge-tag green"><i class="fa-solid fa-check"></i> Agendar y Notificar</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Odontograma 2D/3D Interactivo</strong></td>
+                                <td class="text-center"><span class="badge-tag green"><i class="fa-solid fa-check"></i> Total</span></td>
+                                <td class="text-center"><span class="badge-tag green"><i class="fa-solid fa-check"></i> Registro y Diagnóstico</span></td>
+                                <td class="text-center"><span class="badge-tag blue"><i class="fa-solid fa-eye"></i> Solo Lectura</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Historia Clínica Electrónica (EHR)</strong></td>
+                                <td class="text-center"><span class="badge-tag green"><i class="fa-solid fa-check"></i> Total</span></td>
+                                <td class="text-center"><span class="badge-tag green"><i class="fa-solid fa-check"></i> Evolución y Diagnóstico</span></td>
+                                <td class="text-center"><span class="badge-tag red"><i class="fa-solid fa-xmark"></i> Restringido</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Récipes Médicos con QR & Firma</strong></td>
+                                <td class="text-center"><span class="badge-tag green"><i class="fa-solid fa-check"></i> Total</span></td>
+                                <td class="text-center"><span class="badge-tag green"><i class="fa-solid fa-check"></i> Emisión y Firma</span></td>
+                                <td class="text-center"><span class="badge-tag red"><i class="fa-solid fa-xmark"></i> No Autorizado</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Facturación & Caja Diaria</strong></td>
+                                <td class="text-center"><span class="badge-tag green"><i class="fa-solid fa-check"></i> Auditoría Total</span></td>
+                                <td class="text-center"><span class="badge-tag red"><i class="fa-solid fa-xmark"></i> Restringido</span></td>
+                                <td class="text-center"><span class="badge-tag green"><i class="fa-solid fa-check"></i> Cobro y Arqueo</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Financiamiento Cashea / Crédito</strong></td>
+                                <td class="text-center"><span class="badge-tag green"><i class="fa-solid fa-check"></i> Total</span></td>
+                                <td class="text-center"><span class="badge-tag red"><i class="fa-solid fa-xmark"></i> Restringido</span></td>
+                                <td class="text-center"><span class="badge-tag green"><i class="fa-solid fa-check"></i> Cuotas y Recordatorios</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Inventario & Control de Stock</strong></td>
+                                <td class="text-center"><span class="badge-tag green"><i class="fa-solid fa-check"></i> Compras y Ajustes</span></td>
+                                <td class="text-center"><span class="badge-tag blue"><i class="fa-solid fa-syringe"></i> Consumo en Procedimiento</span></td>
+                                <td class="text-center"><span class="badge-tag green"><i class="fa-solid fa-check"></i> Despacho y Stock</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Baremo de Servicios & Precios</strong></td>
+                                <td class="text-center"><span class="badge-tag green"><i class="fa-solid fa-check"></i> Crear y Modificar Precios</span></td>
+                                <td class="text-center"><span class="badge-tag blue"><i class="fa-solid fa-eye"></i> Consulta y Comisiones</span></td>
+                                <td class="text-center"><span class="badge-tag blue"><i class="fa-solid fa-eye"></i> Consulta para Cobro</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Nómina y Honorarios Médicos</strong></td>
+                                <td class="text-center"><span class="badge-tag green"><i class="fa-solid fa-check"></i> Liquidación Fija y Destajo</span></td>
+                                <td class="text-center"><span class="badge-tag blue"><i class="fa-solid fa-eye"></i> Consulta Honorarios Propios</span></td>
+                                <td class="text-center"><span class="badge-tag red"><i class="fa-solid fa-xmark"></i> Restringido</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Gestión de Consultorios y Especialidades</strong></td>
+                                <td class="text-center"><span class="badge-tag green"><i class="fa-solid fa-check"></i> Abrir, Editar, Alquilar</span></td>
+                                <td class="text-center"><span class="badge-tag blue"><i class="fa-solid fa-eye"></i> Solo Consulta de Horarios</span></td>
+                                <td class="text-center"><span class="badge-tag blue"><i class="fa-solid fa-eye"></i> Solo Consulta de Horarios</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Gestión de Usuarios del Consultorio</strong></td>
+                                <td class="text-center"><span class="badge-tag green"><i class="fa-solid fa-check"></i> Crear, Editar, Eliminar</span></td>
+                                <td class="text-center"><span class="badge-tag red"><i class="fa-solid fa-xmark"></i> Restringido</span></td>
+                                <td class="text-center"><span class="badge-tag red"><i class="fa-solid fa-xmark"></i> Restringido</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Configuración y Papelería</strong></td>
+                                <td class="text-center"><span class="badge-tag green"><i class="fa-solid fa-check"></i> Datos de Clínica y PDF</span></td>
+                                <td class="text-center"><span class="badge-tag red"><i class="fa-solid fa-xmark"></i> Restringido</span></td>
+                                <td class="text-center"><span class="badge-tag red"><i class="fa-solid fa-xmark"></i> Restringido</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" data-close="modal-roles-guide">Entendido</button>
             </div>
         </div>
     </div>
@@ -4320,14 +4538,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=251"></script>
-    <script src="supabaseClient.js?v=251"></script>
-    <script src="odontogram.js?v=251"></script>
-    <script src="signature.js?v=251"></script>
-    <script src="whatsapp.js?v=251"></script>
-    <script src="kardex.js?v=251"></script>
-    <script src="app.js?v=251"></script>
-    <script src="clinicalERP.js?v=251"></script>
-    <script src="tutorial.js?v=251"></script>
+    <script src="seededData.js?v=252"></script>
+    <script src="supabaseClient.js?v=252"></script>
+    <script src="odontogram.js?v=252"></script>
+    <script src="signature.js?v=252"></script>
+    <script src="whatsapp.js?v=252"></script>
+    <script src="kardex.js?v=252"></script>
+    <script src="app.js?v=252"></script>
+    <script src="clinicalERP.js?v=252"></script>
+    <script src="tutorial.js?v=252"></script>
 </body>
 </html>
