@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=255">
+    <link rel="stylesheet" href="styles.css?v=262">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -240,8 +240,8 @@
                     <span>Papelería</span>
                 </a>
                 <a href="#users" class="nav-item" data-tab="users">
-                    <i class="fa-solid fa-users-gear"></i>
-                    <span>Usuarios / Personal</span>
+                    <i class="fa-solid fa-user-doctor"></i>
+                    <span>Personal Médico</span>
                 </a>
                 <a href="#specialties" class="nav-item" data-tab="specialties">
                     <i class="fa-solid fa-stethoscope"></i>
@@ -1564,50 +1564,41 @@
                     </div>
                 </section>
 
-                <!-- VIEW 7: GESTIÓN DE USUARIOS -->
+                <!-- VIEW 7: PLANTILLA DE PERSONAL MÉDICO Y ASISTENCIAL -->
                 <section id="view-users" class="tab-view">
                     <div class="view-header">
                         <div>
-                            <h1>Gestión de Usuarios del Consultorio</h1>
-                            <p class="subtitle">Administración de médicos, especialistas, asistentes y personal administrativo con acceso al sistema.</p>
+                            <h1>Plantilla de Personal Médico y Asistencial</h1>
+                            <p class="subtitle">Directorio asistencial de médicos especialistas, odontólogos, enfermeros y auxiliares clínicos.</p>
                         </div>
                         <div class="action-buttons-group" style="display: flex; gap: 10px; flex-wrap: wrap;">
                             <button class="btn btn-outline" id="btn-view-roles-guide" onclick="openModal('modal-roles-guide')">
                                 <i class="fa-solid fa-shield-halved text-cyan"></i> Alcance de Roles y Permisos
                             </button>
                             <button class="btn btn-primary" id="btn-new-user-modal" onclick="openCreateUserModal()">
-                                <i class="fa-solid fa-user-plus"></i> + Crear Nuevo Usuario
+                                <i class="fa-solid fa-user-doctor"></i> + Registrar Personal Médico
                             </button>
                         </div>
                     </div>
 
-                    <!-- Banner Informativo: Alcance de Roles y Permisos (RBAC) -->
-                    <div class="card" style="margin-bottom: 20px; background: linear-gradient(135deg, rgba(8, 145, 178, 0.05) 0%, rgba(20, 184, 166, 0.05) 100%); border-left: 4px solid var(--primary-cyan); padding: 16px 20px;">
+                    <!-- Banner Informativo: Separación de Roles Asistenciales vs Administrativos -->
+                    <div class="card" style="margin-bottom: 20px; background: linear-gradient(135deg, rgba(8, 145, 178, 0.05) 0%, rgba(20, 184, 166, 0.05) 100%); border-left: 4px solid var(--primary-cyan); padding: 14px 20px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-                            <div>
-                                <h3 style="margin: 0 0 6px 0; font-size: 1.05rem; display: flex; align-items: center; gap: 8px;">
-                                    <i class="fa-solid fa-user-shield text-cyan"></i> Estructura y Alcance de Funciones por Rol
-                                </h3>
-                                <p style="margin: 0; font-size: 0.86rem; color: var(--text-muted);">
-                                    El sistema aplica control de acceso por roles para proteger la confidencialidad médica, los récipes y la contabilidad general.
-                                </p>
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <div style="width: 40px; height: 40px; border-radius: 10px; background: rgba(8, 145, 178, 0.12); display: flex; align-items: center; justify-content: center; color: var(--primary-cyan); font-size: 1.25rem;">
+                                    <i class="fa-solid fa-stethoscope"></i>
+                                </div>
+                                <div>
+                                    <h3 style="margin: 0 0 2px 0; font-size: 1rem; color: #0f172a; font-weight: 800;">
+                                        Cuerpo Médico y Asistencial del Centro de Salud
+                                    </h3>
+                                    <p style="margin: 0; font-size: 0.82rem; color: var(--text-muted);">
+                                        Aquí se gestionan exclusivamente los profesionales que atienden pacientes, firman récipes y tienen agendas médicas.
+                                    </p>
+                                </div>
                             </div>
-                            <button class="btn btn-sm btn-outline" onclick="openModal('modal-roles-guide')">
-                                <i class="fa-solid fa-table-list"></i> Ver Matriz Completa de Permisos
-                            </button>
-                        </div>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 14px;">
-                            <div style="background: var(--card-bg, #ffffff); padding: 12px 14px; border-radius: 8px; border: 1px solid var(--border-color, #e2e8f0); box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
-                                <span class="badge-tag blue" style="margin-bottom: 6px; display: inline-block;"><i class="fa-solid fa-crown"></i> Super Administrador</span>
-                                <p style="font-size: 0.8rem; margin: 4px 0 0 0; color: var(--text-color);">Acceso total sin restricciones a los 16 módulos, auditoría de usuarios, configuración, nóminas y finanzas.</p>
-                            </div>
-                            <div style="background: var(--card-bg, #ffffff); padding: 12px 14px; border-radius: 8px; border: 1px solid var(--border-color, #e2e8f0); box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
-                                <span class="badge-tag teal" style="margin-bottom: 6px; display: inline-block;"><i class="fa-solid fa-user-doctor"></i> Médicos & Especialistas</span>
-                                <p style="font-size: 0.8rem; margin: 4px 0 0 0; color: var(--text-color);">Área asistencial: Historias clínicas (EHR), odontograma, evolución, recetas médicas, citas y comisiones.</p>
-                            </div>
-                            <div style="background: var(--card-bg, #ffffff); padding: 12px 14px; border-radius: 8px; border: 1px solid var(--border-color, #e2e8f0); box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
-                                <span class="badge-tag green" style="margin-bottom: 6px; display: inline-block;"><i class="fa-solid fa-headset"></i> Recepción & Facturación</span>
-                                <p style="font-size: 0.8rem; margin: 4px 0 0 0; color: var(--text-color);">Admisión, citas por WhatsApp, caja, facturas, seguimiento Cashea a crédito e insumos.</p>
+                            <div style="font-size: 0.8rem; background: #ffffff; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border-color); color: #334155;">
+                                <i class="fa-solid fa-gear text-cyan"></i> ¿Usuarios de oficina (Gerente, Admin, Recepción, Caja)? Gestionar en <strong style="color: #0284c7;">Ajustes > Usuarios del Sistema</strong>.
                             </div>
                         </div>
                     </div>
@@ -1616,12 +1607,13 @@
                     <div class="card filter-card">
                         <div class="filter-group">
                             <button class="filter-btn active" data-filter="all">Todos</button>
-                            <button class="filter-btn" data-filter="Administrador">Administradores</button>
                             <button class="filter-btn" data-filter="Médico">Médicos</button>
-                            <button class="filter-btn" data-filter="Asistente">Asistentes</button>
+                            <button class="filter-btn" data-filter="Odontólogo">Odontólogos</button>
+                            <button class="filter-btn" data-filter="Especialista">Especialistas</button>
+                            <button class="filter-btn" data-filter="Asistente">Asistentes / Enfermeros</button>
                         </div>
                         <div class="search-box">
-                            <input type="text" id="users-table-search" placeholder="Buscar usuario o rol...">
+                            <input type="text" id="users-table-search" placeholder="Buscar médico, cargo o MPPS...">
                         </div>
                     </div>
 
@@ -2405,6 +2397,10 @@
                                 <i class="fa-solid fa-palette"></i>
                                 <span>Apariencia y Tema</span>
                             </button>
+                            <button class="settings-nav-btn" data-pane="system-users" id="btn-pane-system-users">
+                                <i class="fa-solid fa-users-gear text-cyan"></i>
+                                <span>Usuarios del Sistema</span>
+                            </button>
                             <button class="settings-nav-btn" data-pane="trash" id="btn-pane-trash">
                                 <i class="fa-solid fa-trash-arrow-up text-amber"></i>
                                 <span>Papelera de Reciclaje</span>
@@ -2680,6 +2676,55 @@
                                             </tbody>
                                         </table>
                                     </div>
+                                </div>
+                            </div>
+
+                            <!-- PANE 6: Usuarios del Sistema y Roles Administrativos (Solo Super Admin / Gerente) -->
+                            <div class="settings-pane" id="pane-system-users">
+                                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+                                    <div>
+                                        <h3 style="margin: 0; color: var(--text-heading); font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                                            <i class="fa-solid fa-users-gear text-cyan"></i> Cuentas de Acceso y Roles del Sistema
+                                        </h3>
+                                        <p class="text-muted" style="font-size: 0.84rem; margin: 4px 0 0 0;">
+                                            Gestione exclusivamente los usuarios de gestión, oficina, recepción y gerencia con acceso al software.
+                                        </p>
+                                    </div>
+                                    <button type="button" class="btn btn-primary" onclick="window.openCreateSystemUserModal()" style="font-weight: 700;">
+                                        <i class="fa-solid fa-user-plus"></i> + Crear Usuario del Sistema
+                                    </button>
+                                </div>
+
+                                <div class="card" style="margin-bottom: 18px; background: rgba(8, 145, 178, 0.04); border-left: 4px solid var(--primary-cyan); padding: 12px 16px;">
+                                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                                        <div style="display: flex; align-items: center; gap: 10px; font-size: 0.83rem; color: #334155;">
+                                            <i class="fa-solid fa-shield-halved text-cyan" style="font-size: 1.2rem;"></i>
+                                            <span>
+                                                <strong>Segregación de Cuentas:</strong> Los roles asistenciales (médicos, odontólogos y enfermeros) se administran en <a href="#users" onclick="window.navigateToTab('users')" style="color: var(--primary-cyan); font-weight: 700; text-decoration: underline;">Personal Médico</a>.
+                                            </span>
+                                        </div>
+                                        <button type="button" class="btn btn-xs btn-outline" onclick="openModal('modal-roles-guide')">
+                                            <i class="fa-solid fa-circle-question"></i> Matriz de Permisos
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="table-responsive" style="max-height: 520px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 10px;">
+                                    <table class="data-table" style="width: 100%; font-size: 0.85rem;">
+                                        <thead>
+                                            <tr>
+                                                <th>Nombre y Apellido</th>
+                                                <th>Usuario / Correo</th>
+                                                <th>Rol Asignado</th>
+                                                <th>Estado</th>
+                                                <th>Fecha de Alta</th>
+                                                <th style="text-align: center;">Acciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="system-users-table-tbody">
+                                            <!-- Loaded dynamically by app.js -->
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                         </div>
@@ -3421,11 +3466,11 @@
         </div>
     </div>
 
-    <!-- MODAL: CREAR/EDITAR USUARIO -->
+    <!-- MODAL: CREAR/EDITAR PERSONAL MÉDICO Y ASISTENCIAL -->
     <div class="modal-overlay hidden" id="modal-user">
         <div class="modal-dialog" style="max-width: 680px; width: 95vw;">
             <div class="modal-header">
-                <h3 id="modal-user-title"><i class="fa-solid fa-user-gear text-cyan"></i> Registrar Nuevo Usuario del Consultorio</h3>
+                <h3 id="modal-user-title"><i class="fa-solid fa-user-doctor text-cyan"></i> Registrar Personal Médico / Asistencial</h3>
                 <button class="modal-close" data-close="modal-user">&times;</button>
             </div>
             <div class="modal-body">
@@ -3445,27 +3490,28 @@
                         <small class="text-muted hidden" id="u-password-hint" style="font-size: 0.78rem; display: block; margin-top: 4px;">Dejar en blanco para mantener la contraseña actual.</small>
                     </div>
                     <div class="form-group span-2">
-                        <label>Rol / Cargo Asignado *</label>
+                        <label>Rol / Especialidad Clínica *</label>
                         <select id="u-role" required>
-                            <option value="Super Administrador">Super Administrador (Acceso Total & Dirección)</option>
                             <option value="Odontólogo Principal">Odontólogo Principal (Médico / Dental)</option>
                             <option value="Odontólogo General">Odontólogo General (Médico / Dental)</option>
-                            <option value="Especialista (Endodoncia/Ortodoncia)">Especialista (Endodoncia/Ortodoncia)</option>
+                            <option value="Especialista en Ortodoncia">Especialista en Ortodoncia</option>
+                            <option value="Especialista en Endodoncia">Especialista en Endodoncia</option>
                             <option value="Cirujano Maxilofacial">Cirujano Maxilofacial</option>
-                            <option value="Médico Especialista">Médico Especialista (Cardiología, Pediatría, Ginecología, etc.)</option>
+                            <option value="Médico General">Médico General</option>
+                            <option value="Médico Especialista">Médico Especialista (Cardiología, Pediatría, etc.)</option>
                             <option value="Asistente Dental">Asistente Dental / Auxiliar Clínico</option>
-                            <option value="Recepcionista / Administración">Recepcionista / Administración / Caja</option>
+                            <option value="Enfermero(a)">Enfermero(a) Asistencial</option>
                         </select>
                         <!-- Live scope helper / indicator for the chosen role -->
                         <div id="u-role-scope-hint" style="margin-top: 10px; padding: 12px 14px; border-radius: 8px; font-size: 0.84rem; line-height: 1.45; background: rgba(8, 145, 178, 0.06); border: 1px solid rgba(8, 145, 178, 0.2); border-left: 4px solid var(--primary-cyan);">
                             <!-- Populated dynamically -->
                         </div>
                     </div>
-                    <div class="form-group span-2 hidden" id="u-license-group">
-                        <label>Nº Colegiado / Matrícula Sanitaria</label>
+                    <div class="form-group span-2" id="u-license-group">
+                        <label>Nº Colegiado / Matrícula Sanitaria (MPPS / Colegio)</label>
                         <input type="text" id="u-license" placeholder="MPPS-98402 / C.O.V-20104">
                     </div>
-                    <div id="doctor-profile-fields" class="span-2 hidden" style="border: 1px solid var(--border-color); padding: 14px; border-radius: 8px; background-color: rgba(0,0,0,0.02); margin-top: 10px;">
+                    <div id="doctor-profile-fields" class="span-2" style="border: 1px solid var(--border-color); padding: 14px; border-radius: 8px; background-color: rgba(0,0,0,0.02); margin-top: 10px;">
                         <h4 style="margin-top: 0; margin-bottom: 10px; color: var(--primary-cyan); font-size: 0.95rem;"><i class="fa-solid fa-user-md"></i> Perfil Clínico / Asignación Médica</h4>
                         <div class="grid-form" style="grid-template-columns: 1fr 1fr; gap: 10px;">
                             <div class="form-group span-2">
@@ -3493,7 +3539,61 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-outline" data-close="modal-user">Cancelar</button>
-                <button class="btn btn-primary" id="btn-save-user"><i class="fa-solid fa-floppy-disk"></i> Guardar Usuario</button>
+                <button class="btn btn-primary" id="btn-save-user"><i class="fa-solid fa-floppy-disk"></i> Guardar Personal</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: CREAR/EDITAR USUARIO DEL SISTEMA (AJUSTES) -->
+    <div class="modal-overlay hidden" id="modal-system-user">
+        <div class="modal-dialog" style="max-width: 580px; width: 95vw;">
+            <div class="modal-header">
+                <h3 id="modal-system-user-title"><i class="fa-solid fa-users-gear text-cyan"></i> Crear Cuenta de Usuario del Sistema</h3>
+                <button class="modal-close" data-close="modal-system-user">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="form-system-user" class="grid-form">
+                    <input type="hidden" id="sys-user-id" value="">
+                    <div class="form-group span-2">
+                        <label>Nombre y Apellido *</label>
+                        <input type="text" id="sys-user-fullname" required placeholder="ej: Lic. Carlos Valero">
+                    </div>
+                    <div class="form-group">
+                        <label>Correo Electrónico (Login) *</label>
+                        <input type="email" id="sys-user-email" required placeholder="ej: carlos.valero@clinica.com">
+                    </div>
+                    <div class="form-group">
+                        <label id="lbl-sys-user-password">Contraseña *</label>
+                        <input type="password" id="sys-user-password" required placeholder="••••••••">
+                        <small class="text-muted hidden" id="sys-user-password-hint" style="font-size: 0.78rem; display: block; margin-top: 4px;">Dejar en blanco para mantener la contraseña actual.</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Rol de Acceso en Plataforma *</label>
+                        <select id="sys-user-role" required class="form-control">
+                            <option value="Super Administrador">Super Administrador (Control Total & Configuración)</option>
+                            <option value="Gerente General">Gerente General (Finanzas, Auditoría y Reportes)</option>
+                            <option value="Administrador">Administrador de Operaciones</option>
+                            <option value="Recepción">Recepción (Admisión de Pacientes y Agenda)</option>
+                            <option value="Caja / Facturación">Caja / Facturación (Cobros y Facturación)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Estado de la Cuenta *</label>
+                        <select id="sys-user-status" required class="form-control">
+                            <option value="Activo" selected>Activo (Permitir Acceso)</option>
+                            <option value="Inactivo">Inactivo (Acceso Suspendido)</option>
+                        </select>
+                    </div>
+                    <div class="form-group span-2">
+                        <div class="card p-12" style="background: rgba(8, 145, 178, 0.05); border: 1px solid rgba(8, 145, 178, 0.2); border-radius: 8px; font-size: 0.82rem; color: #334155; margin-top: 4px;">
+                            <i class="fa-solid fa-circle-info text-cyan"></i> <strong>Nota:</strong> Estas credenciales dan acceso a los módulos operativos y administrativos del sistema según el rol seleccionado.
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" data-close="modal-system-user">Cancelar</button>
+                <button class="btn btn-primary" id="btn-save-system-user"><i class="fa-solid fa-floppy-disk"></i> Guardar Usuario</button>
             </div>
         </div>
     </div>
@@ -4853,7 +4953,7 @@
     </div>
 
     <!-- BURBUJA FLOTANTE DE PRESUPUESTO EN CURSO -->
-    <div id="floating-budget-bubble" class="hidden" onclick="window.returnToActiveBudgetView()" title="Regresar al Presupuesto en curso" style="position: fixed; bottom: 25px; right: 25px; z-index: 9999; display: flex; align-items: center; gap: 10px; background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%); color: white; padding: 10px 18px; border-radius: 50px; box-shadow: 0 10px 25px rgba(13, 148, 136, 0.4); cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; border: 2px solid #ffffff;">
+    <div id="floating-budget-bubble" class="hidden" onclick="window.returnToActiveBudgetView()" title="Regresar al Presupuesto en curso" style="position: fixed; bottom: 25px; right: 25px; z-index: 99999; display: flex; align-items: center; gap: 10px; background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%); color: white; padding: 10px 18px; border-radius: 50px; box-shadow: 0 10px 25px rgba(13, 148, 136, 0.4); cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; border: 2px solid #ffffff;">
         <i class="fa-solid fa-file-invoice-dollar" style="font-size: 1.3rem; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));"></i>
         <div style="display: flex; flex-direction: column; line-height: 1.2;">
             <span style="font-weight: 800; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.5px;">Presupuesto en curso</span>
@@ -6376,14 +6476,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=260"></script>
-    <script src="supabaseClient.js?v=260"></script>
-    <script src="odontogram.js?v=260"></script>
-    <script src="signature.js?v=260"></script>
-    <script src="whatsapp.js?v=260"></script>
-    <script src="kardex.js?v=260"></script>
-    <script src="app.js?v=260"></script>
-    <script src="clinicalERP.js?v=260"></script>
-    <script src="tutorial.js?v=260"></script>
+    <script src="seededData.js?v=262"></script>
+    <script src="supabaseClient.js?v=262"></script>
+    <script src="odontogram.js?v=262"></script>
+    <script src="signature.js?v=262"></script>
+    <script src="whatsapp.js?v=262"></script>
+    <script src="kardex.js?v=262"></script>
+    <script src="app.js?v=262"></script>
+    <script src="clinicalERP.js?v=262"></script>
+    <script src="tutorial.js?v=262"></script>
 </body>
 </html>

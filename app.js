@@ -8405,8 +8405,20 @@ window.deletePricingService = async function(code) {
     });
 };
 
+// Helper to identify if a role is purely administrative (System User)
+function isSystemAdminRole(roleStr) {
+    if (!roleStr) return false;
+    const r = roleStr.toLowerCase().trim();
+    // Clinical roles take precedence
+    if (r.includes('odont') || r.includes('médico') || r.includes('medico') || r.includes('cirujano') || r.includes('enferm') || r.includes('asistente dental')) {
+        return false;
+    }
+    return r.includes('admin') || r.includes('gerente') || r.includes('recep') || r.includes('caja') || r.includes('factura');
+}
+window.isSystemAdminRole = isSystemAdminRole;
+
 // ==========================================
-// GESTIÓN DE USUARIOS (USER MANAGEMENT)
+// GESTIÓN DE PERSONAL MÉDICO Y ASISTENCIAL
 // ==========================================
 async function renderUsersTable(filter = 'all', searchQuery = '') {
     const tbody = document.getElementById('users-table-body');
@@ -8415,13 +8427,22 @@ async function renderUsersTable(filter = 'all', searchQuery = '') {
     tbody.innerHTML = '';
     let users = await SupabaseDataService.getUsers();
 
+    // In Personal Médico view, ONLY show clinical staff (exclude pure system/administrative roles)
+    users = users.filter(u => !isSystemAdminRole(u.role));
+
     // Apply Filter
     if (filter !== 'all') {
         users = users.filter(u => {
             if (!u.role) return false;
             const role = u.role.toLowerCase();
             const f = filter.toLowerCase();
-            return role.includes(f) || (f === 'médico' && (role.includes('odontólogo') || role.includes('médico') || role.includes('especialista') || role.includes('cirujano')));
+            if (f === 'médico' || f === 'medico') {
+                return role.includes('odontólogo') || role.includes('médico') || role.includes('medico') || role.includes('cirujano') || role.includes('especialista');
+            }
+            if (f === 'asistente') {
+                return role.includes('asistente') || role.includes('enfermer') || role.includes('auxiliar');
+            }
+            return role.includes(f);
         });
     }
 
@@ -8431,12 +8452,13 @@ async function renderUsersTable(filter = 'all', searchQuery = '') {
         users = users.filter(u => 
             (u.fullname && u.fullname.toLowerCase().includes(q)) ||
             (u.email && u.email.toLowerCase().includes(q)) ||
-            (u.role && u.role.toLowerCase().includes(q))
+            (u.role && u.role.toLowerCase().includes(q)) ||
+            (u.license && u.license.toLowerCase().includes(q))
         );
     }
 
     if (users.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted" style="padding: 24px;">No se encontraron usuarios con los filtros activos.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted" style="padding: 24px;">No se encontró personal médico o asistencial registrado con estos filtros.</td></tr>`;
         return;
     }
 
@@ -8445,12 +8467,12 @@ async function renderUsersTable(filter = 'all', searchQuery = '') {
         tr.innerHTML = `
             <td><strong>${u.fullname}</strong></td>
             <td>${u.email}</td>
-            <td><span class="badge-tag blue">${u.role}</span></td>
-            <td>${u.license || 'N/A'}</td>
-            <td><span class="badge-tag green">${u.status}</span></td>
-            <td>${u.createdAt}</td>
+            <td><span class="badge-tag blue" style="font-weight:600;"><i class="fa-solid fa-stethoscope"></i> ${u.role}</span></td>
+            <td>${u.license && u.license !== 'N/A' ? `<span style="font-family:monospace; font-weight:700; color:#0369a1;">${u.license}</span>` : '<span class="text-muted">N/A</span>'}</td>
+            <td><span class="badge-tag green">${u.status || 'Activo'}</span></td>
+            <td>${u.createdAt || '-'}</td>
             <td>
-                <button class="btn btn-xs btn-outline text-cyan" onclick="editUser('${u.id}')" title="Editar Usuario" style="margin-right: 4px;"><i class="fa-solid fa-user-pen"></i></button>
+                <button class="btn btn-xs btn-outline text-cyan" onclick="editUser('${u.id}')" title="Editar Ficha Médica" style="margin-right: 4px;"><i class="fa-solid fa-user-pen"></i></button>
                 <button class="btn btn-xs btn-outline text-red" onclick="deleteUser('${u.id}')" title="Eliminar"><i class="fa-solid fa-user-xmark"></i></button>
             </td>
         `;
@@ -8458,65 +8480,192 @@ async function renderUsersTable(filter = 'all', searchQuery = '') {
     });
 }
 
+// ==========================================
+// GESTIÓN DE USUARIOS DEL SISTEMA (AJUSTES)
+// ==========================================
+window.renderSystemUsersTable = async function() {
+    const tbody = document.getElementById('system-users-table-tbody');
+    if (!tbody) return;
+
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding: 20px;"><i class="fa-solid fa-spinner fa-spin text-cyan"></i> Cargando usuarios del sistema...</td></tr>`;
+
+    let users = await SupabaseDataService.getUsers();
+
+    // Filter to only administrative & system users
+    let sysUsers = users.filter(u => isSystemAdminRole(u.role) || !u.role || u.role.toLowerCase().includes('admin'));
+
+    if (sysUsers.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding: 24px;">No hay cuentas administrativas registradas. Cree una nueva con el botón "+ Crear Usuario del Sistema".</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = '';
+    sysUsers.forEach(u => {
+        const tr = document.createElement('tr');
+        const isSuper = (u.role || '').toLowerCase().includes('super') || (u.role || '').toLowerCase().includes('gerente');
+        const roleBadgeClass = isSuper ? 'green' : 'blue';
+
+        tr.innerHTML = `
+            <td>
+                <strong>${u.fullname}</strong>
+                ${isSuper ? ' <small class="badge-tag green" style="font-size:0.68rem; margin-left:4px;">Dirección</small>' : ''}
+            </td>
+            <td><span style="font-family:monospace; color:#334155;">${u.email}</span></td>
+            <td><span class="badge-tag ${roleBadgeClass}" style="font-weight:700;"><i class="fa-solid fa-shield-halved"></i> ${u.role || 'Administrador'}</span></td>
+            <td><span class="badge-tag ${u.status === 'Inactivo' ? 'red' : 'green'}">${u.status || 'Activo'}</span></td>
+            <td>${u.createdAt || '-'}</td>
+            <td style="text-align: center;">
+                <button class="btn btn-xs btn-outline text-cyan" onclick="window.editSystemUser('${u.id}')" title="Editar Cuenta" style="margin-right: 4px;"><i class="fa-solid fa-user-pen"></i></button>
+                <button class="btn btn-xs btn-outline text-red" onclick="window.deleteSystemUser('${u.id}')" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+};
+
+window.openCreateSystemUserModal = function() {
+    const form = document.getElementById('form-system-user');
+    if (form) form.reset();
+
+    const idInput = document.getElementById('sys-user-id');
+    if (idInput) idInput.value = '';
+
+    const title = document.getElementById('modal-system-user-title');
+    if (title) title.innerHTML = '<i class="fa-solid fa-users-gear text-cyan"></i> Crear Cuenta de Usuario del Sistema';
+
+    const saveBtn = document.getElementById('btn-save-system-user');
+    if (saveBtn) saveBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Guardar Usuario';
+
+    const passInput = document.getElementById('sys-user-password');
+    if (passInput) {
+        passInput.required = true;
+        passInput.placeholder = '••••••••';
+        passInput.value = '';
+    }
+    const hint = document.getElementById('sys-user-password-hint');
+    if (hint) hint.classList.add('hidden');
+
+    openModal('modal-system-user');
+};
+
+window.editSystemUser = async function(userId) {
+    const users = await SupabaseDataService.getUsers();
+    const user = users.find(u => String(u.id) === String(userId));
+    if (!user) {
+        Swal.fire({ icon: 'error', title: 'No encontrado', text: 'No se encontró el usuario seleccionado.' });
+        return;
+    }
+
+    const form = document.getElementById('form-system-user');
+    if (form) form.reset();
+
+    document.getElementById('sys-user-id').value = user.id;
+    document.getElementById('sys-user-fullname').value = user.fullname || '';
+    document.getElementById('sys-user-email').value = user.email || '';
+
+    const passInput = document.getElementById('sys-user-password');
+    if (passInput) {
+        passInput.required = false;
+        passInput.placeholder = '(Conservar contraseña actual)';
+        passInput.value = '';
+    }
+    const hint = document.getElementById('sys-user-password-hint');
+    if (hint) hint.classList.remove('hidden');
+
+    const roleSel = document.getElementById('sys-user-role');
+    if (roleSel) {
+        roleSel.value = user.role;
+        if (!roleSel.value && user.role) {
+            for (let i = 0; i < roleSel.options.length; i++) {
+                if (roleSel.options[i].value.toLowerCase().includes(user.role.toLowerCase())) {
+                    roleSel.selectedIndex = i;
+                    break;
+                }
+            }
+        }
+    }
+
+    const statusSel = document.getElementById('sys-user-status');
+    if (statusSel) statusSel.value = user.status || 'Activo';
+
+    const title = document.getElementById('modal-system-user-title');
+    if (title) title.innerHTML = '<i class="fa-solid fa-user-pen text-cyan"></i> Editar Usuario del Sistema';
+
+    const saveBtn = document.getElementById('btn-save-system-user');
+    if (saveBtn) saveBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Guardar Cambios';
+
+    openModal('modal-system-user');
+};
+
+window.deleteSystemUser = async function(userId) {
+    const currentUser = getCurrentUser();
+    if (currentUser && String(currentUser.id) === String(userId)) {
+        Swal.fire({ icon: 'warning', title: 'Acción inválida', text: 'No puede eliminar su propia cuenta de sesión actual.' });
+        return;
+    }
+
+    const users = await SupabaseDataService.getUsers();
+    const target = users.find(u => String(u.id) === String(userId));
+    if (!target) return;
+
+    Swal.fire({
+        title: `¿Eliminar a ${target.fullname}?`,
+        text: 'Se revocará el acceso al sistema para este usuario administrativo.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            await SupabaseDataService.deleteUser(userId);
+            if (window.logUserAction) {
+                await window.logUserAction('Eliminó Usuario del Sistema', 'Ajustes', `Usuario: ${target.fullname} (${target.role})`);
+            }
+            await window.renderSystemUsersTable();
+            Swal.fire({ icon: 'success', title: 'Usuario eliminado', timer: 1800, showConfirmButton: false });
+        }
+    });
+};
+
 function updateRoleScopeHint(role) {
     const hintEl = document.getElementById('u-role-scope-hint');
     if (!hintEl) return;
 
     const r = (role || '').toLowerCase();
-    const isAdmin = r.includes('admin') || r.includes('super') || r.includes('director');
     const isDoctor = r.includes('medico') || r.includes('odont') || r.includes('doctor') || r.includes('dentista') || r.includes('médico') || r.includes('cirujano') || r.includes('especialista');
-    const isAssistant = r.includes('asistente') || r.includes('auxiliar');
+    const isAssistant = r.includes('asistente') || r.includes('enfermer') || r.includes('auxiliar');
 
-    if (isAdmin) {
-        hintEl.innerHTML = `
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px; font-weight:700; color:#0284c7;">
-                <i class="fa-solid fa-crown"></i> Super Administrador / Dirección (Acceso Total)
-            </div>
-            <p style="margin:0 0 6px 0; font-size:0.82rem;"><strong>Alcance:</strong> Control total sobre los 16 módulos del sistema.</p>
-            <ul style="margin:0; padding-left:18px; font-size:0.79rem; color:var(--text-color); line-height:1.4;">
-                <li>Creación, edición y borrado de usuarios y asignación de credenciales.</li>
-                <li>Nómina fija y a destajo, arqueo y balances contables de la clínica.</li>
-                <li>Configuración de consultorios, baremos de precios y papelería.</li>
-            </ul>
-        `;
-    } else if (isDoctor) {
+    if (isDoctor) {
         hintEl.innerHTML = `
             <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px; font-weight:700; color:#0d9488;">
                 <i class="fa-solid fa-user-doctor"></i> Médico / Odontólogo Especialista (Área Asistencial)
             </div>
-            <p style="margin:0 0 6px 0; font-size:0.82rem;"><strong>Alcance:</strong> Diagnóstico clínico, historias médicas y evolución de tratamientos.</p>
+            <p style="margin:0 0 6px 0; font-size:0.82rem;"><strong>Alcance:</strong> Diagnóstico clínico, historias médicas, atención en sillón y evolución.</p>
             <ul style="margin:0; padding-left:18px; font-size:0.79rem; color:var(--text-color); line-height:1.4;">
                 <li>Ficha de paciente, Odontograma interactivo y expediente clínico (EHR).</li>
-                <li>Emisión de récipes con código QR y firma digital.</li>
-                <li>Agenda médica propia y comisiones según baremo asignado.</li>
-                <li><span style="color:#e11d48; font-weight:600;">Restricción:</span> Sin acceso a crear usuarios ni alterar precios o balances generales.</li>
+                <li>Emisión de récipes oficiales con código QR y firma digital.</li>
+                <li>Agenda médica propia y cálculo de comisiones según baremo asignado.</li>
             </ul>
         `;
     } else if (isAssistant) {
         hintEl.innerHTML = `
             <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px; font-weight:700; color:#16a34a;">
-                <i class="fa-solid fa-hand-holding-medical"></i> Asistente Dental / Auxiliar Clínico
+                <i class="fa-solid fa-hand-holding-medical"></i> Asistente Clínico / Enfermero(a)
             </div>
-            <p style="margin:0 0 6px 0; font-size:0.82rem;"><strong>Alcance:</strong> Apoyo asistencial en sillón, inventario y recepción.</p>
+            <p style="margin:0 0 6px 0; font-size:0.82rem;"><strong>Alcance:</strong> Apoyo asistencial en procedimientos clínicos e inventario.</p>
             <ul style="margin:0; padding-left:18px; font-size:0.79rem; color:var(--text-color); line-height:1.4;">
-                <li>Admisión y búsqueda de pacientes registrados.</li>
-                <li>Registro de insumos consumidos en procedimientos.</li>
-                <li>Consulta de agenda y confirmación de citas.</li>
-                <li><span style="color:#e11d48; font-weight:600;">Restricción:</span> No puede alterar diagnósticos ni emitir recetas médicas.</li>
+                <li>Apoyo en toma de signos, fichaje y preparación de materiales en sillón.</li>
+                <li>Descargo de insumos consumidos por procedimiento en el Kardex.</li>
             </ul>
         `;
     } else {
         hintEl.innerHTML = `
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px; font-weight:700; color:#d97706;">
-                <i class="fa-solid fa-cash-register"></i> Recepción / Administración / Caja
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px; font-weight:700; color:#0284c7;">
+                <i class="fa-solid fa-user-doctor"></i> Personal de Salud y Asistencial
             </div>
-            <p style="margin:0 0 6px 0; font-size:0.82rem;"><strong>Alcance:</strong> Admisión, agendamiento de citas, caja y facturación.</p>
-            <ul style="margin:0; padding-left:18px; font-size:0.79rem; color:var(--text-color); line-height:1.4;">
-                <li>Admisión de pacientes y envío de citas/recordatorios por WhatsApp.</li>
-                <li>Facturación y cobro en caja ($ / Bs / Zelle / Cashea cuotas a crédito).</li>
-                <li>Generación de recibos y facturas en papelería.</li>
-                <li><span style="color:#e11d48; font-weight:600;">Restricción:</span> Sin acceso a modificar historias clínicas ni nóminas.</li>
-            </ul>
+            <p style="margin:0; font-size:0.82rem;">Atención asistencial a pacientes con historial clínico y agenda médica.</p>
         `;
     }
 }
@@ -10354,6 +10503,90 @@ function initGlobalEvents() {
             }
         };
     }
+
+    // Guardar Usuario del Sistema (Ajustes -> Usuarios y Roles del Sistema)
+    const saveSysUserBtn = document.getElementById('btn-save-system-user');
+    const formSysUser = document.getElementById('form-system-user');
+    const handleSaveSystemUser = async (e) => {
+        if (e) e.preventDefault();
+        const existingId = document.getElementById('sys-user-id')?.value;
+        const fullname = document.getElementById('sys-user-fullname').value.trim();
+        const email = document.getElementById('sys-user-email').value.trim();
+        const password = document.getElementById('sys-user-password').value.trim();
+        const role = document.getElementById('sys-user-role').value;
+        const status = document.getElementById('sys-user-status').value || 'Activo';
+
+        if (!fullname || !email) {
+            Swal.fire({ icon: 'warning', title: 'Campos requeridos', text: 'Por favor ingrese el Nombre Completo y el Correo Electrónico.' });
+            return;
+        }
+
+        if (!existingId && !password) {
+            Swal.fire({ icon: 'warning', title: 'Contraseña requerida', text: 'Por favor asigne una contraseña de acceso inicial.' });
+            return;
+        }
+
+        if (password && password.length < 4) {
+            Swal.fire({ icon: 'warning', title: 'Contraseña muy corta', text: 'La contraseña debe tener al menos 4 caracteres.' });
+            return;
+        }
+
+        let userObj = null;
+        if (existingId) {
+            const users = await SupabaseDataService.getUsers();
+            const existing = users.find(u => String(u.id) === String(existingId));
+            userObj = {
+                ...(existing || {}),
+                id: existingId,
+                fullname,
+                email,
+                password: password || (existing ? existing.password : '123456'),
+                role,
+                status,
+                createdAt: existing ? existing.createdAt : new Date().toISOString().split('T')[0]
+            };
+        } else {
+            userObj = {
+                id: 'sys-' + Date.now(),
+                fullname,
+                email,
+                password,
+                role,
+                status,
+                createdAt: new Date().toISOString().split('T')[0]
+            };
+        }
+
+        try {
+            await SupabaseDataService.saveUser(userObj);
+            if (window.logUserAction) {
+                await window.logUserAction(
+                    existingId ? 'Actualizó Usuario del Sistema' : 'Creó Usuario del Sistema',
+                    'Ajustes',
+                    `Cuenta: ${fullname} (${role}) - Estado: ${status}`
+                );
+            }
+            closeModal('modal-system-user');
+            await window.renderSystemUsersTable();
+            Swal.fire({
+                icon: 'success',
+                title: existingId ? '¡Cuenta Actualizada!' : '¡Cuenta Creada!',
+                text: `El usuario administrativo de ${fullname} fue guardado correctamente.`,
+                timer: 2000,
+                showConfirmButton: false
+            });
+        } catch (err) {
+            console.error('Error guardando usuario del sistema:', err);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error al guardar',
+                text: 'Ocurrió un inconveniente al guardar el usuario administrativo: ' + (err.message || err)
+            });
+        }
+    };
+
+    if (saveSysUserBtn) saveSysUserBtn.onclick = handleSaveSystemUser;
+    if (formSysUser) formSysUser.onsubmit = handleSaveSystemUser;
 
     window.openBudgetForNewPatient = async function(patientId) {
         setActivePatientId(patientId);
@@ -12245,6 +12478,10 @@ async function renderSettingsView() {
             btn.classList.add('active');
             const targetPane = document.getElementById(`pane-${paneName}`);
             if (targetPane) targetPane.classList.add('active');
+
+            if (paneName === 'system-users' && typeof window.renderSystemUsersTable === 'function') {
+                window.renderSystemUsersTable();
+            }
         };
     });
 
@@ -12437,6 +12674,7 @@ async function renderSettingsView() {
     // Render Trash & Audit panes upon opening Settings
     if (window.renderTrashPane) window.renderTrashPane();
     if (window.renderAuditLogsPane) window.renderAuditLogsPane();
+    if (window.renderSystemUsersTable) window.renderSystemUsersTable();
 
     const auditSearch = document.getElementById('audit-search-input');
     const auditModuleFilter = document.getElementById('audit-module-filter');
