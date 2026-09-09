@@ -27,6 +27,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         loadClinicBranding();
         fetchLiveExchangeRate();
+        if (typeof window.populateTagSelects === 'function') {
+            window.populateTagSelects();
+        }
     }, 20);
 
     // 2. Initialize Theme (Light Mode Default)
@@ -1514,7 +1517,15 @@ async function updateActivePatientUI(filterText = '') {
         const patient = patients.find(p => p.id === activeId);
         if (patient) {
             activePill.classList.remove('hidden');
-            activeName.innerText = patient.fullname;
+            let tagBadge = '';
+            const pTagName = patient.tagName || (patient.metadata && patient.metadata.tagName);
+            const pTagColor = patient.tagColor || (patient.metadata && patient.metadata.tagColor) || '#0d9488';
+            const pTagRule = patient.tagRule || (patient.metadata && patient.metadata.tagRule);
+            if (pTagName) {
+                const rText = pTagRule?.type === 'discount' ? `-${pTagRule.value}%` : (pTagRule?.type === 'surcharge' ? `+${pTagRule.value}%` : (pTagRule?.type === 'exonerated' ? '100% Exon.' : ''));
+                tagBadge = ` <span style="font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; background: ${pTagColor}25; color: ${pTagColor}; font-weight: 700; margin-left: 6px;">🏷️ ${pTagName} ${rText ? `(${rText})` : ''}</span>`;
+            }
+            activeName.innerHTML = `${patient.fullname}${tagBadge}`;
             return;
         }
     }
@@ -1537,7 +1548,8 @@ async function renderPatientSearchResults(query) {
     const filtered = patients.filter(p => {
         const name = (p.fullname || '').toLowerCase();
         const ci = (p.id || '').toLowerCase();
-        return name.includes(trimmedQuery) || ci.includes(trimmedQuery);
+        const tag = (p.tagName || (p.metadata && p.metadata.tagName) || '').toLowerCase();
+        return name.includes(trimmedQuery) || ci.includes(trimmedQuery) || tag.includes(trimmedQuery);
     });
 
     if (filtered.length === 0) {
@@ -1550,7 +1562,10 @@ async function renderPatientSearchResults(query) {
     filtered.forEach(p => {
         const item = document.createElement('div');
         item.className = 'search-result-item';
-        item.innerHTML = `<strong>${p.fullname}</strong> <span style="font-size: 0.8rem; color: var(--text-muted); margin-left: 5px;">(${p.id})</span>`;
+        const pTagName = p.tagName || (p.metadata && p.metadata.tagName);
+        const pTagColor = p.tagColor || (p.metadata && p.metadata.tagColor) || '#0d9488';
+        const tagHtml = pTagName ? `<span style="font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; background: ${pTagColor}20; color: ${pTagColor}; border: 1px solid ${pTagColor}40; font-weight: 700; margin-left: 6px;">🏷️ ${pTagName}</span>` : '';
+        item.innerHTML = `<strong>${p.fullname}</strong> <span style="font-size: 0.8rem; color: var(--text-muted); margin-left: 5px;">(${p.id})</span>${tagHtml}`;
         item.onclick = async () => {
             document.getElementById('od-patient-search-input').value = p.fullname;
             resultsContainer.style.display = 'none';
@@ -1773,6 +1788,20 @@ window.selectPatientAndLoadApprovedBudget = async function(patientId) {
         if (window.odontogram && Object.keys(draftOdData).length > 0) {
             window.odontogram.setData(draftOdData);
         }
+
+        // Auto-aplicar regla de convenio / etiqueta del paciente si no hay borrador con descuento propio
+        const discInput = document.getElementById('budget-discount-input');
+        if (discInput && p) {
+            const rule = p.tagRule || (p.metadata && p.metadata.tagRule);
+            if (rule && rule.type === 'discount') {
+                discInput.value = parseFloat(rule.value) || 0;
+            } else if (rule && rule.type === 'exonerated') {
+                discInput.value = 100;
+            } else if (!p?.metadata?.draftBudget) {
+                discInput.value = 0;
+            }
+        }
+
         renderBudgetTable();
     }
 };
@@ -2472,12 +2501,40 @@ window.onMedicalBudgetPatientChange = async function(patientId) {
         const patients = await SupabaseDataService.getPatients();
         const p = patients.find(pat => String(pat.id) === String(patientId));
         if (p) {
+            const tagName = p.tagName || (p.metadata && p.metadata.tagName);
+            const tagColor = p.tagColor || (p.metadata && p.metadata.tagColor) || '#2563eb';
+            const tagRule = p.tagRule || (p.metadata && p.metadata.tagRule);
+
+            let tagBadgeHtml = '';
+            if (tagName) {
+                let ruleText = '';
+                if (tagRule) {
+                    if (tagRule.type === 'discount') ruleText = ` (-${tagRule.value}%)`;
+                    else if (tagRule.type === 'surcharge') ruleText = ` (+${tagRule.value}%)`;
+                    else if (tagRule.type === 'exonerated') ruleText = ' (100% Exonerado)';
+                }
+                tagBadgeHtml = `<span class="badge-tag" style="background:${tagColor}18; color:${tagColor}; border:1px solid ${tagColor}50; font-weight:700; font-size:0.75rem; margin-left:8px; display:inline-flex; align-items:center; gap:4px;"><i class="fa-solid fa-tags"></i> ${tagName}${ruleText}</span>`;
+            }
+
             infoBox.innerHTML = `
-                <div style="line-height: 1.35;">
-                    <strong style="color: #0f172a; display: block; font-size: 0.9rem;">${p.fullname}</strong>
-                    <span style="color: #64748b;">Cédula: <strong>${p.cedula || 'N/A'}</strong> • Edad: <strong>${p.age ? p.age + ' años' : 'N/A'}</strong> • Teléfono: <strong>${p.phone || 'N/A'}</strong></span>
+                <div style="line-height: 1.35; flex: 1;">
+                    <div style="display: flex; align-items: center; flex-wrap: wrap; margin-bottom: 2px;">
+                        <strong style="color: #0f172a; font-size: 0.92rem;">${p.fullname}</strong>
+                        ${tagBadgeHtml}
+                    </div>
+                    <span style="color: #64748b; font-size: 0.82rem;">Cédula: <strong>${p.cedula || p.id || 'N/A'}</strong> • Edad: <strong>${p.age ? p.age + ' años' : 'N/A'}</strong> • Teléfono: <strong>${p.phone || 'N/A'}</strong></span>
                 </div>
             `;
+
+            // Auto-fill discount input for new items if discount rule exists
+            const discountInput = document.getElementById('med-item-discount');
+            if (discountInput && tagRule) {
+                if (tagRule.type === 'discount') {
+                    discountInput.value = tagRule.value;
+                } else if (tagRule.type === 'exonerated') {
+                    discountInput.value = '100';
+                }
+            }
         }
     } catch(e) {
         console.error(e);
@@ -3821,6 +3878,294 @@ window.removeBudgetItem = async function(index) {
     renderBudgetTable();
 };
 
+// ==========================================================================
+// MOTOR DE ETIQUETAS & CONVENIOS COMERCIALES DE PACIENTES (DESCUENTOS / AUMENTOS)
+// ==========================================================================
+
+window.openManageTagsModal = async function() {
+    openModal('modal-manage-tags');
+    window.resetTagForm();
+    await window.renderTagsListInModal();
+};
+
+window.onTagRuleTypeChange = function() {
+    const type = document.getElementById('tag-form-rule-type')?.value;
+    const valContainer = document.getElementById('tag-form-val-container');
+    const valInput = document.getElementById('tag-form-rule-value');
+    if (!valContainer || !valInput) return;
+
+    if (type === 'exonerated') {
+        valContainer.style.display = 'none';
+        valInput.value = '100';
+    } else if (type === 'neutral') {
+        valContainer.style.display = 'none';
+        valInput.value = '0';
+    } else {
+        valContainer.style.display = 'block';
+        if (parseFloat(valInput.value) <= 0 || parseFloat(valInput.value) > 100) {
+            valInput.value = '15';
+        }
+    }
+};
+
+window.resetTagForm = function() {
+    const idInput = document.getElementById('tag-form-id');
+    if (idInput) idInput.value = '';
+    const nameInput = document.getElementById('tag-form-name');
+    if (nameInput) nameInput.value = '';
+    const colorInput = document.getElementById('tag-form-color');
+    if (colorInput) colorInput.value = '#2563eb';
+    const ruleSelect = document.getElementById('tag-form-rule-type');
+    if (ruleSelect) ruleSelect.value = 'discount';
+    const valInput = document.getElementById('tag-form-rule-value');
+    if (valInput) valInput.value = '15';
+    const descInput = document.getElementById('tag-form-desc');
+    if (descInput) descInput.value = '';
+
+    const title = document.getElementById('tag-form-title');
+    if (title) title.innerHTML = `<i class="fa-solid fa-plus-circle"></i> Nueva Etiqueta / Convenio`;
+    const btnCancel = document.getElementById('btn-cancel-tag-edit');
+    if (btnCancel) btnCancel.style.display = 'none';
+
+    window.onTagRuleTypeChange();
+};
+
+window.saveTagFromModal = async function() {
+    const id = document.getElementById('tag-form-id')?.value.trim() || '';
+    const name = document.getElementById('tag-form-name')?.value.trim();
+    if (!name) {
+        Swal.fire({ icon: 'warning', title: 'Nombre requerido', text: 'Por favor ingrese el nombre del convenio o etiqueta.' });
+        return;
+    }
+
+    const color = document.getElementById('tag-form-color')?.value || '#2563eb';
+    const ruleType = document.getElementById('tag-form-rule-type')?.value || 'discount';
+    let ruleValue = parseFloat(document.getElementById('tag-form-rule-value')?.value) || 0;
+
+    if (ruleType === 'exonerated') ruleValue = 100;
+    else if (ruleType === 'neutral') ruleValue = 0;
+    else {
+        if (isNaN(ruleValue) || ruleValue < 0 || ruleValue > 100) {
+            Swal.fire({ icon: 'warning', title: 'Porcentaje inválido', text: 'El valor debe estar entre 0% y 100%.' });
+            return;
+        }
+    }
+
+    const description = document.getElementById('tag-form-desc')?.value.trim() || '';
+
+    const tagObj = {
+        id: id || ('TAG-' + Date.now().toString()),
+        name: name,
+        color: color,
+        ruleType: ruleType,
+        ruleValue: ruleValue,
+        description: description,
+        updatedAt: new Date().toISOString()
+    };
+
+    try {
+        await SupabaseDataService.savePatientTag(tagObj);
+        Swal.fire({
+            icon: 'success',
+            title: id ? 'Convenio Actualizado' : 'Convenio Creado',
+            text: `La etiqueta "${name}" fue guardada exitosamente en Supabase Cloud.`,
+            timer: 1500,
+            showConfirmButton: false
+        });
+
+        window.resetTagForm();
+        await window.renderTagsListInModal();
+        await window.populateTagSelects();
+        if (typeof renderPatientsTable === 'function') await renderPatientsTable();
+    } catch(err) {
+        console.error('Error saving tag:', err);
+        Swal.fire({ icon: 'error', title: 'Error al Guardar', text: err.message || err });
+    }
+};
+
+window.editTagModal = async function(tagId) {
+    const tags = await SupabaseDataService.getPatientTags();
+    const tag = tags.find(t => t.id === tagId);
+    if (!tag) return;
+
+    document.getElementById('tag-form-id').value = tag.id;
+    document.getElementById('tag-form-name').value = tag.name;
+    document.getElementById('tag-form-color').value = tag.color || '#2563eb';
+    document.getElementById('tag-form-rule-type').value = tag.ruleType || 'discount';
+    document.getElementById('tag-form-rule-value').value = tag.ruleValue !== undefined ? tag.ruleValue : 15;
+    document.getElementById('tag-form-desc').value = tag.description || '';
+
+    const title = document.getElementById('tag-form-title');
+    if (title) title.innerHTML = `<i class="fa-solid fa-pen-to-square text-cyan"></i> Editar Etiqueta: ${tag.name}`;
+    const btnCancel = document.getElementById('btn-cancel-tag-edit');
+    if (btnCancel) btnCancel.style.display = 'inline-block';
+
+    window.onTagRuleTypeChange();
+};
+
+window.deleteTag = async function(tagId) {
+    const tags = await SupabaseDataService.getPatientTags();
+    const tag = tags.find(t => t.id === tagId);
+    if (!tag) return;
+
+    const patients = await SupabaseDataService.getPatients();
+    const count = patients.filter(p => p.tagId === tagId || (p.metadata && p.metadata.tagId === tagId)).length;
+
+    const result = await Swal.fire({
+        title: `¿Eliminar "${tag.name}"?`,
+        html: `
+            <p>¿Está seguro de que desea eliminar este convenio?</p>
+            ${count > 0 ? `<div style="background: rgba(239, 68, 68, 0.08); border-left: 3px solid #ef4444; padding: 8px; border-radius: 4px; font-size: 0.85rem; color: #dc2626; margin-top: 8px;">
+                <i class="fa-solid fa-triangle-exclamation"></i> Hay <strong>${count} pacientes</strong> asociados a este convenio.
+            </div>` : ''}
+        `,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar'
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+        await SupabaseDataService.deletePatientTag(tagId);
+        Swal.fire({
+            icon: 'success',
+            title: 'Etiqueta Eliminada',
+            text: `La etiqueta "${tag.name}" ha sido eliminada.`,
+            timer: 1500,
+            showConfirmButton: false
+        });
+
+        window.resetTagForm();
+        await window.renderTagsListInModal();
+        await window.populateTagSelects();
+        if (typeof renderPatientsTable === 'function') await renderPatientsTable();
+    } catch(err) {
+        console.error('Error deleting tag:', err);
+        Swal.fire({ icon: 'error', title: 'Error', text: err.message || err });
+    }
+};
+
+window.renderTagsListInModal = async function() {
+    const tbody = document.getElementById('tags-table-body');
+    if (!tbody) return;
+
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding: 20px;">Cargando convenios...</td></tr>';
+    const tags = await SupabaseDataService.getPatientTags();
+    const patients = await SupabaseDataService.getPatients();
+
+    const countEl = document.getElementById('tags-count-total');
+    if (countEl) countEl.innerText = tags.length;
+
+    if (tags.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding: 20px;">No hay convenios o etiquetas creadas todavía.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = tags.map(tag => {
+        const pCount = patients.filter(p => p.tagId === tag.id || (p.metadata && p.metadata.tagId === tag.id)).length;
+        let ruleBadge = '';
+        if (tag.ruleType === 'discount') {
+            ruleBadge = `<span class="badge-tag green" style="font-weight:700;"><i class="fa-solid fa-arrow-down"></i> -${tag.ruleValue}% Descuento</span>`;
+        } else if (tag.ruleType === 'surcharge') {
+            ruleBadge = `<span class="badge-tag red" style="font-weight:700;"><i class="fa-solid fa-arrow-up"></i> +${tag.ruleValue}% Recargo</span>`;
+        } else if (tag.ruleType === 'exonerated') {
+            ruleBadge = `<span class="badge-tag purple" style="font-weight:700;"><i class="fa-solid fa-certificate"></i> 100% Exonerado</span>`;
+        } else {
+            ruleBadge = `<span class="badge-tag gray" style="font-weight:600;"><i class="fa-solid fa-info-circle"></i> Tarifa Estándar</span>`;
+        }
+
+        const tagColor = tag.color || '#2563eb';
+        const badgeVisual = `<span class="badge-tag" style="background:${tagColor}15; color:${tagColor}; border:1px solid ${tagColor}40; font-weight:700; font-size:0.85rem;"><i class="fa-solid fa-tag"></i> ${tag.name}</span>`;
+
+        return `
+            <tr>
+                <td>${badgeVisual}</td>
+                <td>${ruleBadge}</td>
+                <td><span style="font-size:0.85rem; color:#64748b;">${tag.description || '-'}</span></td>
+                <td class="text-center font-weight-bold"><span class="badge-tag blue" style="font-size:0.75rem;">${pCount}</span></td>
+                <td class="text-center">
+                    <div style="display: flex; gap: 4px; justify-content: center;">
+                        <button type="button" class="btn btn-xs btn-outline" onclick="window.editTagModal('${tag.id}')" title="Editar Convenio" style="padding: 3px 6px; border-radius: 4px; cursor: pointer;">
+                            <i class="fa-solid fa-pen-to-square"></i>
+                        </button>
+                        <button type="button" class="btn btn-xs btn-outline text-red" onclick="window.deleteTag('${tag.id}')" title="Eliminar Convenio" style="padding: 3px 6px; border-radius: 4px; border-color:#ef4444; color:#ef4444; cursor: pointer;">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+};
+
+window.populateTagSelects = async function() {
+    try {
+        const tags = await SupabaseDataService.getPatientTags();
+
+        // 1. Selector en modal-patient Step 1
+        const patientTagSelect = document.getElementById('p-tag');
+        if (patientTagSelect) {
+            const curVal = patientTagSelect.value;
+            patientTagSelect.innerHTML = '<option value="">Sin etiqueta (Tarifa Estándar / Particular)</option>' +
+                tags.map(t => {
+                    let ruleText = '';
+                    if (t.ruleType === 'discount') ruleText = ` (-${t.ruleValue}%)`;
+                    else if (t.ruleType === 'surcharge') ruleText = ` (+${t.ruleValue}%)`;
+                    else if (t.ruleType === 'exonerated') ruleText = ' (100% Exonerado)';
+                    return `<option value="${t.id}" data-type="${t.ruleType}" data-val="${t.ruleValue}" data-color="${t.color}">${t.name}${ruleText}</option>`;
+                }).join('');
+            if (curVal) patientTagSelect.value = curVal;
+        }
+
+        // 2. Selector en filtro de la tabla de pacientes
+        const filterTagSelect = document.getElementById('patient-tag-filter');
+        if (filterTagSelect) {
+            const curFilter = filterTagSelect.value || 'all';
+            filterTagSelect.innerHTML = '<option value="all">🏷️ Todas las Etiquetas / Convenios</option><option value="none">Sin Etiqueta (Particulares)</option>' +
+                tags.map(t => `<option value="${t.id}">🏷️ ${t.name}</option>`).join('');
+            filterTagSelect.value = curFilter;
+        }
+    } catch(e) {
+        console.warn('Error populating tag selects:', e);
+    }
+};
+
+window.onPatientTagSelectChange = async function() {
+    const select = document.getElementById('p-tag');
+    const preview = document.getElementById('p-tag-benefit-preview');
+    const previewText = document.getElementById('p-tag-benefit-text');
+    if (!select || !preview || !previewText) return;
+
+    const opt = select.options[select.selectedIndex];
+    if (!opt || !opt.value) {
+        preview.style.display = 'none';
+        return;
+    }
+
+    const type = opt.getAttribute('data-type');
+    const val = opt.getAttribute('data-val');
+    const color = opt.getAttribute('data-color') || '#7c3aed';
+
+    let benefitMsg = '';
+    if (type === 'discount') {
+        benefitMsg = `Beneficio Activo: Aplica ${val}% de descuento automático en consultas, odontograma y servicios.`;
+    } else if (type === 'surcharge') {
+        benefitMsg = `Regla Activa: Aplica recargo de +${val}% sobre las tarifas del baremo.`;
+    } else if (type === 'exonerated') {
+        benefitMsg = `Beneficio Especial: 100% Exonerado (Atención gratuita / Cortesía institucional).`;
+    } else {
+        benefitMsg = `Etiqueta Informativa: Tarifa estándar del consultorio.`;
+    }
+
+    previewText.innerText = benefitMsg;
+    preview.style.color = color;
+    preview.style.display = 'block';
+};
+
 // ==========================================
 // PACIENTES VIEW & HIGH-END BBDD TABLE WITH DELETE
 // ==========================================
@@ -3829,25 +4174,45 @@ async function renderPatientsTable(filter = 'all', searchQuery = '') {
     if (!tbody) return;
 
     tbody.innerHTML = '';
+
+    // Ensure tag filter dropdown and patient tag select are populated
+    const tagFilterEl = document.getElementById('patient-tag-filter');
+    if (tagFilterEl && tagFilterEl.options.length <= 1 && typeof window.populateTagSelects === 'function') {
+        await window.populateTagSelects();
+    }
+
     let patients = await SupabaseDataService.getPatients();
     const currentUser = getCurrentUser();
     const isAssistant = currentUser && currentUser.role.toLowerCase().includes('asistente');
 
+    // Filter by status tab if specified
     if (filter !== 'all') {
         patients = patients.filter(p => p.status === filter);
     }
 
+    // Filter by tag if selected in dropdown
+    const selectedTagFilter = tagFilterEl ? tagFilterEl.value : 'all';
+    if (selectedTagFilter && selectedTagFilter !== 'all') {
+        if (selectedTagFilter === 'none') {
+            patients = patients.filter(p => !p.tagId && (!p.metadata || !p.metadata.tagId));
+        } else {
+            patients = patients.filter(p => p.tagId === selectedTagFilter || (p.metadata && p.metadata.tagId === selectedTagFilter));
+        }
+    }
+
     if (searchQuery && searchQuery.trim() !== '') {
         const q = searchQuery.toLowerCase();
-        patients = patients.filter(p => 
-            p.fullname.toLowerCase().includes(q) || 
-            p.id.toLowerCase().includes(q) || 
-            p.phone.includes(q)
-        );
+        patients = patients.filter(p => {
+            const tagName = (p.tagName || (p.metadata && p.metadata.tagName) || '').toLowerCase();
+            return p.fullname.toLowerCase().includes(q) || 
+                   p.id.toLowerCase().includes(q) || 
+                   p.phone.includes(q) ||
+                   tagName.includes(q);
+        });
     }
 
     if (patients.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted" style="padding: 24px;">No se encontraron pacientes en la base de datos.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted" style="padding: 24px;">No se encontraron pacientes en este filtro.</td></tr>`;
         return;
     }
 
@@ -3855,6 +4220,22 @@ async function renderPatientsTable(filter = 'all', searchQuery = '') {
         const age = calculateAge(p.birthdate);
         const initials = p.fullname.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
         
+        // Etiqueta / Convenio badge
+        const tagId = p.tagId || (p.metadata && p.metadata.tagId);
+        const tagName = p.tagName || (p.metadata && p.metadata.tagName);
+        const tagColor = p.tagColor || (p.metadata && p.metadata.tagColor) || '#2563eb';
+        const tagRule = p.tagRule || (p.metadata && p.metadata.tagRule);
+        let tagBadgeHtml = '';
+        if (tagName) {
+            let ruleText = '';
+            if (tagRule) {
+                if (tagRule.type === 'discount') ruleText = ` (-${tagRule.value}%)`;
+                else if (tagRule.type === 'surcharge') ruleText = ` (+${tagRule.value}%)`;
+                else if (tagRule.type === 'exonerated') ruleText = ' (100% Exon.)';
+            }
+            tagBadgeHtml = `<span class="badge-tag" style="background:${tagColor}15; color:${tagColor}; border:1px solid ${tagColor}40; font-size:0.72rem; font-weight:700; margin-top:2px; display:inline-block;"><i class="fa-solid fa-tag"></i> ${tagName}${ruleText}</span>`;
+        }
+
         let alertsHtml = '';
         if (p.allergies && p.allergies.length > 0) {
             p.allergies.forEach(a => {
@@ -3882,6 +4263,7 @@ async function renderPatientsTable(filter = 'all', searchQuery = '') {
                 <div class="patient-row-avatar">${initials}</div>
                 <div class="patient-info-cell">
                     <strong>${p.fullname}</strong>
+                    ${tagBadgeHtml}
                     <small>${p.occupation || 'Sin especificación'}</small>
                 </div>
             </td>
@@ -8637,6 +9019,17 @@ function initGlobalEvents() {
         let patientToSave = {};
 
         try {
+            const selectedTagId = getVal('p-tag') || '';
+            let tagObj = null;
+            if (selectedTagId) {
+                const allTags = await SupabaseDataService.getPatientTags();
+                tagObj = allTags.find(t => t.id === selectedTagId) || null;
+            }
+            const tagId = tagObj ? tagObj.id : '';
+            const tagName = tagObj ? tagObj.name : '';
+            const tagColor = tagObj ? tagObj.color : '';
+            const tagRule = tagObj ? { type: tagObj.ruleType, value: tagObj.ruleValue, label: tagObj.name } : null;
+
             const patients = await SupabaseDataService.getPatients();
             const existing = patients.find(p => p.id === id || (window.editingPatientId && p.id === window.editingPatientId));
 
@@ -8655,9 +9048,17 @@ function initGlobalEvents() {
                     systemic,
                     medication,
                     emergencyContact,
+                    tagId,
+                    tagName,
+                    tagColor,
+                    tagRule,
                     odontogramData: (existing && existing.odontogramData) ? existing.odontogramData : {},
                     metadata: {
                         ...(existing.metadata || {}),
+                        tagId,
+                        tagName,
+                        tagColor,
+                        tagRule,
                         type,
                         age,
                         gender,
@@ -8728,6 +9129,10 @@ function initGlobalEvents() {
                     systemic,
                     medication,
                     emergencyContact,
+                    tagId,
+                    tagName,
+                    tagColor,
+                    tagRule,
                     status: 'Activo',
                     createdAt: new Date().toISOString().split('T')[0],
                     odontogramData: {},
@@ -8735,6 +9140,10 @@ function initGlobalEvents() {
                     photos: [],
                     payments: [],
                     metadata: {
+                        tagId,
+                        tagName,
+                        tagColor,
+                        tagRule,
                         type,
                         age,
                         gender,
@@ -11550,6 +11959,15 @@ function initPatientStepperWizard() {
 
         const pIdInput = document.getElementById('p-id');
         if (pIdInput) pIdInput.readOnly = false;
+
+        // Reset and populate patient tag selector
+        if (typeof window.populateTagSelects === 'function') {
+            window.populateTagSelects();
+        }
+        const tagSelect = document.getElementById('p-tag');
+        if (tagSelect) tagSelect.value = '';
+        const preview = document.getElementById('p-tag-benefit-preview');
+        if (preview) preview.style.display = 'none';
         
         // Show all Step indicators 1, 2, 3, 4 and lines
         document.getElementById('step-ind-2').classList.remove('hidden');
@@ -11704,6 +12122,22 @@ function loadPatientDataIntoForm(p) {
     setVal('p-rep-id', p.metadata?.repId || '');
     setVal('p-rep-phone', p.metadata?.repPhone || '');
     setVal('p-rep-relation', p.metadata?.repRelation || '');
+
+    // Set Tag / Convenio in Step 1
+    const tagVal = p.tagId || (p.metadata && p.metadata.tagId) || '';
+    if (typeof window.populateTagSelects === 'function') {
+        window.populateTagSelects().then(() => {
+            setVal('p-tag', tagVal);
+            if (typeof window.onPatientTagSelectChange === 'function') {
+                window.onPatientTagSelectChange();
+            }
+        });
+    } else {
+        setVal('p-tag', tagVal);
+        if (typeof window.onPatientTagSelectChange === 'function') {
+            window.onPatientTagSelectChange();
+        }
+    }
 
     // Step 2: Anamnesis
     const currentAllergies = Array.isArray(p.allergies) ? p.allergies : [];

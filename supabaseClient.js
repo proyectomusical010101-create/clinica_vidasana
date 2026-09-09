@@ -361,6 +361,10 @@ class SupabaseDataService {
                             medication: p.medication || '',
                             emergencyContact: p.emergency_contact || '',
                             status: p.status || 'Activo',
+                            tagId: p.tag_id || p.tagId || (p.metadata && p.metadata.tagId) || (ext.metadata && ext.metadata.tagId) || '',
+                            tagName: p.tag_name || p.tagName || (p.metadata && p.metadata.tagName) || (ext.metadata && ext.metadata.tagName) || '',
+                            tagColor: p.tag_color || p.tagColor || (p.metadata && p.metadata.tagColor) || (ext.metadata && ext.metadata.tagColor) || '',
+                            tagRule: p.tag_rule || p.tagRule || (p.metadata && p.metadata.tagRule) || (ext.metadata && ext.metadata.tagRule) || null,
                             odontogramData: toothStates,
                             clinicalNotes: p.clinical_notes || ext.clinicalNotes || (p.metadata && p.metadata._fallback_clinical_notes) || [],
                             sessions: ext.sessions || ext.clinicalNotes || p.clinical_notes || [],
@@ -411,6 +415,14 @@ class SupabaseDataService {
         if (this.isCloudConnected()) {
             try {
                 // Bundle complete extended attributes inside odontogram_data JSONB to ensure 100% cloud persistence
+                const meta = {
+                    ...(patientObj.metadata || {}),
+                    tagId: patientObj.tagId || (patientObj.metadata && patientObj.metadata.tagId) || '',
+                    tagName: patientObj.tagName || (patientObj.metadata && patientObj.metadata.tagName) || '',
+                    tagColor: patientObj.tagColor || (patientObj.metadata && patientObj.metadata.tagColor) || '',
+                    tagRule: patientObj.tagRule || (patientObj.metadata && patientObj.metadata.tagRule) || null
+                };
+
                 const packedOdontogramData = {
                     ...(patientObj.odontogramData || {}),
                     _app_extended: {
@@ -418,7 +430,7 @@ class SupabaseDataService {
                         sessions: patientObj.sessions || patientObj.clinicalNotes || [],
                         photos: patientObj.photos || [],
                         payments: patientObj.payments || [],
-                        metadata: patientObj.metadata || {}
+                        metadata: meta
                     }
                 };
 
@@ -1971,6 +1983,186 @@ class SupabaseDataService {
     }
 
     // ==========================================
+    // 17. PATIENT TAGS & AGREEMENTS (CONVENIOS)
+    // ==========================================
+    static _patientTagsCache = null;
+    static _patientTagsCacheTime = 0;
+
+    static getDefaultPatientTags() {
+        return [
+            {
+                id: 'TAG-DEFAULT-POLAR',
+                name: 'Convenio Empresas Polar',
+                color: '#2563eb',
+                ruleType: 'discount',
+                ruleValue: 15,
+                description: 'Descuento corporativo a trabajadores y familiares directos'
+            },
+            {
+                id: 'TAG-DEFAULT-CLINIC',
+                name: 'Personal Clínico / Familiar',
+                color: '#10b981',
+                ruleType: 'exonerated',
+                ruleValue: 100,
+                description: 'Exoneración total 100% por cortesía institucional'
+            },
+            {
+                id: 'TAG-DEFAULT-VIP',
+                name: 'Atención VIP / Preferencial',
+                color: '#8b5cf6',
+                ruleType: 'neutral',
+                ruleValue: 0,
+                description: 'Atención prioritaria y seguimiento personalizado'
+            },
+            {
+                id: 'TAG-DEFAULT-SENIOR',
+                name: 'Tercera Edad / Jubilado',
+                color: '#f59e0b',
+                ruleType: 'discount',
+                ruleValue: 10,
+                description: 'Beneficio social para adultos mayores'
+            },
+            {
+                id: 'TAG-DEFAULT-NIGHT',
+                name: 'Atención Nocturna / Especial',
+                color: '#ef4444',
+                ruleType: 'surcharge',
+                ruleValue: 20,
+                description: 'Recargo de guardia y atención extraordinaria'
+            }
+        ];
+    }
+
+    static async getPatientTags(forceRefresh = false) {
+        const local = JSON.parse(localStorage.getItem('vidasana_patient_tags'));
+        const now = Date.now();
+        if (!forceRefresh && this._patientTagsCache && (now - this._patientTagsCacheTime < 10000)) {
+            return this._patientTagsCache;
+        }
+
+        if (this.isCloudConnected()) {
+            try {
+                const { data, error } = await supabaseClient
+                    .from('patients')
+                    .select('id, odontogram_data')
+                    .eq('id', 'SYS-PATIENT-TAGS')
+                    .maybeSingle();
+
+                if (!error && data && data.odontogram_data && Array.isArray(data.odontogram_data.tags)) {
+                    this._patientTagsCache = data.odontogram_data.tags;
+                    this._patientTagsCacheTime = Date.now();
+                    localStorage.setItem('vidasana_patient_tags', JSON.stringify(this._patientTagsCache));
+                    return this._patientTagsCache;
+                }
+            } catch (err) {
+                console.warn('Supabase getPatientTags fetch warn:', err);
+            }
+        }
+
+        if (local && Array.isArray(local) && local.length > 0) {
+            this._patientTagsCache = local;
+            return local;
+        }
+
+        const defaultTags = this.getDefaultPatientTags();
+        this._patientTagsCache = defaultTags;
+        localStorage.setItem('vidasana_patient_tags', JSON.stringify(defaultTags));
+        
+        // Auto-seed to Supabase Cloud in background
+        if (this.isCloudConnected()) {
+            try {
+                await supabaseClient.from('patients').upsert({
+                    id: 'SYS-PATIENT-TAGS',
+                    fullname: 'Registro Cloud de Etiquetas y Convenios de Pacientes',
+                    birthdate: '2026-01-01',
+                    phone: '',
+                    status: 'Sistema',
+                    odontogram_data: {
+                        _is_system_config: true,
+                        tags: defaultTags,
+                        updatedAt: new Date().toISOString()
+                    }
+                });
+            } catch(e){}
+        }
+
+        return defaultTags;
+    }
+
+    static async savePatientTag(tagObj) {
+        let tags = await this.getPatientTags(true);
+        if (!tagObj.id) {
+            tagObj.id = 'TAG-' + Date.now().toString();
+        }
+        if (!tagObj.createdAt) {
+            tagObj.createdAt = new Date().toISOString();
+        }
+
+        const idx = tags.findIndex(t => t.id === tagObj.id);
+        if (idx >= 0) tags[idx] = tagObj;
+        else tags.push(tagObj);
+
+        localStorage.setItem('vidasana_patient_tags', JSON.stringify(tags));
+        this._patientTagsCache = tags;
+        this._patientTagsCacheTime = Date.now();
+
+        if (this.isCloudConnected()) {
+            try {
+                const payload = {
+                    id: 'SYS-PATIENT-TAGS',
+                    fullname: 'Registro Cloud de Etiquetas y Convenios de Pacientes',
+                    birthdate: '2026-01-01',
+                    phone: '',
+                    status: 'Sistema',
+                    odontogram_data: {
+                        _is_system_config: true,
+                        tags: tags,
+                        updatedAt: new Date().toISOString()
+                    }
+                };
+                await supabaseClient.from('patients').upsert(payload);
+                this.notifyDataChanged('patient_tags', tagObj.id);
+            } catch (err) {
+                console.error('Supabase savePatientTag error:', err);
+                throw err;
+            }
+        }
+        return tagObj;
+    }
+
+    static async deletePatientTag(tagId) {
+        let tags = await this.getPatientTags(true);
+        tags = tags.filter(t => t.id !== tagId);
+
+        localStorage.setItem('vidasana_patient_tags', JSON.stringify(tags));
+        this._patientTagsCache = tags;
+        this._patientTagsCacheTime = Date.now();
+
+        if (this.isCloudConnected()) {
+            try {
+                const payload = {
+                    id: 'SYS-PATIENT-TAGS',
+                    fullname: 'Registro Cloud de Etiquetas y Convenios de Pacientes',
+                    birthdate: '2026-01-01',
+                    phone: '',
+                    status: 'Sistema',
+                    odontogram_data: {
+                        _is_system_config: true,
+                        tags: tags,
+                        updatedAt: new Date().toISOString()
+                    }
+                };
+                await supabaseClient.from('patients').upsert(payload);
+                this.notifyDataChanged('patient_tags', tagId);
+            } catch (err) {
+                console.error('Supabase deletePatientTag error:', err);
+                throw err;
+            }
+        }
+        return true;
+    }
+
+    // ==========================================
     // 14. UNIVERSAL MULTI-DEVICE REALTIME ENGINE
     // ==========================================
     static _realtimeChannel = null;
@@ -2059,6 +2251,10 @@ class SupabaseDataService {
                     this._inventoryCacheTime = 0;
                 } else if (cat === 'users') {
                     this._usersCacheTime = 0;
+                } else if (cat === 'patient_tags' || cat === 'tags') {
+                    this._patientTagsCacheTime = 0;
+                    this._patientsCacheTime = 0;
+                    if (typeof window.populateTagSelects === 'function') window.populateTagSelects();
                 }
                 await this.refreshActiveViews(true);
             });

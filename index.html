@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=254">
+    <link rel="stylesheet" href="styles.css?v=255">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -477,6 +477,9 @@
                             <p class="subtitle">Gestión unificada de expediente, antecedentes médicos y alertas clínicas rápidas.</p>
                         </div>
                         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <button class="btn btn-outline" id="btn-manage-tags-modal" onclick="window.openManageTagsModal()" title="Gestionar Convenios y Etiquetas Comerciales" style="border-color: #8b5cf6; color: #7c3aed; font-weight: 600;">
+                                <i class="fa-solid fa-tags text-purple"></i> Convenios / Etiquetas
+                            </button>
                             <button class="btn btn-outline" id="btn-export-patients-excel" title="Exportar toda la Base de Datos a Excel" style="border-color: #10b981; color: #059669; font-weight: 600;">
                                 <i class="fa-solid fa-file-excel text-green"></i> Exportar Excel
                             </button>
@@ -494,15 +497,21 @@
                     </div>
 
                     <!-- Filters bar -->
-                    <div class="card filter-card">
+                    <div class="card filter-card" style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
                         <div class="filter-group">
                             <button class="filter-btn active" data-filter="all">Todos</button>
                             <button class="filter-btn" data-filter="Activo">Activos</button>
                             <button class="filter-btn" data-filter="En Tratamiento">En Tratamiento</button>
                             <button class="filter-btn" data-filter="Presupuesto Pendiente">Presupuesto Pendiente</button>
                         </div>
-                        <div class="search-box">
-                            <input type="text" id="patient-table-search" placeholder="Buscar paciente o cédula...">
+                        <div style="min-width: 210px;">
+                            <select id="patient-tag-filter" class="form-control" onchange="renderPatientsTable()" style="height: 38px; border-radius: 8px; font-size: 0.85rem; border: 1px solid var(--border-color); background: var(--bg-card); cursor: pointer;">
+                                <option value="all">🏷️ Todas las Etiquetas / Convenios</option>
+                                <option value="none">Sin Etiqueta (Particulares)</option>
+                            </select>
+                        </div>
+                        <div class="search-box" style="flex: 1; min-width: 220px;">
+                            <input type="text" id="patient-table-search" placeholder="Buscar por paciente, cédula o convenio...">
                         </div>
                     </div>
 
@@ -3522,6 +3531,25 @@
                                 <label>Dirección Habitación *</label>
                                 <input type="text" id="p-address" required placeholder="Av. Principal, Edificio X, Apto Y">
                             </div>
+
+                            <!-- Etiqueta / Convenio del Paciente -->
+                            <div class="form-group" style="grid-column: 1 / -1; background: rgba(124, 58, 237, 0.05); border: 1.5px dashed rgba(124, 58, 237, 0.35); padding: 14px; border-radius: 10px; margin-top: 4px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                    <label style="font-weight: 700; color: #6d28d9; margin: 0; font-size: 0.9rem; display: flex; align-items: center; gap: 8px;">
+                                        <i class="fa-solid fa-tags text-purple"></i> Etiqueta / Convenio del Paciente
+                                    </label>
+                                    <button type="button" class="btn btn-xs btn-outline" onclick="window.openManageTagsModal()" style="font-size: 0.76rem; border-color: #7c3aed; color: #7c3aed; padding: 3px 10px; border-radius: 6px; font-weight: 600;" title="Crear, editar o configurar convenios y descuentos">
+                                        <i class="fa-solid fa-gear"></i> Gestionar Convenios
+                                    </button>
+                                </div>
+                                <select id="p-tag" class="form-control" onchange="window.onPatientTagSelectChange()" style="border: 1.5px solid #c4b5fd; border-radius: 8px; height: 40px; font-size: 0.88rem; width: 100%; background: #ffffff; cursor: pointer;">
+                                    <option value="">Sin etiqueta (Tarifa Estándar / Particular)</option>
+                                    <!-- Cargado dinámicamente -->
+                                </select>
+                                <div id="p-tag-benefit-preview" style="margin-top: 8px; font-size: 0.84rem; color: #6d28d9; font-weight: 600; display: none;">
+                                    <i class="fa-solid fa-circle-check"></i> <span id="p-tag-benefit-text"></span>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Representante (Condicional para Infantil) -->
@@ -5209,18 +5237,124 @@
             <div class="modal-footer" style="padding: 14px 24px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end;">
                 <button type="button" class="btn btn-outline" onclick="closeModal('modal-select-budget-type')">Cancelar</button>
             </div>
+    </div>
+
+    <!-- MODAL: GESTIÓN DE ETIQUETAS Y CONVENIOS -->
+    <div class="modal-overlay hidden" id="modal-manage-tags">
+        <div class="modal-dialog" style="max-width: 860px; width: 95vw; max-height: 90vh; display: flex; flex-direction: column;">
+            <div class="modal-header" style="border-bottom: 1px solid var(--border-color); padding: 18px 24px; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h3 style="margin: 0; font-size: 1.35rem; color: #0f172a; font-family: 'Outfit', sans-serif; display: flex; align-items: center; gap: 10px;">
+                        <i class="fa-solid fa-tags text-purple"></i> Gestión de Etiquetas & Convenios
+                    </h3>
+                    <p class="text-muted" style="margin: 4px 0 0 0; font-size: 0.86rem;">
+                        Configura convenios empresariales, seguros, exoneraciones o categorías especiales con cálculo automático de precios.
+                    </p>
+                </div>
+                <button class="modal-close" onclick="closeModal('modal-manage-tags')">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px 24px; overflow-y: auto; flex: 1;">
+                
+                <!-- Formulario de Creación / Edición -->
+                <div class="card mb-20" style="border: 1px solid #c4b5fd; background: #faf5ff; border-radius: 12px; padding: 16px;">
+                    <h4 id="tag-form-title" style="margin-top: 0; margin-bottom: 14px; font-size: 0.98rem; color: #6d28d9; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                        <i class="fa-solid fa-plus-circle"></i> Nueva Etiqueta / Convenio
+                    </h4>
+                    <input type="hidden" id="tag-form-id" value="">
+                    
+                    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 14px; margin-bottom: 12px;">
+                        <div>
+                            <label style="font-size: 0.84rem; font-weight: 600; color: #334155; display: block; margin-bottom: 4px;">Nombre del Convenio / Etiqueta *</label>
+                            <input type="text" id="tag-form-name" class="form-control" placeholder="Ej: Convenio Empresas Polar, Seguro Mercantil..." style="height: 38px; border-radius: 8px; border: 1px solid var(--border-color); background: #fff; width: 100%; box-sizing: border-box; font-size: 0.9rem;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.84rem; font-weight: 600; color: #334155; display: block; margin-bottom: 4px;">Color Distintivo *</label>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <input type="color" id="tag-form-color" value="#2563eb" style="width: 44px; height: 38px; border: 1px solid var(--border-color); border-radius: 8px; padding: 2px; cursor: pointer; background: #fff;">
+                                <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                                    <span onclick="document.getElementById('tag-form-color').value='#2563eb'" style="width: 20px; height: 20px; border-radius: 50%; background: #2563eb; cursor: pointer; display: inline-block;" title="Azul Corporativo"></span>
+                                    <span onclick="document.getElementById('tag-form-color').value='#10b981'" style="width: 20px; height: 20px; border-radius: 50%; background: #10b981; cursor: pointer; display: inline-block;" title="Verde Esmeralda"></span>
+                                    <span onclick="document.getElementById('tag-form-color').value='#8b5cf6'" style="width: 20px; height: 20px; border-radius: 50%; background: #8b5cf6; cursor: pointer; display: inline-block;" title="Púrpura VIP"></span>
+                                    <span onclick="document.getElementById('tag-form-color').value='#f59e0b'" style="width: 20px; height: 20px; border-radius: 50%; background: #f59e0b; cursor: pointer; display: inline-block;" title="Ámbar"></span>
+                                    <span onclick="document.getElementById('tag-form-color').value='#ef4444'" style="width: 20px; height: 20px; border-radius: 50%; background: #ef4444; cursor: pointer; display: inline-block;" title="Rojo"></span>
+                                    <span onclick="document.getElementById('tag-form-color').value='#06b6d4'" style="width: 20px; height: 20px; border-radius: 50%; background: #06b6d4; cursor: pointer; display: inline-block;" title="Cyan"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 14px; margin-bottom: 12px;">
+                        <div>
+                            <label style="font-size: 0.84rem; font-weight: 600; color: #334155; display: block; margin-bottom: 4px;">Regla Económica / Comercial *</label>
+                            <select id="tag-form-rule-type" class="form-control" onchange="window.onTagRuleTypeChange()" style="height: 38px; border-radius: 8px; border: 1px solid var(--border-color); background: #fff; width: 100%; box-sizing: border-box; font-size: 0.88rem; cursor: pointer;">
+                                <option value="discount" selected>Descuento Porcentual (%)</option>
+                                <option value="surcharge">Aumento / Recargo Porcentual (%)</option>
+                                <option value="exonerated">Exoneración Total (100% Descuento)</option>
+                                <option value="neutral">Informativo (Sin Alteración de Precios)</option>
+                            </select>
+                        </div>
+                        <div id="tag-form-val-container">
+                            <label style="font-size: 0.84rem; font-weight: 600; color: #334155; display: block; margin-bottom: 4px;">Porcentaje (%) *</label>
+                            <div style="display: flex; align-items: center; position: relative;">
+                                <input type="number" id="tag-form-rule-value" class="form-control" min="0" max="100" step="1" value="15" placeholder="15" style="height: 38px; border-radius: 8px; border: 1px solid var(--border-color); background: #fff; width: 100%; box-sizing: border-box; font-size: 0.9rem; padding-right: 30px;">
+                                <span style="position: absolute; right: 12px; font-weight: 700; color: #64748b;">%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 14px;">
+                        <label style="font-size: 0.84rem; font-weight: 600; color: #334155; display: block; margin-bottom: 4px;">Descripción / Condiciones (Opcional)</label>
+                        <input type="text" id="tag-form-desc" class="form-control" placeholder="Ej: Aplica para trabajadores y familiares directos con carnet vigente" style="height: 38px; border-radius: 8px; border: 1px solid var(--border-color); background: #fff; width: 100%; box-sizing: border-box; font-size: 0.88rem;">
+                    </div>
+
+                    <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                        <button type="button" class="btn btn-outline" id="btn-cancel-tag-edit" onclick="window.resetTagForm()" style="display: none; font-size: 0.88rem;">Cancelar Edición</button>
+                        <button type="button" class="btn btn-primary" onclick="window.saveTagFromModal()" style="background: #7c3aed !important; border: none !important; font-weight: 700; font-size: 0.88rem; padding: 8px 18px; border-radius: 8px;">
+                            <i class="fa-solid fa-floppy-disk"></i> Guardar Etiqueta / Convenio
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tabla de Etiquetas Existentes -->
+                <div>
+                    <h4 style="margin-top: 0; margin-bottom: 12px; font-size: 0.95rem; color: #0f172a; font-weight: 700; display: flex; align-items: center; justify-content: space-between;">
+                        <span><i class="fa-solid fa-list-check text-cyan"></i> Convenios y Etiquetas Registradas (<span id="tags-count-total">0</span>)</span>
+                        <small class="text-muted" style="font-size: 0.78rem; font-weight: normal;">Sincronizado en tiempo real con Supabase Cloud</small>
+                    </h4>
+                    <div class="table-responsive" style="max-height: 280px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px;">
+                        <table class="table table-compact" style="width: 100%; margin: 0;">
+                            <thead style="position: sticky; top: 0; background: var(--bg-card); z-index: 1;">
+                                <tr>
+                                    <th>Etiqueta / Badge</th>
+                                    <th>Regla Comercial</th>
+                                    <th>Descripción</th>
+                                    <th class="text-center">Pacientes</th>
+                                    <th class="text-center" style="width: 110px;">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tags-table-body">
+                                <tr><td colspan="5" class="text-center text-muted" style="padding: 20px;">Cargando convenios...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+            <div class="modal-footer" style="padding: 14px 24px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end;">
+                <button type="button" class="btn btn-outline" onclick="closeModal('modal-manage-tags')">Cerrar</button>
+            </div>
         </div>
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=254"></script>
-    <script src="supabaseClient.js?v=254"></script>
-    <script src="odontogram.js?v=254"></script>
-    <script src="signature.js?v=254"></script>
-    <script src="whatsapp.js?v=254"></script>
-    <script src="kardex.js?v=254"></script>
-    <script src="app.js?v=254"></script>
-    <script src="clinicalERP.js?v=254"></script>
-    <script src="tutorial.js?v=254"></script>
+    <script src="seededData.js?v=255"></script>
+    <script src="supabaseClient.js?v=255"></script>
+    <script src="odontogram.js?v=255"></script>
+    <script src="signature.js?v=255"></script>
+    <script src="whatsapp.js?v=255"></script>
+    <script src="kardex.js?v=255"></script>
+    <script src="app.js?v=255"></script>
+    <script src="clinicalERP.js?v=255"></script>
+    <script src="tutorial.js?v=255"></script>
 </body>
 </html>
