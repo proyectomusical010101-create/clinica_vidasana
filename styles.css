@@ -5217,7 +5217,39 @@ select, .form-select, select.form-control {
     }
 }
 
+/* Autocomplete live search dropdown in Direct Sale */
+#ds-patient-search-results {
+    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.18), 0 8px 10px -6px rgba(0,0,0,0.1) !important;
+    scrollbar-width: thin;
+}
 
+.ds-patient-search-item {
+    padding: 10px 14px;
+    border-bottom: 1px solid #f1f5f9;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
 
+.ds-patient-search-item:last-child {
+    border-bottom: none;
+}
 
+.ds-patient-search-item:hover {
+    background-color: #f0fdfa !important;
+}
+
+.ds-patient-search-item.active {
+    background-color: #ccfbf1 !important;
+}
+
+@media (max-width: 640px) {
+    #ds-btn-new-patient .btn-text {
+        display: none !important;
+    }
+    #ds-btn-new-patient {
+        padding: 0 12px !important;
+        min-width: 40px !important;
+        justify-content: center !important;
+    }
+}
 

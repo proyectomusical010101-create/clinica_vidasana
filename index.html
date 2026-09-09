@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=265">
+    <link rel="stylesheet" href="styles.css?v=266">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -5908,13 +5908,27 @@
                             <label class="form-label" style="font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
                                 <i class="fa-solid fa-user-check text-cyan"></i> 1. Paciente a Facturar / Cobrar *
                             </label>
-                            <select id="ds-patient-select" class="form-control" onchange="window.onDirectSalePatientChange(this.value)" style="height: 40px; border-radius: 8px; font-weight: 600;">
+                            <div style="display: flex; gap: 10px; align-items: center; width: 100%;">
+                                <div style="position: relative; flex: 1;">
+                                    <input type="text" id="ds-patient-search-input" class="form-control" placeholder="🔍 Buscar por Nombre o Cédula (ej: Carlos, V-12345678)..." autocomplete="off" style="height: 40px; border-radius: 8px; font-size: 0.88rem; padding: 8px 36px 8px 12px; width: 100%; box-sizing: border-box; font-weight: 600;">
+                                    <button type="button" id="ds-btn-clear-patient-search" onclick="window.clearDirectSalePatientSearch()" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #94a3b8; cursor: pointer; display: none; padding: 4px;" title="Limpiar selección">
+                                        <i class="fa-solid fa-xmark"></i>
+                                    </button>
+                                    <!-- Floating Autocomplete Results Container -->
+                                    <div id="ds-patient-search-results" style="position: absolute; top: 44px; left: 0; right: 0; background: #ffffff; border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.18), 0 8px 10px -6px rgba(0,0,0,0.1); z-index: 10800; max-height: 240px; overflow-y: auto; display: none;"></div>
+                                </div>
+                                <button type="button" class="btn btn-primary" id="ds-btn-new-patient" onclick="window.openNewPatientFromDirectSale()" style="height: 40px; border-radius: 8px; font-weight: 700; font-size: 0.84rem; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; padding: 0 14px; background: #0d9488 !important; border: none !important; cursor: pointer;" title="Registrar un nuevo paciente en el sistema">
+                                    <i class="fa-solid fa-user-plus"></i> <span class="btn-text">Nuevo Paciente</span>
+                                </button>
+                            </div>
+                            <!-- Hidden select to preserve 100% backward compatibility with internal scripts -->
+                            <select id="ds-patient-select" style="display: none;">
                                 <option value="">-- Seleccionar Paciente --</option>
                             </select>
 
                             <!-- Live Patient Info & Tag Preview -->
                             <div id="ds-patient-info-box" style="margin-top: 8px; font-size: 0.82rem; color: #64748b;">
-                                <em>Seleccione un paciente registrado para cargar sus datos y convenios.</em>
+                                <em>Escribe en el buscador el nombre o cédula del paciente para seleccionarlo.</em>
                             </div>
 
                             <!-- Professional & Assistant Selectors (generous width in left column) -->
@@ -6483,14 +6497,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=265"></script>
-    <script src="supabaseClient.js?v=265"></script>
-    <script src="odontogram.js?v=265"></script>
-    <script src="signature.js?v=265"></script>
-    <script src="whatsapp.js?v=265"></script>
-    <script src="kardex.js?v=265"></script>
-    <script src="app.js?v=265"></script>
-    <script src="clinicalERP.js?v=265"></script>
-    <script src="tutorial.js?v=265"></script>
+    <script src="seededData.js?v=266"></script>
+    <script src="supabaseClient.js?v=266"></script>
+    <script src="odontogram.js?v=266"></script>
+    <script src="signature.js?v=266"></script>
+    <script src="whatsapp.js?v=266"></script>
+    <script src="kardex.js?v=266"></script>
+    <script src="app.js?v=266"></script>
+    <script src="clinicalERP.js?v=266"></script>
+    <script src="tutorial.js?v=266"></script>
 </body>
 </html>

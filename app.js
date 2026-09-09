@@ -4904,23 +4904,76 @@ window.openDirectSaleModal = async function(preselectedPatientId = null) {
 
     openModal('modal-direct-sale');
 
-    // 1. Populate Patients Dropdown
+    // 1. Populate Patients & Setup Live Search Autocomplete
     const patientSelect = document.getElementById('ds-patient-select');
+    const searchInput = document.getElementById('ds-patient-search-input');
+    const searchResults = document.getElementById('ds-patient-search-results');
+    const clearBtn = document.getElementById('ds-btn-clear-patient-search');
+
+    const patients = await SupabaseDataService.getPatients();
+    window._cachedDirectSalePatients = patients;
+
     if (patientSelect) {
-        const patients = await SupabaseDataService.getPatients();
         patientSelect.innerHTML = '<option value="">-- Seleccionar Paciente --</option>' +
             patients.map(p => {
                 const tagInfo = p.tagName ? ` [🏷️ ${p.tagName}]` : '';
                 return `<option value="${p.id}">${p.fullname} (${p.id})${tagInfo}</option>`;
             }).join('');
-        
-        if (preselectedPatientId) {
-            patientSelect.value = preselectedPatientId;
-            await window.onDirectSalePatientChange(preselectedPatientId);
-        } else {
-            const infoBox = document.getElementById('ds-patient-info-box');
-            if (infoBox) infoBox.innerHTML = '<em>Seleccione un paciente registrado para cargar sus datos y convenios.</em>';
+    }
+
+    // Attach search input events once
+    if (searchInput && !searchInput.dataset.initialized) {
+        searchInput.dataset.initialized = 'true';
+        searchInput.addEventListener('input', (e) => {
+            window.renderDirectSalePatientSearchResults(e.target.value);
+        });
+        searchInput.addEventListener('focus', (e) => {
+            window.renderDirectSalePatientSearchResults(e.target.value);
+        });
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const res = document.getElementById('ds-patient-search-results');
+                if (res) res.style.display = 'none';
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                const firstItem = document.querySelector('#ds-patient-search-results .ds-patient-search-item');
+                if (firstItem) {
+                    firstItem.click();
+                }
+            }
+        });
+    }
+
+    // Outside click dismisser
+    if (!window._dsSearchOutsideClickAttached) {
+        window._dsSearchOutsideClickAttached = true;
+        document.addEventListener('click', (e) => {
+            const sInput = document.getElementById('ds-patient-search-input');
+            const res = document.getElementById('ds-patient-search-results');
+            if (res && sInput) {
+                if (!sInput.contains(e.target) && !res.contains(e.target)) {
+                    res.style.display = 'none';
+                }
+            }
+        });
+    }
+
+    if (preselectedPatientId) {
+        if (patientSelect) patientSelect.value = preselectedPatientId;
+        const p = patients.find(pat => String(pat.id) === String(preselectedPatientId));
+        if (p && searchInput) {
+            searchInput.value = `${p.fullname} (${p.id})`;
+            if (clearBtn) clearBtn.style.display = 'block';
         }
+        if (searchResults) searchResults.style.display = 'none';
+        await window.onDirectSalePatientChange(preselectedPatientId);
+    } else {
+        if (patientSelect) patientSelect.value = '';
+        if (searchInput) searchInput.value = '';
+        if (clearBtn) clearBtn.style.display = 'none';
+        if (searchResults) searchResults.style.display = 'none';
+        const infoBox = document.getElementById('ds-patient-info-box');
+        if (infoBox) infoBox.innerHTML = '<em>Escribe en el buscador el nombre o cédula del paciente para seleccionarlo.</em>';
     }
 
     // 2. Populate Doctors & Assistants
@@ -4958,6 +5011,135 @@ window.openDirectSaleModal = async function(preselectedPatientId = null) {
     window.calculateDirectSaleTotals();
 };
 
+window.renderDirectSalePatientSearchResults = async function(query) {
+    const resultsContainer = document.getElementById('ds-patient-search-results');
+    const clearBtn = document.getElementById('ds-btn-clear-patient-search');
+    if (!resultsContainer) return;
+
+    const term = (query || '').trim().toLowerCase();
+    if (clearBtn) {
+        clearBtn.style.display = term.length > 0 ? 'block' : 'none';
+    }
+
+    const patients = window._cachedDirectSalePatients || await SupabaseDataService.getPatients();
+    window._cachedDirectSalePatients = patients;
+
+    let matches = [];
+    if (!term) {
+        matches = patients.slice(0, 15);
+    } else {
+        matches = patients.filter(p => {
+            const fn = (p.fullname || '').toLowerCase();
+            const id = String(p.id || '').toLowerCase();
+            const ph = String(p.phone || '').toLowerCase();
+            const tag = (p.tagName || (p.metadata && p.metadata.tagName) || '').toLowerCase();
+            return fn.includes(term) || id.includes(term) || ph.includes(term) || tag.includes(term);
+        }).slice(0, 30);
+    }
+
+    if (matches.length === 0) {
+        resultsContainer.innerHTML = `
+            <div style="padding: 14px; text-align: center; color: #64748b; font-size: 0.85rem;">
+                <div style="margin-bottom: 6px;"><i class="fa-solid fa-user-slash" style="font-size: 1.2rem; color: #94a3b8;"></i></div>
+                <div>No se encontraron pacientes que coincidan con "<strong>${term.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</strong>"</div>
+                <button type="button" class="btn btn-sm btn-primary" onclick="window.openNewPatientFromDirectSale()" style="margin-top: 10px; background: #0d9488 !important; border: none !important; font-size: 0.8rem; padding: 6px 12px; border-radius: 6px; cursor: pointer; color: white;">
+                    <i class="fa-solid fa-user-plus"></i> Registrar Nuevo Paciente
+                </button>
+            </div>
+        `;
+        resultsContainer.style.display = 'block';
+        return;
+    }
+
+    const header = !term ? `<div style="padding: 6px 12px; background: #f8fafc; font-size: 0.72rem; font-weight: 700; color: #64748b; border-bottom: 1px solid #e2e8f0; text-transform: uppercase;">Pacientes Registrados (${patients.length} en total)</div>` : '';
+
+    const itemsHtml = matches.map(p => {
+        const pTag = p.tagName || (p.metadata && p.metadata.tagName);
+        const pTagColor = p.tagColor || (p.metadata && p.metadata.tagColor) || '#10b981';
+        const tagBadge = pTag ? `<span style="font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; background: ${pTagColor}20; color: ${pTagColor}; border: 1px solid ${pTagColor}50; font-weight: 700; margin-left: 6px;"><i class="fa-solid fa-tags"></i> ${pTag}</span>` : '';
+
+        const safeId = String(p.id || '').replace(/'/g, "\\'");
+        const safeName = (p.fullname || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+        return `
+            <div class="ds-patient-search-item" onclick="window.selectDirectSalePatient('${safeId}')" style="padding: 9px 12px; border-bottom: 1px solid #f1f5f9; cursor: pointer; transition: background 0.15s ease;">
+                <div style="font-weight: 700; color: #0f172a; font-size: 0.88rem; display: flex; align-items: center; justify-content: space-between;">
+                    <span><i class="fa-solid fa-user text-cyan" style="margin-right: 6px; font-size: 0.8rem;"></i> ${safeName}</span>
+                    ${tagBadge}
+                </div>
+                <div style="font-size: 0.76rem; color: #64748b; margin-top: 2px; display: flex; gap: 12px;">
+                    <span><i class="fa-solid fa-id-card"></i> Cédula: <strong>${p.id}</strong></span>
+                    <span><i class="fa-solid fa-phone"></i> ${p.phone || 'S/N'}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    resultsContainer.innerHTML = header + itemsHtml;
+    resultsContainer.style.display = 'block';
+};
+
+window.selectDirectSalePatient = async function(patientId) {
+    const searchInput = document.getElementById('ds-patient-search-input');
+    const resultsContainer = document.getElementById('ds-patient-search-results');
+    const clearBtn = document.getElementById('ds-btn-clear-patient-search');
+    const patientSelect = document.getElementById('ds-patient-select');
+
+    const patients = window._cachedDirectSalePatients || await SupabaseDataService.getPatients();
+    const p = patients.find(pat => String(pat.id) === String(patientId));
+
+    if (patientSelect) {
+        patientSelect.value = patientId;
+    }
+
+    if (p && searchInput) {
+        searchInput.value = `${p.fullname} (${p.id})`;
+        if (clearBtn) clearBtn.style.display = 'block';
+    }
+
+    if (resultsContainer) {
+        resultsContainer.style.display = 'none';
+    }
+
+    await window.onDirectSalePatientChange(patientId);
+};
+
+window.clearDirectSalePatientSearch = async function() {
+    const searchInput = document.getElementById('ds-patient-search-input');
+    const resultsContainer = document.getElementById('ds-patient-search-results');
+    const clearBtn = document.getElementById('ds-btn-clear-patient-search');
+    const patientSelect = document.getElementById('ds-patient-select');
+
+    if (searchInput) {
+        searchInput.value = '';
+        searchInput.focus();
+    }
+    if (patientSelect) {
+        patientSelect.value = '';
+    }
+    if (clearBtn) {
+        clearBtn.style.display = 'none';
+    }
+    if (resultsContainer) {
+        resultsContainer.style.display = 'none';
+    }
+
+    await window.onDirectSalePatientChange('');
+};
+
+window.openNewPatientFromDirectSale = function() {
+    window.returnToDirectSaleAfterPatientCreated = true;
+    const dsModal = document.getElementById('modal-direct-sale');
+    if (dsModal) {
+        dsModal.classList.add('hidden');
+    }
+    if (typeof window.openPatientModalForNew === 'function') {
+        window.openPatientModalForNew();
+    } else {
+        openModal('modal-patient');
+    }
+};
+
 window.resetDirectSaleForm = function() {
     const overlay = document.getElementById('ds-success-overlay');
     if (overlay) overlay.style.display = 'none';
@@ -4971,6 +5153,7 @@ window.resetDirectSaleForm = function() {
     if (priceIn) priceIn.value = '';
     const notesIn = document.getElementById('ds-notes');
     if (notesIn) notesIn.value = '';
+    window.clearDirectSalePatientSearch();
 };
 
 window.onDirectSalePatientChange = async function(patientId) {
@@ -11021,6 +11204,19 @@ function initGlobalEvents() {
             await renderDashboard();
             await renderAgendaView();
 
+            if (window.returnToDirectSaleAfterPatientCreated) {
+                window.returnToDirectSaleAfterPatientCreated = false;
+                await window.openDirectSaleModal(id);
+                Swal.fire({
+                    icon: 'success',
+                    title: '¡Paciente Guardado!',
+                    text: `${fullname} ha sido registrado y seleccionado en la Venta Directa.`,
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+                return true;
+            }
+
             if (redirectToBudget) {
                 await window.openBudgetForNewPatient(id);
                 Swal.fire({
@@ -12479,6 +12675,11 @@ async function closeModal(id, force = false) {
     el.classList.add('hidden');
     if (id === 'modal-patient') {
         window.patientModalOpenedFromBudget = false;
+        if (window.returnToDirectSaleAfterPatientCreated) {
+            window.returnToDirectSaleAfterPatientCreated = false;
+            const dsModal = document.getElementById('modal-direct-sale');
+            if (dsModal) dsModal.classList.remove('hidden');
+        }
     }
     return true;
 }
