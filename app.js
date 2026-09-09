@@ -30,6 +30,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (typeof window.populateTagSelects === 'function') {
             window.populateTagSelects();
         }
+        if (typeof window.updateBirthdayNotificationsBadge === 'function') {
+            window.updateBirthdayNotificationsBadge();
+            setInterval(() => window.updateBirthdayNotificationsBadge(), 300000);
+        }
     }, 20);
 
     // 2. Initialize Theme (Light Mode Default)
@@ -4366,6 +4370,495 @@ window.deletePatient = async function(patientId) {
             Swal.fire({ icon: 'success', title: 'Paciente movido a la papelera', text: 'Puede restaurarlo en Ajustes > Papelera de Reciclaje.', timer: 2000, showConfirmButton: false });
         }
     });
+};
+
+// ============================================================================
+// CENTRO DE ALERTAS, NOTIFICACIONES Y CUMPLEAÑOS DE PACIENTES (WHATSAPP HUB)
+// ============================================================================
+
+const DEFAULT_BIRTHDAY_MSG_TEMPLATE = '¡Hola {nombre}! 🎂🎉 Desde Clínica VidaSana queremos desearte un muy Feliz Cumpleaños. Que este nuevo año de vida esté colmado de excelente salud, dicha y bendiciones para ti y tus seres queridos. ¡Pasa un día extraordinario!';
+
+window.getBirthdayTemplate = function() {
+    return localStorage.getItem('clinic_birthday_template') || DEFAULT_BIRTHDAY_MSG_TEMPLATE;
+};
+
+window.saveBirthdayTemplate = function() {
+    const templateInput = document.getElementById('bday-msg-template');
+    if (templateInput) {
+        const val = templateInput.value.trim() || DEFAULT_BIRTHDAY_MSG_TEMPLATE;
+        localStorage.setItem('clinic_birthday_template', val);
+        Swal.fire({
+            icon: 'success',
+            title: 'Plantilla Guardada',
+            text: 'La plantilla personalizada de WhatsApp se guardó exitosamente.',
+            timer: 1600,
+            showConfirmButton: false
+        });
+    }
+};
+
+window.toggleBirthdayTemplateEditor = function() {
+    const body = document.getElementById('bday-template-body');
+    const icon = document.getElementById('bday-template-toggle-icon');
+    if (!body) return;
+    const isHidden = body.style.display === 'none';
+    body.style.display = isHidden ? 'block' : 'none';
+    if (icon) {
+        icon.innerHTML = isHidden 
+            ? '<i class="fa-solid fa-chevron-up"></i> Ocultar Editor' 
+            : '<i class="fa-solid fa-chevron-down"></i> Personalizar Mensaje';
+    }
+};
+
+window.insertBirthdayVariable = function(variableName) {
+    const textarea = document.getElementById('bday-msg-template');
+    if (!textarea) return;
+    const start = textarea.selectionStart || textarea.value.length;
+    const end = textarea.selectionEnd || textarea.value.length;
+    const text = textarea.value;
+    textarea.value = text.substring(0, start) + variableName + text.substring(end);
+    textarea.focus();
+    textarea.selectionStart = textarea.selectionEnd = start + variableName.length;
+};
+
+window.calculatePatientBirthdayDetails = function(p, today = new Date()) {
+    if (!p || !p.birthdate) return null;
+    const parts = String(p.birthdate).split('-');
+    if (parts.length < 3) return null;
+
+    const bYear = parseInt(parts[0], 10);
+    const bMonth = parseInt(parts[1], 10) - 1; // 0-indexed
+    const bDay = parseInt(parts[2], 10);
+    if (isNaN(bYear) || isNaN(bMonth) || isNaN(bDay)) return null;
+
+    const curYear = today.getFullYear();
+    const curMonth = today.getMonth();
+    const curDate = today.getDate();
+
+    const isToday = (curMonth === bMonth && curDate === bDay);
+
+    let nextBday = new Date(curYear, bMonth, bDay);
+    const todayZero = new Date(curYear, curMonth, curDate);
+
+    if (nextBday < todayZero && !isToday) {
+        nextBday = new Date(curYear + 1, bMonth, bDay);
+    }
+
+    const diffTime = nextBday.getTime() - todayZero.getTime();
+    const daysRemaining = isToday ? 0 : Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    const turningAge = isToday ? (curYear - bYear) : (nextBday.getFullYear() - bYear);
+
+    const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    const formattedBday = `${bDay} de ${monthNames[bMonth]}`;
+
+    // Cloud Congratulated Status & Manual Override
+    const congratulatedYear = p.birthdayCongratulatedYear || (p.metadata && p.metadata.birthdayCongratulatedYear);
+    const isCongratulatedThisYear = String(congratulatedYear) === String(curYear);
+    const manualStatus = p.birthdayManualStatus || (p.metadata && p.metadata.birthdayManualStatus) || null;
+
+    let category = 'other';
+    if (manualStatus === 'congratulated' || isCongratulatedThisYear) {
+        category = 'congratulated';
+    } else if (manualStatus === 'today' || isToday) {
+        category = 'today';
+    } else if (manualStatus === 'upcoming' || (daysRemaining > 0 && daysRemaining <= 7)) {
+        category = 'upcoming';
+    }
+
+    return {
+        patient: p,
+        bYear,
+        bMonth,
+        bDay,
+        formattedBday,
+        isToday,
+        daysRemaining,
+        turningAge,
+        category,
+        isCongratulatedThisYear,
+        manualStatus
+    };
+};
+
+window.analyzePatientBirthdays = async function() {
+    const patients = await SupabaseDataService.getPatients();
+    const today = new Date();
+
+    const result = {
+        today: [],
+        upcoming: [],
+        congratulated: [],
+        allThisMonth: []
+    };
+
+    patients.forEach(p => {
+        const details = window.calculatePatientBirthdayDetails(p, today);
+        if (!details) return;
+
+        if (details.category === 'congratulated') {
+            result.congratulated.push(details);
+        } else if (details.category === 'today') {
+            result.today.push(details);
+        } else if (details.category === 'upcoming') {
+            result.upcoming.push(details);
+        }
+
+        if (details.bMonth === today.getMonth()) {
+            result.allThisMonth.push(details);
+        }
+    });
+
+    // Sort upcoming by days remaining ascending
+    result.upcoming.sort((a, b) => a.daysRemaining - b.daysRemaining);
+    result.today.sort((a, b) => (a.patient.fullname || '').localeCompare(b.patient.fullname || ''));
+
+    return result;
+};
+
+window.updateBirthdayNotificationsBadge = async function() {
+    try {
+        const badge = document.getElementById('notifications-badge-count');
+        if (!badge) return;
+
+        const analysis = await window.analyzePatientBirthdays();
+        const pendingCount = analysis.today.length + analysis.upcoming.length;
+
+        if (pendingCount > 0) {
+            badge.innerText = pendingCount;
+            badge.style.display = 'inline-block';
+            if (analysis.today.length > 0) {
+                badge.style.background = '#ef4444';
+                badge.title = `¡${analysis.today.length} paciente(s) cumplen años hoy!`;
+            } else {
+                badge.style.background = '#f59e0b';
+                badge.title = `${pendingCount} cumpleaños próximos esta semana.`;
+            }
+        } else {
+            badge.style.display = 'none';
+        }
+    } catch(e) {
+        console.error('Error updating birthday notifications badge:', e);
+    }
+};
+
+window.openBirthdaysHubModal = async function() {
+    openModal('modal-birthdays-hub');
+    const templateInput = document.getElementById('bday-msg-template');
+    if (templateInput) {
+        templateInput.value = window.getBirthdayTemplate();
+    }
+    await window.renderBirthdaysHub();
+};
+
+window.toggleBirthdayAccordion = function(section) {
+    const content = document.getElementById(`bday-content-${section}`);
+    const arrow = document.getElementById(`bday-arrow-${section}`);
+    if (!content) return;
+    const isHidden = content.style.display === 'none';
+    content.style.display = isHidden ? 'block' : 'none';
+    if (arrow) {
+        arrow.className = isHidden ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down';
+    }
+};
+
+window.formatCleanPhoneForWhatsApp = function(rawPhone) {
+    if (!rawPhone) return '';
+    let digits = String(rawPhone).replace(/[^0-9]/g, '');
+    if (!digits) return '';
+    // Format Venezuela numbers
+    if (digits.startsWith('0')) digits = digits.substring(1);
+    if (!digits.startsWith('58') && digits.length === 10) {
+        digits = '58' + digits;
+    }
+    return digits;
+};
+
+window.renderBirthdaysHub = async function() {
+    const listToday = document.getElementById('bday-list-today');
+    const listUpcoming = document.getElementById('bday-list-upcoming');
+    const listCongratulated = document.getElementById('bday-list-congratulated');
+
+    if (listToday) listToday.innerHTML = '<div style="text-align:center; padding:15px; color:#64748b;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</div>';
+    if (listUpcoming) listUpcoming.innerHTML = '<div style="text-align:center; padding:15px; color:#64748b;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</div>';
+    if (listCongratulated) listCongratulated.innerHTML = '<div style="text-align:center; padding:15px; color:#64748b;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</div>';
+
+    const analysis = await window.analyzePatientBirthdays();
+
+    // Update KPI counts
+    const countToday = document.getElementById('bday-count-today');
+    const countUpcoming = document.getElementById('bday-count-upcoming');
+    const countCongratulated = document.getElementById('bday-count-congratulated');
+    if (countToday) countToday.innerText = analysis.today.length;
+    if (countUpcoming) countUpcoming.innerText = analysis.upcoming.length;
+    if (countCongratulated) countCongratulated.innerText = analysis.congratulated.length;
+
+    // Update accordion badges
+    const badgeToday = document.getElementById('bday-badge-today');
+    const badgeUpcoming = document.getElementById('bday-badge-upcoming');
+    const badgeCongratulated = document.getElementById('bday-badge-congratulated');
+    if (badgeToday) badgeToday.innerText = analysis.today.length;
+    if (badgeUpcoming) badgeUpcoming.innerText = analysis.upcoming.length;
+    if (badgeCongratulated) badgeCongratulated.innerText = analysis.congratulated.length;
+
+    // Helper to render patient item card
+    const renderCard = (item, sectionType) => {
+        const p = item.patient;
+        const initials = (p.fullname || 'P').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+        
+        let statusBadge = '';
+        if (sectionType === 'today') {
+            statusBadge = '<span class="badge-tag red" style="font-size:0.75rem; font-weight:800; animation: pulse 2s infinite;"><i class="fa-solid fa-cake-candles"></i> ¡Cumple Hoy! 🎉</span>';
+        } else if (sectionType === 'upcoming') {
+            statusBadge = `<span class="badge-tag amber" style="font-size:0.75rem; font-weight:700;"><i class="fa-solid fa-clock"></i> Faltan ${item.daysRemaining} día(s)</span>`;
+        } else {
+            statusBadge = '<span class="badge-tag green" style="font-size:0.75rem; font-weight:700;"><i class="fa-solid fa-check"></i> Ya Felicitado</span>';
+        }
+
+        let tagBadge = '';
+        if (p.tagName) {
+            const color = p.tagColor || '#0d9488';
+            tagBadge = `<span style="font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; background: ${color}20; color: ${color}; border: 1px solid ${color}40; font-weight: 700; margin-left: 6px;">🏷️ ${p.tagName}</span>`;
+        }
+
+        const phoneClean = window.formatCleanPhoneForWhatsApp(p.phone);
+
+        return `
+            <div class="bday-patient-card" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 12px 14px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-card); transition: all 0.2s ease;">
+                <div style="display: flex; align-items: center; gap: 12px; min-width: 250px; flex: 1;">
+                    <input type="checkbox" class="bday-patient-checkbox" data-id="${p.id}" data-name="${p.fullname}" data-phone="${phoneClean}" data-age="${item.turningAge}" onchange="window.updateBirthdaySelectedCount()" style="width: 17px; height: 17px; cursor: pointer;">
+                    <div style="width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.85rem;">
+                        ${initials}
+                    </div>
+                    <div style="line-height: 1.3;">
+                        <div style="font-weight: 700; font-size: 0.92rem; color: var(--text-main); display: flex; align-items: center; flex-wrap: wrap;">
+                            ${p.fullname} ${tagBadge}
+                        </div>
+                        <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
+                            C.I: <strong>${p.id}</strong> • <i class="fa-solid fa-cake-candles" style="color:#f59e0b;"></i> <strong>${item.formattedBday}</strong> (Cumple <strong>${item.turningAge} años</strong>)
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    ${statusBadge}
+
+                    <!-- Manual Status Selector Dropdown -->
+                    <select class="form-control btn-xs" onchange="window.setPatientBirthdayStatus('${p.id}', this.value)" style="height: 32px; font-size: 0.8rem; border-radius: 6px; padding: 2px 8px; cursor: pointer;" title="Cambiar Estatus de Felicitación">
+                        <option value="today" ${item.category === 'today' ? 'selected' : ''}>🎂 Cumple Hoy</option>
+                        <option value="upcoming" ${item.category === 'upcoming' ? 'selected' : ''}>⏳ Por Cumplir</option>
+                        <option value="congratulated" ${item.category === 'congratulated' ? 'selected' : ''}>✅ Ya Felicitado</option>
+                    </select>
+
+                    <!-- Individual WhatsApp Action Buttons -->
+                    <button type="button" class="btn btn-xs btn-success" onclick="window.sendBirthdayWhatsApp('${p.id}')" style="background: #10b981; color: white; border: none; height: 32px; border-radius: 6px; padding: 4px 10px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;" title="Enviar WhatsApp con Plantilla">
+                        <i class="fa-brands fa-whatsapp"></i> WhatsApp
+                    </button>
+
+                    <button type="button" class="btn btn-xs btn-outline" onclick="window.customizeAndSendBirthdayWhatsApp('${p.id}')" style="height: 32px; border-radius: 6px; padding: 4px 8px;" title="Editar Mensaje antes de Enviar">
+                        <i class="fa-solid fa-pen"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    };
+
+    // Render Today
+    if (listToday) {
+        if (analysis.today.length === 0) {
+            listToday.innerHTML = '<div style="text-align:center; padding:16px; color:#64748b; font-size:0.88rem;"><i class="fa-solid fa-circle-info"></i> No hay pacientes cumpliendo años el día de hoy pendientes de felicitar.</div>';
+        } else {
+            listToday.innerHTML = analysis.today.map(item => renderCard(item, 'today')).join('');
+        }
+    }
+
+    // Render Upcoming
+    if (listUpcoming) {
+        if (analysis.upcoming.length === 0) {
+            listUpcoming.innerHTML = '<div style="text-align:center; padding:16px; color:#64748b; font-size:0.88rem;"><i class="fa-solid fa-circle-info"></i> No hay pacientes cumpliendo años en los próximos 7 días.</div>';
+        } else {
+            listUpcoming.innerHTML = analysis.upcoming.map(item => renderCard(item, 'upcoming')).join('');
+        }
+    }
+
+    // Render Congratulated
+    if (listCongratulated) {
+        if (analysis.congratulated.length === 0) {
+            listCongratulated.innerHTML = '<div style="text-align:center; padding:16px; color:#64748b; font-size:0.88rem;"><i class="fa-solid fa-circle-info"></i> Aún no se han registrado felicitaciones este año.</div>';
+        } else {
+            listCongratulated.innerHTML = analysis.congratulated.map(item => renderCard(item, 'congratulated')).join('');
+        }
+    }
+
+    window.updateBirthdaySelectedCount();
+    window.updateBirthdayNotificationsBadge();
+};
+
+window.updateBirthdaySelectedCount = function() {
+    const checkboxes = document.querySelectorAll('.bday-patient-checkbox:checked');
+    const label = document.getElementById('bday-selected-count');
+    if (label) label.innerText = checkboxes.length;
+};
+
+window.toggleSelectAllBirthdays = function(checked) {
+    const checkboxes = document.querySelectorAll('.bday-patient-checkbox');
+    checkboxes.forEach(cb => cb.checked = checked);
+    window.updateBirthdaySelectedCount();
+};
+
+window.mergeBirthdayMessage = function(p, turningAge, rawTemplate) {
+    const template = rawTemplate || window.getBirthdayTemplate();
+    const clinicaName = (typeof SupabaseDataService !== 'undefined' && SupabaseDataService._clinicConfig?.clinic_name) || 'Clínica VidaSana';
+    return template
+        .replace(/\{nombre\}/g, p.fullname || 'Paciente')
+        .replace(/\{edad\}/g, turningAge ? `${turningAge}` : '')
+        .replace(/\{clinica\}/g, clinicaName);
+};
+
+window.sendBirthdayWhatsApp = async function(patientId, customText) {
+    const patients = await SupabaseDataService.getPatients();
+    const p = patients.find(pat => String(pat.id) === String(patientId));
+    if (!p) {
+        Swal.fire({ icon: 'error', title: 'Error', text: 'No se encontró el paciente.' });
+        return;
+    }
+
+    const cleanPhone = window.formatCleanPhoneForWhatsApp(p.phone);
+    if (!cleanPhone) {
+        Swal.fire({ icon: 'warning', title: 'Sin Teléfono', text: `El paciente ${p.fullname} no tiene un número telefónico registrado.` });
+        return;
+    }
+
+    const details = window.calculatePatientBirthdayDetails(p);
+    const msg = customText || window.mergeBirthdayMessage(p, details ? details.turningAge : '');
+
+    const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
+    window.open(waUrl, '_blank');
+
+    // Confirm congratulation status persistence to cloud
+    const result = await Swal.fire({
+        title: '¿Marcar como Felicitado?',
+        html: `Se abrió WhatsApp para <strong>${p.fullname}</strong>.<br><br>¿Deseas marcar a este paciente como <strong>"Ya Felicitado"</strong> en el sistema?`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#10b981',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: '<i class="fa-solid fa-check"></i> Sí, marcar como felicitado',
+        cancelButtonText: 'Dejar pendiente'
+    });
+
+    if (result.isConfirmed) {
+        await window.setPatientBirthdayStatus(patientId, 'congratulated');
+    }
+};
+
+window.customizeAndSendBirthdayWhatsApp = async function(patientId) {
+    const patients = await SupabaseDataService.getPatients();
+    const p = patients.find(pat => String(pat.id) === String(patientId));
+    if (!p) return;
+
+    const details = window.calculatePatientBirthdayDetails(p);
+    const initialMsg = window.mergeBirthdayMessage(p, details ? details.turningAge : '');
+
+    const { value: editedMsg } = await Swal.fire({
+        title: `<i class="fa-brands fa-whatsapp text-emerald" style="color: #10b981;"></i> Mensaje para ${p.fullname}`,
+        html: `
+            <div style="text-align: left; font-size: 0.88rem; color: #475569; margin-bottom: 8px;">
+                Personalice el mensaje antes de enviar:
+            </div>
+            <textarea id="swal-custom-bday-msg" class="swal2-textarea" style="width: 100%; height: 120px; font-size: 0.9rem; line-height: 1.4; margin: 0; box-sizing: border-box;">${initialMsg}</textarea>
+        `,
+        showCancelButton: true,
+        confirmButtonColor: '#10b981',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: '<i class="fa-brands fa-whatsapp"></i> Enviar por WhatsApp',
+        cancelButtonText: 'Cancelar',
+        preConfirm: () => {
+            const val = document.getElementById('swal-custom-bday-msg')?.value;
+            if (!val || val.trim() === '') {
+                Swal.showValidationMessage('El mensaje no puede estar vacío');
+                return false;
+            }
+            return val.trim();
+        }
+    });
+
+    if (editedMsg) {
+        await window.sendBirthdayWhatsApp(patientId, editedMsg);
+    }
+};
+
+window.setPatientBirthdayStatus = async function(patientId, status) {
+    try {
+        const curYear = new Date().getFullYear();
+        await SupabaseDataService.updatePatientBirthdayCongratulated(patientId, curYear, status);
+        await window.renderBirthdaysHub();
+        await window.updateBirthdayNotificationsBadge();
+    } catch(err) {
+        console.error('Error setting birthday status:', err);
+        Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo actualizar el estatus en la base de datos.' });
+    }
+};
+
+window.sendSelectedBirthdaysWhatsApp = async function() {
+    const checkboxes = document.querySelectorAll('.bday-patient-checkbox:checked');
+    if (checkboxes.length === 0) {
+        Swal.fire({ icon: 'warning', title: 'Ningún paciente seleccionado', text: 'Marque al menos un paciente para felicitar por WhatsApp.' });
+        return;
+    }
+
+    for (let i = 0; i < checkboxes.length; i++) {
+        const cb = checkboxes[i];
+        const patId = cb.getAttribute('data-id');
+        const patName = cb.getAttribute('data-name');
+        const phone = cb.getAttribute('data-phone');
+        const age = cb.getAttribute('data-age');
+
+        if (!phone) continue;
+
+        const msg = window.mergeBirthdayMessage({ fullname: patName }, age);
+        const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+        window.open(waUrl, '_blank');
+
+        // Automatically set status to congratulated
+        await SupabaseDataService.updatePatientBirthdayCongratulated(patId, new Date().getFullYear(), 'congratulated');
+    }
+
+    Swal.fire({
+        icon: 'success',
+        title: '¡Mensajes Iniciados!',
+        text: `Se abrieron las pestañas de WhatsApp para ${checkboxes.length} paciente(s) y se marcaron como felicitados en la nube.`,
+        timer: 2500,
+        showConfirmButton: false
+    });
+
+    await window.renderBirthdaysHub();
+    await window.updateBirthdayNotificationsBadge();
+};
+
+window.markSelectedBirthdaysAsCongratulated = async function() {
+    const checkboxes = document.querySelectorAll('.bday-patient-checkbox:checked');
+    if (checkboxes.length === 0) {
+        Swal.fire({ icon: 'warning', title: 'Ningún paciente seleccionado', text: 'Marque al menos un paciente para cambiar su estatus.' });
+        return;
+    }
+
+    const curYear = new Date().getFullYear();
+    for (let i = 0; i < checkboxes.length; i++) {
+        const patId = checkboxes[i].getAttribute('data-id');
+        await SupabaseDataService.updatePatientBirthdayCongratulated(patId, curYear, 'congratulated');
+    }
+
+    Swal.fire({
+        icon: 'success',
+        title: 'Estatus Actualizado',
+        text: `Se marcaron ${checkboxes.length} paciente(s) como felicitados exitosamente en la base de datos.`,
+        timer: 2000,
+        showConfirmButton: false
+    });
+
+    await window.renderBirthdaysHub();
+    await window.updateBirthdayNotificationsBadge();
 };
 
 function calculateAge(birthdateStr) {

@@ -365,6 +365,8 @@ class SupabaseDataService {
                             tagName: p.tag_name || p.tagName || (p.metadata && p.metadata.tagName) || (ext.metadata && ext.metadata.tagName) || '',
                             tagColor: p.tag_color || p.tagColor || (p.metadata && p.metadata.tagColor) || (ext.metadata && ext.metadata.tagColor) || '',
                             tagRule: p.tag_rule || p.tagRule || (p.metadata && p.metadata.tagRule) || (ext.metadata && ext.metadata.tagRule) || null,
+                            birthdayCongratulatedYear: (p.metadata && p.metadata.birthdayCongratulatedYear) || (ext.metadata && ext.metadata.birthdayCongratulatedYear) || null,
+                            birthdayManualStatus: (p.metadata && p.metadata.birthdayManualStatus) || (ext.metadata && ext.metadata.birthdayManualStatus) || null,
                             odontogramData: toothStates,
                             clinicalNotes: p.clinical_notes || ext.clinicalNotes || (p.metadata && p.metadata._fallback_clinical_notes) || [],
                             sessions: ext.sessions || ext.clinicalNotes || p.clinical_notes || [],
@@ -465,6 +467,34 @@ class SupabaseDataService {
         this._patientsCacheTime = 0;
         this._patientsPromise = null;
         this.notifyDataChanged('patients', patientObj.id);
+    }
+
+    static async updatePatientBirthdayCongratulated(patientId, year, status = 'congratulated') {
+        let localPatients = JSON.parse(localStorage.getItem('dental_patients')) || [];
+        const pIdx = localPatients.findIndex(p => String(p.id) === String(patientId));
+        if (pIdx >= 0) {
+            const currentYear = year || new Date().getFullYear();
+            localPatients[pIdx].metadata = localPatients[pIdx].metadata || {};
+            localPatients[pIdx].metadata.birthdayCongratulatedYear = status === 'congratulated' ? currentYear : null;
+            localPatients[pIdx].metadata.birthdayCongratulatedAt = status === 'congratulated' ? new Date().toISOString() : null;
+            localPatients[pIdx].metadata.birthdayManualStatus = status;
+            localPatients[pIdx].birthdayCongratulatedYear = status === 'congratulated' ? currentYear : null;
+            localPatients[pIdx].birthdayManualStatus = status;
+            localStorage.setItem('dental_patients', JSON.stringify(localPatients));
+            
+            // Persist using existing savePatient logic
+            if (this.isCloudConnected()) {
+                try {
+                    await this.savePatient(localPatients[pIdx]);
+                } catch(e) {
+                    console.error('Error updating birthday status in cloud:', e);
+                }
+            } else {
+                this.notifyDataChanged('patients', patientId);
+            }
+            return true;
+        }
+        return false;
     }
 
     static async deletePatient(patientId) {
@@ -2221,6 +2251,11 @@ class SupabaseDataService {
                 if (typeof renderPricingTable === 'function') await renderPricingTable();
             } else if (viewId === 'view-users' && !isEditingUser) {
                 if (typeof renderUsersTable === 'function') await renderUsersTable();
+            }
+
+            // Always update system alerts & birthday notifications badge
+            if (typeof window.updateBirthdayNotificationsBadge === 'function') {
+                window.updateBirthdayNotificationsBadge();
             }
         } catch (err) {
             console.warn('Realtime refreshActiveViews warn:', err);
