@@ -4324,21 +4324,98 @@ async function renderPatientsTable(filter = 'all', searchQuery = '') {
             </td>
             <td>${alertsHtml}</td>
             <td><span class="badge-tag ${statusClass}">${p.status}</span></td>
-            <td>
-                <div class="actions-cell-group">
-                    <button class="btn btn-xs btn-outline" style="border-color:#10b981; color:#059669; font-weight:700;" onclick="window.openDirectSaleModal('${p.id}')" title="Venta Directa / Cobro Rápido sin Presupuesto"><i class="fa-solid fa-bolt"></i> <span class="btn-text-full">Cobrar</span></button>
-                    <button class="btn btn-xs btn-outline" style="border-color:#8b5cf6; color:#7c3aed; font-weight:700;" onclick="window.openPatientReceiptsHub('${p.id}')" title="Historial de Comprobantes, Facturas y Recibos"><i class="fa-solid fa-receipt"></i> <span class="btn-text-full">Recibos</span></button>
-                    <button class="btn btn-xs btn-outline" style="border-color:#0891b2; color:#0891b2;" onclick="window.editPatient('${p.id}')" title="Editar Ficha / Historia"><i class="fa-solid fa-pen-to-square"></i> <span class="btn-text-full">Editar</span></button>
-                    <button class="btn btn-xs btn-success" style="background:#10b981; border:none; color:#fff;" onclick="window.finalizePatientTreatment('${p.id}')" title="Finalizar Tratamiento / Presupuesto"><i class="fa-solid fa-circle-check"></i> <span class="btn-text-full">Finalizar</span></button>
-                    <button class="btn btn-xs btn-primary" onclick="selectPatientForOdontogram('${p.id}')" title="Emitir Presupuesto"><i class="fa-solid fa-tooth"></i> Presupuesto</button>
-                    <button class="btn btn-xs btn-outline" onclick="openEHRForPatient('${p.id}')" title="Ver Historia"><i class="fa-solid fa-folder-open"></i> EHR</button>
-                    ${deleteBtnHtml}
+                <div class="patient-actions-cluster">
+                    <button class="btn btn-xs btn-outline btn-act-cobrar" onclick="window.openDirectSaleModal('${p.id}')" title="Venta Directa / Cobro Rápido">
+                        <i class="fa-solid fa-bolt"></i> <span>Cobrar</span>
+                    </button>
+                    <button class="btn btn-xs btn-primary btn-act-presupuesto" onclick="selectPatientForOdontogram('${p.id}')" title="Emitir Presupuesto">
+                        <i class="fa-solid fa-tooth"></i> <span>Presupuesto</span>
+                    </button>
+                    <button class="btn btn-xs btn-outline btn-act-editar" onclick="window.editPatient('${p.id}')" title="Editar Ficha / Historia">
+                        <i class="fa-solid fa-pen-to-square"></i> <span>Editar</span>
+                    </button>
+                    <button class="btn btn-xs btn-outline btn-act-more" onclick="window.openPatientRowActionsMenu('${p.id}', this, event, ${isAssistant})" title="Más opciones para este paciente">
+                        <i class="fa-solid fa-ellipsis-vertical"></i>
+                    </button>
                 </div>
             </td>
         `;
         tbody.appendChild(tr);
     });
 }
+
+window.openPatientRowActionsMenu = function(patientId, btnEl, event, isAssistant) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+
+    let menu = document.getElementById('patient-row-actions-floating-menu');
+    if (!menu) {
+        menu = document.createElement('div');
+        menu.id = 'patient-row-actions-floating-menu';
+        menu.className = 'patient-row-floating-menu';
+        document.body.appendChild(menu);
+
+        document.addEventListener('click', (e) => {
+            if (!menu.contains(e.target) && !e.target.closest('.btn-act-more')) {
+                menu.style.display = 'none';
+            }
+        });
+
+        window.addEventListener('scroll', () => {
+            menu.style.display = 'none';
+        }, true);
+    }
+
+    // Toggle off if clicking the same button
+    if (menu.style.display === 'flex' && menu.dataset.activePatientId === String(patientId)) {
+        menu.style.display = 'none';
+        return;
+    }
+
+    menu.dataset.activePatientId = String(patientId);
+
+    const deleteOption = isAssistant ? '' : `
+        <div class="patient-menu-divider"></div>
+        <a href="javascript:void(0)" class="patient-menu-item text-red" onclick="window.closePatientRowActionsMenu(); window.deletePatient('${patientId}')">
+            <i class="fa-solid fa-trash"></i> <span>Eliminar Paciente</span>
+        </a>
+    `;
+
+    menu.innerHTML = `
+        <a href="javascript:void(0)" class="patient-menu-item" onclick="window.closePatientRowActionsMenu(); window.openPatientReceiptsHub('${patientId}')">
+            <i class="fa-solid fa-receipt text-purple"></i> <span>Recibos y Facturas</span>
+        </a>
+        <a href="javascript:void(0)" class="patient-menu-item" onclick="window.closePatientRowActionsMenu(); openEHRForPatient('${patientId}')">
+            <i class="fa-solid fa-folder-open text-cyan"></i> <span>Historia Clínica (EHR)</span>
+        </a>
+        <a href="javascript:void(0)" class="patient-menu-item" onclick="window.closePatientRowActionsMenu(); window.finalizePatientTreatment('${patientId}')">
+            <i class="fa-solid fa-circle-check text-green"></i> <span>Finalizar Tratamiento</span>
+        </a>
+        ${deleteOption}
+    `;
+
+    menu.style.display = 'flex';
+
+    // Position relative to button
+    const rect = btnEl.getBoundingClientRect();
+    const menuWidth = 195;
+    let left = rect.right - menuWidth;
+    if (left < 10) left = 10;
+    let top = rect.bottom + 4;
+    if (top + 180 > window.innerHeight) {
+        top = rect.top - 170;
+    }
+
+    menu.style.top = `${top + window.scrollY}px`;
+    menu.style.left = `${left + window.scrollX}px`;
+};
+
+window.closePatientRowActionsMenu = function() {
+    const menu = document.getElementById('patient-row-actions-floating-menu');
+    if (menu) menu.style.display = 'none';
+};
 
 window.deletePatient = async function(patientId) {
     const user = getCurrentUser();
