@@ -723,6 +723,7 @@ class SupabaseDataService {
 
                     budgetRows.forEach(row => {
                         const od = row.odontogram_data || {};
+                        const meta = od.metadata || {};
                         cloudInvoices.push({
                             id: od.id || row.id,
                             patientId: od.patientId || row.phone,
@@ -737,6 +738,11 @@ class SupabaseDataService {
                             doctorSignature: od.doctorSignature || '',
                             patientSignature: od.patientSignature || '',
                             footerText: od.footerText || '',
+                            category: od.category || meta.category || 'Odontología',
+                            specialty: od.specialty || meta.specialty || '',
+                            doctor: od.doctor || meta.doctor || '',
+                            notes: od.notes || meta.notes || '',
+                            validUntil: od.validUntil || meta.validUntil || 30,
                             odontogramData: od.odontogramData || (od.metadata && od.metadata.odontogramData) || {},
                             metadata: od.metadata || {}
                         });
@@ -747,6 +753,7 @@ class SupabaseDataService {
                 if (!invErr && invData && invData.length > 0) {
                     invData.forEach(i => {
                         if (!cloudInvoices.find(c => c.id === i.id)) {
+                            const meta = i.metadata || {};
                             cloudInvoices.push({
                                 id: i.id,
                                 patientId: i.patient_id,
@@ -761,6 +768,11 @@ class SupabaseDataService {
                                 doctorSignature: i.doctor_signature || i.doctorSignature || '',
                                 patientSignature: i.patient_signature || i.patientSignature || '',
                                 footerText: i.footer_text,
+                                category: i.category || meta.category || 'Odontología',
+                                specialty: i.specialty || meta.specialty || '',
+                                doctor: i.doctor || meta.doctor || '',
+                                notes: i.notes || meta.notes || '',
+                                validUntil: i.valid_until || i.validUntil || meta.validUntil || 30,
                                 odontogramData: (i.metadata && i.metadata.odontogramData) || {},
                                 metadata: i.metadata || {}
                             });
@@ -812,10 +824,22 @@ class SupabaseDataService {
                         totalRef: invoiceObj.totalRef || 0,
                         totalBcv: invoiceObj.totalBcv || 0,
                         status: invoiceObj.status || 'Emitida',
+                        doctorSignature: invoiceObj.doctorSignature || '',
+                        patientSignature: invoiceObj.patientSignature || '',
                         footerText: invoiceObj.footerText || '',
+                        category: invoiceObj.category || 'Odontología',
+                        specialty: invoiceObj.specialty || '',
+                        doctor: invoiceObj.doctor || '',
+                        notes: invoiceObj.notes || '',
+                        validUntil: invoiceObj.validUntil || 30,
                         odontogramData: odData,
                         metadata: {
                             ...(invoiceObj.metadata || {}),
+                            category: invoiceObj.category || 'Odontología',
+                            specialty: invoiceObj.specialty || '',
+                            doctor: invoiceObj.doctor || '',
+                            notes: invoiceObj.notes || '',
+                            validUntil: invoiceObj.validUntil || 30,
                             odontogramData: odData
                         }
                     }
@@ -835,7 +859,15 @@ class SupabaseDataService {
                     total_ref: invoiceObj.totalRef,
                     total_bcv: invoiceObj.totalBcv,
                     status: invoiceObj.status || 'Emitida',
-                    footer_text: invoiceObj.footerText
+                    footer_text: invoiceObj.footerText,
+                    metadata: {
+                        ...(invoiceObj.metadata || {}),
+                        category: invoiceObj.category || 'Odontología',
+                        specialty: invoiceObj.specialty || '',
+                        doctor: invoiceObj.doctor || '',
+                        notes: invoiceObj.notes || '',
+                        validUntil: invoiceObj.validUntil || 30
+                    }
                 });
                 console.log('✅ Invoice / Budget synced to Supabase Cloud:', invoiceObj.id);
             } catch (err) {

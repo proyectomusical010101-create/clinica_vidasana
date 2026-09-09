@@ -1403,8 +1403,7 @@ function initMobileFabActions() {
         actBudget.onclick = async () => {
             closeModal('modal-mobile-quick-actions');
             await window.navigateToTab('odontogram');
-            const newBudgetBtn = document.getElementById('btn-new-budget');
-            if (newBudgetBtn) newBudgetBtn.click();
+            openModal('modal-select-budget-type');
         };
     }
 
@@ -1778,13 +1777,29 @@ window.selectPatientAndLoadApprovedBudget = async function(patientId) {
     }
 };
 
+window.activeBudgetCategoryFilter = window.activeBudgetCategoryFilter || 'all';
+
+window.filterBudgetCategory = function(cat, btn) {
+    window.activeBudgetCategoryFilter = cat;
+    const container = document.getElementById('odontogram-list-container');
+    if (container) {
+        container.querySelectorAll('.filter-btn').forEach(b => {
+            if (b.id && b.id.startsWith('filter-cat-')) b.classList.remove('active');
+        });
+    }
+    if (btn) btn.classList.add('active');
+    renderBudgetListView();
+};
+
 async function renderBudgetListView(forceRefresh = false) {
     localStorage.setItem('dental_odontogram_subview', 'list');
     document.documentElement.setAttribute('data-odontogram-subview', 'list');
     const listContainer = document.getElementById('odontogram-list-container');
     const editorContainer = document.getElementById('odontogram-editor-container');
+    const medEditorContainer = document.getElementById('medical-budget-editor-container');
     if (listContainer) listContainer.classList.remove('hidden');
     if (editorContainer) editorContainer.classList.add('hidden');
+    if (medEditorContainer) medEditorContainer.classList.add('hidden');
 
     const searchInput = document.getElementById('budget-search-input');
     const statusFilter = document.getElementById('budget-status-filter');
@@ -1793,6 +1808,31 @@ async function renderBudgetListView(forceRefresh = false) {
 
     const invoices = await SupabaseDataService.getInvoices(forceRefresh);
     let budgets = invoices.filter(inv => inv.id && inv.id.startsWith('PRE-'));
+
+    // Calcular contadores por área clínica
+    let countAll = budgets.length;
+    let countDental = 0;
+    let countMed = 0;
+    let countXray = 0;
+    let countLab = 0;
+    let countProc = 0;
+
+    budgets.forEach(b => {
+        const cat = b.category || 'Odontología';
+        if (cat === 'Odontología') countDental++;
+        else if (cat === 'Consultas Médicas' || cat.includes('Consulta')) countMed++;
+        else if (cat === 'Rayos X & Imagenología' || cat.includes('Rayos') || cat.includes('Imagen')) countXray++;
+        else if (cat === 'Laboratorio Clínico' || cat.includes('Laboratorio')) countLab++;
+        else if (cat === 'Procedimientos Ambulatorios' || cat.includes('Procedimiento')) countProc++;
+        else countDental++;
+    });
+
+    const elAll = document.getElementById('count-cat-all'); if (elAll) elAll.innerText = countAll;
+    const elDental = document.getElementById('count-cat-dental'); if (elDental) elDental.innerText = countDental;
+    const elMed = document.getElementById('count-cat-med'); if (elMed) elMed.innerText = countMed;
+    const elXray = document.getElementById('count-cat-xray'); if (elXray) elXray.innerText = countXray;
+    const elLab = document.getElementById('count-cat-lab'); if (elLab) elLab.innerText = countLab;
+    const elProc = document.getElementById('count-cat-proc'); if (elProc) elProc.innerText = countProc;
 
     // Ordenar por orden de llegada: El último creado SIEMPRE de primero
     budgets.sort((a, b) => {
@@ -1824,46 +1864,87 @@ async function renderBudgetListView(forceRefresh = false) {
 
         const patients = await SupabaseDataService.getPatients();
 
-        const filtered = budgets.filter(b => {
+        let filtered = budgets.filter(b => {
             const patient = patients.find(p => p.id === b.patientId);
             const patientName = patient ? patient.fullname.toLowerCase() : '';
             const spec = b.items && b.items[0] && b.items[0].specialist ? b.items[0].specialist.toLowerCase() : '';
-            const matchText = b.id.toLowerCase().includes(query) || patientName.includes(query) || spec.includes(query);
+            const docName = (b.doctor || '').toLowerCase();
+            const catName = (b.category || '').toLowerCase();
+            const matchText = b.id.toLowerCase().includes(query) || patientName.includes(query) || spec.includes(query) || docName.includes(query) || catName.includes(query);
 
             if (status === 'all') return matchText;
-            if (status === 'Presupuesto') return matchText && b.status !== 'Aprobado';
+            if (status === 'Presupuesto') return matchText && b.status !== 'Aprobado' && b.status !== 'Facturado';
             if (status === 'Aprobado') return matchText && b.status === 'Aprobado';
+            if (status === 'Facturado') return matchText && b.status === 'Facturado';
             return matchText;
         });
 
+        // Filtrar por categoría / especialidad seleccionada
+        if (window.activeBudgetCategoryFilter && window.activeBudgetCategoryFilter !== 'all') {
+            const selCat = window.activeBudgetCategoryFilter;
+            if (selCat === 'Odontología') {
+                filtered = filtered.filter(b => !b.category || b.category === 'Odontología');
+            } else {
+                filtered = filtered.filter(b => b.category === selCat || (b.category && b.category.includes(selCat.substring(0, 6))));
+            }
+        }
+
         tableBody.innerHTML = '';
         if (filtered.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No se encontraron presupuestos.</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="8" class="text-center text-muted" style="padding: 30px;">No se encontraron presupuestos en este filtro.</td></tr>';
             return;
         }
 
         filtered.forEach(b => {
             const patient = patients.find(p => p.id === b.patientId);
             const patientName = patient ? patient.fullname : 'Desconocido';
-            const spec = b.items && b.items[0] && b.items[0].specialist ? b.items[0].specialist : 'Varios';
+            const spec = b.items && b.items[0] && b.items[0].specialist ? b.items[0].specialist : (b.doctor || 'Especialista');
             
             const isApproved = b.status === 'Aprobado';
             const isFacturado = b.status === 'Facturado';
             const badgeClass = isFacturado ? 'badge-tag blue' : (isApproved ? 'badge-tag green' : 'badge-tag orange');
             const statusLabel = isFacturado ? 'Finalizado' : (isApproved ? 'Aprobado' : 'Borrador');
 
+            // Category badge
+            let categoryBadge = '';
+            const cat = b.category || 'Odontología';
+            if (cat === 'Odontología') {
+                categoryBadge = `<span class="badge-tag green" style="font-size:0.74rem; font-weight:700;"><i class="fa-solid fa-tooth"></i> Odontología</span>`;
+            } else if (cat === 'Consultas Médicas' || cat.includes('Consulta')) {
+                categoryBadge = `<span class="badge-tag blue" style="font-size:0.74rem; font-weight:700;"><i class="fa-solid fa-stethoscope"></i> ${b.specialty || 'Consultas'}</span>`;
+            } else if (cat === 'Rayos X & Imagenología' || cat.includes('Rayos') || cat.includes('Imagen')) {
+                categoryBadge = `<span class="badge-tag purple" style="font-size:0.74rem; font-weight:700;"><i class="fa-solid fa-x-ray"></i> ${b.specialty || 'Rayos X'}</span>`;
+            } else if (cat === 'Laboratorio Clínico' || cat.includes('Laboratorio')) {
+                categoryBadge = `<span class="badge-tag amber" style="font-size:0.74rem; font-weight:700;"><i class="fa-solid fa-flask"></i> Laboratorio</span>`;
+            } else if (cat === 'Procedimientos Ambulatorios' || cat.includes('Procedimiento')) {
+                categoryBadge = `<span class="badge-tag red" style="font-size:0.74rem; font-weight:700;"><i class="fa-solid fa-syringe"></i> ${b.specialty || 'Procedimiento'}</span>`;
+            } else {
+                categoryBadge = `<span class="badge-tag gray" style="font-size:0.74rem; font-weight:700;">${cat}</span>`;
+            }
+
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td><strong>${b.id}</strong></td>
-                <td>${patientName}</td>
-                <td>${b.invoiceDate}</td>
-                <td>$${b.totalRef.toFixed(2)}</td>
-                <td>${spec}</td>
+                <td>${categoryBadge}</td>
+                <td>
+                    <strong>${patientName}</strong>
+                    ${patient && patient.cedula ? `<br><small class="text-muted">${patient.cedula}</small>` : ''}
+                </td>
+                <td>${b.invoiceDate || 'N/A'}</td>
+                <td>
+                    <strong style="color: #0f172a; font-size: 0.95rem;">$${b.totalRef.toFixed(2)}</strong>
+                    ${b.totalBcv ? `<br><small style="color: #0284c7; font-weight: 600;">${parseFloat(b.totalBcv).toFixed(2)} Bs.</small>` : ''}
+                </td>
+                <td>${b.doctor || spec}</td>
                 <td><span class="${badgeClass}" style="font-size:0.75rem; text-transform:none; padding: 2px 6px;">${statusLabel}</span></td>
                 <td style="text-align: center;">
                     <div style="display: flex; gap: 4px; justify-content: center; flex-wrap: wrap;">
                         <button class="btn btn-xs btn-outline" onclick="loadBudgetIntoEditor('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer;" title="Abrir y Editar Presupuesto"><i class="fa-solid fa-folder-open"></i> Abrir</button>
-                        <button class="btn btn-xs btn-success" onclick="window.sendBudgetWhatsApp('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; background:#25D366; border:none; color:#fff;" title="Enviar Presupuesto por WhatsApp"><i class="fa-brands fa-whatsapp"></i> WhatsApp</button>
+                        ${b.category && b.category !== 'Odontología' 
+                            ? `<button class="btn btn-xs btn-outline" onclick="window.printMedicalBudgetPDF('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; color: #0284c7; border-color: #bae6fd;" title="Imprimir Presupuesto PDF"><i class="fa-solid fa-file-pdf"></i> PDF</button>`
+                            : ''
+                        }
+                        <button class="btn btn-xs btn-success" onclick="${b.category && b.category !== 'Odontología' ? `window.sendMedicalBudgetWhatsApp('${b.id}')` : `window.sendBudgetWhatsApp('${b.id}')`}" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; background:#25D366; border:none; color:#fff;" title="Enviar Presupuesto por WhatsApp"><i class="fa-brands fa-whatsapp"></i> WhatsApp</button>
                         ${isApproved ? `<button class="btn btn-xs btn-success" onclick="window.finalizeBudgetDirect('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; background:#10b981; border:none; color:#fff;" title="Finalizar Tratamiento / Presupuesto"><i class="fa-solid fa-circle-check"></i> Finalizar</button>` : ''}
                         <button class="btn btn-xs btn-outline text-red" onclick="window.deleteBudget('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; border-color: #ef4444; color: #ef4444;" title="Eliminar Presupuesto (Enviar a Papelera)"><i class="fa-solid fa-trash-can"></i></button>
                     </div>
@@ -2201,15 +2282,669 @@ window.finalizePatientTreatment = async function(patientId) {
     }
 };
 
-window.loadBudgetIntoEditor = async function(budgetId) {
+// ==========================================================================
+// MOTOR DE PRESUPUESTOS MÉDICOS & MULTI-ESPECIALIDADES (SIN ODONTOGRAMA)
+// ==========================================================================
+window.currentMedicalBudgetItems = [];
+window.activeEditingMedicalBudgetId = null;
+window.activeMedicalSpecialtyCategory = 'Consultas Médicas';
+
+window.startBudgetCreation = async function(category) {
+    closeModal('modal-select-budget-type');
+    if (category === 'Odontología') {
+        await window.selectPatientAndLoadApprovedBudget(null);
+    } else {
+        await window.openMedicalBudgetEditor({ specialtyCategory: category });
+    }
+};
+
+window.openMedicalBudgetEditor = async function({ budgetId = null, specialtyCategory = 'Consultas Médicas' } = {}) {
+    localStorage.setItem('dental_odontogram_subview', 'medical-editor');
+    document.documentElement.setAttribute('data-odontogram-subview', 'medical-editor');
+
     const listContainer = document.getElementById('odontogram-list-container');
     const editorContainer = document.getElementById('odontogram-editor-container');
-    if (listContainer) listContainer.classList.add('hidden');
-    if (editorContainer) editorContainer.classList.remove('hidden');
+    const medEditorContainer = document.getElementById('medical-budget-editor-container');
 
+    if (listContainer) listContainer.classList.add('hidden');
+    if (editorContainer) editorContainer.classList.add('hidden');
+    if (medEditorContainer) medEditorContainer.classList.remove('hidden');
+
+    window.activeMedicalSpecialtyCategory = specialtyCategory;
+    window.activeEditingMedicalBudgetId = budgetId;
+
+    // Actualizar tasa BCV en el encabezado
+    const rate = getExchangeRate();
+    const rateEl = document.getElementById('med-budget-bcv-rate');
+    if (rateEl) rateEl.innerText = rate.toFixed(2);
+
+    // Cargar pacientes
+    const patientSelect = document.getElementById('med-budget-patient-select');
+    if (patientSelect) {
+        patientSelect.innerHTML = '<option value="">Cargando pacientes...</option>';
+        try {
+            const patients = await SupabaseDataService.getPatients();
+            patientSelect.innerHTML = '<option value="">-- Seleccionar Paciente --</option>' +
+                patients.map(p => `<option value="${p.id}">${p.fullname} ${p.cedula ? `(${p.cedula})` : ''}</option>`).join('');
+        } catch(e) {
+            patientSelect.innerHTML = '<option value="">-- Error cargando pacientes --</option>';
+        }
+    }
+
+    // Cargar especialistas (doctores)
+    const doctorSelect = document.getElementById('med-budget-doctor-select');
+    if (doctorSelect) {
+        try {
+            const users = await SupabaseDataService.getUsers();
+            const doctors = users.filter(u => u.role === 'Odontólogo' || u.role === 'Especialista' || u.role === 'Doctor' || (u.name && u.name.toLowerCase().includes('dr')) || (u.fullname && u.fullname.toLowerCase().includes('dr')));
+            if (doctors.length > 0) {
+                doctorSelect.innerHTML = doctors.map(d => `<option value="${d.fullname || d.name}" data-id="${d.id}">${d.fullname || d.name} (${d.role || 'Médico'})</option>`).join('');
+            } else {
+                doctorSelect.innerHTML = '<option value="Médico Tratante">Médico Tratante</option>';
+            }
+        } catch(e) {
+            doctorSelect.innerHTML = '<option value="Médico Tratante">Médico Tratante</option>';
+        }
+    }
+
+    // Configurar Departamento / Área
+    const deptSelect = document.getElementById('med-budget-department-select');
+    if (deptSelect) {
+        deptSelect.value = specialtyCategory;
+    }
+
+    // Título dinámico
+    const titleEl = document.getElementById('med-budget-title');
+    const icons = {
+        'Odontología': '<i class="fa-solid fa-tooth text-green"></i> Presupuesto Odontológico',
+        'Consultas Médicas': '<i class="fa-solid fa-stethoscope text-blue"></i> Presupuesto de Consultas Médicas',
+        'Rayos X & Imagenología': '<i class="fa-solid fa-x-ray text-purple"></i> Presupuesto de Rayos X & Imagenología',
+        'Laboratorio Clínico': '<i class="fa-solid fa-flask text-amber"></i> Presupuesto de Laboratorio Clínico',
+        'Procedimientos Ambulatorios': '<i class="fa-solid fa-syringe text-red"></i> Presupuesto de Procedimientos Ambulatorios'
+    };
+    if (titleEl) {
+        titleEl.innerHTML = icons[specialtyCategory] || `<i class="fa-solid fa-file-invoice-dollar text-cyan"></i> Presupuesto: ${specialtyCategory}`;
+    }
+
+    // Fechas
+    const dateInput = document.getElementById('med-budget-date');
+    if (dateInput) {
+        dateInput.value = new Date().toISOString().split('T')[0];
+    }
+
+    // Cargar servicios en el baremo
+    await window.refreshMedicalBaremoSelect();
+
+    // Si estamos editando un presupuesto existente:
+    if (budgetId) {
+        try {
+            const invoices = await SupabaseDataService.getInvoices();
+            const budget = invoices.find(inv => String(inv.id) === String(budgetId));
+            if (budget) {
+                window.activeEditingMedicalBudgetId = budget.id;
+                const idBadge = document.getElementById('med-budget-id-badge');
+                if (idBadge) {
+                    idBadge.innerText = budget.id;
+                    idBadge.className = 'badge-tag green';
+                }
+
+                if (patientSelect) {
+                    patientSelect.value = budget.patientId || '';
+                    window.onMedicalBudgetPatientChange(budget.patientId);
+                }
+                if (deptSelect && budget.category) {
+                    deptSelect.value = budget.category;
+                }
+                if (doctorSelect && budget.doctor) {
+                    doctorSelect.value = budget.doctor;
+                }
+                if (dateInput && budget.invoiceDate) {
+                    dateInput.value = budget.invoiceDate;
+                }
+                const validitySelect = document.getElementById('med-budget-validity');
+                if (validitySelect && budget.validUntil) {
+                    validitySelect.value = String(budget.validUntil);
+                }
+                const notesEl = document.getElementById('med-budget-notes');
+                if (notesEl) {
+                    notesEl.value = budget.notes || budget.footerText || '';
+                }
+
+                window.currentMedicalBudgetItems = (budget.items || []).map(it => ({
+                    code: it.code || it.serviceCode || '',
+                    name: it.name || it.treatment || 'Servicio',
+                    price: parseFloat(it.price) || 0,
+                    qty: parseInt(it.qty) || 1,
+                    discount: parseFloat(it.discount) || 0,
+                    totalUSD: parseFloat(it.totalUSD || (it.price * (it.qty || 1))),
+                    totalBs: parseFloat(it.totalBs || (it.totalUSD * rate))
+                }));
+
+                window.renderMedicalBudgetItems();
+                return;
+            }
+        } catch(e) {
+            console.error('Error loading medical budget:', e);
+        }
+    }
+
+    // Presupuesto nuevo en blanco
+    window.activeEditingMedicalBudgetId = null;
+    window.currentMedicalBudgetItems = [];
+    const idBadge = document.getElementById('med-budget-id-badge');
+    if (idBadge) {
+        idBadge.innerText = 'Nuevo Presupuesto';
+        idBadge.className = 'badge-tag gray';
+    }
+    const notesEl = document.getElementById('med-budget-notes');
+    if (notesEl) notesEl.value = '';
+
+    const infoBox = document.getElementById('med-budget-patient-info-box');
+    if (infoBox) {
+        infoBox.innerHTML = '<span style="color: #64748b;"><i class="fa-solid fa-circle-info"></i> Seleccione un paciente para ver sus datos clínicos de contacto.</span>';
+    }
+
+    window.renderMedicalBudgetItems();
+};
+
+window.backToBudgetList = function() {
+    localStorage.setItem('dental_odontogram_subview', 'list');
+    document.documentElement.setAttribute('data-odontogram-subview', 'list');
+    const listContainer = document.getElementById('odontogram-list-container');
+    const editorContainer = document.getElementById('odontogram-editor-container');
+    const medEditorContainer = document.getElementById('medical-budget-editor-container');
+    if (listContainer) listContainer.classList.remove('hidden');
+    if (editorContainer) editorContainer.classList.add('hidden');
+    if (medEditorContainer) medEditorContainer.classList.add('hidden');
+    renderBudgetListView();
+};
+
+window.onMedicalBudgetPatientChange = async function(patientId) {
+    const infoBox = document.getElementById('med-budget-patient-info-box');
+    if (!infoBox) return;
+
+    if (!patientId) {
+        infoBox.innerHTML = '<span style="color: #64748b;"><i class="fa-solid fa-circle-info"></i> Seleccione un paciente para ver sus datos clínicos de contacto.</span>';
+        return;
+    }
+
+    try {
+        const patients = await SupabaseDataService.getPatients();
+        const p = patients.find(pat => String(pat.id) === String(patientId));
+        if (p) {
+            infoBox.innerHTML = `
+                <div style="line-height: 1.35;">
+                    <strong style="color: #0f172a; display: block; font-size: 0.9rem;">${p.fullname}</strong>
+                    <span style="color: #64748b;">Cédula: <strong>${p.cedula || 'N/A'}</strong> • Edad: <strong>${p.age ? p.age + ' años' : 'N/A'}</strong> • Teléfono: <strong>${p.phone || 'N/A'}</strong></span>
+                </div>
+            `;
+        }
+    } catch(e) {
+        console.error(e);
+    }
+};
+
+window.onMedicalBudgetDepartmentChange = async function(dept) {
+    window.activeMedicalSpecialtyCategory = dept;
+    const titleEl = document.getElementById('med-budget-title');
+    const icons = {
+        'Consultas Médicas': '<i class="fa-solid fa-stethoscope text-blue"></i> Presupuesto de Consultas Médicas',
+        'Rayos X & Imagenología': '<i class="fa-solid fa-x-ray text-purple"></i> Presupuesto de Rayos X & Imagenología',
+        'Laboratorio Clínico': '<i class="fa-solid fa-flask text-amber"></i> Presupuesto de Laboratorio Clínico',
+        'Procedimientos Ambulatorios': '<i class="fa-solid fa-syringe text-red"></i> Presupuesto de Procedimientos Ambulatorios'
+    };
+    if (titleEl) {
+        titleEl.innerHTML = icons[dept] || `<i class="fa-solid fa-file-invoice-dollar text-cyan"></i> Presupuesto: ${dept}`;
+    }
+    await window.refreshMedicalBaremoSelect();
+};
+
+window.refreshMedicalBaremoSelect = async function() {
+    const srvSelect = document.getElementById('med-item-baremo-select');
+    if (!srvSelect) return;
+
+    srvSelect.innerHTML = '<option value="">Cargando baremo...</option>';
+    try {
+        const baremo = await SupabaseDataService.getBaremo();
+        const showAll = document.getElementById('med-budget-show-all-baremo')?.checked;
+        const currentDept = document.getElementById('med-budget-department-select')?.value || 'Consultas Médicas';
+
+        let filtered = baremo;
+        if (!showAll) {
+            const deptLow = currentDept.toLowerCase();
+            filtered = baremo.filter(b => {
+                const cat = (b.category || '').toLowerCase();
+                if (deptLow.includes('consulta')) {
+                    return cat.includes('consulta') || cat.includes('medicina') || cat.includes('cardiolog') || cat.includes('pediatr') || cat.includes('especialidad');
+                } else if (deptLow.includes('rayos') || deptLow.includes('imagen')) {
+                    return cat.includes('rayos') || cat.includes('radio') || cat.includes('eco') || cat.includes('imagen') || cat.includes('tórax') || cat.includes('rx');
+                } else if (deptLow.includes('laboratorio')) {
+                    return cat.includes('lab') || cat.includes('sangre') || cat.includes('perfil') || cat.includes('examen') || cat.includes('química');
+                } else if (deptLow.includes('procedimiento')) {
+                    return cat.includes('cirug') || cat.includes('proced') || cat.includes('curac') || cat.includes('sutura');
+                }
+                return true;
+            });
+            // Si el filtro no encontró ítems específicos, mostramos todo el baremo para no dejar en blanco
+            if (filtered.length === 0) filtered = baremo;
+        }
+
+        srvSelect.innerHTML = '<option value="">-- Seleccionar Servicio / Procedimiento --</option>' +
+            filtered.map(b => `<option value="${b.code || b.id}" data-name="${b.name}" data-price="${b.price || 0}">${b.name} ($${parseFloat(b.price || 0).toFixed(2)})</option>`).join('');
+    } catch(e) {
+        srvSelect.innerHTML = '<option value="">Error cargando baremo</option>';
+    }
+};
+
+window.onMedicalBaremoSelected = function(code) {
+    const srvSelect = document.getElementById('med-item-baremo-select');
+    const opt = srvSelect ? srvSelect.options[srvSelect.selectedIndex] : null;
+    const priceInput = document.getElementById('med-item-price');
+    if (opt && priceInput) {
+        const price = parseFloat(opt.getAttribute('data-price') || 0);
+        priceInput.value = price.toFixed(2);
+    }
+};
+
+window.addMedicalBudgetItem = function() {
+    const srvSelect = document.getElementById('med-item-baremo-select');
+    const opt = srvSelect ? srvSelect.options[srvSelect.selectedIndex] : null;
+    if (!opt || !opt.value) {
+        Swal.fire({ icon: 'warning', title: 'Servicio Requerido', text: 'Por favor seleccione un servicio del baremo.' });
+        return;
+    }
+
+    const name = opt.getAttribute('data-name') || opt.text.split(' ($')[0];
+    const code = opt.value;
+    const price = parseFloat(document.getElementById('med-item-price')?.value) || 0;
+    const qty = parseInt(document.getElementById('med-item-qty')?.value) || 1;
+    const discount = parseFloat(document.getElementById('med-item-discount')?.value) || 0;
+
+    const rate = getExchangeRate();
+    const itemSubtotal = price * qty;
+    const itemTotalUSD = Math.max(0, itemSubtotal * (1 - discount / 100));
+    const itemTotalBs = itemTotalUSD * rate;
+
+    window.currentMedicalBudgetItems.push({
+        code: code,
+        name: name,
+        price: price,
+        qty: qty,
+        discount: discount,
+        totalUSD: itemTotalUSD,
+        totalBs: itemTotalBs
+    });
+
+    // Reset fields
+    if (srvSelect) srvSelect.value = '';
+    const priceInput = document.getElementById('med-item-price');
+    if (priceInput) priceInput.value = '';
+    const qtyInput = document.getElementById('med-item-qty');
+    if (qtyInput) qtyInput.value = '1';
+    const discInput = document.getElementById('med-item-discount');
+    if (discInput) discInput.value = '0';
+
+    window.renderMedicalBudgetItems();
+};
+
+window.removeMedicalBudgetItem = function(index) {
+    window.currentMedicalBudgetItems.splice(index, 1);
+    window.renderMedicalBudgetItems();
+};
+
+window.renderMedicalBudgetItems = function() {
+    const tbody = document.getElementById('med-budget-items-tbody');
+    if (!tbody) return;
+
+    const rate = getExchangeRate();
+    let subtotalUSD = 0;
+    let totalDiscountUSD = 0;
+    let totalFinalUSD = 0;
+
+    if (window.currentMedicalBudgetItems.length === 0) {
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="6" class="text-center text-muted" style="padding: 30px;">Cargue los servicios o estudios médicos para calcular el presupuesto.</td></tr>';
+    } else {
+        tbody.innerHTML = window.currentMedicalBudgetItems.map((it, idx) => {
+            const rawSub = it.price * it.qty;
+            const discAmt = rawSub * (it.discount / 100);
+            const netUSD = rawSub - discAmt;
+            const netBs = netUSD * rate;
+
+            subtotalUSD += rawSub;
+            totalDiscountUSD += discAmt;
+            totalFinalUSD += netUSD;
+
+            return `
+                <tr>
+                    <td>
+                        <strong style="color: #0f172a; font-size: 0.92rem;">${it.name}</strong>
+                        ${it.code ? `<br><small style="color: #64748b;">Cód: ${it.code}</small>` : ''}
+                    </td>
+                    <td class="text-center font-weight-bold">${it.qty}</td>
+                    <td class="text-right">$${it.price.toFixed(2)}</td>
+                    <td class="text-center">${it.discount > 0 ? `<span class="badge-tag red">${it.discount}%</span>` : '-'}</td>
+                    <td class="text-right">
+                        <strong style="color: #0f172a; font-size: 0.95rem;">$${netUSD.toFixed(2)}</strong>
+                        <br><small style="color: #0284c7; font-weight: 600;">${netBs.toFixed(2)} Bs.</small>
+                    </td>
+                    <td class="text-center">
+                        <button type="button" class="btn btn-xs btn-outline text-red" onclick="window.removeMedicalBudgetItem(${idx})" style="border: none; color: #ef4444; cursor: pointer;" title="Eliminar ítem">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    // Totales calculados
+    if (window.currentMedicalBudgetItems.length > 0) {
+        totalFinalUSD = Math.max(0, subtotalUSD - totalDiscountUSD);
+    }
+    const totalFinalBs = totalFinalUSD * rate;
+
+    const elSub = document.getElementById('med-summary-subtotal');
+    if (elSub) elSub.innerText = `$${subtotalUSD.toFixed(2)}`;
+
+    const elDisc = document.getElementById('med-summary-discount');
+    if (elDisc) elDisc.innerText = `-$${totalDiscountUSD.toFixed(2)}`;
+
+    const elTot = document.getElementById('med-summary-total');
+    if (elTot) elTot.innerText = `$${totalFinalUSD.toFixed(2)}`;
+
+    const elBs = document.getElementById('med-summary-bs');
+    if (elBs) elBs.innerText = `${totalFinalBs.toFixed(2)} Bs.`;
+};
+
+window.saveMedicalBudget = async function(status = 'Presupuesto') {
+    const patientSelect = document.getElementById('med-budget-patient-select');
+    const patientId = patientSelect ? patientSelect.value : null;
+
+    if (!patientId) {
+        Swal.fire({ icon: 'warning', title: 'Paciente Requerido', text: 'Debe seleccionar un paciente para el presupuesto.' });
+        return;
+    }
+
+    if (window.currentMedicalBudgetItems.length === 0) {
+        Swal.fire({ icon: 'warning', title: 'Presupuesto Vacío', text: 'Debe añadir al menos un servicio o estudio al presupuesto.' });
+        return;
+    }
+
+    const deptSelect = document.getElementById('med-budget-department-select');
+    const department = deptSelect ? deptSelect.value : 'Consultas Médicas';
+
+    const doctorSelect = document.getElementById('med-budget-doctor-select');
+    const doctorName = doctorSelect ? doctorSelect.value : 'Médico Tratante';
+
+    const dateInput = document.getElementById('med-budget-date');
+    const date = dateInput && dateInput.value ? dateInput.value : new Date().toISOString().split('T')[0];
+
+    const validitySelect = document.getElementById('med-budget-validity');
+    const validityDays = validitySelect ? validitySelect.value : '30';
+
+    const notes = document.getElementById('med-budget-notes')?.value || '';
+
+    const rate = getExchangeRate();
+    let totalRef = 0;
+    window.currentMedicalBudgetItems.forEach(it => {
+        totalRef += (it.totalUSD || (it.price * it.qty));
+    });
+    const totalBcv = totalRef * rate;
+
+    // Generar o conservar ID del presupuesto
+    const budgetId = window.activeEditingMedicalBudgetId || ('PRE-' + Date.now().toString().slice(-6));
+
+    const invoiceObj = {
+        id: budgetId,
+        patientId: patientId,
+        invoiceDate: date,
+        paymentMethod: 'Por definir',
+        paymentTerms: 'Contado',
+        currency: 'USD',
+        category: department,
+        specialty: department,
+        doctor: doctorName,
+        items: window.currentMedicalBudgetItems,
+        totalRef: totalRef,
+        totalBcv: totalBcv,
+        status: status, // 'Presupuesto' | 'Aprobado'
+        notes: notes,
+        validUntil: validityDays,
+        createdAt: new Date().toISOString()
+    };
+
+    try {
+        // 1. Guardar formalmente en Supabase Cloud (tabla invoices)
+        await SupabaseDataService.saveInvoice(invoiceObj);
+
+        // 2. Asociar al paciente en Supabase
+        const patients = await SupabaseDataService.getPatients();
+        const pat = patients.find(p => String(p.id) === String(patientId));
+        if (pat) {
+            if (!pat.metadata) pat.metadata = {};
+            if (!pat.metadata.budgets) pat.metadata.budgets = [];
+            const existingIdx = pat.metadata.budgets.findIndex(b => String(b.id) === String(budgetId));
+            if (existingIdx >= 0) {
+                pat.metadata.budgets[existingIdx] = invoiceObj;
+            } else {
+                pat.metadata.budgets.unshift(invoiceObj);
+            }
+            await SupabaseDataService.savePatient(pat);
+        }
+
+        window.activeEditingMedicalBudgetId = budgetId;
+        const idBadge = document.getElementById('med-budget-id-badge');
+        if (idBadge) {
+            idBadge.innerText = budgetId;
+            idBadge.className = status === 'Aprobado' ? 'badge-tag green' : 'badge-tag orange';
+        }
+
+        Swal.fire({
+            icon: 'success',
+            title: status === 'Aprobado' ? '¡Presupuesto Aprobado!' : '¡Borrador Guardado!',
+            text: `Presupuesto ${budgetId} guardado exitosamente en la base de datos.`,
+            timer: 2000,
+            showConfirmButton: false
+        });
+    } catch(err) {
+        console.error('Error saving medical budget:', err);
+        Swal.fire({ icon: 'error', title: 'Error al Guardar', text: err.message || err });
+    }
+};
+
+window.printMedicalBudgetPDF = async function(budgetId = null) {
+    let budget = null;
+    if (budgetId) {
+        const invoices = await SupabaseDataService.getInvoices();
+        budget = invoices.find(inv => String(inv.id) === String(budgetId));
+    } else if (window.activeEditingMedicalBudgetId) {
+        const invoices = await SupabaseDataService.getInvoices();
+        budget = invoices.find(inv => String(inv.id) === String(window.activeEditingMedicalBudgetId));
+    }
+
+    if (!budget) {
+        Swal.fire({ icon: 'warning', title: 'Guarde el presupuesto', text: 'Debe guardar el presupuesto antes de imprimirlo en PDF.' });
+        return;
+    }
+
+    const patients = await SupabaseDataService.getPatients();
+    const patient = patients.find(p => String(p.id) === String(budget.patientId)) || {};
+    const rate = getExchangeRate();
+
+    const printContent = `
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+            <meta charset="UTF-8">
+            <title>Presupuesto Médico - ${budget.id} - ${patient.fullname || 'Paciente'}</title>
+            <style>
+                body { font-family: 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 25px; color: #1e293b; background: #fff; }
+                .header-table { width: 100%; border-bottom: 2px solid #0d9488; padding-bottom: 14px; margin-bottom: 20px; }
+                .brand-title { font-size: 22px; font-weight: 800; color: #0f172a; margin: 0; letter-spacing: 0.5px; }
+                .brand-sub { font-size: 11px; color: #0d9488; font-weight: 700; text-transform: uppercase; margin-top: 2px; }
+                .meta-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; font-size: 13px; line-height: 1.6; }
+                .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+                table.items-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+                table.items-table th { background: #0f172a; color: #ffffff; padding: 9px 10px; text-align: left; font-weight: 700; }
+                table.items-table td { padding: 9px 10px; border-bottom: 1px solid #e2e8f0; }
+                .text-right { text-align: right; }
+                .text-center { text-align: center; }
+                .total-box { margin-top: 20px; display: flex; justify-content: flex-end; }
+                .total-table { width: 320px; font-size: 13px; }
+                .total-table td { padding: 6px 0; }
+                .total-main { font-size: 18px; font-weight: 800; color: #0d9488; border-top: 2px solid #0f172a; padding-top: 8px; }
+                .notes-box { margin-top: 25px; background: #f1f5f9; border-left: 4px solid #0d9488; padding: 10px 14px; font-size: 12px; line-height: 1.5; }
+                .signatures { margin-top: 50px; display: grid; grid-template-columns: 1fr 1fr; gap: 60px; text-align: center; font-size: 12px; }
+                .sig-line { border-top: 1px solid #334155; padding-top: 6px; }
+                @media print { body { padding: 0; } }
+            </style>
+        </head>
+        <body>
+            <table class="header-table">
+                <tr>
+                    <td>
+                        <div class="brand-title">CLÍNICA VIDASANA</div>
+                        <div class="brand-sub">Centro Médico Asistencial & Especialidades Ambulatorias</div>
+                        <div style="font-size: 11px; color: #64748b; margin-top: 3px;">RIF: J-50189230-1 • Torre de Consultorios Médicos</div>
+                    </td>
+                    <td class="text-right" style="vertical-align: top;">
+                        <div style="font-size: 18px; font-weight: 800; color: #0d9488;">PRESUPUESTO MÉDICO</div>
+                        <div style="font-size: 13px; font-weight: 700; color: #0f172a;">N° ${budget.id}</div>
+                        <div style="font-size: 12px; color: #64748b;">Fecha: ${budget.invoiceDate || new Date().toISOString().split('T')[0]}</div>
+                    </td>
+                </tr>
+            </table>
+
+            <div class="meta-box">
+                <div class="meta-grid">
+                    <div><strong>Paciente:</strong> ${patient.fullname || 'Paciente Clínico'}</div>
+                    <div><strong>Cédula / ID:</strong> ${patient.cedula || patient.id || 'N/A'}</div>
+                    <div><strong>Área / Especialidad:</strong> ${budget.category || 'Consultas Médicas'}</div>
+                    <div><strong>Especialista Tratante:</strong> ${budget.doctor || 'Especialista Asignado'}</div>
+                    <div><strong>Teléfono:</strong> ${patient.phone || 'N/A'}</div>
+                    <div><strong>Validez de la Propuesta:</strong> ${budget.validUntil || '30'} días continuos</div>
+                </div>
+            </div>
+
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th style="width: 5%;">#</th>
+                        <th style="width: 50%;">Descripción del Servicio / Estudio</th>
+                        <th style="width: 10%;" class="text-center">Cant.</th>
+                        <th style="width: 15%;" class="text-right">Precio Unit. ($)</th>
+                        <th style="width: 20%;" class="text-right">Total Ref. ($)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${(budget.items || []).map((item, idx) => `
+                        <tr>
+                            <td class="text-center text-muted">${idx + 1}</td>
+                            <td>
+                                <strong>${item.name || 'Servicio Médico'}</strong>
+                                ${item.code ? `<br><small style="color: #64748b;">Cód: ${item.code}</small>` : ''}
+                            </td>
+                            <td class="text-center">${item.qty || 1}</td>
+                            <td class="text-right">$${parseFloat(item.price || 0).toFixed(2)}</td>
+                            <td class="text-right font-weight-bold">$${parseFloat(item.totalUSD || (item.price * (item.qty || 1))).toFixed(2)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+
+            <div class="total-box">
+                <table class="total-table">
+                    <tr>
+                        <td class="text-muted">Tasa Oficial BCV:</td>
+                        <td class="text-right font-weight-bold">${rate.toFixed(2)} Bs./USD</td>
+                    </tr>
+                    <tr class="total-main">
+                        <td>TOTAL ($ USD):</td>
+                        <td class="text-right">$${parseFloat(budget.totalRef || 0).toFixed(2)}</td>
+                    </tr>
+                    <tr>
+                        <td style="color: #0284c7; font-weight: bold;">TOTAL (Bs. Oficial):</td>
+                        <td class="text-right" style="color: #0284c7; font-weight: bold;">${parseFloat(budget.totalBcv || (budget.totalRef * rate)).toFixed(2)} Bs.</td>
+                    </tr>
+                </table>
+            </div>
+
+            ${budget.notes ? `
+                <div class="notes-box">
+                    <strong>Indicaciones Clínicas & Observaciones:</strong><br>
+                    ${budget.notes}
+                </div>
+            ` : ''}
+
+            <div class="signatures">
+                <div>
+                    <div class="sig-line">
+                        <strong>${budget.doctor || 'Especialista Tratante'}</strong><br>
+                        <span style="color: #64748b; font-size: 11px;">Firma y Sello Médico</span>
+                    </div>
+                </div>
+                <div>
+                    <div class="sig-line">
+                        <strong>${patient.fullname || 'Paciente / Representante'}</strong><br>
+                        <span style="color: #64748b; font-size: 11px;">Firma de Aceptación y Conformidad</span>
+                    </div>
+                </div>
+            </div>
+        </body>
+        </html>
+    `;
+
+    const win = window.open('', '_blank');
+    win.document.write(printContent);
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 500);
+};
+
+window.sendMedicalBudgetWhatsApp = async function(budgetId = null) {
+    let budget = null;
+    if (budgetId) {
+        const invoices = await SupabaseDataService.getInvoices();
+        budget = invoices.find(inv => String(inv.id) === String(budgetId));
+    } else if (window.activeEditingMedicalBudgetId) {
+        const invoices = await SupabaseDataService.getInvoices();
+        budget = invoices.find(inv => String(inv.id) === String(window.activeEditingMedicalBudgetId));
+    }
+
+    if (!budget) {
+        Swal.fire({ icon: 'warning', title: 'Guarde el presupuesto', text: 'Debe guardar el presupuesto antes de enviarlo por WhatsApp.' });
+        return;
+    }
+
+    const patients = await SupabaseDataService.getPatients();
+    const patient = patients.find(p => String(p.id) === String(budget.patientId)) || {};
+    const rate = getExchangeRate();
+    const phone = (patient.phone || '').replace(/[^0-9]/g, '');
+
+    const itemsText = (budget.items || []).map((it, idx) => `• *${it.name}* (x${it.qty || 1}) - $${parseFloat(it.totalUSD || it.price).toFixed(2)}`).join('\n');
+    const msg = `🏥 *CLÍNICA VIDASANA*\nEstimado/a *${patient.fullname || 'Paciente'}*,\nLe hacemos entrega de su presupuesto para el área de *${budget.category || 'Consultas Médicas'}*:\n\n📋 *Presupuesto:* #${budget.id}\n👨‍⚕️ *Especialista:* ${budget.doctor || 'VidaSana'}\n\n*Servicios presupuestados:*\n${itemsText}\n\n💰 *Total Ref.:* $${parseFloat(budget.totalRef || 0).toFixed(2)} USD\n🇻🇪 *Total Oficial:* ${parseFloat(budget.totalBcv || (budget.totalRef * rate)).toFixed(2)} Bs. (Tasa BCV: ${rate.toFixed(2)})\n⏳ *Validez:* ${budget.validUntil || 30} días continuos.\n\n${budget.notes ? `📝 *Indicaciones:* ${budget.notes}\n\n` : ''}Quedamos a su entera disposición para coordinar su cita. ¡Feliz día!`;
+
+    const cleanPhone = phone.startsWith('58') ? phone : ('58' + phone.replace(/^0/, ''));
+    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
+    window.open(url, '_blank');
+};
+
+window.loadBudgetIntoEditor = async function(budgetId) {
     const invoices = await SupabaseDataService.getInvoices();
     const budget = invoices.find(inv => String(inv.id) === String(budgetId));
     if (!budget) return;
+
+    if (budget.category && budget.category !== 'Odontología') {
+        await window.openMedicalBudgetEditor({ budgetId: budget.id, specialtyCategory: budget.category });
+        return;
+    }
+
+    const listContainer = document.getElementById('odontogram-list-container');
+    const editorContainer = document.getElementById('odontogram-editor-container');
+    const medEditorContainer = document.getElementById('medical-budget-editor-container');
+    if (listContainer) listContainer.classList.add('hidden');
+    if (medEditorContainer) medEditorContainer.classList.add('hidden');
+    if (editorContainer) editorContainer.classList.remove('hidden');
 
     activeEditingBudgetId = budget.id;
 
@@ -8667,8 +9402,8 @@ function initGlobalEvents() {
     // Historial y Listado de Presupuestos Buttons
     const btnNewBudget = document.getElementById('btn-new-budget');
     if (btnNewBudget) {
-        btnNewBudget.onclick = async () => {
-            await window.selectPatientAndLoadApprovedBudget(null);
+        btnNewBudget.onclick = () => {
+            openModal('modal-select-budget-type');
         };
     }
 

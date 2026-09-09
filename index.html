@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=221">
+    <link rel="stylesheet" href="styles.css?v=254">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -85,12 +85,30 @@
             display: block !important;
         }
 
-        /* Instant Odontogram Subview Persistence (Editor vs List) */
-        html[data-active-tab="odontogram"][data-odontogram-subview="editor"] #odontogram-list-container {
+        /* Instant Odontogram Subview Persistence (Editor vs List vs Medical Editor) */
+        html[data-active-tab="odontogram"][data-odontogram-subview="editor"] #odontogram-list-container,
+        html[data-active-tab="odontogram"][data-odontogram-subview="editor"] #medical-budget-editor-container {
             display: none !important;
         }
         html[data-active-tab="odontogram"][data-odontogram-subview="editor"] #odontogram-editor-container {
             display: block !important;
+        }
+
+        html[data-active-tab="odontogram"][data-odontogram-subview="medical-editor"] #odontogram-list-container,
+        html[data-active-tab="odontogram"][data-odontogram-subview="medical-editor"] #odontogram-editor-container {
+            display: none !important;
+        }
+        html[data-active-tab="odontogram"][data-odontogram-subview="medical-editor"] #medical-budget-editor-container {
+            display: block !important;
+        }
+
+        .budget-type-card {
+            transition: all 0.22s ease-in-out;
+        }
+        .budget-type-card:hover {
+            border-color: #0d9488 !important;
+            transform: translateY(-3px);
+            box-shadow: 0 10px 24px rgba(13, 148, 136, 0.15) !important;
         }
     </style>
 </head>
@@ -565,18 +583,30 @@
                             </div>
                         </div>
 
+                        <!-- Filtros Rápidos por Área / Especialidad -->
+                        <div class="card mb-15" style="padding: 10px 16px; border: 1px solid var(--border-color); border-radius: 12px; background: rgba(0,0,0,0.02); display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                            <strong style="font-size: 0.84rem; color: #64748b; margin-right: 4px;"><i class="fa-solid fa-filter text-cyan"></i> Área Clínica:</strong>
+                            <button type="button" class="filter-btn active" id="filter-cat-all" onclick="window.filterBudgetCategory('all', this)" style="font-weight: 600; padding: 6px 14px; border-radius: 8px;">Todos (<span id="count-cat-all">0</span>)</button>
+                            <button type="button" class="filter-btn" id="filter-cat-dental" onclick="window.filterBudgetCategory('Odontología', this)" style="font-weight: 600; padding: 6px 14px; border-radius: 8px;"><i class="fa-solid fa-tooth text-green"></i> Odontología (<span id="count-cat-dental">0</span>)</button>
+                            <button type="button" class="filter-btn" id="filter-cat-med" onclick="window.filterBudgetCategory('Consultas Médicas', this)" style="font-weight: 600; padding: 6px 14px; border-radius: 8px;"><i class="fa-solid fa-stethoscope text-blue"></i> Consultas Médicas (<span id="count-cat-med">0</span>)</button>
+                            <button type="button" class="filter-btn" id="filter-cat-xray" onclick="window.filterBudgetCategory('Rayos X & Imagenología', this)" style="font-weight: 600; padding: 6px 14px; border-radius: 8px;"><i class="fa-solid fa-x-ray text-purple"></i> Rayos X & Imagen (<span id="count-cat-xray">0</span>)</button>
+                            <button type="button" class="filter-btn" id="filter-cat-lab" onclick="window.filterBudgetCategory('Laboratorio Clínico', this)" style="font-weight: 600; padding: 6px 14px; border-radius: 8px;"><i class="fa-solid fa-flask text-amber"></i> Laboratorio (<span id="count-cat-lab">0</span>)</button>
+                            <button type="button" class="filter-btn" id="filter-cat-proc" onclick="window.filterBudgetCategory('Procedimientos Ambulatorios', this)" style="font-weight: 600; padding: 6px 14px; border-radius: 8px;"><i class="fa-solid fa-syringe text-red"></i> Procedimientos (<span id="count-cat-proc">0</span>)</button>
+                        </div>
+
                         <!-- Filtros del Listado -->
                         <div class="card mb-20">
                             <div class="card-body" style="display: flex; gap: 15px; flex-wrap: wrap; align-items: center; padding: 15px;">
                                 <div style="flex: 1.5; min-width: 250px; position: relative;">
-                                    <input type="text" id="budget-search-input" class="form-input" placeholder="Buscar paciente o código..." style="padding: 9px 38px 9px 14px; width: 100%; border-radius: 8px; height: 42px; min-height: 42px; line-height: normal; border: 1px solid var(--border-color); font-size: 0.88rem; box-sizing: border-box;">
+                                    <input type="text" id="budget-search-input" class="form-input" placeholder="Buscar por paciente, cédula o código de presupuesto..." style="padding: 9px 38px 9px 14px; width: 100%; border-radius: 8px; height: 42px; min-height: 42px; line-height: normal; border: 1px solid var(--border-color); font-size: 0.88rem; box-sizing: border-box;">
                                     <i class="fa-solid fa-magnifying-glass" style="position: absolute; right: 14px; left: auto; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none; font-size: 0.9rem;"></i>
                                 </div>
                                 <div style="flex: 0.8; min-width: 150px;">
                                     <select id="budget-status-filter" class="form-control" style="width: 100%; border-radius: 8px; height: 42px; min-height: 42px; line-height: 1.4; padding: 8px 12px; border: 1px solid var(--border-color); background: var(--bg-card); font-size: 0.88rem; box-sizing: border-box;">
-                                        <option value="all" selected>Todos los Presupuestos</option>
+                                        <option value="all" selected>Todos los Estatus</option>
                                         <option value="Presupuesto">Solo Borradores / Cotizaciones</option>
                                         <option value="Aprobado">Solo Aprobados / Certificados</option>
+                                        <option value="Facturado">Solo Finalizados / Facturados</option>
                                     </select>
                                 </div>
                             </div>
@@ -589,17 +619,18 @@
                                     <table class="table table-compact" id="budget-list-table">
                                         <thead>
                                             <tr>
-                                                <th style="width: 12%;">Código ID</th>
-                                                <th style="width: 25%;">Paciente</th>
-                                                <th style="width: 15%;">Fecha Emisión</th>
-                                                <th style="width: 15%;">Total Ref. ($)</th>
-                                                <th style="width: 18%;">Especialista</th>
-                                                <th style="width: 10%;">Estatus</th>
-                                                <th style="width: 10%; text-align: center;">Acciones</th>
+                                                <th style="width: 11%;">Código ID</th>
+                                                <th style="width: 15%;">Área / Especialidad</th>
+                                                <th style="width: 22%;">Paciente</th>
+                                                <th style="width: 11%;">Fecha Emisión</th>
+                                                <th style="width: 15%;">Total Ref. ($ / Bs.)</th>
+                                                <th style="width: 15%;">Especialista</th>
+                                                <th style="width: 9%;">Estatus</th>
+                                                <th style="width: 12%; text-align: center;">Acciones</th>
                                             </tr>
                                         </thead>
                                         <tbody id="budget-list-table-body">
-                                            <tr class="empty-row"><td colspan="7" class="text-center text-muted">Cargando propuestas económicas...</td></tr>
+                                            <tr class="empty-row"><td colspan="8" class="text-center text-muted">Cargando propuestas económicas...</td></tr>
                                         </tbody>
                                     </table>
                                 </div>
@@ -951,6 +982,207 @@
                                             <i class="fa-solid fa-shield-halved"></i> Aprobar Presupuesto
                                         </button>
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- 3. EDITOR DE PRESUPUESTO MÉDICO & ESPECIALIDADES (SIN ODONTOGRAMA) -->
+                    <div id="medical-budget-editor-container" class="hidden">
+                        
+                        <!-- Barra Superior: Volver, Título Dinámico e Indicador BCV -->
+                        <div class="card mb-20" style="padding: 16px 20px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+                                <div style="display: flex; align-items: center; gap: 14px;">
+                                    <button type="button" class="btn btn-outline" onclick="window.backToBudgetList()" style="border: 1px solid var(--border-color); border-radius: 8px; padding: 8px 14px; font-weight: 600; cursor: pointer;">
+                                        <i class="fa-solid fa-arrow-left"></i> Volver al Historial
+                                    </button>
+                                    <div>
+                                        <h2 id="med-budget-title" style="margin: 0; font-size: 1.4rem; color: var(--text-main); font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                                            <i class="fa-solid fa-file-invoice-dollar text-cyan"></i> Presupuesto Médico
+                                        </h2>
+                                        <span id="med-budget-id-badge" class="badge-tag gray" style="font-size: 0.76rem; font-weight: 700; margin-top: 3px; display: inline-block;">Nuevo Presupuesto</span>
+                                    </div>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 8px; padding: 6px 14px; font-size: 0.85rem; color: #059669; font-weight: 700;">
+                                        <i class="fa-solid fa-coins"></i> Tasa Oficial BCV: <span id="med-budget-bcv-rate">0.00</span> Bs.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Panel de Datos Principales: Paciente, Especialidad, Médico y Fechas -->
+                        <div class="card mb-20">
+                            <div class="card-header" style="padding: 14px 20px; border-bottom: 1px solid var(--border-color);">
+                                <h3 style="margin: 0; font-size: 1.05rem; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
+                                    <i class="fa-solid fa-user-check text-cyan"></i> Datos del Paciente & Asignación Clínica
+                                </h3>
+                            </div>
+                            <div class="card-body" style="padding: 20px;">
+                                <div class="form-row" style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                                    <div class="form-group">
+                                        <label style="font-weight: 600; font-size: 0.88rem; display: block; margin-bottom: 6px;">Paciente *</label>
+                                        <div style="display: flex; gap: 8px;">
+                                            <select id="med-budget-patient-select" class="form-control" style="flex: 1;" onchange="window.onMedicalBudgetPatientChange(this.value)">
+                                                <option value="">-- Seleccionar Paciente --</option>
+                                            </select>
+                                            <button type="button" class="btn btn-outline" onclick="openModal('patient-modal')" title="Registrar Paciente Nuevo" style="padding: 8px 12px; border-radius: 8px;">
+                                                <i class="fa-solid fa-user-plus text-cyan"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label style="font-weight: 600; font-size: 0.88rem; display: block; margin-bottom: 6px;">Área / Especialidad *</label>
+                                        <select id="med-budget-department-select" class="form-control" onchange="window.onMedicalBudgetDepartmentChange(this.value)">
+                                            <option value="Consultas Médicas">🩺 Consultas Médicas & Especialidades</option>
+                                            <option value="Rayos X & Imagenología">🩻 Rayos X & Imagenología</option>
+                                            <option value="Laboratorio Clínico">🧪 Laboratorio Clínico</option>
+                                            <option value="Procedimientos Ambulatorios">🩹 Procedimientos Ambulatorios</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label style="font-weight: 600; font-size: 0.88rem; display: block; margin-bottom: 6px;">Especialista / Médico Tratante</label>
+                                        <select id="med-budget-doctor-select" class="form-control">
+                                            <!-- Populated dynamically -->
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 15px;">
+                                    <div class="form-group">
+                                        <label style="font-weight: 600; font-size: 0.88rem; display: block; margin-bottom: 6px;">Fecha de Emisión</label>
+                                        <input type="date" id="med-budget-date" class="form-control">
+                                    </div>
+                                    <div class="form-group">
+                                        <label style="font-weight: 600; font-size: 0.88rem; display: block; margin-bottom: 6px;">Validez de la Propuesta</label>
+                                        <select id="med-budget-validity" class="form-control">
+                                            <option value="15">15 días continuos</option>
+                                            <option value="30" selected>30 días continuos</option>
+                                            <option value="7">7 días continuos</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <div id="med-budget-patient-info-box" style="background: rgba(13, 148, 136, 0.05); border: 1px solid rgba(13, 148, 136, 0.2); border-radius: 8px; padding: 10px 14px; font-size: 0.85rem; height: 100%; box-sizing: border-box; display: flex; align-items: center; gap: 15px;">
+                                            <span style="color: #64748b;"><i class="fa-solid fa-circle-info"></i> Seleccione un paciente para ver sus datos clínicos de contacto.</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Panel de Servicios: Selector Rápido del Baremo y Tabla de Ítems -->
+                        <div class="card mb-20">
+                            <div class="card-header" style="padding: 14px 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                                <h3 style="margin: 0; font-size: 1.05rem; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
+                                    <i class="fa-solid fa-list-check text-cyan"></i> Procedimientos, Consultas y Estudios a Presupuestar
+                                </h3>
+                                <label style="font-size: 0.82rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                                    <input type="checkbox" id="med-budget-show-all-baremo" onchange="window.refreshMedicalBaremoSelect()"> Mostrar servicios de todas las áreas
+                                </label>
+                            </div>
+                            <div class="card-body" style="padding: 20px;">
+                                
+                                <!-- Barra de Inserción Rápida de Servicio -->
+                                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; margin-bottom: 18px; display: grid; grid-template-columns: 3fr 1fr 1fr 1.5fr auto; gap: 12px; align-items: flex-end;">
+                                    <div class="form-group" style="margin: 0;">
+                                        <label style="font-weight: 600; font-size: 0.84rem; display: block; margin-bottom: 4px;">Seleccionar Servicio del Baremo *</label>
+                                        <select id="med-item-baremo-select" class="form-control" onchange="window.onMedicalBaremoSelected(this.value)">
+                                            <option value="">-- Buscar procedimiento o estudio --</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group" style="margin: 0;">
+                                        <label style="font-weight: 600; font-size: 0.84rem; display: block; margin-bottom: 4px;">Precio Unit. ($)</label>
+                                        <input type="number" id="med-item-price" class="form-control" step="0.01" min="0" placeholder="0.00">
+                                    </div>
+                                    <div class="form-group" style="margin: 0;">
+                                        <label style="font-weight: 600; font-size: 0.84rem; display: block; margin-bottom: 4px;">Cantidad</label>
+                                        <input type="number" id="med-item-qty" class="form-control" min="1" value="1">
+                                    </div>
+                                    <div class="form-group" style="margin: 0;">
+                                        <label style="font-weight: 600; font-size: 0.84rem; display: block; margin-bottom: 4px;">Descuento (%)</label>
+                                        <input type="number" id="med-item-discount" class="form-control" min="0" max="100" value="0">
+                                    </div>
+                                    <div>
+                                        <button type="button" class="btn btn-primary" onclick="window.addMedicalBudgetItem()" style="background: #0d9488 !important; border: none !important; font-weight: 700; padding: 10px 18px; border-radius: 8px; white-space: nowrap; cursor: pointer;">
+                                            <i class="fa-solid fa-plus"></i> Añadir Ítem
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Tabla Dinámica de Ítems del Presupuesto -->
+                                <div class="table-responsive">
+                                    <table class="table" id="med-budget-items-table">
+                                        <thead>
+                                            <tr>
+                                                <th style="width: 42%;">Procedimiento / Estudio</th>
+                                                <th style="width: 10%; text-align: center;">Cant.</th>
+                                                <th style="width: 15%; text-align: right;">Precio Unit. ($)</th>
+                                                <th style="width: 10%; text-align: center;">Desc.</th>
+                                                <th style="width: 18%; text-align: right;">Total Ref. ($ / Bs.)</th>
+                                                <th style="width: 5%; text-align: center;"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="med-budget-items-tbody">
+                                            <tr class="empty-row"><td colspan="6" class="text-center text-muted" style="padding: 30px;">Cargue los servicios o estudios médicos para calcular el presupuesto.</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Resumen Financiero y Observaciones -->
+                        <div class="card mb-20">
+                            <div class="card-body" style="padding: 20px;">
+                                <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px;">
+                                    <div>
+                                        <label style="font-weight: 600; font-size: 0.88rem; display: block; margin-bottom: 6px;">Indicaciones Clínicas & Observaciones del Presupuesto</label>
+                                        <textarea id="med-budget-notes" class="form-control" rows="4" placeholder="Ej: Presentarse en ayunas de 8 horas para toma de muestra. Traer radiografías o ecografías previas si las posee..."></textarea>
+                                    </div>
+                                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between;">
+                                        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 0.92rem;">
+                                            <div style="display: flex; justify-content: space-between;">
+                                                <span class="text-muted">Subtotal Bruto:</span>
+                                                <strong id="med-summary-subtotal">$0.00</strong>
+                                            </div>
+                                            <div style="display: flex; justify-content: space-between; color: #dc2626;">
+                                                <span>Descuento Aplicado:</span>
+                                                <strong id="med-summary-discount">-$0.00</strong>
+                                            </div>
+                                            <div style="border-top: 2px solid #cbd5e1; padding-top: 8px; display: flex; justify-content: space-between; align-items: baseline;">
+                                                <span style="font-size: 1.05rem; font-weight: 700; color: #0f172a;">TOTAL ESTIMADO:</span>
+                                                <strong id="med-summary-total" style="font-size: 1.4rem; color: #0d9488; font-family: 'Outfit', sans-serif;">$0.00</strong>
+                                            </div>
+                                            <div style="display: flex; justify-content: space-between; color: #0284c7; font-size: 0.88rem; font-weight: 600;">
+                                                <span>Equivalente Oficial (Bs.):</span>
+                                                <span id="med-summary-bs">0.00 Bs.</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Barra Inferior de Acciones para la Recepcionista -->
+                        <div class="card mb-20" style="padding: 16px 20px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                                <button type="button" class="btn btn-outline" onclick="window.backToBudgetList()" style="color: #64748b; font-weight: 600;">
+                                    <i class="fa-solid fa-ban"></i> Cancelar
+                                </button>
+                                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                                    <button type="button" class="btn btn-outline" onclick="window.saveMedicalBudget('Presupuesto')" style="font-weight: 700; border-radius: 8px; padding: 10px 18px; cursor: pointer;">
+                                        <i class="fa-solid fa-floppy-disk"></i> Guardar Borrador
+                                    </button>
+                                    <button type="button" class="btn btn-success" onclick="window.saveMedicalBudget('Aprobado')" style="background: #0d9488 !important; border: none !important; font-weight: 700; padding: 10px 22px; border-radius: 8px; cursor: pointer;">
+                                        <i class="fa-solid fa-circle-check"></i> Guardar y Aprobar
+                                    </button>
+                                    <button type="button" class="btn btn-outline" id="btn-med-budget-print" onclick="window.printMedicalBudgetPDF()" style="color: #0284c7; border-color: #bae6fd; font-weight: 700; border-radius: 8px; padding: 10px 18px; cursor: pointer;">
+                                        <i class="fa-solid fa-file-pdf"></i> Imprimir PDF
+                                    </button>
+                                    <button type="button" class="btn btn-success" id="btn-med-budget-whatsapp" onclick="window.sendMedicalBudgetWhatsApp()" style="background: #25D366 !important; border: none !important; color: #ffffff; font-weight: 700; border-radius: 8px; padding: 10px 18px; cursor: pointer;">
+                                        <i class="fa-brands fa-whatsapp"></i> WhatsApp
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -4895,17 +5127,100 @@
                 <button type="button" class="btn btn-primary" data-close-erp="modal-cashea-tracker">Cerrar</button>
             </div>
         </div>
+    <!-- MODAL: SELECCIONAR TIPO DE PRESUPUESTO / ESPECIALIDAD -->
+    <div class="modal-overlay hidden" id="modal-select-budget-type">
+        <div class="modal-dialog" style="max-width: 780px; width: 95vw;">
+            <div class="modal-header" style="border-bottom: 1px solid var(--border-color); padding: 18px 24px; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h3 style="margin: 0; font-size: 1.35rem; color: #0f172a; font-family: 'Outfit', sans-serif; display: flex; align-items: center; gap: 10px;">
+                        <i class="fa-solid fa-calculator text-cyan"></i> Crear Nuevo Presupuesto
+                    </h3>
+                    <p class="text-muted" style="margin: 4px 0 0 0; font-size: 0.88rem;">
+                        Seleccione el área o tipo de servicio que desea presupuestar:
+                    </p>
+                </div>
+                <button class="modal-close" onclick="closeModal('modal-select-budget-type')">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 24px;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px;">
+                    
+                    <!-- Tarjeta 1: Odontología -->
+                    <div class="budget-type-card" onclick="window.startBudgetCreation('Odontología')" style="border: 2px solid #e2e8f0; border-radius: 14px; padding: 20px 16px; cursor: pointer; background: #ffffff; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
+                        <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(13, 148, 136, 0.1); color: #0d9488; font-size: 1.6rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px auto;">
+                            <i class="fa-solid fa-tooth"></i>
+                        </div>
+                        <strong style="font-size: 1.05rem; color: #0f172a; display: block; margin-bottom: 6px;">Odontología & Bucal</strong>
+                        <p style="font-size: 0.8rem; color: #64748b; margin: 0; line-height: 1.4;">
+                            Plan dental con odontograma interactivo, piezas 11 a 48 y caras.
+                        </p>
+                        <span class="badge-tag green" style="margin-top: 12px; font-weight: 700; font-size: 0.72rem; display: inline-block;">Odontograma 3D</span>
+                    </div>
+
+                    <!-- Tarjeta 2: Consultas Médicas & Especialidades -->
+                    <div class="budget-type-card" onclick="window.startBudgetCreation('Consultas Médicas')" style="border: 2px solid #e2e8f0; border-radius: 14px; padding: 20px 16px; cursor: pointer; background: #ffffff; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
+                        <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(37, 99, 235, 0.1); color: #2563eb; font-size: 1.6rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px auto;">
+                            <i class="fa-solid fa-stethoscope"></i>
+                        </div>
+                        <strong style="font-size: 1.05rem; color: #0f172a; display: block; margin-bottom: 6px;">Consultas Médicas</strong>
+                        <p style="font-size: 0.8rem; color: #64748b; margin: 0; line-height: 1.4;">
+                            Cardiología, Pediatría, Ginecología, Traumatología y Medicina General.
+                        </p>
+                        <span class="badge-tag blue" style="margin-top: 12px; font-weight: 700; font-size: 0.72rem; display: inline-block;">Especialistas</span>
+                    </div>
+
+                    <!-- Tarjeta 3: Rayos X & Imagenología -->
+                    <div class="budget-type-card" onclick="window.startBudgetCreation('Rayos X & Imagenología')" style="border: 2px solid #e2e8f0; border-radius: 14px; padding: 20px 16px; cursor: pointer; background: #ffffff; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
+                        <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(147, 51, 234, 0.1); color: #9333ea; font-size: 1.6rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px auto;">
+                            <i class="fa-solid fa-x-ray"></i>
+                        </div>
+                        <strong style="font-size: 1.05rem; color: #0f172a; display: block; margin-bottom: 6px;">Rayos X & Imagen</strong>
+                        <p style="font-size: 0.8rem; color: #64748b; margin: 0; line-height: 1.4;">
+                            Radiografías, ecografías, ecosonogramas y estudios de imagen.
+                        </p>
+                        <span class="badge-tag purple" style="margin-top: 12px; font-weight: 700; font-size: 0.72rem; display: inline-block;">Diagnóstico</span>
+                    </div>
+
+                    <!-- Tarjeta 4: Laboratorio Clínico -->
+                    <div class="budget-type-card" onclick="window.startBudgetCreation('Laboratorio Clínico')" style="border: 2px solid #e2e8f0; border-radius: 14px; padding: 20px 16px; cursor: pointer; background: #ffffff; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
+                        <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(245, 158, 11, 0.1); color: #d97706; font-size: 1.6rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px auto;">
+                            <i class="fa-solid fa-flask"></i>
+                        </div>
+                        <strong style="font-size: 1.05rem; color: #0f172a; display: block; margin-bottom: 6px;">Laboratorio Clínico</strong>
+                        <p style="font-size: 0.8rem; color: #64748b; margin: 0; line-height: 1.4;">
+                            Perfiles sanguíneos, química, hematología y pruebas especiales.
+                        </p>
+                        <span class="badge-tag amber" style="margin-top: 12px; font-weight: 700; font-size: 0.72rem; display: inline-block;">Exámenes</span>
+                    </div>
+
+                    <!-- Tarjeta 5: Procedimientos Menores / Ambulatorios -->
+                    <div class="budget-type-card" onclick="window.startBudgetCreation('Procedimientos Ambulatorios')" style="border: 2px solid #e2e8f0; border-radius: 14px; padding: 20px 16px; cursor: pointer; background: #ffffff; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
+                        <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(239, 68, 68, 0.1); color: #dc2626; font-size: 1.6rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px auto;">
+                            <i class="fa-solid fa-syringe"></i>
+                        </div>
+                        <strong style="font-size: 1.05rem; color: #0f172a; display: block; margin-bottom: 6px;">Procedimientos</strong>
+                        <p style="font-size: 0.8rem; color: #64748b; margin: 0; line-height: 1.4;">
+                            Cirugías menores ambulatorias, curaciones y tratamientos.
+                        </p>
+                        <span class="badge-tag red" style="margin-top: 12px; font-weight: 700; font-size: 0.72rem; display: inline-block;">Ambulatorio</span>
+                    </div>
+
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 14px 24px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end;">
+                <button type="button" class="btn btn-outline" onclick="closeModal('modal-select-budget-type')">Cancelar</button>
+            </div>
+        </div>
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=253"></script>
-    <script src="supabaseClient.js?v=253"></script>
-    <script src="odontogram.js?v=253"></script>
-    <script src="signature.js?v=253"></script>
-    <script src="whatsapp.js?v=253"></script>
-    <script src="kardex.js?v=253"></script>
-    <script src="app.js?v=253"></script>
-    <script src="clinicalERP.js?v=253"></script>
-    <script src="tutorial.js?v=253"></script>
+    <script src="seededData.js?v=254"></script>
+    <script src="supabaseClient.js?v=254"></script>
+    <script src="odontogram.js?v=254"></script>
+    <script src="signature.js?v=254"></script>
+    <script src="whatsapp.js?v=254"></script>
+    <script src="kardex.js?v=254"></script>
+    <script src="app.js?v=254"></script>
+    <script src="clinicalERP.js?v=254"></script>
+    <script src="tutorial.js?v=254"></script>
 </body>
 </html>
