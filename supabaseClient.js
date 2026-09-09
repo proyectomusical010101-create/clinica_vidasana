@@ -942,7 +942,9 @@ class SupabaseDataService {
     }
 
     static async registerDirectSale(saleData) {
-        const isFull = saleData.isFullPayment !== undefined ? saleData.isFullPayment : (parseFloat(saleData.paidUSD || 0) >= parseFloat(saleData.totalUSD || 0));
+        const isCashea = !!(saleData.isCashea || saleData.paymentMethod === 'cashea' || (saleData.splitDetails && parseFloat(saleData.splitDetails.cashea || 0) > 0));
+        const casheaFinancedUSD = isCashea ? (parseFloat(saleData.casheaFinancedUSD) || Math.max(0, parseFloat(saleData.totalUSD || 0) - parseFloat(saleData.paidUSD || 0))) : 0;
+        const isFull = isCashea ? true : (saleData.isFullPayment !== undefined ? saleData.isFullPayment : (parseFloat(saleData.paidUSD || 0) >= parseFloat(saleData.totalUSD || 0)));
         const docPrefix = isFull ? 'FAC-' : 'REC-';
         const docId = saleData.id || (docPrefix + Date.now().toString().slice(-6));
         
@@ -951,33 +953,48 @@ class SupabaseDataService {
             patientId: saleData.patientId,
             patientName: saleData.patientName,
             invoiceDate: saleData.date || new Date().toISOString().split('T')[0],
-            paymentMethod: saleData.paymentMethod || 'Efectivo USD',
-            paymentTerms: saleData.paymentTerms || (isFull ? 'Contado' : 'Abono Parcial'),
+            paymentMethod: isCashea ? (saleData.paymentMethod === 'split' ? 'Mixto (con Cashea)' : 'Cashea') : (saleData.paymentMethod || 'Efectivo USD'),
+            paymentTerms: isCashea ? 'Financiamiento Cashea' : (isFull ? 'Contado' : 'Abono Parcial'),
             currency: saleData.currency || 'REF',
             items: saleData.items || [],
             totalRef: parseFloat(saleData.totalUSD || 0),
             totalBcv: parseFloat(saleData.totalBs || 0),
             paidRef: parseFloat(saleData.paidUSD || 0),
             paidBcv: parseFloat(saleData.paidBs || 0),
-            balanceRef: Math.max(0, parseFloat(saleData.totalUSD || 0) - parseFloat(saleData.paidUSD || 0)),
-            status: isFull ? 'Pagado' : 'Abono Parcial',
+            balanceRef: isCashea ? 0 : Math.max(0, parseFloat(saleData.totalUSD || 0) - parseFloat(saleData.paidUSD || 0)),
+            status: isCashea ? 'Financiado Cashea' : (isFull ? 'Pagado' : 'Abono Parcial'),
             doctor: saleData.doctor || 'Dr. Médico Tratante',
             specialty: saleData.specialty || 'General',
             category: saleData.specialty || 'General',
             notes: saleData.notes || '',
             footerText: saleData.notes || '',
             isDirectSale: true,
-            docType: isFull ? 'Factura' : 'Recibo de Abono',
+            is_cashea: isCashea,
+            casheaDetails: isCashea ? {
+                surchargePct: parseFloat(saleData.casheaSurchargePct || 0),
+                surchargeAmountUSD: parseFloat(saleData.casheaSurchargeUSD || 0),
+                initialPaidUSD: parseFloat(saleData.paidUSD || 0),
+                initialMethod: saleData.casheaInitialMethod || saleData.paymentMethod,
+                financedUSD: casheaFinancedUSD,
+                payoutStatus: 'pending',
+                payoutDate: null,
+                payoutBank: null,
+                payoutReference: null,
+                payoutNotes: null
+            } : null,
+            docType: isCashea ? 'Factura Cashea' : (isFull ? 'Factura' : 'Recibo de Abono'),
             splitDetails: saleData.splitDetails || null,
             metadata: {
                 isDirectSale: true,
-                docType: isFull ? 'Factura' : 'Recibo de Abono',
+                docType: isCashea ? 'Factura Cashea' : (isFull ? 'Factura' : 'Recibo de Abono'),
                 paidUSD: parseFloat(saleData.paidUSD || 0),
-                balanceUSD: Math.max(0, parseFloat(saleData.totalUSD || 0) - parseFloat(saleData.paidUSD || 0)),
+                balanceUSD: isCashea ? 0 : Math.max(0, parseFloat(saleData.totalUSD || 0) - parseFloat(saleData.paidUSD || 0)),
                 doctor: saleData.doctor || '',
                 assistant: saleData.assistant || '',
                 splitDetails: saleData.splitDetails || null,
-                notes: saleData.notes || ''
+                notes: saleData.notes || '',
+                isCashea: isCashea,
+                casheaFinancedUSD: casheaFinancedUSD
             }
         };
 
@@ -993,13 +1010,13 @@ class SupabaseDataService {
                 p.payments.push({
                     id: docId,
                     date: invoiceObj.invoiceDate,
-                    concept: `${invoiceObj.docType} (${docId}): ${(saleData.items || []).map(i => i.name).join(', ')}`,
+                    concept: isCashea ? `Factura Cashea (${docId}): ${(saleData.items || []).map(i => i.name).join(', ')} [Inicial: $${invoiceObj.paidRef.toFixed(2)} | Financiado Cashea: $${casheaFinancedUSD.toFixed(2)}]` : `${invoiceObj.docType} (${docId}): ${(saleData.items || []).map(i => i.name).join(', ')}`,
                     method: saleData.paymentMethod,
                     bank: saleData.paymentMethodLabel || saleData.paymentMethod,
                     reference: docId,
                     totalUSD: invoiceObj.totalRef,
                     paidUSD: invoiceObj.paidRef,
-                    balanceUSD: invoiceObj.balanceRef,
+                    balanceUSD: isCashea ? 0 : invoiceObj.balanceRef,
                     status: invoiceObj.status
                 });
 
@@ -2067,10 +2084,39 @@ class SupabaseDataService {
         return await this.saveServiceLiquidation(record);
     }
 
-    // --- CASHEA TRACKING & BIRTHDAYS ---
-    static async getCasheaInvoices() {
+    // --- CASHEA TRACKING & SETTLEMENT ---
+    static async getCasheaInvoices(forceRefresh = false) {
+        const invoices = await this.getInvoices(forceRefresh);
+        return invoices.filter(inv => {
+            if (inv.is_cashea) return true;
+            if (inv.paymentMethod && inv.paymentMethod.toLowerCase().includes('cashea')) return true;
+            if (inv.splitDetails && parseFloat(inv.splitDetails.cashea || 0) > 0) return true;
+            if (inv.metadata && (inv.metadata.isCashea || (inv.metadata.splitDetails && parseFloat(inv.metadata.splitDetails.cashea || 0) > 0))) return true;
+            return false;
+        });
+    }
+
+    static async settleCasheaPayout({ invoiceId, payoutDate, bank, reference, netUSD, notes }) {
         const invoices = await this.getInvoices(true);
-        return invoices.filter(inv => inv.is_cashea || (inv.paymentMethod && inv.paymentMethod.toLowerCase().includes('cashea')));
+        const inv = invoices.find(i => String(i.id) === String(invoiceId));
+        if (!inv) throw new Error('Comprobante Cashea no encontrado: ' + invoiceId);
+
+        inv.casheaDetails = inv.casheaDetails || {};
+        inv.casheaDetails.payoutStatus = 'settled';
+        inv.casheaDetails.payoutDate = payoutDate || new Date().toISOString().split('T')[0];
+        inv.casheaDetails.payoutBank = bank || 'Cuenta Bancaria Clínica';
+        inv.casheaDetails.payoutReference = reference || 'DEP-CASHEA';
+        inv.casheaDetails.payoutNetUSD = parseFloat(netUSD) || inv.casheaDetails.financedUSD || 0;
+        inv.casheaDetails.payoutNotes = notes || '';
+        inv.status = 'Liquidado Cashea';
+        if (inv.metadata) {
+            inv.metadata.casheaPayoutStatus = 'settled';
+            inv.metadata.casheaPayoutRef = inv.casheaDetails.payoutReference;
+        }
+
+        await this.saveInvoice(inv);
+        await this.notifyDataChanged('invoices', invoiceId);
+        return inv;
     }
 
     static async getBirthdayPatients() {

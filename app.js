@@ -5162,7 +5162,6 @@ window.renderDirectSaleItems = function() {
 window.calculateDirectSaleTotals = function() {
     let subtotalUSD = 0;
     let totalDiscountUSD = 0;
-    let totalUSD = 0;
     const rate = getExchangeRate();
 
     window.currentDirectSaleItems.forEach(item => {
@@ -5170,8 +5169,65 @@ window.calculateDirectSaleTotals = function() {
         const itemDisc = itemGross * (item.discount / 100);
         subtotalUSD += itemGross;
         totalDiscountUSD += itemDisc;
-        totalUSD += item.totalUSD;
     });
+
+    const subtotalAfterDisc = Math.max(0, subtotalUSD - totalDiscountUSD);
+    const paymentMethod = document.getElementById('ds-payment-method')?.value || 'pagomovil';
+    const splitCasheaVal = parseFloat(document.getElementById('ds-split-cashea')?.value || 0);
+    const isCashea = (paymentMethod === 'cashea') || (paymentMethod === 'split' && splitCasheaVal > 0);
+
+    let totalUSD = subtotalAfterDisc;
+    let casheaSurchargeUSD = 0;
+    let casheaSurchargePct = 7.0;
+    let casheaFinancedUSD = 0;
+    let casheaInitialUSD = 0;
+
+    const casheaBox = document.getElementById('ds-cashea-config-container');
+
+    if (isCashea) {
+        if (casheaBox) casheaBox.style.display = 'block';
+        const surchargeInput = document.getElementById('ds-cashea-surcharge-pct');
+        if (surchargeInput && surchargeInput.value !== '') {
+            casheaSurchargePct = parseFloat(surchargeInput.value) || 0;
+        }
+        casheaSurchargeUSD = parseFloat((subtotalAfterDisc * (casheaSurchargePct / 100)).toFixed(2));
+        totalUSD = parseFloat((subtotalAfterDisc + casheaSurchargeUSD).toFixed(2));
+
+        const subDisplay = document.getElementById('ds-cashea-subtotal-display');
+        const surDisplay = document.getElementById('ds-cashea-surcharge-display');
+        const totDisplay = document.getElementById('ds-cashea-total-display');
+        if (subDisplay) subDisplay.innerText = `$${subtotalAfterDisc.toFixed(2)}`;
+        if (surDisplay) surDisplay.innerText = `+$${casheaSurchargeUSD.toFixed(2)} (${casheaSurchargePct.toFixed(1)}%)`;
+        if (totDisplay) totDisplay.innerText = `$${totalUSD.toFixed(2)} USD`;
+
+        if (paymentMethod === 'cashea') {
+            const initialIn = document.getElementById('ds-cashea-initial-input');
+            casheaInitialUSD = parseFloat(initialIn ? initialIn.value : 0) || 0;
+            casheaFinancedUSD = Math.max(0, totalUSD - casheaInitialUSD);
+        } else {
+            // Split mode
+            casheaFinancedUSD = splitCasheaVal;
+            casheaInitialUSD = Math.max(0, totalUSD - casheaFinancedUSD);
+            const initialIn = document.getElementById('ds-cashea-initial-input');
+            if (initialIn) initialIn.value = casheaInitialUSD.toFixed(2);
+        }
+
+        const financedDisplay = document.getElementById('ds-cashea-financed-display');
+        if (financedDisplay) financedDisplay.innerText = `$${casheaFinancedUSD.toFixed(2)}`;
+
+        const amountPaidIn = document.getElementById('ds-amount-paid');
+        if (amountPaidIn) {
+            amountPaidIn.value = casheaInitialUSD.toFixed(2);
+            amountPaidIn.dataset.autoFilled = 'true';
+        }
+    } else {
+        if (casheaBox) casheaBox.style.display = 'none';
+        const amountPaidIn = document.getElementById('ds-amount-paid');
+        if (amountPaidIn && (!amountPaidIn.value || parseFloat(amountPaidIn.value) === 0 || amountPaidIn.dataset.autoFilled === 'true')) {
+            amountPaidIn.value = totalUSD.toFixed(2);
+            amountPaidIn.dataset.autoFilled = 'true';
+        }
+    }
 
     const totalBs = totalUSD * rate;
 
@@ -5187,36 +5243,40 @@ window.calculateDirectSaleTotals = function() {
     if (totalBsEl) totalBsEl.innerText = `Bs. ${totalBs.toFixed(2)}`;
     if (rateLabel) rateLabel.innerText = `Tasa BCV: Bs. ${rate.toFixed(2)}`;
 
-    // Set default amount paid to 100% if empty
-    const amountPaidIn = document.getElementById('ds-amount-paid');
-    if (amountPaidIn && (!amountPaidIn.value || parseFloat(amountPaidIn.value) === 0 || amountPaidIn.dataset.autoFilled === 'true')) {
-        amountPaidIn.value = totalUSD.toFixed(2);
-        amountPaidIn.dataset.autoFilled = 'true';
-    }
-
-    window.updateDirectSaleDocIndicator(totalUSD);
+    window.updateDirectSaleDocIndicator(totalUSD, isCashea, casheaFinancedUSD);
 };
 
 window.setDirectSaleFullPayment = function() {
-    let totalUSD = 0;
-    window.currentDirectSaleItems.forEach(item => totalUSD += item.totalUSD);
-    const amountPaidIn = document.getElementById('ds-amount-paid');
-    if (amountPaidIn) {
-        amountPaidIn.value = totalUSD.toFixed(2);
-        amountPaidIn.dataset.autoFilled = 'true';
+    const paymentMethod = document.getElementById('ds-payment-method')?.value || 'pagomovil';
+    if (paymentMethod === 'cashea') {
+        const initialIn = document.getElementById('ds-cashea-initial-input');
+        if (initialIn) initialIn.value = '0.00';
     }
-    window.updateDirectSaleDocIndicator(totalUSD);
+    window.calculateDirectSaleTotals();
 };
 
 window.onDirectSaleAmountPaidChange = function(val) {
     const amountPaidIn = document.getElementById('ds-amount-paid');
     if (amountPaidIn) amountPaidIn.dataset.autoFilled = 'false';
-    let totalUSD = 0;
-    window.currentDirectSaleItems.forEach(item => totalUSD += item.totalUSD);
-    window.updateDirectSaleDocIndicator(totalUSD);
+    const paymentMethod = document.getElementById('ds-payment-method')?.value || 'pagomovil';
+    if (paymentMethod === 'cashea') {
+        const initialIn = document.getElementById('ds-cashea-initial-input');
+        if (initialIn) initialIn.value = val;
+    }
+    window.calculateDirectSaleTotals();
 };
 
-window.updateDirectSaleDocIndicator = function(totalUSD) {
+window.onDirectSaleCasheaInitialChange = function(val) {
+    const amountPaidIn = document.getElementById('ds-amount-paid');
+    if (amountPaidIn) amountPaidIn.value = val;
+    window.calculateDirectSaleTotals();
+};
+
+window.onDirectSaleSplitChange = function() {
+    window.calculateDirectSaleTotals();
+};
+
+window.updateDirectSaleDocIndicator = function(totalUSD, isCashea = false, financedUSD = 0) {
     const indicator = document.getElementById('ds-doc-indicator');
     const amountPaidIn = document.getElementById('ds-amount-paid');
     if (!indicator || !amountPaidIn) return;
@@ -5224,7 +5284,13 @@ window.updateDirectSaleDocIndicator = function(totalUSD) {
     const paid = parseFloat(amountPaidIn.value) || 0;
     const balance = Math.max(0, totalUSD - paid);
 
-    if (paid >= totalUSD && totalUSD > 0) {
+    if (isCashea) {
+        indicator.innerHTML = `
+            <span class="badge-tag blue" style="font-size:0.8rem; font-weight:700; display:inline-flex; align-items:center; gap:4px; background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd;">
+                <i class="fa-solid fa-credit-card"></i> Factura Cashea (Inicial: $${paid.toFixed(2)} | Financiado Cashea: $${financedUSD.toFixed(2)})
+            </span>
+        `;
+    } else if (paid >= totalUSD && totalUSD > 0) {
         indicator.innerHTML = `
             <span class="badge-tag green" style="font-size:0.8rem; font-weight:700; display:inline-flex; align-items:center; gap:4px;">
                 <i class="fa-solid fa-file-invoice"></i> Emite Factura Oficial (100% Pagado Completo)
@@ -5233,7 +5299,7 @@ window.updateDirectSaleDocIndicator = function(totalUSD) {
     } else if (paid > 0 && paid < totalUSD) {
         indicator.innerHTML = `
             <span class="badge-tag amber" style="font-size:0.8rem; font-weight:700; display:inline-flex; align-items:center; gap:4px;">
-                <i class="fa-solid fa-receipt"></i> Emite Recibo de Abono Parcial (Saldo pendiente: $${balance.toFixed(2)} USD)
+                <i class="fa-solid fa-receipt"></i> Emite Recibo de Abono Parcial (Saldo deudor del paciente: $${balance.toFixed(2)} USD)
             </span>
         `;
     } else {
@@ -5247,9 +5313,16 @@ window.updateDirectSaleDocIndicator = function(totalUSD) {
 
 window.onDirectSalePaymentMethodChange = function(method) {
     const splitContainer = document.getElementById('ds-split-container');
+    const casheaBox = document.getElementById('ds-cashea-config-container');
+    
     if (splitContainer) {
         splitContainer.style.display = method === 'split' ? 'block' : 'none';
     }
+    if (casheaBox) {
+        casheaBox.style.display = method === 'cashea' ? 'block' : 'none';
+    }
+
+    window.calculateDirectSaleTotals();
 };
 
 window.processDirectSale = async function() {
@@ -5270,20 +5343,56 @@ window.processDirectSale = async function() {
     const patient = patients.find(p => String(p.id) === String(patientId));
     const patientName = patient ? patient.fullname : `Paciente (${patientId})`;
 
-    let totalUSD = 0;
-    window.currentDirectSaleItems.forEach(i => totalUSD += i.totalUSD);
+    let subtotalGross = 0;
+    let totalDiscountUSD = 0;
+    window.currentDirectSaleItems.forEach(i => {
+        const gross = i.price * i.qty;
+        subtotalGross += gross;
+        totalDiscountUSD += gross * (i.discount / 100);
+    });
+    const subtotalAfterDisc = Math.max(0, subtotalGross - totalDiscountUSD);
+
+    const paymentMethod = document.getElementById('ds-payment-method')?.value || 'pagomovil';
+    const splitCasheaVal = parseFloat(document.getElementById('ds-split-cashea')?.value || 0);
+    const isCashea = (paymentMethod === 'cashea') || (paymentMethod === 'split' && splitCasheaVal > 0);
+
+    let casheaSurchargePct = 7.0;
+    let casheaSurchargeUSD = 0;
+    let totalUSD = subtotalAfterDisc;
+    let casheaFinancedUSD = 0;
+    let casheaInitialUSD = 0;
+    let casheaInitialMethod = 'pagomovil';
+
+    if (isCashea) {
+        const surchargeInput = document.getElementById('ds-cashea-surcharge-pct');
+        if (surchargeInput && surchargeInput.value !== '') {
+            casheaSurchargePct = parseFloat(surchargeInput.value) || 0;
+        }
+        casheaSurchargeUSD = parseFloat((subtotalAfterDisc * (casheaSurchargePct / 100)).toFixed(2));
+        totalUSD = parseFloat((subtotalAfterDisc + casheaSurchargeUSD).toFixed(2));
+
+        if (paymentMethod === 'cashea') {
+            casheaInitialUSD = parseFloat(document.getElementById('ds-cashea-initial-input')?.value || 0) || 0;
+            casheaFinancedUSD = Math.max(0, totalUSD - casheaInitialUSD);
+            casheaInitialMethod = document.getElementById('ds-cashea-initial-method')?.value || 'pagomovil';
+        } else {
+            casheaFinancedUSD = splitCasheaVal;
+            casheaInitialUSD = Math.max(0, totalUSD - casheaFinancedUSD);
+            casheaInitialMethod = 'split';
+        }
+    }
+
     const rate = getExchangeRate();
     const totalBs = totalUSD * rate;
 
     const amountPaidIn = document.getElementById('ds-amount-paid');
-    const paidUSD = parseFloat(amountPaidIn ? amountPaidIn.value : 0) || 0;
+    const paidUSD = isCashea ? casheaInitialUSD : (parseFloat(amountPaidIn ? amountPaidIn.value : 0) || 0);
     const paidBs = paidUSD * rate;
 
-    const isFull = paidUSD >= totalUSD;
-    const docPrefix = isFull ? 'FAC-' : 'REC-';
+    const isFull = isCashea ? true : (paidUSD >= totalUSD);
+    const docPrefix = isCashea ? 'FAC-' : (isFull ? 'FAC-' : 'REC-');
     const docId = docPrefix + Date.now().toString().slice(-6);
 
-    const paymentMethod = document.getElementById('ds-payment-method')?.value || 'pagomovil';
     const doctor = document.getElementById('ds-doctor-select')?.value || 'Dr. Médico Tratante';
     const assistant = document.getElementById('ds-assistant-select')?.value || '';
     const notes = document.getElementById('ds-notes')?.value || '';
@@ -5294,7 +5403,8 @@ window.processDirectSale = async function() {
             pagomovil: parseFloat(document.getElementById('ds-split-pm')?.value || 0),
             cash: parseFloat(document.getElementById('ds-split-cash')?.value || 0),
             zelle: parseFloat(document.getElementById('ds-split-zelle')?.value || 0),
-            pos: parseFloat(document.getElementById('ds-split-pos')?.value || 0)
+            pos: parseFloat(document.getElementById('ds-split-pos')?.value || 0),
+            cashea: splitCasheaVal
         };
     }
 
@@ -5305,8 +5415,8 @@ window.processDirectSale = async function() {
         patientId,
         patientName,
         date: new Date().toISOString().split('T')[0],
-        paymentMethod,
-        paymentTerms: isFull ? 'Contado' : 'Abono Parcial',
+        paymentMethod: isCashea ? (paymentMethod === 'split' ? 'Mixto (con Cashea)' : 'Cashea') : paymentMethod,
+        paymentTerms: isCashea ? 'Financiamiento Cashea' : (isFull ? 'Contado' : 'Abono Parcial'),
         items: [...window.currentDirectSaleItems],
         totalUSD,
         totalBs,
@@ -5317,7 +5427,13 @@ window.processDirectSale = async function() {
         assistant,
         specialty: specialtyPrimary,
         notes,
-        splitDetails
+        splitDetails,
+        isCashea,
+        casheaSurchargePct,
+        casheaSurchargeUSD,
+        casheaFinancedUSD,
+        casheaInitialUSD,
+        casheaInitialMethod
     };
 
     try {
@@ -5341,10 +5457,12 @@ window.processDirectSale = async function() {
         const patNameEl = document.getElementById('ds-success-patient-name');
         const amountEl = document.getElementById('ds-success-amount');
 
-        if (titleEl) titleEl.innerText = isFull ? '¡Factura Oficial Emitida!' : '¡Recibo de Abono Emitido!';
-        if (subtitleEl) subtitleEl.innerText = isFull 
-            ? `Se procesó el pago total de $${paidUSD.toFixed(2)} USD y se asentó en la historia médica.` 
-            : `Se registró el abono de $${paidUSD.toFixed(2)} USD (Saldo restante: $${(totalUSD - paidUSD).toFixed(2)} USD).`;
+        if (titleEl) titleEl.innerText = isCashea ? '¡Factura Cashea Emitida!' : (isFull ? '¡Factura Oficial Emitida!' : '¡Recibo de Abono Emitido!');
+        if (subtitleEl) subtitleEl.innerText = isCashea 
+            ? `Se registró la inicial de $${paidUSD.toFixed(2)} USD en caja. El saldo de $${casheaFinancedUSD.toFixed(2)} USD fue transferido a Cuentas por Cobrar a Cashea.`
+            : (isFull 
+                ? `Se procesó el pago total de $${paidUSD.toFixed(2)} USD y se asentó en la historia médica.` 
+                : `Se registró el abono de $${paidUSD.toFixed(2)} USD (Saldo deudor del paciente: $${(totalUSD - paidUSD).toFixed(2)} USD).`);
         if (docIdEl) docIdEl.innerText = docId;
         if (patNameEl) patNameEl.innerText = patientName;
         if (amountEl) amountEl.innerText = `$${paidUSD.toFixed(2)} USD (Bs. ${paidBs.toFixed(2)})`;
@@ -5453,8 +5571,16 @@ window.printDirectSaleReceipt = async function(docId = null) {
                 <div><span>Tasa BCV Oficial:</span> <span>Bs. ${rate.toFixed(2)}</span></div>
                 <div><span>Equivalente en Bs:</span> <span style="color:#0284c7; font-weight:bold;">Bs. ${(parseFloat(doc.totalRef || 0) * rate).toFixed(2)}</span></div>
                 <hr style="border: none; border-top: 1px solid #cbd5e1; margin: 6px 0;">
-                <div style="font-size: 12pt; color: #059669;"><span>Monto Cobrado / Pagado:</span> <strong>$${parseFloat(paidVal).toFixed(2)} USD</strong></div>
-                ${balanceVal > 0 ? `<div style="font-size: 11pt; color: #e11d48;"><span>Saldo Restante Pendiente:</span> <strong>$${parseFloat(balanceVal).toFixed(2)} USD</strong></div>` : ''}
+                ${(doc.is_cashea || doc.casheaDetails) ? `
+                    <div style="color: #0369a1; font-weight: bold;"><span>Plan de Pago:</span> <span>Financiamiento Cashea</span></div>
+                    ${doc.casheaDetails?.surchargeAmountUSD > 0 ? `<div style="font-size: 10pt; color: #0284c7;"><span>Recargo Cashea (${doc.casheaDetails.surchargePct}%):</span> <span>+$${doc.casheaDetails.surchargeAmountUSD.toFixed(2)} USD</span></div>` : ''}
+                    <div style="font-size: 11pt; color: #059669;"><span>Inicial Pagada en Recepción:</span> <strong>$${parseFloat(doc.casheaDetails?.initialPaidUSD || paidVal).toFixed(2)} USD</strong></div>
+                    <div style="font-size: 11.5pt; color: #0284c7;"><span>Financiado por Cashea:</span> <strong>$${parseFloat(doc.casheaDetails?.financedUSD || (doc.totalRef - paidVal)).toFixed(2)} USD</strong></div>
+                    <div style="font-size: 8.5pt; color: #64748b; font-style: italic; margin-top: 4px;">* Las cuotas quincenales son abonadas por el paciente directamente en la App Cashea.</div>
+                ` : `
+                    <div style="font-size: 12pt; color: #059669;"><span>Monto Cobrado / Pagado:</span> <strong>$${parseFloat(paidVal).toFixed(2)} USD</strong></div>
+                    ${balanceVal > 0 ? `<div style="font-size: 11pt; color: #e11d48;"><span>Saldo Restante Pendiente:</span> <strong>$${parseFloat(balanceVal).toFixed(2)} USD</strong></div>` : ''}
+                `}
             </div>
 
             <div class="footer">
@@ -5511,9 +5637,18 @@ window.sendDirectSaleReceiptWhatsApp = async function(docId = null) {
     msg += `📅 *Fecha:* ${doc.invoiceDate || new Date().toISOString().split('T')[0]}\n\n`;
     msg += `*Servicios Realizados:*\n${srvList}\n\n`;
     msg += `💰 *Total Servicios:* $${parseFloat(doc.totalRef || 0).toFixed(2)} USD (Bs. ${totalBs})\n`;
-    msg += `✅ *Monto Pagado:* $${parseFloat(paidVal).toFixed(2)} USD\n`;
-    if (balanceVal > 0) {
-        msg += `⏳ *Saldo Restante:* $${parseFloat(balanceVal).toFixed(2)} USD\n`;
+    if (doc.is_cashea || doc.casheaDetails) {
+        msg += `💳 *Método de Pago:* Financiamiento Cashea\n`;
+        if (doc.casheaDetails?.surchargeAmountUSD > 0) {
+            msg += `➕ *Recargo Cashea (${doc.casheaDetails.surchargePct}%):* +$${doc.casheaDetails.surchargeAmountUSD.toFixed(2)} USD\n`;
+        }
+        msg += `✅ *Inicial Cobrada en Recepción:* $${(doc.casheaDetails?.initialPaidUSD || paidVal).toFixed(2)} USD\n`;
+        msg += `📱 *Saldo Financiado por Cashea:* $${(doc.casheaDetails?.financedUSD || (doc.totalRef - paidVal)).toFixed(2)} USD (a pagar en sus cuotas por la App Cashea)\n`;
+    } else {
+        msg += `✅ *Monto Pagado:* $${parseFloat(paidVal).toFixed(2)} USD\n`;
+        if (balanceVal > 0) {
+            msg += `⏳ *Saldo Restante:* $${parseFloat(balanceVal).toFixed(2)} USD\n`;
+        }
     }
     msg += `\n¡Agradecemos su preferencia y quedamos a su entera orden para su próximo control!`;
 
@@ -15612,12 +15747,14 @@ async function renderReceivables() {
 
     const patients = await SupabaseDataService.getPatients();
     let count = 0;
+    let totalPatientDebt = 0;
 
     patients.forEach(p => {
-        let pendingPayments = (p.payments || []).filter(pay => pay.status === 'Pendiente' || pay.balanceUSD > 0);
+        let pendingPayments = (p.payments || []).filter(pay => (pay.status === 'Pendiente' || pay.balanceUSD > 0.01) && !pay.isCashea);
         if (pendingPayments.length > 0) {
             pendingPayments.forEach(pay => {
                 count++;
+                totalPatientDebt += pay.balanceUSD;
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td><strong class="badge-tag blue">${p.id}</strong></td>
@@ -15642,10 +15779,175 @@ async function renderReceivables() {
         }
     });
 
+    const kpiPatients = document.getElementById('kpi-receivables-patients');
+    const kpiPatientsCount = document.getElementById('kpi-receivables-patients-count');
+    if (kpiPatients) kpiPatients.innerText = `$${totalPatientDebt.toFixed(2)}`;
+    if (kpiPatientsCount) kpiPatientsCount.innerText = `${count} paciente${count === 1 ? '' : 's'} con saldo deudor directo`;
+
     if (count === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted" style="padding: 15px;">No hay pacientes con saldos pendientes.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted" style="padding: 15px;">No hay pacientes con créditos o saldos pendientes directos.</td></tr>';
     }
+
+    await window.renderCasheaReceivables();
 }
+
+window.switchReceivablesTab = function(tab, btn) {
+    const secPatients = document.getElementById('section-rec-patients');
+    const secCashea = document.getElementById('section-rec-cashea');
+    const btnPatients = document.getElementById('btn-tab-rec-patients');
+    const btnCashea = document.getElementById('btn-tab-rec-cashea');
+
+    if (tab === 'patients') {
+        if (secPatients) secPatients.style.display = 'block';
+        if (secCashea) secCashea.style.display = 'none';
+        if (btnPatients) btnPatients.classList.add('active');
+        if (btnCashea) btnCashea.classList.remove('active');
+    } else {
+        if (secPatients) secPatients.style.display = 'none';
+        if (secCashea) secCashea.style.display = 'block';
+        if (btnPatients) btnPatients.classList.remove('active');
+        if (btnCashea) btnCashea.classList.add('active');
+        window.renderCasheaReceivables();
+    }
+};
+
+window.renderCasheaReceivables = async function() {
+    const tbody = document.getElementById('finance-cashea-receivables-tbody');
+    const kpiPending = document.getElementById('kpi-receivables-cashea-pending');
+    const kpiPendingCount = document.getElementById('kpi-receivables-cashea-count');
+    const kpiSettled = document.getElementById('kpi-receivables-cashea-settled');
+
+    const casheaInvoices = await SupabaseDataService.getCasheaInvoices(true);
+    const rate = getExchangeRate();
+
+    let totalPendingUSD = 0;
+    let totalSettledUSD = 0;
+    let pendingCount = 0;
+
+    casheaInvoices.forEach(inv => {
+        const financed = inv.casheaDetails?.financedUSD || (inv.splitDetails?.cashea ? parseFloat(inv.splitDetails.cashea) : Math.max(0, inv.totalRef - inv.paidRef));
+        const isSettled = inv.casheaDetails?.payoutStatus === 'settled' || inv.status === 'Liquidado Cashea';
+
+        if (isSettled) {
+            totalSettledUSD += financed;
+        } else {
+            totalPendingUSD += financed;
+            pendingCount++;
+        }
+    });
+
+    if (kpiPending) kpiPending.innerText = `$${totalPendingUSD.toFixed(2)}`;
+    if (kpiPendingCount) kpiPendingCount.innerText = `${pendingCount} lote${pendingCount === 1 ? '' : 's'} pendiente${pendingCount === 1 ? '' : 's'} por liquidar`;
+    if (kpiSettled) kpiSettled.innerText = `$${totalSettledUSD.toFixed(2)}`;
+
+    if (!tbody) return;
+
+    if (casheaInvoices.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted" style="padding: 24px;">No se registran operaciones con financiamiento Cashea aún.</td></tr>';
+        return;
+    }
+
+    // Sort newest first
+    const sorted = [...casheaInvoices].sort((a, b) => new Date(b.invoiceDate || 0) - new Date(a.invoiceDate || 0));
+
+    tbody.innerHTML = sorted.map(inv => {
+        const financed = inv.casheaDetails?.financedUSD || (inv.splitDetails?.cashea ? parseFloat(inv.splitDetails.cashea) : Math.max(0, inv.totalRef - inv.paidRef));
+        const financedBs = financed * rate;
+        const initial = inv.casheaDetails?.initialPaidUSD || inv.paidRef || 0;
+        const surchargePct = inv.casheaDetails?.surchargePct !== undefined ? inv.casheaDetails.surchargePct : 7.0;
+        const isSettled = inv.casheaDetails?.payoutStatus === 'settled' || inv.status === 'Liquidado Cashea';
+
+        const statusBadge = isSettled 
+            ? `<span class="badge-tag green" style="display:inline-flex; align-items:center; gap:4px;"><i class="fa-solid fa-check-circle"></i> Liquidado en Banco</span><div style="font-size:0.7rem; color:#64748b; margin-top:2px;">${inv.casheaDetails?.payoutBank || 'Banco'} (Ref: ${inv.casheaDetails?.payoutReference || '--'})</div>`
+            : `<span class="badge-tag amber" style="display:inline-flex; align-items:center; gap:4px; font-weight:700;"><i class="fa-solid fa-clock"></i> Pendiente por Liquidar</span>`;
+
+        const actionBtn = isSettled
+            ? `<button type="button" class="btn btn-xs btn-outline" onclick="window.printDirectSaleReceipt('${inv.id}')" title="Ver Comprobante"><i class="fa-solid fa-file-invoice"></i> Ver</button>`
+            : `<button type="button" class="btn btn-xs btn-success" onclick="window.openCasheaReconciliationModal('${inv.id}')" style="font-weight:700; display:inline-flex; align-items:center; gap:4px;" title="Registrar depósito bancario recibido de Cashea"><i class="fa-solid fa-check-circle"></i> Conciliar Depósito</button>`;
+
+        return `
+            <tr style="font-size:0.85rem; border-bottom:1px solid var(--border-color);">
+                <td>${inv.invoiceDate || '--'}</td>
+                <td><strong class="text-cyan">${inv.id}</strong></td>
+                <td><strong>${inv.patientName || '--'}</strong></td>
+                <td class="text-right" style="font-weight:600;">$${inv.totalRef.toFixed(2)}</td>
+                <td class="text-right text-green" style="font-weight:600;">$${initial.toFixed(2)}</td>
+                <td class="text-center"><span class="badge-tag blue" style="font-size:0.75rem;">+${surchargePct}%</span></td>
+                <td class="text-right">
+                    <strong style="color:#0284c7; font-size:0.95rem;">$${financed.toFixed(2)}</strong>
+                    <small style="display:block; color:#64748b;">Bs. ${financedBs.toFixed(2)}</small>
+                </td>
+                <td class="text-center">${statusBadge}</td>
+                <td class="text-center">${actionBtn}</td>
+            </tr>
+        `;
+    }).join('');
+};
+
+window.openCasheaReconciliationModal = async function(invoiceId) {
+    const invoices = await SupabaseDataService.getInvoices();
+    const inv = invoices.find(i => String(i.id) === String(invoiceId));
+    if (!inv) return;
+
+    const financed = inv.casheaDetails?.financedUSD || (inv.splitDetails?.cashea ? parseFloat(inv.splitDetails.cashea) : Math.max(0, inv.totalRef - inv.paidRef));
+
+    document.getElementById('cr-invoice-id').value = inv.id;
+    document.getElementById('cr-doc-id').innerText = inv.id;
+    document.getElementById('cr-patient-name').innerText = inv.patientName || '--';
+    document.getElementById('cr-amount-usd').innerText = `$${financed.toFixed(2)} USD`;
+    document.getElementById('cr-payout-net').value = financed.toFixed(2);
+    document.getElementById('cr-payout-date').value = new Date().toISOString().split('T')[0];
+    document.getElementById('cr-payout-reference').value = '';
+    document.getElementById('cr-payout-notes').value = '';
+
+    openModal('modal-cashea-reconciliation');
+};
+
+window.processCasheaReconciliation = async function(e) {
+    if (e) e.preventDefault();
+    const invoiceId = document.getElementById('cr-invoice-id').value;
+    const payoutDate = document.getElementById('cr-payout-date').value;
+    const bank = document.getElementById('cr-payout-bank').value;
+    const reference = document.getElementById('cr-payout-reference').value;
+    const netUSD = parseFloat(document.getElementById('cr-payout-net').value) || 0;
+    const notes = document.getElementById('cr-payout-notes').value;
+
+    if (!invoiceId || !reference) {
+        Swal.fire({ icon: 'warning', title: 'Campos requeridos', text: 'Indique el banco y la referencia bancaria del depósito de Cashea.' });
+        return;
+    }
+
+    try {
+        Swal.fire({
+            title: 'Asentando Liquidación...',
+            text: 'Registrando conciliación bancaria en la nube...',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        await SupabaseDataService.settleCasheaPayout({
+            invoiceId,
+            payoutDate,
+            bank,
+            reference,
+            netUSD,
+            notes
+        });
+
+        Swal.fire({
+            icon: 'success',
+            title: '¡Depósito Conciliado con Éxito!',
+            text: `El lote de $${netUSD.toFixed(2)} USD quedó asentado como recibido en ${bank} (Ref: ${reference}).`,
+            timer: 2500,
+            showConfirmButton: false
+        });
+
+        closeModal('modal-cashea-reconciliation');
+        await window.renderCasheaReceivables();
+    } catch(err) {
+        Swal.fire({ icon: 'error', title: 'Error', text: err.message || 'No se pudo registrar la liquidación.' });
+    }
+};
 
 async function renderCashFlow() {
     const tbody = document.getElementById('finance-cashflow-tbody');

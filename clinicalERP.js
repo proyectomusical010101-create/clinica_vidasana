@@ -1537,35 +1537,40 @@
             }
 
             container.innerHTML = this.casheaInvoices.map(c => {
-                const total = parseFloat(c.total_amount || 0);
-                const paid = parseFloat(c.paid_amount || 0);
-                const pending = total - paid;
-                const phone = (c.patient_phone || '').replace(/[^0-9]/g, '');
+                const total = parseFloat(c.totalRef || c.total_amount || 0);
+                const initial = parseFloat(c.casheaDetails?.initialPaidUSD || c.paidRef || c.paid_amount || 0);
+                const financed = parseFloat(c.casheaDetails?.financedUSD || (total - initial));
+                const isSettled = c.casheaDetails?.payoutStatus === 'settled' || c.status === 'Liquidado Cashea';
+                const docId = c.id || c.invoice_number || 'S/N';
+                const patientName = c.patientName || c.patient_name || 'Paciente';
 
                 return `
-                    <div style="border: 1px solid #e2e8f0; border-left: 4px solid #06b6d4; background: #ffffff; margin-bottom: 12px; padding: 14px 16px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
-                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div style="border: 1px solid #e2e8f0; border-left: 4px solid #0284c7; background: #ffffff; margin-bottom: 12px; padding: 14px 16px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px;">
                             <div>
-                                <h4 style="margin: 0 0 4px 0; color: #0f172a; font-family: 'Outfit', sans-serif;"><strong>${c.patient_name}</strong></h4>
-                                <small style="color: #64748b;">Factura: <strong>${c.invoice_number || 'S/N'}</strong> • Cédula: ${c.patient_id_num || 'N/A'}</small>
+                                <h4 style="margin: 0 0 4px 0; color: #0f172a; font-family: 'Outfit', sans-serif;"><strong>${patientName}</strong></h4>
+                                <small style="color: #64748b;">Comprobante: <strong class="text-cyan">${docId}</strong> • Fecha: ${c.invoiceDate || 'Reciente'}</small>
                                 <div style="margin-top: 8px; display: flex; gap: 6px;">
-                                    <span class="badge-tag blue">Cashea / Cuotas</span>
-                                    <span class="badge-tag ${pending <= 0 ? 'green' : 'amber'}">${pending <= 0 ? 'Solvente' : 'Saldo Pendiente'}</span>
+                                    <span class="badge-tag blue" style="background:#e0f2fe; color:#0369a1;"><i class="fa-solid fa-credit-card"></i> Financiamiento Cashea</span>
+                                    <span class="badge-tag ${isSettled ? 'green' : 'amber'}">${isSettled ? 'Liquidado en Banco' : 'Pendiente Liquidación Cashea'}</span>
                                 </div>
                             </div>
                             <div style="text-align: right;">
-                                <div style="color: #64748b; font-size: 0.8rem;">Total Plan: <strong>$${total.toFixed(2)}</strong></div>
-                                <div style="color: #dc2626; font-size: 1.1rem; font-weight: 800; font-family: 'Outfit', sans-serif; margin-top: 2px;">$${pending.toFixed(2)}</div>
-                                <small style="color: #64748b; font-size: 0.72rem;">Por cobrar</small>
+                                <div style="color: #64748b; font-size: 0.8rem;">Total: <strong>$${total.toFixed(2)}</strong> (Inicial: $${initial.toFixed(2)})</div>
+                                <div style="color: #0284c7; font-size: 1.15rem; font-weight: 800; font-family: 'Outfit', sans-serif; margin-top: 2px;">$${financed.toFixed(2)}</div>
+                                <small style="color: #64748b; font-size: 0.72rem;">Por cobrar a empresa Cashea</small>
                             </div>
                         </div>
                         <div style="margin-top: 12px; display: flex; justify-content: flex-end; gap: 8px;">
-                            ${phone ? `
-                                <a href="https://wa.me/${phone.startsWith('58') ? phone : ('58' + phone)}?text=${encodeURIComponent('Estimado(a) ' + c.patient_name + ', le saludamos cordialmente de Clínica VidaSana para recordarle su cuota pendiente de Cashea por un monto de $' + pending.toFixed(2) + '. ¡Gracias por su preferencia!')}" 
-                                   target="_blank" class="whatsapp-pill-link">
-                                    <i class="fa-brands fa-whatsapp"></i> Recordar Cuota por WhatsApp
-                                </a>
-                            ` : ''}
+                            ${!isSettled ? `
+                                <button type="button" class="btn btn-xs btn-success" onclick="closeModal('modal-cashea-tracker'); window.openCasheaReconciliationModal('${docId}')" style="font-weight:700; display:inline-flex; align-items:center; gap:4px;">
+                                    <i class="fa-solid fa-building-columns"></i> Conciliar Depósito de Cashea
+                                </button>
+                            ` : `
+                                <small class="text-green" style="font-weight:700; display:inline-flex; align-items:center; gap:4px;">
+                                    <i class="fa-solid fa-check-circle"></i> Liquidado en ${c.casheaDetails?.payoutBank || 'Banco'} (Ref: ${c.casheaDetails?.payoutReference || '--'})
+                                </small>
+                            `}
                         </div>
                     </div>
                 `;

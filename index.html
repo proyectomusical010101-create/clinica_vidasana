@@ -1882,11 +1882,54 @@
                         </div>
                     </div>
 
-                    <!-- SUBTAB: Cuentas por Cobrar (Pacientes con saldo pendiente) -->
+                    <!-- SUBTAB: Cuentas por Cobrar (Pacientes y Cashea) -->
                     <div id="subtab-receivables" class="subtab-content">
-                        <div class="card">
-                            <div class="card-header">
-                                <h3><i class="fa-solid fa-user-clock text-amber"></i> Pacientes con Deudas Pendientes</h3>
+                        
+                        <!-- Receivables KPIs Overview -->
+                        <div class="stats-grid mb-20">
+                            <div class="stat-card border-amber">
+                                <div class="stat-header">
+                                    <span>Por Cobrar a Pacientes</span>
+                                    <div class="stat-icon amber"><i class="fa-solid fa-user-clock"></i></div>
+                                </div>
+                                <h2 id="kpi-receivables-patients">$0.00</h2>
+                                <small class="text-muted" id="kpi-receivables-patients-count">0 pacientes con saldo deudor</small>
+                            </div>
+
+                            <div class="stat-card border-blue" style="border-left: 4px solid #0284c7;">
+                                <div class="stat-header">
+                                    <span>Por Cobrar a Cashea (Plataforma)</span>
+                                    <div class="stat-icon blue" style="color: #0284c7; background: rgba(2, 132, 199, 0.1);"><i class="fa-solid fa-credit-card"></i></div>
+                                </div>
+                                <h2 id="kpi-receivables-cashea-pending" style="color: #0284c7;">$0.00</h2>
+                                <small class="text-muted" id="kpi-receivables-cashea-count">0 operaciones pendientes por liquidar</small>
+                            </div>
+
+                            <div class="stat-card border-green">
+                                <div class="stat-header">
+                                    <span>Liquidado por Cashea en Banco</span>
+                                    <div class="stat-icon green"><i class="fa-solid fa-building-columns"></i></div>
+                                </div>
+                                <h2 id="kpi-receivables-cashea-settled">$0.00</h2>
+                                <small class="text-muted">Lotes depositados y conciliados</small>
+                            </div>
+                        </div>
+
+                        <!-- Segment Switcher Tabs -->
+                        <div style="display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+                            <button type="button" class="filter-btn active" id="btn-tab-rec-patients" onclick="window.switchReceivablesTab('patients', this)" style="display: inline-flex; align-items: center; gap: 6px; font-weight: 700;">
+                                <i class="fa-solid fa-user-tag"></i> 1. Créditos a Pacientes (Internos)
+                            </button>
+                            <button type="button" class="filter-btn" id="btn-tab-rec-cashea" onclick="window.switchReceivablesTab('cashea', this)" style="display: inline-flex; align-items: center; gap: 6px; font-weight: 700;">
+                                <i class="fa-solid fa-layer-group text-cyan"></i> 2. Cuentas por Cobrar a Cashea (Plataforma)
+                            </button>
+                        </div>
+
+                        <!-- SECTION 1: Pacientes con Deudas Pendientes (Crédito Directo) -->
+                        <div id="section-rec-patients" class="card">
+                            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                                <h3><i class="fa-solid fa-user-clock text-amber"></i> Pacientes con Crédito Directo Pendiente</h3>
+                                <small class="text-muted">Cobranza directa de la clínica al paciente con recordatorios por WhatsApp</small>
                             </div>
                             <div class="card-body p-0">
                                 <div class="table-responsive">
@@ -1910,6 +1953,46 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- SECTION 2: Cuentas por Cobrar a Cashea (Plataforma) -->
+                        <div id="section-rec-cashea" class="card" style="display: none;">
+                            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                                <div>
+                                    <h3 style="margin: 0; display: inline-flex; align-items: center; gap: 8px;">
+                                        <i class="fa-solid fa-credit-card text-teal"></i> Lotes y Operaciones por Cobrar a Cashea
+                                    </h3>
+                                    <p class="subtitle" style="margin: 2px 0 0 0; font-size: 0.82rem;">
+                                        El paciente ya cubrió su inicial en clínica. Monitoree las transferencias pendientes de liquidar por parte de la empresa Cashea a nuestra cuenta bancaria.
+                                    </p>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-outline" onclick="window.renderCasheaReceivables()" style="font-weight: 700;">
+                                    <i class="fa-solid fa-arrows-rotate"></i> Refrescar Lotes Cashea
+                                </button>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="table">
+                                        <thead>
+                                            <tr style="font-size: 0.8rem; text-transform: uppercase;">
+                                                <th>Fecha</th>
+                                                <th>Comprobante</th>
+                                                <th>Paciente Atendido</th>
+                                                <th class="text-right">Total Venta</th>
+                                                <th class="text-right">Inicial Cobrada</th>
+                                                <th class="text-center">% Recargo</th>
+                                                <th class="text-right">Por Cobrar a Cashea</th>
+                                                <th class="text-center">Estado Liquidación</th>
+                                                <th class="text-center" style="width: 150px;">Acciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="finance-cashea-receivables-tbody">
+                                            <tr><td colspan="9" class="text-center text-muted" style="padding: 24px;">Cargando operaciones de Cashea...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
 
                     <!-- SUBTAB: Flujo de Caja (Cash Flow) -->
@@ -5719,7 +5802,8 @@
                                 <option value="pos">Punto de Venta / Débito</option>
                                 <option value="zelle">Zelle</option>
                                 <option value="binance">Binance USDT</option>
-                                <option value="split">Mixto (Dividido)</option>
+                                <option value="cashea">Cashea (Financiamiento por Cuotas)</option>
+                                <option value="split">Mixto (Dividido con Cashea o Varios)</option>
                             </select>
                         </div>
 
@@ -5727,10 +5811,64 @@
                         <div id="ds-split-container" style="display: none; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px;">
                             <div style="font-size: 0.78rem; font-weight: 700; color: #334155; margin-bottom: 6px;">Distribución Mixta ($ USD):</div>
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                                <div><small>Pago Móvil ($):</small><input type="number" id="ds-split-pm" class="form-control btn-xs" value="0" min="0" step="0.01"></div>
-                                <div><small>Efectivo ($):</small><input type="number" id="ds-split-cash" class="form-control btn-xs" value="0" min="0" step="0.01"></div>
-                                <div><small>Zelle ($):</small><input type="number" id="ds-split-zelle" class="form-control btn-xs" value="0" min="0" step="0.01"></div>
-                                <div><small>Punto / Tarjeta ($):</small><input type="number" id="ds-split-pos" class="form-control btn-xs" value="0" min="0" step="0.01"></div>
+                                <div><small>Pago Móvil ($):</small><input type="number" id="ds-split-pm" class="form-control btn-xs" value="0" min="0" step="0.01" oninput="window.onDirectSaleSplitChange()"></div>
+                                <div><small>Efectivo ($):</small><input type="number" id="ds-split-cash" class="form-control btn-xs" value="0" min="0" step="0.01" oninput="window.onDirectSaleSplitChange()"></div>
+                                <div><small>Zelle ($):</small><input type="number" id="ds-split-zelle" class="form-control btn-xs" value="0" min="0" step="0.01" oninput="window.onDirectSaleSplitChange()"></div>
+                                <div><small>Punto / Tarjeta ($):</small><input type="number" id="ds-split-pos" class="form-control btn-xs" value="0" min="0" step="0.01" oninput="window.onDirectSaleSplitChange()"></div>
+                                <div style="grid-column: span 2; background: #f0f9ff; padding: 6px 8px; border-radius: 6px; border: 1px solid #bae6fd;">
+                                    <small style="color: #0284c7; font-weight: 700;"><i class="fa-solid fa-credit-card"></i> Cashea Financiado ($):</small>
+                                    <input type="number" id="ds-split-cashea" class="form-control btn-xs" value="0" min="0" step="0.01" oninput="window.onDirectSaleSplitChange()" style="font-weight: 800; color: #0369a1;">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Cashea Configuration & Financial Breakdown -->
+                        <div id="ds-cashea-config-container" style="display: none; background: #f0f9ff; border: 1.5px solid #38bdf8; border-radius: 10px; padding: 12px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <span style="font-size: 0.82rem; font-weight: 800; color: #0369a1; display: flex; align-items: center; gap: 6px;">
+                                    <i class="fa-solid fa-credit-card"></i> Financiamiento Cashea
+                                </span>
+                                <div style="display: flex; align-items: center; gap: 4px;">
+                                    <label style="font-size: 0.75rem; font-weight: 700; color: #0284c7; margin: 0;">% Recargo:</label>
+                                    <input type="number" id="ds-cashea-surcharge-pct" class="form-control btn-xs" value="7.0" min="0" max="100" step="0.1" style="width: 55px; font-weight: 800; text-align: center; height: 26px;" oninput="window.calculateDirectSaleTotals()">
+                                    <span style="font-size: 0.75rem; font-weight: 700; color: #0284c7;">%</span>
+                                </div>
+                            </div>
+
+                            <div style="font-size: 0.78rem; line-height: 1.5; color: #334155; background: rgba(255,255,255,0.7); padding: 8px 10px; border-radius: 6px; border: 1px dashed #bae6fd; margin-bottom: 8px;">
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span>Subtotal Base Servicios:</span>
+                                    <strong id="ds-cashea-subtotal-display">$0.00</strong>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; color: #0369a1;">
+                                    <span>+ Recargo Comisión Cashea:</span>
+                                    <strong id="ds-cashea-surcharge-display">+$0.00</strong>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; border-top: 1px solid #e0f2fe; margin-top: 4px; padding-top: 4px; font-weight: 800;">
+                                    <span>Total Factura Cashea:</span>
+                                    <span id="ds-cashea-total-display" style="color: #0c4a6e;">$0.00</span>
+                                </div>
+                            </div>
+
+                            <div id="ds-cashea-initial-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                                <div>
+                                    <label style="font-size: 0.74rem; font-weight: 700; color: #0369a1; display: block; margin-bottom: 2px;">Inicial Pagada Hoy ($):</label>
+                                    <input type="number" id="ds-cashea-initial-input" class="form-control btn-xs" value="0.00" min="0" step="0.01" style="height: 30px; font-weight: 700;" oninput="window.onDirectSaleCasheaInitialChange(this.value)">
+                                </div>
+                                <div>
+                                    <label style="font-size: 0.74rem; font-weight: 700; color: #0369a1; display: block; margin-bottom: 2px;">Método de Inicial:</label>
+                                    <select id="ds-cashea-initial-method" class="form-control btn-xs" style="height: 30px; font-size: 0.78rem;">
+                                        <option value="pagomovil">Pago Móvil</option>
+                                        <option value="cash">Efectivo USD/Bs.</option>
+                                        <option value="pos">Punto de Venta</option>
+                                        <option value="zelle">Zelle</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div style="margin-top: 8px; font-size: 0.78rem; display: flex; justify-content: space-between; align-items: center; background: #e0f2fe; padding: 6px 10px; border-radius: 6px;">
+                                <span style="font-weight: 700; color: #0369a1;">Restante por Cobrar a Cashea:</span>
+                                <strong id="ds-cashea-financed-display" style="font-size: 0.95rem; color: #0284c7;">$0.00</strong>
                             </div>
                         </div>
 
@@ -5893,15 +6031,80 @@
         </div>
     </div>
 
+    <!-- MODAL 3: CONCILIACIÓN / LIQUIDACIÓN BANCARIA DE CASHEA -->
+    <div id="modal-cashea-reconciliation" class="modal-overlay hidden" style="z-index: 10560;">
+        <div class="modal-dialog" style="max-width: 520px; width: 95%; background: var(--bg-card); border-radius: 14px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+            <div class="modal-header" style="padding: 16px 20px; border-bottom: 1px solid var(--border-color); background: linear-gradient(135deg, rgba(2, 132, 199, 0.1) 0%, rgba(13, 148, 136, 0.1) 100%); display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; font-size: 1.1rem; color: #0f172a; font-weight: 800; display: flex; align-items: center; gap: 8px;">
+                    <i class="fa-solid fa-building-columns text-cyan"></i> Conciliar Depósito de Cashea
+                </h3>
+                <button type="button" class="btn-close" onclick="closeModal('modal-cashea-reconciliation')" style="background: none; border: none; font-size: 1.2rem; color: #64748b; cursor: pointer;">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <form id="form-cashea-reconciliation" onsubmit="window.processCasheaReconciliation(event)" style="padding: 20px; display: flex; flex-direction: column; gap: 14px; margin: 0;">
+                <input type="hidden" id="cr-invoice-id">
+                
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; font-size: 0.85rem; line-height: 1.5;">
+                    <div>Comprobante: <strong id="cr-doc-id" class="text-cyan">--</strong></div>
+                    <div>Paciente: <strong id="cr-patient-name">--</strong></div>
+                    <div style="margin-top: 4px; font-size: 0.95rem; font-weight: 800; color: #0284c7;">
+                        Monto por Liquidar: <span id="cr-amount-usd">$0.00 USD</span>
+                    </div>
+                </div>
+
+                <div>
+                    <label style="font-size: 0.8rem; font-weight: 700; color: #334155; display: block; margin-bottom: 4px;">Fecha del Depósito de Cashea *</label>
+                    <input type="date" id="cr-payout-date" class="form-control" required style="height: 36px; border-radius: 6px; font-size: 0.85rem;">
+                </div>
+
+                <div>
+                    <label style="font-size: 0.8rem; font-weight: 700; color: #334155; display: block; margin-bottom: 4px;">Banco Receptor en la Clínica *</label>
+                    <select id="cr-payout-bank" class="form-control" required style="height: 36px; border-radius: 6px; font-size: 0.85rem;">
+                        <option value="Banesco Banco Universal">Banesco Banco Universal</option>
+                        <option value="Banco Mercantil">Banco Mercantil</option>
+                        <option value="Banco de Venezuela">Banco de Venezuela (BDV)</option>
+                        <option value="Bancaribe">Bancaribe</option>
+                        <option value="BNC Banco Nacional de Crédito">BNC Banco Nacional de Crédito</option>
+                        <option value="Cuenta Dólares / Custodia">Cuenta Dólares / Custodia</option>
+                        <option value="Otro Banco">Otro Banco</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label style="font-size: 0.8rem; font-weight: 700; color: #334155; display: block; margin-bottom: 4px;">N° de Referencia de la Transferencia de Cashea *</label>
+                    <input type="text" id="cr-payout-reference" class="form-control" required placeholder="ej: REF-8849201" style="height: 36px; border-radius: 6px; font-size: 0.85rem;">
+                </div>
+
+                <div>
+                    <label style="font-size: 0.8rem; font-weight: 700; color: #334155; display: block; margin-bottom: 4px;">Monto Neto Depositado ($ USD) *</label>
+                    <input type="number" id="cr-payout-net" class="form-control" step="0.01" min="0" required style="height: 36px; border-radius: 6px; font-size: 0.95rem; font-weight: 800;">
+                </div>
+
+                <div>
+                    <label style="font-size: 0.8rem; font-weight: 600; color: #64748b; display: block; margin-bottom: 4px;">Notas / Observaciones (Opcional):</label>
+                    <input type="text" id="cr-payout-notes" class="form-control" placeholder="ej: Lote liquidado por Cashea según acuerdo" style="height: 34px; border-radius: 6px; font-size: 0.82rem;">
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
+                    <button type="button" class="btn btn-outline" onclick="closeModal('modal-cashea-reconciliation')">Cancelar</button>
+                    <button type="submit" class="btn btn-success" style="font-weight: 700; display: inline-flex; align-items: center; gap: 6px;">
+                        <i class="fa-solid fa-check-circle"></i> Asentar Liquidación en Banco
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=257"></script>
-    <script src="supabaseClient.js?v=257"></script>
-    <script src="odontogram.js?v=257"></script>
-    <script src="signature.js?v=257"></script>
-    <script src="whatsapp.js?v=257"></script>
-    <script src="kardex.js?v=257"></script>
-    <script src="app.js?v=257"></script>
-    <script src="clinicalERP.js?v=257"></script>
-    <script src="tutorial.js?v=257"></script>
+    <script src="seededData.js?v=258"></script>
+    <script src="supabaseClient.js?v=258"></script>
+    <script src="odontogram.js?v=258"></script>
+    <script src="signature.js?v=258"></script>
+    <script src="whatsapp.js?v=258"></script>
+    <script src="kardex.js?v=258"></script>
+    <script src="app.js?v=258"></script>
+    <script src="clinicalERP.js?v=258"></script>
+    <script src="tutorial.js?v=258"></script>
 </body>
 </html>
