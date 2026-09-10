@@ -18,9 +18,10 @@
         casheaInvoices: [],
         birthdayPatients: [],
         serviceLiquidations: [],
+        payrollStaff: [],
 
         // Subtabs and active filters
-        payrollSubtab: 'services', // 'services' (Honorarios por Servicio) or 'general' (Nómina General)
+        payrollSubtab: 'services', // 'services' (Honorarios por Servicio), 'general' (Nómina General), or 'staff' (Personal)
         serviceLiquidationsFilter: 'all',
         serviceLiquidationsSearch: '',
         specialtiesFilter: 'all',
@@ -29,6 +30,8 @@
         roomsSearch: '',
         payrollFilter: 'all',
         payrollSearch: '',
+        payrollStaffFilter: 'all',
+        payrollStaffSearch: '',
 
         async init() {
             console.log('[ClinicalERP] Initializing Executive Multi-Specialty ERP Engine...');
@@ -60,13 +63,14 @@
         async loadAll() {
             try {
                 if (window.SupabaseDataService) {
-                    const [specs, rms, pay, cashea, bdays, srvLiq] = await Promise.all([
+                    const [specs, rms, pay, cashea, bdays, srvLiq, pStaff] = await Promise.all([
                         window.SupabaseDataService.getSpecialties().catch(() => []),
                         window.SupabaseDataService.getClinicRooms().catch(() => []),
                         window.SupabaseDataService.getPayrollRecords().catch(() => []),
                         window.SupabaseDataService.getCasheaInvoices().catch(() => []),
                         window.SupabaseDataService.getBirthdayPatients().catch(() => []),
-                        window.SupabaseDataService.getServiceLiquidations().catch(() => [])
+                        window.SupabaseDataService.getServiceLiquidations().catch(() => []),
+                        window.SupabaseDataService.getPayrollStaff().catch(() => [])
                     ]);
                     this.specialties = specs || [];
                     this.rooms = rms || [];
@@ -74,6 +78,7 @@
                     this.casheaInvoices = cashea || [];
                     this.birthdayPatients = bdays || [];
                     this.serviceLiquidations = srvLiq || [];
+                    this.payrollStaff = pStaff || [];
                 }
             } catch (err) {
                 console.warn('[ClinicalERP] Error loading data from Supabase:', err);
@@ -513,19 +518,24 @@
             this.payrollSubtab = subtab;
             const btnServices = document.getElementById('tab-btn-payroll-services');
             const btnGeneral = document.getElementById('tab-btn-payroll-general');
+            const btnStaff = document.getElementById('tab-btn-payroll-staff');
             const viewServices = document.getElementById('payroll-subview-services');
             const viewGeneral = document.getElementById('payroll-subview-general');
+            const viewStaff = document.getElementById('payroll-subview-staff');
+
+            [btnServices, btnGeneral, btnStaff].forEach(b => { if (b) b.classList.remove('active'); });
+            [viewServices, viewGeneral, viewStaff].forEach(v => { if (v) v.classList.add('hidden'); });
 
             if (subtab === 'services') {
                 if (btnServices) btnServices.classList.add('active');
-                if (btnGeneral) btnGeneral.classList.remove('active');
                 if (viewServices) viewServices.classList.remove('hidden');
-                if (viewGeneral) viewGeneral.classList.add('hidden');
                 this.renderServiceLiquidations();
+            } else if (subtab === 'staff') {
+                if (btnStaff) btnStaff.classList.add('active');
+                if (viewStaff) viewStaff.classList.remove('hidden');
+                this.renderPayrollStaff();
             } else {
-                if (btnServices) btnServices.classList.remove('active');
                 if (btnGeneral) btnGeneral.classList.add('active');
-                if (viewServices) viewServices.classList.add('hidden');
                 if (viewGeneral) viewGeneral.classList.remove('hidden');
                 this.renderFixedPayroll();
             }
@@ -1395,6 +1405,8 @@
         renderPayroll() {
             this.renderServiceLiquidations();
             this.renderFixedPayroll();
+            this.renderPayrollStaff();
+            this.populatePayrollStaffDatalist();
         },
 
         renderFixedPayroll() {
@@ -1530,6 +1542,7 @@
             document.getElementById('form-payroll').reset();
             document.getElementById('payroll-id').value = '';
             document.getElementById('modal-payroll-title').innerText = 'Nueva Liquidación de Nómina / Honorarios';
+            this.populatePayrollStaffDatalist();
             this.calcPayrollNet();
             const modal = document.getElementById('modal-payroll');
             if (modal) modal.classList.remove('hidden');
@@ -1667,7 +1680,273 @@
         },
 
         // =========================================================
-        // 4. SEGUIMIENTO A CASHEA / CRÉDITOS
+        // 5. DIRECTORIO DE PERSONAL & COLABORADORES (SIN ROL)
+        // =========================================================
+        filterPayrollStaff(status, btn) {
+            this.payrollStaffFilter = status;
+            if (btn) {
+                document.querySelectorAll('#payroll-staff-filter-group .filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            }
+            this.renderPayrollStaff();
+        },
+
+        searchPayrollStaff(query) {
+            this.payrollStaffSearch = (query || '').toLowerCase().trim();
+            this.renderPayrollStaff();
+        },
+
+        renderPayrollStaff() {
+            const container = document.getElementById('payroll-staff-table-body');
+            if (!container) return;
+
+            let list = [...this.payrollStaff];
+
+            if (this.payrollStaffFilter && this.payrollStaffFilter !== 'all') {
+                list = list.filter(s => (s.status || 'Activo').toLowerCase() === this.payrollStaffFilter.toLowerCase());
+            }
+
+            if (this.payrollStaffSearch) {
+                const q = this.payrollStaffSearch;
+                list = list.filter(s =>
+                    (s.fullname || '').toLowerCase().includes(q) ||
+                    (s.dni || '').toLowerCase().includes(q) ||
+                    (s.role_or_title || '').toLowerCase().includes(q) ||
+                    (s.department || '').toLowerCase().includes(q) ||
+                    (s.phone || '').toLowerCase().includes(q) ||
+                    (s.email || '').toLowerCase().includes(q)
+                );
+            }
+
+            if (list.length === 0) {
+                container.innerHTML = `
+                    <tr>
+                        <td colspan="9" class="text-center text-muted" style="padding: 28px;">
+                            <div style="font-size: 1.1rem; margin-bottom: 6px;"><i class="fa-solid fa-users text-cyan"></i></div>
+                            No hay colaboradores registrados con estos filtros. Haz clic en <strong>+ Registrar Colaborador</strong> para agregar Community Managers, Diseñadores, Personal de Limpieza o Servicios Generales.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            container.innerHTML = list.map(s => {
+                const isActivo = (s.status || 'Activo') === 'Activo';
+                const statusBadge = isActivo 
+                    ? '<span class="badge-tag green">Activo</span>' 
+                    : '<span class="badge-tag" style="background: rgba(100,116,139,0.15); color: #64748b;">Inactivo</span>';
+                
+                const typeLabels = {
+                    'personal_fijo': 'Personal Fijo (Sueldo)',
+                    'honorarios': 'Honorarios / Servicios',
+                    'freelance': 'Freelance / Destajo'
+                };
+                const typeDisplay = typeLabels[s.contract_type] || s.contract_type || 'Personal Fijo';
+                const baseSalary = parseFloat(s.base_salary || 0).toFixed(2);
+
+                return `
+                    <tr>
+                        <td>
+                            <div style="font-weight: 700; color: #1e293b; font-size: 0.95rem;">${s.fullname || 'Sin nombre'}</div>
+                            ${s.dni ? `<small class="text-muted" style="font-size: 0.78rem;"><i class="fa-solid fa-id-card"></i> ${s.dni}</small>` : ''}
+                        </td>
+                        <td>
+                            <span class="badge-tag blue" style="font-weight: 700; font-size: 0.8rem;">
+                                <i class="fa-solid fa-briefcase"></i> ${s.role_or_title || 'Colaborador'}
+                            </span>
+                        </td>
+                        <td><span class="badge-tag" style="background: rgba(14, 165, 233, 0.08); color: #0284c7;">${s.department || 'General'}</span></td>
+                        <td><small style="color: #475569; font-weight: 500;">${typeDisplay}</small></td>
+                        <td class="text-right"><strong style="color: #608127; font-size: 0.95rem;">$${baseSalary}</strong></td>
+                        <td>
+                            <div>${s.phone ? `<a href="https://wa.me/${s.phone.replace(/[^0-9]/g, '')}" target="_blank" style="color: #059669; text-decoration: none; font-weight: 600;"><i class="fa-brands fa-whatsapp"></i> ${s.phone}</a>` : '<span class="text-muted">—</span>'}</div>
+                            ${s.email ? `<small class="text-muted" style="display:block;">${s.email}</small>` : ''}
+                        </td>
+                        <td>
+                            <small style="color: #475569; font-size: 0.78rem; display: block; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${s.bank_info || 'Sin datos bancarios'}">
+                                ${s.bank_info ? `<i class="fa-solid fa-building-columns text-cyan"></i> ${s.bank_info}` : '<span class="text-muted">—</span>'}
+                            </small>
+                        </td>
+                        <td class="text-center">${statusBadge}</td>
+                        <td class="text-right">
+                            <div style="display: flex; gap: 4px; justify-content: flex-end;">
+                                <button type="button" class="btn btn-xs btn-primary" onclick="window.ClinicalERP.openAddPayrollForStaff('${s.id}')" title="Liquidar Nómina a este Colaborador" style="background: #7fa13c; border-color: #7fa13c; padding: 4px 8px;">
+                                    <i class="fa-solid fa-money-bill-wave"></i> Liquidar
+                                </button>
+                                <button type="button" class="btn btn-xs btn-outline" onclick="window.ClinicalERP.openAddPayrollStaffModal('${s.id}')" title="Editar Ficha" style="padding: 4px 8px;">
+                                    <i class="fa-solid fa-pen"></i>
+                                </button>
+                                <button type="button" class="btn btn-xs btn-outline text-red" onclick="window.ClinicalERP.deletePayrollStaff('${s.id}')" title="Eliminar Colaborador" style="padding: 4px 8px;">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        },
+
+        openAddPayrollStaffModal(staffId = null) {
+            const form = document.getElementById('form-payroll-staff');
+            if (form) form.reset();
+            const idInput = document.getElementById('payroll-staff-id');
+            const titleEl = document.getElementById('modal-payroll-staff-title');
+
+            if (staffId) {
+                const s = this.payrollStaff.find(x => x.id === staffId);
+                if (s) {
+                    if (idInput) idInput.value = s.id;
+                    if (titleEl) titleEl.innerHTML = '<i class="fa-solid fa-user-pen text-cyan"></i> Editar Colaborador de Nómina';
+                    document.getElementById('payroll-staff-name').value = s.fullname || '';
+                    document.getElementById('payroll-staff-dni').value = s.dni || '';
+                    document.getElementById('payroll-staff-role').value = s.role_or_title || '';
+                    document.getElementById('payroll-staff-dept').value = s.department || '';
+                    document.getElementById('payroll-staff-type').value = s.contract_type || 'personal_fijo';
+                    document.getElementById('payroll-staff-salary').value = s.base_salary || 0;
+                    document.getElementById('payroll-staff-phone').value = s.phone || '';
+                    document.getElementById('payroll-staff-email').value = s.email || '';
+                    document.getElementById('payroll-staff-bank').value = s.bank_info || '';
+                    document.getElementById('payroll-staff-hiredate').value = s.hire_date || '';
+                    document.getElementById('payroll-staff-status').value = s.status || 'Activo';
+                    document.getElementById('payroll-staff-notes').value = s.notes || '';
+                }
+            } else {
+                if (idInput) idInput.value = '';
+                if (titleEl) titleEl.innerHTML = '<i class="fa-solid fa-user-plus text-cyan"></i> Registrar Colaborador de Nómina';
+                const statusEl = document.getElementById('payroll-staff-status');
+                if (statusEl) statusEl.value = 'Activo';
+            }
+
+            const modal = document.getElementById('modal-payroll-staff');
+            if (modal) modal.classList.remove('hidden');
+        },
+
+        async savePayrollStaff(e) {
+            if (e) e.preventDefault();
+            const id = document.getElementById('payroll-staff-id').value;
+            const staffObj = {
+                id: id || ('pstaff-' + Date.now()),
+                fullname: document.getElementById('payroll-staff-name').value.trim(),
+                dni: document.getElementById('payroll-staff-dni').value.trim(),
+                role_or_title: document.getElementById('payroll-staff-role').value.trim(),
+                department: document.getElementById('payroll-staff-dept').value.trim(),
+                contract_type: document.getElementById('payroll-staff-type').value,
+                base_salary: parseFloat(document.getElementById('payroll-staff-salary').value) || 0,
+                phone: document.getElementById('payroll-staff-phone').value.trim(),
+                email: document.getElementById('payroll-staff-email').value.trim(),
+                bank_info: document.getElementById('payroll-staff-bank').value.trim(),
+                hire_date: document.getElementById('payroll-staff-hiredate').value,
+                status: document.getElementById('payroll-staff-status').value,
+                notes: document.getElementById('payroll-staff-notes').value.trim()
+            };
+
+            if (!staffObj.fullname || !staffObj.role_or_title) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({ icon: 'warning', title: 'Campos requeridos', text: 'Por favor complete el nombre y cargo del colaborador.' });
+                }
+                return;
+            }
+
+            try {
+                if (window.SupabaseDataService) {
+                    await window.SupabaseDataService.savePayrollStaff(staffObj);
+                }
+                await this.loadAll();
+                this.renderPayrollStaff();
+                this.populatePayrollStaffDatalist();
+
+                const modal = document.getElementById('modal-payroll-staff');
+                if (modal) modal.classList.add('hidden');
+
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'success',
+                        title: '¡Colaborador Guardado!',
+                        text: `${staffObj.fullname} se registró en nómina exitosamente.`,
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                }
+            } catch (err) {
+                console.error(err);
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({ icon: 'error', title: 'Error al guardar colaborador', text: err.message || err });
+                }
+            }
+        },
+
+        async deletePayrollStaff(staffId) {
+            const staff = this.payrollStaff.find(s => s.id === staffId);
+            const name = staff ? staff.fullname : 'este colaborador';
+
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: `¿Eliminar a ${name}?`,
+                    text: 'El colaborador se eliminará del directorio de nómina.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#ef4444',
+                    cancelButtonColor: '#64748b',
+                    confirmButtonText: 'Sí, eliminar',
+                    cancelButtonText: 'Cancelar'
+                }).then(async (result) => {
+                    if (result.isConfirmed) {
+                        try {
+                            if (window.SupabaseDataService) {
+                                await window.SupabaseDataService.deletePayrollStaff(staffId);
+                            }
+                            await this.loadAll();
+                            this.renderPayrollStaff();
+                            this.populatePayrollStaffDatalist();
+                            Swal.fire({ icon: 'success', title: 'Colaborador Eliminado', timer: 1500, showConfirmButton: false });
+                        } catch (err) {
+                            Swal.fire({ icon: 'error', title: 'Error al eliminar', text: err.message || err });
+                        }
+                    }
+                });
+            }
+        },
+
+        openAddPayrollForStaff(staffId) {
+            const staff = this.payrollStaff.find(s => s.id === staffId);
+            if (!staff) return;
+
+            this.openAddPayroll();
+            document.getElementById('payroll-name').value = staff.fullname;
+            document.getElementById('payroll-role').value = staff.role_or_title || '';
+            document.getElementById('payroll-type').value = (staff.contract_type === 'medico_contratado' ? 'medico_contratado' : 'personal_fijo');
+            document.getElementById('payroll-base').value = staff.base_salary || 0;
+            const now = new Date();
+            const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+            const currentPeriod = `${monthNames[now.getMonth()]} ${now.getFullYear()} / Quincena ${now.getDate() <= 15 ? '1' : '2'}`;
+            document.getElementById('payroll-period').value = currentPeriod;
+            this.calcPayrollNet();
+        },
+
+        populatePayrollStaffDatalist() {
+            const datalist = document.getElementById('payroll-staff-datalist');
+            if (!datalist) return;
+            let options = '';
+            (this.payrollStaff || []).forEach(s => {
+                options += `<option value="${s.fullname}">${s.role_or_title} - Sueldo Base: $${parseFloat(s.base_salary || 0).toFixed(2)}</option>`;
+            });
+            datalist.innerHTML = options;
+        },
+
+        onPayrollStaffSelected(name) {
+            if (!name) return;
+            const trimmed = name.trim().toLowerCase();
+            const staff = (this.payrollStaff || []).find(s => (s.fullname || '').toLowerCase() === trimmed);
+            if (staff) {
+                if (document.getElementById('payroll-role')) document.getElementById('payroll-role').value = staff.role_or_title || '';
+                if (document.getElementById('payroll-type')) document.getElementById('payroll-type').value = (staff.contract_type === 'medico_contratado' ? 'medico_contratado' : 'personal_fijo');
+                if (document.getElementById('payroll-base')) document.getElementById('payroll-base').value = staff.base_salary || 0;
+                this.calcPayrollNet();
+            }
+        },
+
+        // =========================================================
+        // 6. SEGUIMIENTO A CASHEA / CRÉDITOS
         // =========================================================
         openCasheaModal() {
             const modal = document.getElementById('modal-cashea-tracker');

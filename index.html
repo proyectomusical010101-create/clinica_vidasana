@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=272">
+    <link rel="stylesheet" href="styles.css?v=273">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -3018,6 +3018,9 @@
                             </p>
                         </div>
                         <div class="action-buttons-group" style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <button type="button" class="btn btn-outline" onclick="window.ClinicalERP.openAddPayrollStaffModal()" style="font-weight: 600; border-color: #0891b2; color: #0891b2;">
+                                <i class="fa-solid fa-user-plus text-cyan"></i> + Registrar Colaborador
+                            </button>
                             <button type="button" class="btn btn-outline" onclick="window.ClinicalERP.openAddServiceLiquidationModal()" style="font-weight: 600;">
                                 <i class="fa-solid fa-file-invoice-dollar text-cyan"></i> + Registrar Servicio a Liquidar
                             </button>
@@ -3027,13 +3030,16 @@
                         </div>
                     </div>
 
-                    <!-- Subtabs Switcher: Servicios vs Nómina Fija -->
-                    <div class="card" style="margin-bottom: 20px; padding: 6px; background: rgba(0,0,0,0.03); border: 1px solid var(--border-color); border-radius: 12px; display: inline-flex; gap: 6px; width: auto;">
+                    <!-- Subtabs Switcher: Servicios vs Nómina Fija vs Personal -->
+                    <div class="card" style="margin-bottom: 20px; padding: 6px; background: rgba(0,0,0,0.03); border: 1px solid var(--border-color); border-radius: 12px; display: inline-flex; gap: 6px; width: auto; flex-wrap: wrap;">
                         <button type="button" id="tab-btn-payroll-services" class="filter-btn active" onclick="window.ClinicalERP.switchPayrollSubtab('services')" style="font-weight: 700; padding: 8px 18px; border-radius: 8px;">
                             <i class="fa-solid fa-stethoscope"></i> Honorarios por Servicio (Pendientes por Liquidar)
                         </button>
                         <button type="button" id="tab-btn-payroll-general" class="filter-btn" onclick="window.ClinicalERP.switchPayrollSubtab('general')" style="font-weight: 600; padding: 8px 18px; border-radius: 8px;">
-                            <i class="fa-solid fa-users"></i> Nómina General & Personal Fijo
+                            <i class="fa-solid fa-file-invoice-dollar"></i> Liquidaciones de Nómina Fija
+                        </button>
+                        <button type="button" id="tab-btn-payroll-staff" class="filter-btn" onclick="window.ClinicalERP.switchPayrollSubtab('staff')" style="font-weight: 600; padding: 8px 18px; border-radius: 8px;">
+                            <i class="fa-solid fa-users"></i> Personal y Colaboradores (Sin Rol de Sistema)
                         </button>
                     </div>
 
@@ -3188,6 +3194,67 @@
                                         </tr>
                                     </thead>
                                     <tbody id="payroll-table-body">
+                                        <!-- Populated dynamically by ClinicalERP -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SUBVIEW 3: PERSONAL Y COLABORADORES (SIN ROL DE USUARIO) -->
+                    <div id="payroll-subview-staff" class="hidden">
+                        <!-- Banner explicativo -->
+                        <div class="card" style="margin-bottom: 20px; background: linear-gradient(135deg, rgba(8, 145, 178, 0.05) 0%, rgba(20, 184, 166, 0.05) 100%); border-left: 4px solid var(--primary-cyan); padding: 14px 20px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <div style="width: 40px; height: 40px; border-radius: 10px; background: rgba(8, 145, 178, 0.12); display: flex; align-items: center; justify-content: center; color: var(--primary-cyan); font-size: 1.25rem;">
+                                        <i class="fa-solid fa-user-tie"></i>
+                                    </div>
+                                    <div>
+                                        <h3 style="margin: 0 0 2px 0; font-size: 1rem; color: #0f172a; font-weight: 800;">
+                                            Directorio de Personal y Colaboradores de Nómina
+                                        </h3>
+                                        <p style="margin: 0; font-size: 0.82rem; color: var(--text-muted);">
+                                            Personal asistencial o administrativo que no requiere usuario ni contraseña en el sistema (ej: Community Manager, Diseñador, Mantenimiento, Limpieza, etc.) para gestionar sus liquidaciones y pagos de nómina.
+                                        </p>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn btn-primary" onclick="window.ClinicalERP.openAddPayrollStaffModal()" style="font-weight: 700; border-radius: 8px;">
+                                    <i class="fa-solid fa-user-plus"></i> + Registrar Colaborador
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Filter bar for staff -->
+                        <div class="card filter-card" style="margin-bottom: 20px;">
+                            <div class="filter-group" id="payroll-staff-filter-group">
+                                <button type="button" class="filter-btn active" onclick="window.ClinicalERP.filterPayrollStaff('all', this)">Todos</button>
+                                <button type="button" class="filter-btn" onclick="window.ClinicalERP.filterPayrollStaff('Activo', this)">Activos</button>
+                                <button type="button" class="filter-btn" onclick="window.ClinicalERP.filterPayrollStaff('Inactivo', this)">Inactivos</button>
+                            </div>
+                            <div class="search-box">
+                                <input type="text" id="payroll-staff-search-input" oninput="window.ClinicalERP.searchPayrollStaff(this.value)" placeholder="Buscar colaborador por nombre, cargo, cédula...">
+                            </div>
+                        </div>
+
+                        <!-- Staff Table -->
+                        <div class="card" style="border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.03);">
+                            <div class="table-responsive">
+                                <table class="table" id="payroll-staff-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Colaborador / Personal</th>
+                                            <th>Cargo / Puesto</th>
+                                            <th>Departamento / Área</th>
+                                            <th>Tipo de Vínculo</th>
+                                            <th class="text-right">Sueldo / Tarifa ($)</th>
+                                            <th>Contacto</th>
+                                            <th>Datos de Pago</th>
+                                            <th class="text-center">Estado</th>
+                                            <th class="text-right">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="payroll-staff-table-body">
                                         <!-- Populated dynamically by ClinicalERP -->
                                     </tbody>
                                 </table>
@@ -5174,8 +5241,14 @@
                     <input type="hidden" id="payroll-id">
                     <div class="form-row" style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px;">
                         <div class="form-group">
-                            <label>Nombre del Colaborador / Doctor *</label>
-                            <input type="text" id="payroll-name" class="form-control" required placeholder="Dr. Juan Pérez / Lic. María Gómez">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                <label style="margin: 0;">Nombre del Colaborador / Doctor *</label>
+                                <a href="javascript:void(0)" onclick="window.ClinicalERP.openAddPayrollStaffModal()" style="font-size: 0.78rem; color: var(--primary-cyan); font-weight: 600; text-decoration: none;">
+                                    <i class="fa-solid fa-user-plus"></i> + Registrar Colaborador
+                                </a>
+                            </div>
+                            <input type="text" id="payroll-name" class="form-control" required placeholder="Seleccionar colaborador o escribir nombre..." list="payroll-staff-datalist" onchange="window.ClinicalERP.onPayrollStaffSelected(this.value)">
+                            <datalist id="payroll-staff-datalist"></datalist>
                         </div>
                         <div class="form-group">
                             <label>Tipo de Vínculo</label>
@@ -5235,6 +5308,107 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline" data-close-erp="modal-payroll">Cancelar</button>
                     <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Guardar Liquidación</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: REGISTRAR / EDITAR PERSONAL Y COLABORADOR (SIN ROL DE USUARIO) -->
+    <div class="modal-overlay hidden" id="modal-payroll-staff">
+        <div class="modal-dialog" style="max-width: 600px; width: 95vw;">
+            <div class="modal-header">
+                <h3 id="modal-payroll-staff-title"><i class="fa-solid fa-user-plus text-cyan"></i> Registrar Colaborador de Nómina</h3>
+                <button class="modal-close" data-close-erp="modal-payroll-staff">&times;</button>
+            </div>
+            <form id="form-payroll-staff" onsubmit="window.ClinicalERP.savePayrollStaff(event)">
+                <div class="modal-body">
+                    <input type="hidden" id="payroll-staff-id">
+                    <div class="form-row" style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label>Nombre Completo *</label>
+                            <input type="text" id="payroll-staff-name" class="form-control" required placeholder="ej: Carlos Mendoza">
+                        </div>
+                        <div class="form-group">
+                            <label>Cédula / Documento</label>
+                            <input type="text" id="payroll-staff-dni" class="form-control" placeholder="ej: V-24819301">
+                        </div>
+                    </div>
+                    <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label>Cargo / Puesto *</label>
+                            <input type="text" id="payroll-staff-role" class="form-control" required placeholder="ej: Community Manager, Limpieza..." list="payroll-staff-role-list">
+                            <datalist id="payroll-staff-role-list">
+                                <option value="Community Manager & Redes">
+                                <option value="Diseñador Gráfico & Multimedia">
+                                <option value="Personal de Limpieza y Mantenimiento">
+                                <option value="Mensajero / Gestor Externo">
+                                <option value="Soporte IT y Sistemas">
+                                <option value="Asistente Administrativo">
+                                <option value="Seguridad y Vigilancia">
+                                <option value="Contador Externo">
+                            </datalist>
+                        </div>
+                        <div class="form-group">
+                            <label>Departamento / Área</label>
+                            <input type="text" id="payroll-staff-dept" class="form-control" placeholder="ej: Marketing, Servicios Generales..." list="payroll-staff-dept-list">
+                            <datalist id="payroll-staff-dept-list">
+                                <option value="Marketing y Comunicaciones">
+                                <option value="Administración y Finanzas">
+                                <option value="Servicios Generales y Limpieza">
+                                <option value="Sistemas y Tecnología">
+                                <option value="Atención y Recepción">
+                            </datalist>
+                        </div>
+                    </div>
+                    <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label>Tipo de Vínculo</label>
+                            <select id="payroll-staff-type" class="form-control">
+                                <option value="personal_fijo">Personal Fijo (Sueldo Fijo)</option>
+                                <option value="honorarios">Honorarios Profesionales / Servicios</option>
+                                <option value="freelance">Freelance / Destajo</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Sueldo Base / Tarifa Recurrente ($)</label>
+                            <input type="number" id="payroll-staff-salary" class="form-control" step="0.01" min="0" value="0.00" placeholder="0.00">
+                        </div>
+                    </div>
+                    <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label>Teléfono / WhatsApp</label>
+                            <input type="text" id="payroll-staff-phone" class="form-control" placeholder="+58 412-1234567">
+                        </div>
+                        <div class="form-group">
+                            <label>Correo Electrónico (Opcional)</label>
+                            <input type="email" id="payroll-staff-email" class="form-control" placeholder="contacto@ejemplo.com">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Datos Bancarios / Pago (Banco, Cuenta, Pago Móvil, Zelle)</label>
+                        <input type="text" id="payroll-staff-bank" class="form-control" placeholder="ej: Banesco 0134... / Pago Móvil 0412... / Zelle...">
+                    </div>
+                    <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label>Fecha de Ingreso</label>
+                            <input type="date" id="payroll-staff-hiredate" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label>Estado</label>
+                            <select id="payroll-staff-status" class="form-control">
+                                <option value="Activo">Activo</option>
+                                <option value="Inactivo">Inactivo</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Observaciones / Funciones</label>
+                        <textarea id="payroll-staff-notes" class="form-control" rows="2" placeholder="Detalles de sus funciones, horario, entregables o condiciones de pago..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" data-close-erp="modal-payroll-staff">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Guardar Colaborador</button>
                 </div>
             </form>
         </div>
@@ -6542,14 +6716,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=272"></script>
-    <script src="supabaseClient.js?v=272"></script>
-    <script src="odontogram.js?v=272"></script>
-    <script src="signature.js?v=272"></script>
-    <script src="whatsapp.js?v=272"></script>
-    <script src="kardex.js?v=272"></script>
-    <script src="app.js?v=272"></script>
-    <script src="clinicalERP.js?v=272"></script>
-    <script src="tutorial.js?v=272"></script>
+    <script src="seededData.js?v=273"></script>
+    <script src="supabaseClient.js?v=273"></script>
+    <script src="odontogram.js?v=273"></script>
+    <script src="signature.js?v=273"></script>
+    <script src="whatsapp.js?v=273"></script>
+    <script src="kardex.js?v=273"></script>
+    <script src="app.js?v=273"></script>
+    <script src="clinicalERP.js?v=273"></script>
+    <script src="tutorial.js?v=273"></script>
 </body>
 </html>

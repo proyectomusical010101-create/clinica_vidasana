@@ -1917,6 +1917,100 @@ class SupabaseDataService {
         }
     }
 
+    // --- PAYROLL STAFF (PERSONAL / COLABORADORES SIN ROL DE USUARIO) ---
+    static _payrollStaffCache = null;
+    static _payrollStaffCacheTime = 0;
+
+    static async getPayrollStaff(forceRefresh = false) {
+        const local = JSON.parse(localStorage.getItem('vidasana_payroll_staff')) || [];
+        if (!this.isCloudConnected()) return local;
+
+        const now = Date.now();
+        if (!forceRefresh && this._payrollStaffCacheTime && (now - this._payrollStaffCacheTime < 5000) && this._payrollStaffCache) {
+            return this._payrollStaffCache;
+        }
+
+        try {
+            const { data, error } = await supabaseClient.from('patients').select('odontogram_data').eq('id', 'SYS-PAYROLL-STAFF').single();
+            if (error && error.code !== 'PGRST116') throw error;
+            if (data && data.odontogram_data && Array.isArray(data.odontogram_data._staff)) {
+                const staffList = data.odontogram_data._staff;
+                localStorage.setItem('vidasana_payroll_staff', JSON.stringify(staffList));
+                this._payrollStaffCache = staffList;
+                this._payrollStaffCacheTime = Date.now();
+                return staffList;
+            }
+            return local;
+        } catch(err) {
+            console.warn('Supabase getPayrollStaff Error:', err);
+            return local;
+        }
+    }
+
+    static async savePayrollStaff(staffObj) {
+        if (!staffObj.id) staffObj.id = 'pstaff-' + Date.now();
+        staffObj.updatedAt = new Date().toISOString();
+
+        let local = JSON.parse(localStorage.getItem('vidasana_payroll_staff')) || [];
+        const idx = local.findIndex(s => s.id === staffObj.id);
+        if (idx >= 0) local[idx] = staffObj; else local.push(staffObj);
+
+        localStorage.setItem('vidasana_payroll_staff', JSON.stringify(local));
+        this._payrollStaffCache = local;
+        this._payrollStaffCacheTime = Date.now();
+
+        if (this.isCloudConnected()) {
+            try {
+                const { error } = await supabaseClient.from('patients').upsert({
+                    id: 'SYS-PAYROLL-STAFF',
+                    fullname: 'Directorio de Personal de Nómina',
+                    birthdate: '2026-01-01',
+                    phone: 'SYS',
+                    status: 'Sistema',
+                    odontogram_data: {
+                        _is_payroll_staff: true,
+                        _updated_at: new Date().toISOString(),
+                        _staff: local
+                    }
+                });
+                if (error) throw error;
+                this.notifyDataChanged('payroll_staff', staffObj.id);
+            } catch(e) {
+                console.error('Supabase savePayrollStaff Error:', e);
+            }
+        }
+        return staffObj;
+    }
+
+    static async deletePayrollStaff(staffId) {
+        let local = JSON.parse(localStorage.getItem('vidasana_payroll_staff')) || [];
+        local = local.filter(s => s.id !== staffId);
+        localStorage.setItem('vidasana_payroll_staff', JSON.stringify(local));
+        this._payrollStaffCache = local;
+        this._payrollStaffCacheTime = Date.now();
+
+        if (this.isCloudConnected()) {
+            try {
+                const { error } = await supabaseClient.from('patients').upsert({
+                    id: 'SYS-PAYROLL-STAFF',
+                    fullname: 'Directorio de Personal de Nómina',
+                    birthdate: '2026-01-01',
+                    phone: 'SYS',
+                    status: 'Sistema',
+                    odontogram_data: {
+                        _is_payroll_staff: true,
+                        _updated_at: new Date().toISOString(),
+                        _staff: local
+                    }
+                });
+                if (error) throw error;
+                this.notifyDataChanged('payroll_staff', staffId);
+            } catch(e) {
+                console.error('Supabase deletePayrollStaff Error:', e);
+            }
+        }
+    }
+
     // =========================================================================
     // 14. LIQUIDACIÓN DE HONORARIOS POR SERVICIO (MÉDICOS Y ASISTENTES)
     // Persistencia 100% en Base de Datos Supabase Cloud para todos los dispositivos
