@@ -8628,6 +8628,19 @@ async function renderPricingTable(filter = 'all', searchQuery = '') {
     const tbody = document.getElementById('pricing-table-body');
     if (!tbody) return;
 
+    // Dynamic header: "Tiempo de Espera" for Laboratorio, "Tiempo Silla (min)" otherwise
+    const thTime = document.getElementById('th-pricing-time');
+    const isLabFilter = (filter && filter.toLowerCase() === 'laboratorio');
+    if (thTime) {
+        if (isLabFilter) {
+            thTime.innerHTML = '<i class="fa-solid fa-clock text-purple"></i> Tiempo de Espera';
+            thTime.title = 'Tiempo estimado para tener listos y entregar los resultados';
+        } else {
+            thTime.innerHTML = 'Tiempo Silla (min)';
+            thTime.title = 'Tiempo estimado de atención en sillón (minutos)';
+        }
+    }
+
     tbody.innerHTML = '';
     let baremo = await SupabaseDataService.getBaremo();
     const rate = getExchangeRate();
@@ -8672,6 +8685,11 @@ async function renderPricingTable(filter = 'all', searchQuery = '') {
         const deleteSrvBtn = isAssistant ? '' : `<button class="btn btn-xs btn-outline text-red" onclick="deletePricingService('${p.code}')" title="Eliminar Servicio"><i class="fa-solid fa-trash"></i></button>`;
         const areaInfo = typeof getAreaIconInfo === 'function' ? getAreaIconInfo(p.area) : { icon: 'fa-hospital', color: '#64748b', bg: 'rgba(100,116,139,0.1)' };
 
+        const isLabService = (p.area && p.area.toLowerCase() === 'laboratorio') || isLabFilter;
+        const timeDisplay = isLabService 
+            ? (isLabFilter ? `${p.chairTimeMin} min` : `${p.chairTimeMin} min <small class="text-purple" style="font-size:0.75rem; font-weight:600;" title="Tiempo de espera para resultados">(Espera)</small>`)
+            : `${p.chairTimeMin} min`;
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td><strong>${p.code}</strong></td>
@@ -8685,7 +8703,7 @@ async function renderPricingTable(filter = 'all', searchQuery = '') {
             <td class="text-cyan"><strong>$${p.priceUSD.toFixed(2)}</strong></td>
             <td>Bs. ${priceVES}</td>
             <td><strong>$${(p.hygienistBonus || 0).toFixed(2)}</strong></td>
-            <td>${p.chairTimeMin} min</td>
+            <td>${timeDisplay}</td>
             <td>${p.materials ? p.materials.length : 0} insumos</td>
             <td>
                 <div class="actions-cell-group">
@@ -9746,8 +9764,51 @@ function initGlobalEvents() {
     }
 
     // Modal Servicio Baremo Handler
+    function updateServiceModalTimeLabel() {
+        const srvArea = document.getElementById('srv-area');
+        const srvCategory = document.getElementById('srv-category');
+        const lblTime = document.getElementById('lbl-srv-time');
+        const hintTime = document.getElementById('hint-srv-time');
+        if (!lblTime) return;
+
+        const isLabArea = srvArea && srvArea.value === 'Laboratorio';
+        const isLabCat = srvCategory && srvCategory.value && srvCategory.value.toLowerCase().includes('laboratorio');
+
+        if (isLabArea || isLabCat) {
+            lblTime.innerHTML = '<i class="fa-solid fa-flask-vial text-purple"></i> Tiempo de Espera (Minutos)';
+            if (hintTime) {
+                hintTime.style.display = 'block';
+                hintTime.textContent = 'Tiempo estimado en minutos en el cual los resultados estarán listos para su entrega.';
+            }
+        } else {
+            lblTime.innerHTML = 'Tiempo Estimado en Silla (Minutos)';
+            if (hintTime) hintTime.style.display = 'none';
+        }
+    }
+
+    const srvAreaSelect = document.getElementById('srv-area');
+    if (srvAreaSelect) {
+        srvAreaSelect.addEventListener('change', updateServiceModalTimeLabel);
+    }
+    const srvCatInput = document.getElementById('srv-category');
+    if (srvCatInput) {
+        srvCatInput.addEventListener('input', updateServiceModalTimeLabel);
+    }
+
     const btnAddSrv = document.getElementById('btn-add-service');
-    if (btnAddSrv) btnAddSrv.onclick = () => openModal('modal-service');
+    if (btnAddSrv) {
+        btnAddSrv.onclick = () => {
+            const activeFilterBtn = document.querySelector('#view-pricing .filter-btn.active');
+            const activeFilter = activeFilterBtn ? activeFilterBtn.dataset.filter : 'all';
+            const srvArea = document.getElementById('srv-area');
+            if (srvArea && activeFilter && activeFilter !== 'all') {
+                const opt = Array.from(srvArea.options).find(o => o.value.toLowerCase() === activeFilter.toLowerCase());
+                if (opt) srvArea.value = opt.value;
+            }
+            updateServiceModalTimeLabel();
+            openModal('modal-service');
+        };
+    }
 
     const saveSrvBtn = document.getElementById('btn-save-service');
     if (saveSrvBtn) {
@@ -10129,7 +10190,7 @@ function initGlobalEvents() {
                         const category = (row["Categoría"] || "General").toString().trim();
                         const name = (row["Nombre del Servicio"] || row["Nombre del Tratamiento"] || "").toString().trim();
                         const priceUSD = parseFloat(row["Precio Base (USD)"] || row["Precio Base"] || 0);
-                        const chairTimeMin = parseInt(row["Tiempo en Silla (Minutos)"] || row["Tiempo en Silla"] || 30);
+                        const chairTimeMin = parseInt(row["Tiempo en Silla (Minutos)"] || row["Tiempo en Silla"] || row["Tiempo de Espera (Minutos)"] || row["Tiempo de Espera"] || row["Tiempo de espera"] || 30);
                         const hygienistBonus = parseFloat(row["Bono Higienista (USD)"] || row["Bono Higienista"] || 0);
 
                         if (code && name) {

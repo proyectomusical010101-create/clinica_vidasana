@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=271">
+    <link rel="stylesheet" href="styles.css?v=272">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -1585,7 +1585,7 @@
                                         <th>Precio Base ($ USD)</th>
                                         <th>Precio (Bs.)</th>
                                         <th>Bonif. Higienista ($)</th>
-                                        <th>Tiempo Silla (min)</th>
+                                        <th id="th-pricing-time">Tiempo Silla (min)</th>
                                         <th>Insumos Consumidos</th>
                                         <th>Acciones</th>
                                     </tr>
@@ -3434,8 +3434,9 @@
                         <input type="number" id="srv-hygienist-bonus" step="0.01" value="0.00" placeholder="0.00">
                     </div>
                     <div class="form-group span-2">
-                        <label>Tiempo Estimado en Silla (Minutos)</label>
+                        <label id="lbl-srv-time">Tiempo Estimado en Silla (Minutos)</label>
                         <input type="number" id="srv-time" value="45">
+                        <small id="hint-srv-time" class="text-muted" style="display:none; font-size: 0.78rem; margin-top: 4px;">Tiempo estimado en minutos en el cual los resultados estarán listos para entrega.</small>
                     </div>
                 </form>
             </div>
@@ -6541,14 +6542,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=271"></script>
-    <script src="supabaseClient.js?v=271"></script>
-    <script src="odontogram.js?v=271"></script>
-    <script src="signature.js?v=271"></script>
-    <script src="whatsapp.js?v=271"></script>
-    <script src="kardex.js?v=271"></script>
-    <script src="app.js?v=271"></script>
-    <script src="clinicalERP.js?v=271"></script>
-    <script src="tutorial.js?v=271"></script>
+    <script src="seededData.js?v=272"></script>
+    <script src="supabaseClient.js?v=272"></script>
+    <script src="odontogram.js?v=272"></script>
+    <script src="signature.js?v=272"></script>
+    <script src="whatsapp.js?v=272"></script>
+    <script src="kardex.js?v=272"></script>
+    <script src="app.js?v=272"></script>
+    <script src="clinicalERP.js?v=272"></script>
+    <script src="tutorial.js?v=272"></script>
 </body>
 </html>
