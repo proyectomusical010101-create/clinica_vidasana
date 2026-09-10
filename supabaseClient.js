@@ -816,6 +816,79 @@ class SupabaseDataService {
         this.notifyDataChanged('inventory', itemObj.code);
     }
 
+    static async saveInventoryBatch(itemsArray) {
+        if (!Array.isArray(itemsArray) || itemsArray.length === 0) return;
+
+        let localInv = JSON.parse(localStorage.getItem('dental_kardex')) || [];
+        const localMap = new Map();
+        localInv.forEach(item => localMap.set(item.code, item));
+
+        const preparedForDb = [];
+        for (const itemObj of itemsArray) {
+            itemObj.expiryDate = this._sanitizeDate(itemObj.expiryDate);
+            if (!itemObj.area && typeof detectClinicalArea === 'function') {
+                itemObj.area = detectClinicalArea(itemObj.category, itemObj.name);
+            }
+            localMap.set(itemObj.code, itemObj);
+
+            preparedForDb.push({
+                code: itemObj.code,
+                name: itemObj.name,
+                area: itemObj.area || 'Odontología',
+                category: itemObj.category || 'General',
+                current_stock: Number(itemObj.currentStock) || 0,
+                min_stock: Number(itemObj.minStock) || 0,
+                unit: itemObj.unit || 'Unidades',
+                expiry_date: itemObj.expiryDate
+            });
+        }
+
+        const mergedLocal = Array.from(localMap.values());
+        localStorage.setItem('dental_kardex', JSON.stringify(mergedLocal));
+        localStorage.setItem('dental_inventory', JSON.stringify(mergedLocal));
+        if (window.kardex) window.kardex.items = mergedLocal;
+
+        if (this.isCloudConnected()) {
+            try {
+                // Upsert to kardex_inventory in chunks of 50
+                for (let i = 0; i < preparedForDb.length; i += 50) {
+                    const chunk = preparedForDb.slice(i, i + 50);
+                    const { error } = await supabaseClient.from('kardex_inventory').upsert(chunk);
+                    if (error) {
+                        console.warn('Batch chunk upsert fallback without area:', error);
+                        // Fallback without area if column fails
+                        const chunkNoArea = chunk.map(c => {
+                            const { area, ...rest } = c;
+                            return rest;
+                        });
+                        await supabaseClient.from('kardex_inventory').upsert(chunkNoArea);
+                    }
+                }
+
+                // Guaranteed secondary backup in SYS-INVENTORY-CONFIG
+                await supabaseClient.from('patients').upsert({
+                    id: 'SYS-INVENTORY-CONFIG',
+                    fullname: 'Configuración Inventario Maestro',
+                    birthdate: '2026-01-01',
+                    phone: 'SYS',
+                    status: 'Sistema',
+                    odontogram_data: {
+                        _is_inventory_config: true,
+                        _initialized: true,
+                        _inventory: mergedLocal,
+                        updatedAt: new Date().toISOString()
+                    }
+                });
+            } catch (err) {
+                console.error('Supabase saveInventoryBatch Exception:', err);
+            }
+        }
+
+        this._inventoryCacheTime = 0;
+        this._inventoryPromise = null;
+        this.notifyDataChanged('inventory', 'batch');
+    }
+
     static async deleteInventoryItem(code) {
         let localInv = JSON.parse(localStorage.getItem('dental_kardex')) || [];
         localInv = localInv.filter(i => i.code !== code);

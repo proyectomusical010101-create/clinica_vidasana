@@ -9757,9 +9757,35 @@ function initGlobalEvents() {
 
             await SupabaseDataService.saveInventoryItem({ code, name, area, category, unit, currentStock: stock, minStock, expiryDate });
             closeModal('modal-material');
-            await renderInventoryTable();
+
+            // Force refresh inventory cache immediately so no F5/cache clearing is required
+            await SupabaseDataService.getInventory(true);
+
+            // Update area filter if necessary so the new item is directly visible
+            window.currentInventoryAreaFilter = area;
+            document.querySelectorAll('#inventory-area-filters .filter-btn').forEach(b => {
+                if (b.dataset.areaFilter === area) b.classList.add('active');
+                else b.classList.remove('active');
+            });
+
+            await renderInventoryTable(null, null, area);
             await renderDashboard();
-            Swal.fire({ icon: 'success', title: '¡Insumo Guardado!', text: `El material se registró en ${area}.`, timer: 2000, showConfirmButton: false });
+
+            // Female voice notification
+            if ('speechSynthesis' in window) {
+                try {
+                    const utter = new SpeechSynthesisUtterance('El insumo se ha guardado exitosamente en la base de datos.');
+                    utter.lang = 'es-ES';
+                    utter.rate = 1.0;
+                    utter.pitch = 1.15; // slightly higher pitch for friendly female tone
+                    const voices = window.speechSynthesis.getVoices();
+                    const femaleVoice = voices.find(v => v.lang.startsWith('es') && (v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('sabina') || v.name.toLowerCase().includes('helena') || v.name.toLowerCase().includes('monica') || v.name.toLowerCase().includes('paulina') || v.name.toLowerCase().includes('lucia')));
+                    if (femaleVoice) utter.voice = femaleVoice;
+                    window.speechSynthesis.speak(utter);
+                } catch(e) {}
+            }
+
+            Swal.fire({ icon: 'success', title: '¡Insumo Guardado!', text: `El material ${name} (${code}) se registró en ${area} y está guardado en la base de datos.`, timer: 2200, showConfirmButton: false });
         };
     }
 
@@ -10310,6 +10336,214 @@ function initGlobalEvents() {
         };
     }
 
+    // State for Bulk Materials Import Preview
+    window.pendingImportMaterials = [];
+
+    window.closeImportMaterialsPreview = function() {
+        window.pendingImportMaterials = [];
+        const modal = document.getElementById('modal-import-materials-preview');
+        if (modal) modal.classList.add('hidden');
+        const fileInput = document.getElementById('import-materials-file');
+        if (fileInput) fileInput.value = '';
+    };
+
+    window.updateImportPreviewStats = function() {
+        const total = window.pendingImportMaterials.length;
+        let valid = 0;
+        let errors = 0;
+
+        window.pendingImportMaterials.forEach(item => {
+            if (item.code && item.name) valid++;
+            else errors++;
+        });
+
+        const elTot = document.getElementById('import-preview-total');
+        if (elTot) elTot.innerText = total;
+        const elVal = document.getElementById('import-preview-valid');
+        if (elVal) elVal.innerText = valid;
+        const elErr = document.getElementById('import-preview-errors');
+        if (elErr) elErr.innerText = errors;
+
+        const btnConfirm = document.getElementById('btn-confirm-import-materials');
+        if (btnConfirm) {
+            btnConfirm.disabled = (valid === 0);
+            btnConfirm.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> Subir ${valid} Insumo${valid === 1 ? '' : 's'} a Base de Datos`;
+        }
+    };
+
+    window.updatePendingImportField = function(idx, field, val) {
+        if (!window.pendingImportMaterials[idx]) return;
+        if (field === 'currentStock' || field === 'minStock') {
+            window.pendingImportMaterials[idx][field] = parseInt(val) || 0;
+        } else {
+            window.pendingImportMaterials[idx][field] = (val || '').toString().trim();
+        }
+        window.updateImportPreviewStats();
+
+        // Highlight input if error
+        const inputEl = document.getElementById(`imp-row-${field}-${idx}`);
+        if (inputEl && (field === 'code' || field === 'name')) {
+            if (!val || !val.toString().trim()) {
+                inputEl.style.borderColor = '#dc2626';
+                inputEl.style.background = '#fef2f2';
+            } else {
+                inputEl.style.borderColor = '#cbd5e1';
+                inputEl.style.background = '#ffffff';
+            }
+        }
+    };
+
+    window.removePendingImportRow = function(idx) {
+        window.pendingImportMaterials.splice(idx, 1);
+        window.renderImportMaterialsPreviewTable();
+    };
+
+    window.renderImportMaterialsPreviewTable = function() {
+        const tbody = document.getElementById('import-preview-tbody');
+        if (!tbody) return;
+
+        window.updateImportPreviewStats();
+
+        if (window.pendingImportMaterials.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="10" class="text-center text-muted" style="padding: 24px;">No hay registros para mostrar.</td></tr>`;
+            return;
+        }
+
+        const clinicalAreas = ['Odontología', 'Cardiología', 'Laboratorio', 'Rayos X e Imagen', 'Medicina General', 'Ginecología', 'Pediatría', 'General'];
+
+        tbody.innerHTML = window.pendingImportMaterials.map((item, idx) => {
+            const hasError = !item.code || !item.name;
+            const rowBg = hasError ? '#fff5f5' : (idx % 2 === 0 ? '#ffffff' : '#f8fafc');
+
+            const areaOptions = clinicalAreas.map(a => 
+                `<option value="${a}" ${item.area.toLowerCase() === a.toLowerCase() ? 'selected' : ''}>${a}</option>`
+            ).join('');
+
+            return `
+                <tr style="background: ${rowBg}; border-bottom: 1px solid #e2e8f0;">
+                    <td style="text-align: center; color: #64748b; font-weight: 600;">${idx + 1}</td>
+                    <td>
+                        <input type="text" id="imp-row-code-${idx}" class="form-control" style="font-size: 0.78rem; padding: 4px 6px; height: 30px; font-weight: 700; ${!item.code ? 'border-color: #dc2626; background: #fef2f2;' : ''}" 
+                               value="${item.code || ''}" placeholder="Ej: INS-01" 
+                               oninput="window.updatePendingImportField(${idx}, 'code', this.value)">
+                    </td>
+                    <td>
+                        <input type="text" id="imp-row-name-${idx}" class="form-control" style="font-size: 0.78rem; padding: 4px 6px; height: 30px; ${!item.name ? 'border-color: #dc2626; background: #fef2f2;' : ''}" 
+                               value="${item.name || ''}" placeholder="Nombre del insumo..." 
+                               oninput="window.updatePendingImportField(${idx}, 'name', this.value)">
+                    </td>
+                    <td>
+                        <select class="form-control" style="font-size: 0.76rem; padding: 2px 6px; height: 30px;" 
+                                onchange="window.updatePendingImportField(${idx}, 'area', this.value)">
+                            ${areaOptions}
+                        </select>
+                    </td>
+                    <td>
+                        <input type="text" class="form-control" style="font-size: 0.76rem; padding: 4px 6px; height: 30px;" 
+                               value="${item.category || 'Materiales'}" 
+                               oninput="window.updatePendingImportField(${idx}, 'category', this.value)">
+                    </td>
+                    <td style="text-align: center;">
+                        <input type="number" min="0" class="form-control" style="font-size: 0.78rem; padding: 4px; height: 30px; text-align: center;" 
+                               value="${item.currentStock || 0}" 
+                               oninput="window.updatePendingImportField(${idx}, 'currentStock', this.value)">
+                    </td>
+                    <td style="text-align: center;">
+                        <input type="number" min="0" class="form-control" style="font-size: 0.78rem; padding: 4px; height: 30px; text-align: center;" 
+                               value="${item.minStock || 0}" 
+                               oninput="window.updatePendingImportField(${idx}, 'minStock', this.value)">
+                    </td>
+                    <td>
+                        <input type="text" class="form-control" style="font-size: 0.76rem; padding: 4px 6px; height: 30px;" 
+                               value="${item.unit || 'Unidades'}" 
+                               oninput="window.updatePendingImportField(${idx}, 'unit', this.value)">
+                    </td>
+                    <td>
+                        <input type="date" class="form-control" style="font-size: 0.74rem; padding: 2px 4px; height: 30px;" 
+                               value="${item.expiryDate || ''}" 
+                               onchange="window.updatePendingImportField(${idx}, 'expiryDate', this.value)">
+                    </td>
+                    <td style="text-align: center;">
+                        <button type="button" class="btn btn-xs" style="color: #dc2626; background: transparent; border: none; padding: 4px; cursor: pointer;" 
+                                title="Quitar de la lista" onclick="window.removePendingImportRow(${idx})">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    };
+
+    window.confirmImportMaterials = async function() {
+        const validItems = window.pendingImportMaterials.filter(i => i.code && i.name);
+        if (validItems.length === 0) {
+            Swal.fire({ icon: 'warning', title: 'Sin insumos válidos', text: 'Por favor complete al menos el código y nombre de los insumos a subir.' });
+            return;
+        }
+
+        Swal.fire({
+            title: 'Guardando en Base de Datos...',
+            html: `Subiendo <b>${validItems.length}</b> insumos a Supabase con persistencia dual...`,
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
+        try {
+            if (window.SupabaseDataService) {
+                if (typeof window.SupabaseDataService.saveInventoryBatch === 'function') {
+                    await window.SupabaseDataService.saveInventoryBatch(validItems);
+                } else {
+                    for (const it of validItems) {
+                        await window.SupabaseDataService.saveInventoryItem(it);
+                    }
+                }
+            }
+
+            // Close preview modal and clean up state
+            window.closeImportMaterialsPreview();
+
+            // Force refresh inventory cache immediately so no F5/cache clearing is required
+            await SupabaseDataService.getInventory(true);
+
+            // Re-render inventory table and dashboard
+            window.currentInventoryAreaFilter = 'all';
+            document.querySelectorAll('#inventory-area-filters .filter-btn').forEach(b => {
+                if (b.dataset.areaFilter === 'all') b.classList.add('active');
+                else b.classList.remove('active');
+            });
+
+            await renderInventoryTable('all', null, 'all');
+            await renderDashboard();
+
+            // Female voice notification
+            if ('speechSynthesis' in window) {
+                try {
+                    const utter = new SpeechSynthesisUtterance('Los insumos se han subido e importado con éxito a la base de datos.');
+                    utter.lang = 'es-ES';
+                    utter.rate = 1.0;
+                    utter.pitch = 1.15; // slightly higher pitch for friendly female tone
+                    const voices = window.speechSynthesis.getVoices();
+                    const femaleVoice = voices.find(v => v.lang.startsWith('es') && (v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('sabina') || v.name.toLowerCase().includes('helena') || v.name.toLowerCase().includes('monica') || v.name.toLowerCase().includes('paulina') || v.name.toLowerCase().includes('lucia')));
+                    if (femaleVoice) utter.voice = femaleVoice;
+                    window.speechSynthesis.speak(utter);
+                } catch(e) {}
+            }
+
+            Swal.fire({
+                icon: 'success',
+                title: '¡Importación Completada con Éxito!',
+                html: `Se han subido y sincronizado <b>${validItems.length}</b> insumos en la base de datos en la nube. Ya están disponibles en pantalla.`,
+                timer: 3000,
+                showConfirmButton: false
+            });
+        } catch(err) {
+            console.error('Error in confirmImportMaterials:', err);
+            Swal.fire({ icon: 'error', title: 'Error al importar', text: err.message || 'Ocurrió un error al guardar en la nube.' });
+        }
+    };
+
     const btnImportMat = document.getElementById('btn-import-materials');
     const importMatFile = document.getElementById('import-materials-file');
     if (btnImportMat && importMatFile) {
@@ -10319,8 +10553,8 @@ function initGlobalEvents() {
             if (!file) return;
 
             Swal.fire({
-                title: 'Cargando Excel...',
-                text: 'Procesando los registros de insumos y materiales.',
+                title: 'Leyendo Excel...',
+                text: 'Generando vista previa de validación...',
                 allowOutsideClick: false,
                 didOpen: () => {
                     Swal.showLoading();
@@ -10337,45 +10571,51 @@ function initGlobalEvents() {
                     const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
                     if (jsonData.length === 0) {
-                        Swal.fire({ icon: 'warning', title: 'Archivo vacío', text: 'El archivo Excel no contiene filas.' });
+                        Swal.fire({ icon: 'warning', title: 'Archivo vacío', text: 'El archivo Excel no contiene filas de insumos.' });
+                        importMatFile.value = '';
                         return;
                     }
 
-                    let count = 0;
+                    const parsedList = [];
                     for (const row of jsonData) {
                         const code = (row["Código"] || row["Codigo"] || row["code"] || row["Code"] || "").toString().trim();
                         const name = (row["Nombre del Insumo"] || row["Nombre"] || row["name"] || row["Name"] || "").toString().trim();
                         const category = (row["Categoría"] || row["Categoria"] || row["category"] || row["Category"] || "Materiales").toString().trim();
-                        const area = (row["Área Clínica"] || row["Area Clinica"] || row["Área"] || row["Area"] || row["area"] || "").toString().trim();
+                        let area = (row["Área Clínica"] || row["Area Clinica"] || row["Área"] || row["Area"] || row["area"] || "").toString().trim();
+                        if (!area && typeof detectClinicalArea === 'function') {
+                            area = detectClinicalArea(category, name);
+                        }
+                        if (!area) area = 'Odontología';
+
                         const currentStock = parseInt(row["Stock Actual"] || row["Stock"] || row["currentStock"] || 0);
                         const minStock = parseInt(row["Stock Mínimo"] || row["Stock Minimo"] || row["minStock"] || 0);
                         const unit = (row["Unidad de Medida"] || row["Unidad"] || row["unit"] || "Unidades").toString().trim();
                         const rawExpiry = row["Fecha de Vencimiento (AAAA-MM-DD)"] || row["Fecha de Vencimiento"] || row["Vencimiento"] || row["expiryDate"] || null;
                         const expiryDate = SupabaseDataService._sanitizeDate ? SupabaseDataService._sanitizeDate(rawExpiry) : (rawExpiry === '—' || rawExpiry === '-' ? null : rawExpiry);
 
-                        if (code && name) {
-                            await SupabaseDataService.saveInventoryItem({
-                                code,
-                                name,
-                                area: area || (typeof detectClinicalArea === 'function' ? detectClinicalArea(category, name) : 'Odontología'),
-                                category,
-                                unit,
-                                currentStock: isNaN(currentStock) ? 0 : currentStock,
-                                minStock: isNaN(minStock) ? 0 : minStock,
-                                expiryDate
-                            });
-                            count++;
-                        }
+                        parsedList.push({
+                            code,
+                            name,
+                            area,
+                            category,
+                            unit,
+                            currentStock: isNaN(currentStock) ? 0 : currentStock,
+                            minStock: isNaN(minStock) ? 0 : minStock,
+                            expiryDate: expiryDate || ''
+                        });
                     }
 
-                    await SupabaseDataService.getInventory(true);
-                    await renderInventoryTable();
-                    await renderDashboard();
-                    Swal.fire({ icon: 'success', title: '¡Importación Completada!', text: `Se cargaron/actualizaron ${count} insumos correctamente.` });
+                    window.pendingImportMaterials = parsedList;
+                    Swal.close();
+
+                    const modal = document.getElementById('modal-import-materials-preview');
+                    if (modal) {
+                        modal.classList.remove('hidden');
+                        window.renderImportMaterialsPreviewTable();
+                    }
                 } catch (err) {
-                    console.error("Error al importar insumos:", err);
+                    console.error("Error al procesar Excel:", err);
                     Swal.fire({ icon: 'error', title: 'Error de Lectura', text: `No se pudo procesar el archivo Excel. Detalle: ${err.message || err}` });
-                } finally {
                     importMatFile.value = '';
                 }
             };
