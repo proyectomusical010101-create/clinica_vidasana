@@ -3291,7 +3291,7 @@ async function renderOdontogramView() {
         document.getElementById('info-patient-name').innerText = 'Paciente';
         document.getElementById('info-patient-cedula').innerText = 'V-00000000';
         document.getElementById('info-patient-category').innerText = 'Privado';
-        const currentDrName = (getCurrentUser() && getCurrentUser().fullname) ? getCurrentUser().fullname : 'Dr. Alejandro Silva';
+        const currentDrName = (getCurrentUser() && getCurrentUser().fullname) ? getCurrentUser().fullname : 'Director(a) Médico';
         document.getElementById('info-patient-doctor').innerText = currentDrName;
         await autoLoadDoctorSignatureInBudget(currentDrName);
 
@@ -3553,7 +3553,8 @@ async function handleOdontogramFaceClick(toothNumber, faceId, mode, key) {
                     serviceCode: porHacerProc.code || 'EN-01',
                     name: `Endodoncia: ${porHacerProc.name}`,
                     price: porHacerProc.priceUSD || 120.00,
-                    specialist: 'Dr. Alejandro Silva'
+                    specialist: '',
+                    assistant: ''
                 });
             } else if (chosenEndoStatus === 'rehacer') {
                 currentBudgetItems.push({
@@ -3563,7 +3564,8 @@ async function handleOdontogramFaceClick(toothNumber, faceId, mode, key) {
                     serviceCode: rehacerProc.code || 'EN-02',
                     name: `Retratamiento de Endodoncia: ${rehacerProc.name}`,
                     price: rehacerProc.priceUSD || 180.00,
-                    specialist: 'Dr. Alejandro Silva'
+                    specialist: '',
+                    assistant: ''
                 });
             }
 
@@ -3694,7 +3696,9 @@ function addProcedureToBudget(toothKeyObj, procedure) {
         serviceCode: procedure.code || '',
         name: itemName,
         price: procPrice,
-        discount: 0
+        discount: 0,
+        specialist: '',
+        assistant: ''
     };
 
     // Check if the exact same procedure already exists for this tooth and face
@@ -3713,28 +3717,146 @@ function addProcedureToBudget(toothKeyObj, procedure) {
     renderBudgetTable();
 }
 
-async function getDoctorsList() {
+// Helpers to identify strictly Odontology specialists and Dental Assistants / Hygienists
+function isOdontologyRole(roleOrSpecialty) {
+    if (!roleOrSpecialty) return false;
+    const s = String(roleOrSpecialty).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+    // Exclude non-doctors / assistants / receptionists / administrators
+    if (s.includes('asistente') || s.includes('higien') || s.includes('enferm') || s.includes('recep') || s.includes('admin') || s.includes('super')) {
+        return false;
+    }
+    // Exclude other clinical specialties (general medicine, cardiology, gynecology, pediatrics unless odontopediatria)
+    if (s.includes('medico general') || s.includes('medicina general') || s.includes('cardiolog') || s.includes('ginecolog') || s.includes('dermatolog') || s.includes('oftalmolog') || s.includes('traumatolog') || s.includes('pediatria') || s.includes('pediatra')) {
+        if (!s.includes('odontopediat')) return false;
+    }
+
+    return (
+        s.includes('odont') ||
+        s.includes('ortodon') ||
+        s.includes('endodon') ||
+        s.includes('periodon') ||
+        s.includes('maxilofacial') ||
+        s.includes('bucal') ||
+        s.includes('protes') ||
+        s.includes('implant') ||
+        s.includes('rehabilitad') ||
+        s.includes('dental')
+    );
+}
+
+function isDentalAssistantRole(roleOrSpecialty) {
+    if (!roleOrSpecialty) return false;
+    const s = String(roleOrSpecialty).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+    // Strictly exclude general nurses, medical assistants, or receptionists if not dental
+    if (s.includes('enferm') && !s.includes('dental') && !s.includes('odont')) return false;
+    if (s.includes('recep') || s.includes('admin')) return false;
+
+    if (s.includes('higien')) return true;
+    if (s.includes('asistente') && (s.includes('dental') || s.includes('odont') || s.includes('bucal') || s.includes('consultorio'))) return true;
+    if (s.includes('auxiliar') && (s.includes('dental') || s.includes('odont'))) return true;
+    if (s === 'asistente' || s === 'asistente dental' || s === 'higienista') return true;
+    return false;
+}
+
+async function getOdontologistsList() {
     try {
         const users = await SupabaseDataService.getUsers();
-        const doctors = users.filter(u => {
-            if (!u.role) return false;
-            const r = u.role.toLowerCase();
-            // Strictly exclude non-doctors: assistants, receptionists, administrators
-            if (r.includes('asistente') || r.includes('recep') || r.includes('admin') || r.includes('super')) return false;
-            return true;
-        });
-        if (doctors.length === 0) {
-            const fallback = users.filter(u => {
-                const r = (u.role || '').toLowerCase();
-                return !r.includes('admin') && !r.includes('super') && !r.includes('asistente') && !r.includes('recep');
-            });
-            return fallback.length > 0 ? fallback : [{ fullname: 'Dr. Alejandro Silva', role: 'Odontólogo Principal' }];
+        let payrollStaff = [];
+        if (typeof SupabaseDataService.getPayrollStaff === 'function') {
+            payrollStaff = await SupabaseDataService.getPayrollStaff();
         }
-        return doctors;
+
+        const list = [];
+        const seenNames = new Set();
+
+        // 1. From users table (filtered strictly for odontologists)
+        users.forEach(u => {
+            const role = u.role || (u.doctorProfile && u.doctorProfile.specialty) || '';
+            if (isOdontologyRole(role) || (u.specialty && isOdontologyRole(u.specialty))) {
+                const name = (u.fullname || '').trim();
+                if (name && name !== 'Dr. Alejandro Silva' && !seenNames.has(name.toLowerCase())) {
+                    seenNames.add(name.toLowerCase());
+                    list.push({ id: u.id, fullname: name, role: role || 'Odontólogo Especialista' });
+                }
+            }
+        });
+
+        // 2. From payroll staff directory (filtered strictly for odontologists)
+        payrollStaff.forEach(s => {
+            const pos = s.position || s.role || s.specialty || '';
+            if (isOdontologyRole(pos)) {
+                const name = (s.fullname || s.name || '').trim();
+                if (name && name !== 'Dr. Alejandro Silva' && !seenNames.has(name.toLowerCase())) {
+                    seenNames.add(name.toLowerCase());
+                    list.push({ id: s.id, fullname: name, role: pos || 'Odontólogo' });
+                }
+            }
+        });
+
+        // 3. If currently logged in user is an odontologist and not yet in list, include them
+        const curr = getCurrentUser();
+        if (curr && curr.fullname && curr.fullname !== 'Dr. Alejandro Silva') {
+            const currRole = curr.role || '';
+            if (isOdontologyRole(currRole) && !seenNames.has(curr.fullname.toLowerCase())) {
+                seenNames.add(curr.fullname.toLowerCase());
+                list.unshift({ id: curr.id, fullname: curr.fullname, role: currRole });
+            }
+        }
+
+        return list;
     } catch (err) {
-        console.error('Error in getDoctorsList:', err);
-        return [{ fullname: 'Dr. Alejandro Silva', role: 'Odontólogo Principal' }];
+        console.error('Error in getOdontologistsList:', err);
+        return [];
     }
+}
+
+async function getDentalAssistantsList() {
+    try {
+        const users = await SupabaseDataService.getUsers();
+        let payrollStaff = [];
+        if (typeof SupabaseDataService.getPayrollStaff === 'function') {
+            payrollStaff = await SupabaseDataService.getPayrollStaff();
+        }
+
+        const list = [];
+        const seenNames = new Set();
+
+        // 1. From users table (filtered strictly for dental assistants / hygienists)
+        users.forEach(u => {
+            const role = u.role || '';
+            if (isDentalAssistantRole(role) || (u.specialty && isDentalAssistantRole(u.specialty))) {
+                const name = (u.fullname || '').trim();
+                if (name && !seenNames.has(name.toLowerCase())) {
+                    seenNames.add(name.toLowerCase());
+                    list.push({ id: u.id, fullname: name, role: role || 'Higienista / Asistente Dental' });
+                }
+            }
+        });
+
+        // 2. From payroll staff directory (filtered strictly for dental assistants / hygienists)
+        payrollStaff.forEach(s => {
+            const pos = s.position || s.role || s.specialty || '';
+            if (isDentalAssistantRole(pos)) {
+                const name = (s.fullname || s.name || '').trim();
+                if (name && !seenNames.has(name.toLowerCase())) {
+                    seenNames.add(name.toLowerCase());
+                    list.push({ id: s.id, fullname: name, role: pos || 'Higienista Dental' });
+                }
+            }
+        });
+
+        return list;
+    } catch (err) {
+        console.error('Error in getDentalAssistantsList:', err);
+        return [];
+    }
+}
+
+// Backward-compatible alias for existing callers
+async function getDoctorsList() {
+    return await getOdontologistsList();
 }
 
 async function renderBudgetTable() {
@@ -3743,7 +3865,8 @@ async function renderBudgetTable() {
 
     tbody.innerHTML = '';
     const rate = getExchangeRate();
-    const doctors = await getDoctorsList();
+    const odontologists = await getOdontologistsList();
+    const dentalAssistants = await getDentalAssistantsList();
 
     const activeCurrency = localStorage.getItem('dental_exchange_currency') || 'USD';
     const curSymbol = activeCurrency === 'EUR' ? '€' : '$';
@@ -3800,7 +3923,7 @@ async function renderBudgetTable() {
     }
 
     if (currentBudgetItems.length === 0) {
-        tbody.innerHTML = `<tr class="empty-row"><td colspan="6" class="text-center text-muted">Haga clic en el odontodiagrama o en "+ Agregar Item" para armar el presupuesto.</td></tr>`;
+        tbody.innerHTML = `<tr class="empty-row"><td colspan="7" class="text-center text-muted">Haga clic en el odontodiagrama o en "+ Agregar Item" para armar el presupuesto.</td></tr>`;
         document.getElementById('budget-subtotal').innerText = `${curSymbol}0.00`;
         document.getElementById('budget-subtotal-bs').innerText = 'Bs. 0.00';
         document.getElementById('budget-discount-amount').innerText = `${curSymbol}0.00`;
@@ -3812,53 +3935,97 @@ async function renderBudgetTable() {
 
     let subtotalUSD = 0;
     const currentUser = getCurrentUser();
-    const loggedInDoctor = currentUser && doctors.find(d => d.fullname === currentUser.fullname);
+    const loggedInDoctor = currentUser && odontologists.find(d => d.fullname === currentUser.fullname);
 
     currentBudgetItems.forEach((item, index) => {
         if (item.price === undefined) item.price = 0;
-        if (!item.specialist || !doctors.some(d => d.fullname === item.specialist)) {
-            item.specialist = loggedInDoctor ? loggedInDoctor.fullname : (doctors[0] ? doctors[0].fullname : 'Dr. Alejandro Silva');
+
+        // Clean any old hardcoded fake doctors
+        if (item.specialist === 'Dr. Alejandro Silva') {
+            item.specialist = '';
+        }
+
+        // Set default specialist if not selected or invalid
+        if (!item.specialist || !odontologists.some(d => d.fullname === item.specialist)) {
+            item.specialist = loggedInDoctor ? loggedInDoctor.fullname : (odontologists[0] ? odontologists[0].fullname : '');
+        }
+
+        if (item.assistant === undefined) {
+            item.assistant = '';
         }
 
         subtotalUSD += item.price;
+
+        // Build Odontologist dropdown options
+        let doctorOptionsHtml = '';
+        if (odontologists.length === 0) {
+            doctorOptionsHtml = `<option value="">-- Sin odontólogos registrados --</option>`;
+        } else {
+            doctorOptionsHtml = odontologists.map(doc => `<option value="${doc.fullname}" ${item.specialist === doc.fullname ? 'selected' : ''}>${doc.fullname}</option>`).join('');
+        }
+
+        // Build Dental Assistant / Hygienist dropdown options
+        let assistantOptionsHtml = `<option value="">-- Sin Asistente / Higienista --</option>`;
+        if (dentalAssistants.length > 0) {
+            assistantOptionsHtml += dentalAssistants.map(ast => `<option value="${ast.fullname}" ${item.assistant === ast.fullname ? 'selected' : ''}>${ast.fullname} (${ast.role})</option>`).join('');
+        }
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td><strong>#${item.tooth || '-'}</strong></td>
             <td><strong>${item.name}</strong></td>
             <td>
-                <select class="form-control btn-xs srv-specialist-select" style="width: 160px; font-size: 0.82rem; padding: 4px 8px; border-radius: 6px;" data-idx="${index}">
-                    ${doctors.map(doc => `<option value="${doc.fullname}" ${item.specialist === doc.fullname ? 'selected' : ''}>${doc.fullname}</option>`).join('')}
+                <select class="form-control btn-xs srv-specialist-select" style="width: 145px; font-size: 0.8rem; padding: 4px 6px; border-radius: 6px;" data-idx="${index}" title="Odontólogo Tratante">
+                    ${doctorOptionsHtml}
+                </select>
+            </td>
+            <td>
+                <select class="form-control btn-xs srv-assistant-select" style="width: 155px; font-size: 0.8rem; padding: 4px 6px; border-radius: 6px;" data-idx="${index}" title="Higienista / Asistente Dental">
+                    ${assistantOptionsHtml}
                 </select>
             </td>
             <td>
                 <div style="display: flex; align-items: center; gap: 4px; font-weight: 600;">
-                    ${curSymbol} <input type="number" class="form-control btn-xs srv-price-input" style="width: 70px; padding: 4px 6px; height: auto; text-align: center; border-radius: 4px;" value="${item.price}" step="0.01" data-idx="${index}"> ${curLabel}
+                    ${curSymbol} <input type="number" class="form-control btn-xs srv-price-input" style="width: 65px; padding: 4px 4px; height: auto; text-align: center; border-radius: 4px;" value="${item.price}" step="0.01" data-idx="${index}"> ${curLabel}
                 </div>
             </td>
             <td style="font-weight: 700; color: #1e3a8a;">${(item.price * rate).toFixed(2)} Bs</td>
             <td>
-                <button class="btn btn-xs btn-outline text-red" style="border-radius: 6px; padding: 4px 8px;" onclick="removeBudgetItem(${index})"><i class="fa-solid fa-trash"></i></button>
+                <button class="btn btn-xs btn-outline text-red" style="border-radius: 6px; padding: 4px 8px;" onclick="removeBudgetItem(${index})" title="Eliminar este procedimiento"><i class="fa-solid fa-trash"></i></button>
             </td>
         `;
 
         // Handle specialist select change
         const specSelect = tr.querySelector('.srv-specialist-select');
-        specSelect.addEventListener('change', async (e) => {
-            const selectedDoc = e.target.value;
-            currentBudgetItems[index].specialist = selectedDoc;
-            await autoLoadDoctorSignatureInBudget(selectedDoc);
-            await autoSaveActivePatientOdontogram();
-        });
+        if (specSelect) {
+            specSelect.addEventListener('change', async (e) => {
+                const selectedDoc = e.target.value;
+                currentBudgetItems[index].specialist = selectedDoc;
+                if (selectedDoc) await autoLoadDoctorSignatureInBudget(selectedDoc);
+                await autoSaveActivePatientOdontogram();
+            });
+        }
+
+        // Handle assistant select change
+        const astSelect = tr.querySelector('.srv-assistant-select');
+        if (astSelect) {
+            astSelect.addEventListener('change', async (e) => {
+                const selectedAst = e.target.value;
+                currentBudgetItems[index].assistant = selectedAst;
+                await autoSaveActivePatientOdontogram();
+            });
+        }
 
         // Handle price input edit
         const priceIn = tr.querySelector('.srv-price-input');
-        priceIn.addEventListener('change', async (e) => {
-            const val = parseFloat(e.target.value) || 0;
-            currentBudgetItems[index].price = Math.max(0, val);
-            await autoSaveActivePatientOdontogram();
-            renderBudgetTable();
-        });
+        if (priceIn) {
+            priceIn.addEventListener('change', async (e) => {
+                const val = parseFloat(e.target.value) || 0;
+                currentBudgetItems[index].price = Math.max(0, val);
+                await autoSaveActivePatientOdontogram();
+                renderBudgetTable();
+            });
+        }
 
         tbody.appendChild(tr);
     });
@@ -7322,9 +7489,9 @@ async function exportEHRToPDF() {
     let headerHtml = `
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0284c7; padding-bottom: 15px; margin-bottom: 20px;">
             <div>
-                <h1 style="font-family: 'Outfit', sans-serif; font-size: 1.6rem; color: #0284c7; margin: 0;">🦷 DentalCare Pro</h1>
-                <p style="font-size: 0.8rem; color: #64748b; margin: 2px 0 0 0;">Consultorio Odontológico Unipersonal | Expediente Clínico Oficial</p>
-                <small style="font-size: 0.72rem; color: #94a3b8;">Odontólogo: Dr. Alejandro Silva (MPPS-84920 / C.O.V-14920)</small>
+                <h1 style="font-family: 'Outfit', sans-serif; font-size: 1.6rem; color: #0284c7; margin: 0;">🏥 Clínica VidaSana</h1>
+                <p style="font-size: 0.8rem; color: #64748b; margin: 2px 0 0 0;">Centro Médico Odontológico | Expediente Clínico Oficial</p>
+                <small style="font-size: 0.72rem; color: #94a3b8;">Atención Odontológica Especializada</small>
             </div>
             <div style="text-align: right;">
                 <span style="display: inline-block; background: #e0f2fe; color: #0284c7; padding: 4px 10px; border-radius: 12px; font-weight: 700; font-size: 0.75rem;">HISTORIA CLÍNICA</span>
@@ -9657,8 +9824,8 @@ function initGlobalEvents() {
                 return;
             }
 
-            const doctors = await getDoctorsList();
-            const defaultDoc = doctors[0] ? doctors[0].fullname : 'Dr. Alejandro Silva';
+            const odontologists = await getOdontologistsList();
+            const defaultDoc = odontologists[0] ? odontologists[0].fullname : '';
 
             const toothNum = parseInt(toothVal);
             let itemKey = `custom-${toothVal}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
@@ -9681,7 +9848,8 @@ function initGlobalEvents() {
                 serviceCode: '',
                 name: nameVal,
                 price: priceVal,
-                specialist: defaultDoc
+                specialist: defaultDoc,
+                assistant: ''
             };
 
             currentBudgetItems.push(newCustomItem);
@@ -12046,7 +12214,8 @@ function initGlobalEvents() {
                         tooth: extractToothNumber(item),
                         face: item.face || 'Gnl',
                         price: item.price,
-                        specialist: item.specialist || ''
+                        specialist: item.specialist || '',
+                        assistant: item.assistant || ''
                     })),
                     odontogramData: { ...approvedOdData },
                     totalRef: totalUSD,
@@ -12079,6 +12248,7 @@ function initGlobalEvents() {
                     face: item.face || 'Gnl',
                     price: item.price,
                     specialist: item.specialist || '',
+                    assistant: item.assistant || '',
                     status: 'Planificado',
                     sessionNum: item.sessionNum || (idx + 1)
                 }));
@@ -12574,6 +12744,7 @@ function initGlobalEvents() {
                     name: item.name,
                     price: parseFloat(item.price) || 0,
                     specialist: item.specialist || '',
+                    assistant: item.assistant || '',
                     key: item.key
                 })),
                 odontogramData: odData,
@@ -15135,7 +15306,7 @@ function parseClinicHeaderString(raw) {
             continue;
         }
 
-        // Match Doctor: "Dr. Rodrigo Navas" or "Dr. Alejandro Silva"
+        // Match Doctor: e.g. "Dr. Rodrigo Navas"
         const docMatch = line.match(/(?:dr\.|dra\.|doctor|doctora)[-:\s]+([^\n]+)/i);
         if (docMatch && !res.doctor) {
             res.doctor = line.trim();
@@ -15177,7 +15348,7 @@ function formatHeaderText(raw) {
 function getClinicBusData(config) {
     let busData = {
         name: 'Vida Sana Centro Médico Odontológico',
-        doctor: 'Dr. Alejandro Silva',
+        doctor: 'Dirección Médica Odontológica',
         doctorSpecialty: 'Odontología General / Especializada',
         phone: '0424-1894138',
         email: 'recepcion.vidasana@gmail.com',
@@ -15296,7 +15467,7 @@ function buildMedicalDocumentHTML(opts) {
     const finalClinicPhone = (clinicPhone && !clinicPhone.includes('555-0192')) ? clinicPhone : (parsedFromClinicName.phone || baseBus.phone);
     const finalClinicEmail = clinicEmail || parsedFromClinicName.email || baseBus.email;
     const finalClinicAddress = (clinicAddress && !clinicAddress.includes('Las Mercedes')) ? clinicAddress : (parsedFromClinicName.address || baseBus.address);
-    const finalDoctorName = doctorName || (getCurrentUser() && getCurrentUser().fullname) || baseBus.doctor || 'Dr. Alejandro Silva';
+    const finalDoctorName = doctorName || (getCurrentUser() && getCurrentUser().fullname) || baseBus.doctor || 'Dirección Médica';
     const finalDoctorPhone = (doctorPhone && !doctorPhone.includes('123-4567') && !doctorPhone.includes('555-0192')) ? doctorPhone : (baseBus.phone || '');
     const finalBankingDetails = bankingDetails || baseBus.bankInfo || 'Banco Banesco / Pago Móvil: RIF J-50781755-5 | Teléfono: 0424-1894138';
 
@@ -15558,7 +15729,7 @@ function buildRecipeDocumentHTML(opts) {
     const finalClinicPhone = (clinicPhone && !clinicPhone.includes('555-0192')) ? clinicPhone : (parsedFromClinicName.phone || baseBus.phone);
     const finalClinicEmail = clinicEmail || parsedFromClinicName.email || baseBus.email;
     const finalClinicAddress = (clinicAddress && !clinicAddress.includes('Las Mercedes')) ? clinicAddress : (parsedFromClinicName.address || baseBus.address);
-    const finalDoctorName = doctorName || (getCurrentUser() && getCurrentUser().fullname) || baseBus.doctor || 'Dr. Alejandro Silva';
+    const finalDoctorName = doctorName || (getCurrentUser() && getCurrentUser().fullname) || baseBus.doctor || 'Dirección Médica';
     const finalDoctorPhone = (doctorPhone && !doctorPhone.includes('123-4567') && !doctorPhone.includes('555-0192')) ? doctorPhone : (baseBus.phone || '');
 
     let medsList = '';
@@ -17768,7 +17939,7 @@ async function renderStationeryView() {
             const clinicPhone = (document.getElementById('stat-clinic-phone') ? document.getElementById('stat-clinic-phone').value.trim() : '') || '0424-1894138';
             const clinicEmail = (document.getElementById('stat-clinic-email') ? document.getElementById('stat-clinic-email').value.trim() : '') || 'recepcion.vidasana@gmail.com';
             const clinicAddress = (document.getElementById('stat-clinic-address') ? document.getElementById('stat-clinic-address').value.trim() : '') || 'Av. Libertador Con Calle Paraíso, Edif Torre Siclar Piso Local 1, Sector Libertador, Caracas';
-            const doctorName = (document.getElementById('stat-doctor-name') ? document.getElementById('stat-doctor-name').value.trim() : '') || 'Dr. Alejandro Silva';
+            const doctorName = (document.getElementById('stat-doctor-name') ? document.getElementById('stat-doctor-name').value.trim() : '');
             const doctorSpecialty = (document.getElementById('stat-doctor-specialty') ? document.getElementById('stat-doctor-specialty').value.trim() : '') || 'Odontología General / Especializada';
             const bankInfo = (document.getElementById('stat-bank-info') ? document.getElementById('stat-bank-info').value.trim() : '') || 'Banco Banesco / Pago Móvil: RIF J-50781755-5 | Teléfono: 0424-1894138';
             const footerText = (footerTextarea ? footerTextarea.value.trim() : '') || 'Correo: recepcion.vidasana@gmail.com | Instagram: @Vidasanacmo | Gracias por su confianza.';
@@ -17904,7 +18075,7 @@ async function handleStationeryAction(templateType, action) {
                 clinicEmail: busData.email,
                 clinicAddress: busData.address,
                 logoUrl: logoBase64,
-                doctorName: busData.doctor || 'Dr. Alejandro Silva',
+                doctorName: busData.doctor || 'Dirección Médica',
                 doctorSpecialty: busData.doctorSpecialty || 'Odontología General / Rehabilitación Oral',
                 doctorPhone: busData.phone,
                 patientName: 'Carlos Eduardo Mendoza',
@@ -17938,7 +18109,7 @@ async function handleStationeryAction(templateType, action) {
                 clinicEmail: busData.email,
                 clinicAddress: busData.address,
                 logoUrl: logoBase64,
-                doctorName: busData.doctor || 'Dr. Alejandro Silva',
+                doctorName: busData.doctor || 'Dirección Médica',
                 doctorSpecialty: busData.doctorSpecialty || 'Odontología Estética y Prótesis',
                 doctorPhone: busData.phone,
                 patientName: 'Carlos Eduardo Mendoza',
@@ -17973,7 +18144,7 @@ async function handleStationeryAction(templateType, action) {
                 clinicEmail: busData.email,
                 clinicAddress: busData.address,
                 logoUrl: logoBase64,
-                doctorName: busData.doctor || 'Dr. Alejandro Silva',
+                doctorName: busData.doctor || 'Dirección Médica',
                 doctorSpecialty: busData.doctorSpecialty || 'Odontología General',
                 doctorPhone: busData.phone,
                 patientName: 'Carlos Eduardo Mendoza',
@@ -18006,7 +18177,7 @@ async function handleStationeryAction(templateType, action) {
                 clinicEmail: busData.email,
                 clinicAddress: busData.address,
                 logoUrl: logoBase64,
-                doctorName: busData.doctor || 'Dr. Alejandro Silva',
+                doctorName: busData.doctor || 'Dirección Médica',
                 doctorSpecialty: busData.doctorSpecialty || 'Odontología General / Rehabilitación Oral',
                 doctorLicense: 'MPPS-98402 / C.O.V-20104',
                 doctorPhone: busData.phone,

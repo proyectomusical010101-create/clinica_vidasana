@@ -7,7 +7,7 @@ const DEFAULT_EXCHANGE_RATE = 36.5; // 1 USD = 36.5 Bs.
 const INITIAL_USERS = [
     {
         id: "usr-01",
-        fullname: "Dr. Alejandro Silva",
+        fullname: "Odontólogo General",
         email: "doctor@dentalcare.com",
         password: "123456",
         role: "Odontólogo Principal",
