@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=269">
+    <link rel="stylesheet" href="styles.css?v=270">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -5434,9 +5434,23 @@
             </div>
             <form id="form-add-service-liquidation" onsubmit="window.ClinicalERP.saveManualServiceLiquidation(event)">
                 <div class="modal-body" style="padding: 20px;">
-                    <div class="form-group" style="margin-bottom: 12px;">
-                        <label>Servicio del Baremo *</label>
-                        <select id="man-liq-service-select" class="form-control" required onchange="window.ClinicalERP.onManualServiceSelected(this.value)">
+                    <div class="form-group" style="margin-bottom: 12px; position: relative;">
+                        <label style="font-weight: 700; display: flex; align-items: center; justify-content: space-between;">
+                            <span><i class="fa-solid fa-tooth text-cyan" style="margin-right: 5px;"></i> Servicio del Baremo *</span>
+                            <span id="man-liq-selected-badge" style="display: none; font-size: 0.75rem; color: #0d9488; font-weight: 700; background: #ccfbf1; padding: 2px 8px; border-radius: 6px;">
+                                <i class="fa-solid fa-check-circle"></i> Seleccionado
+                            </span>
+                        </label>
+                        <div style="position: relative; width: 100%;">
+                            <input type="text" id="man-liq-service-search-input" class="form-control" placeholder="🔍 Escribe para buscar servicio (ej: Limpieza, Extracción, Calza)..." autocomplete="off" style="height: 40px; border-radius: 8px; font-size: 0.88rem; padding: 8px 36px 8px 12px; width: 100%; box-sizing: border-box; font-weight: 600;">
+                            <button type="button" id="man-liq-btn-clear-service" onclick="window.ClinicalERP.clearManualServiceSearch()" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #94a3b8; cursor: pointer; display: none; padding: 4px;" title="Limpiar selección">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                            <!-- Floating Autocomplete Results Dropdown -->
+                            <div id="man-liq-service-search-results" style="position: absolute; top: 44px; left: 0; right: 0; background: #ffffff; border: 1px solid var(--border-color, #e2e8f0); border-radius: 8px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.18), 0 8px 10px -6px rgba(0,0,0,0.1); z-index: 10900; max-height: 240px; overflow-y: auto; display: none;"></div>
+                        </div>
+                        <!-- Hidden select to preserve 100% backward compatibility (Golden Rule 1) -->
+                        <select id="man-liq-service-select" style="display: none;" required>
                             <!-- Populated dynamically -->
                         </select>
                     </div>
@@ -6527,14 +6541,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=269"></script>
-    <script src="supabaseClient.js?v=269"></script>
-    <script src="odontogram.js?v=269"></script>
-    <script src="signature.js?v=269"></script>
-    <script src="whatsapp.js?v=269"></script>
-    <script src="kardex.js?v=269"></script>
-    <script src="app.js?v=269"></script>
-    <script src="clinicalERP.js?v=269"></script>
-    <script src="tutorial.js?v=269"></script>
+    <script src="seededData.js?v=270"></script>
+    <script src="supabaseClient.js?v=270"></script>
+    <script src="odontogram.js?v=270"></script>
+    <script src="signature.js?v=270"></script>
+    <script src="whatsapp.js?v=270"></script>
+    <script src="kardex.js?v=270"></script>
+    <script src="app.js?v=270"></script>
+    <script src="clinicalERP.js?v=270"></script>
+    <script src="tutorial.js?v=270"></script>
 </body>
 </html>

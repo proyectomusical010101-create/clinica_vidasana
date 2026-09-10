@@ -953,12 +953,15 @@
             const form = document.getElementById('form-add-service-liquidation');
             if (form) form.reset();
 
+            this.clearManualServiceSearch();
+
             // Populate services from baremo
             const srvSelect = document.getElementById('man-liq-service-select');
             if (srvSelect && window.SupabaseDataService) {
                 srvSelect.innerHTML = '<option value="">Cargando servicios...</option>';
                 try {
                     const baremo = await window.SupabaseDataService.getBaremo();
+                    this._cachedBaremo = baremo || [];
                     if (baremo && baremo.length > 0) {
                         srvSelect.innerHTML = '<option value="">-- Seleccionar Servicio del Baremo --</option>' +
                             baremo.map(b => `<option value="${b.code || b.id}" data-price="${b.price || 0}" data-hygienist="${b.hygienistBonus || 0}">${b.name} ($${parseFloat(b.price || 0).toFixed(2)})</option>`).join('');
@@ -968,6 +971,41 @@
                 } catch(e) {
                     srvSelect.innerHTML = '<option value="SRV-CUSTOM" data-price="0">Servicio Personalizado / Consulta</option>';
                 }
+            }
+
+            // Setup search input listeners once
+            const searchInput = document.getElementById('man-liq-service-search-input');
+            if (searchInput && !searchInput.dataset.initialized) {
+                searchInput.dataset.initialized = 'true';
+                searchInput.addEventListener('input', (e) => {
+                    this.renderManualServiceSearchResults(e.target.value);
+                });
+                searchInput.addEventListener('focus', (e) => {
+                    this.renderManualServiceSearchResults(e.target.value);
+                });
+                searchInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') {
+                        const res = document.getElementById('man-liq-service-search-results');
+                        if (res) res.style.display = 'none';
+                    } else if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const firstItem = document.querySelector('#man-liq-service-search-results .man-liq-service-item');
+                        if (firstItem) firstItem.click();
+                    }
+                });
+            }
+
+            if (!window._manLiqSearchOutsideClickAttached) {
+                window._manLiqSearchOutsideClickAttached = true;
+                document.addEventListener('click', (e) => {
+                    const sIn = document.getElementById('man-liq-service-search-input');
+                    const res = document.getElementById('man-liq-service-search-results');
+                    if (res && sIn) {
+                        if (!sIn.contains(e.target) && !res.contains(e.target)) {
+                            res.style.display = 'none';
+                        }
+                    }
+                });
             }
 
             // Populate doctors & assistants
@@ -1003,6 +1041,122 @@
 
             const modal = document.getElementById('modal-add-service-liquidation');
             if (modal) modal.classList.remove('hidden');
+        },
+
+        renderManualServiceSearchResults(query) {
+            const resultsContainer = document.getElementById('man-liq-service-search-results');
+            const clearBtn = document.getElementById('man-liq-btn-clear-service');
+            if (!resultsContainer) return;
+
+            const term = (query || '').trim().toLowerCase();
+            if (clearBtn) {
+                clearBtn.style.display = term.length > 0 ? 'block' : 'none';
+            }
+
+            const baremo = this._cachedBaremo || [];
+            let matches = [];
+            if (!term) {
+                matches = baremo.slice(0, 20);
+            } else {
+                matches = baremo.filter(b => {
+                    const name = (b.name || '').toLowerCase();
+                    const code = (b.code || b.id || '').toLowerCase();
+                    const area = (b.area || b.specialty || b.category || '').toLowerCase();
+                    return name.includes(term) || code.includes(term) || area.includes(term);
+                }).slice(0, 30);
+            }
+
+            if (matches.length === 0) {
+                resultsContainer.innerHTML = `
+                    <div style="padding: 14px; text-align: center; color: #64748b; font-size: 0.85rem;">
+                        <i class="fa-solid fa-circle-question" style="font-size: 1.2rem; color: #94a3b8; margin-bottom: 6px; display: block;"></i>
+                        <div>No se encontró ningún servicio que coincida con "<strong>${term.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</strong>"</div>
+                    </div>
+                `;
+                resultsContainer.style.display = 'block';
+                return;
+            }
+
+            const header = !term ? `<div style="padding: 6px 12px; background: #f8fafc; font-size: 0.72rem; font-weight: 700; color: #64748b; border-bottom: 1px solid #e2e8f0; text-transform: uppercase;">Servicios Disponibles (${baremo.length} en total)</div>` : '';
+
+            const itemsHtml = matches.map(b => {
+                const safeCode = String(b.code || b.id || '').replace(/'/g, "\\'");
+                const safeName = (b.name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+                const price = parseFloat(b.price || 0).toFixed(2);
+                const areaBadge = b.area ? `<span style="font-size: 0.72rem; padding: 1px 6px; border-radius: 4px; background: #f1f5f9; color: #475569; font-weight: 600;">${b.area}</span>` : '';
+
+                return `
+                    <div class="man-liq-service-item" onclick="window.ClinicalERP.selectManualService('${safeCode}')" style="padding: 9px 12px; border-bottom: 1px solid #f1f5f9; cursor: pointer; transition: background 0.15s ease;" onmouseover="this.style.background='#f0fdfa'" onmouseout="this.style.background='#fff'">
+                        <div style="font-weight: 700; color: #0f172a; font-size: 0.88rem; display: flex; align-items: center; justify-content: space-between;">
+                            <span><i class="fa-solid fa-tooth text-cyan" style="margin-right: 6px; font-size: 0.8rem;"></i> ${safeName}</span>
+                            <span style="font-weight: 800; color: #0d9488; font-size: 0.88rem;">$${price}</span>
+                        </div>
+                        <div style="font-size: 0.76rem; color: #64748b; margin-top: 2px; display: flex; align-items: center; gap: 10px;">
+                            <span>Código: <strong>${b.code || 'S/C'}</strong></span>
+                            ${areaBadge}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            resultsContainer.innerHTML = header + itemsHtml;
+            resultsContainer.style.display = 'block';
+        },
+
+        selectManualService(code) {
+            const searchInput = document.getElementById('man-liq-service-search-input');
+            const resultsContainer = document.getElementById('man-liq-service-search-results');
+            const clearBtn = document.getElementById('man-liq-btn-clear-service');
+            const badge = document.getElementById('man-liq-selected-badge');
+            const srvSelect = document.getElementById('man-liq-service-select');
+
+            const baremo = this._cachedBaremo || [];
+            const srv = baremo.find(b => String(b.code || b.id) === String(code));
+
+            if (srvSelect) {
+                srvSelect.value = code;
+            }
+
+            if (searchInput && srv) {
+                searchInput.value = `${srv.name} ($${parseFloat(srv.price || 0).toFixed(2)})`;
+                if (clearBtn) clearBtn.style.display = 'block';
+                if (badge) badge.style.display = 'inline-flex';
+            }
+
+            if (resultsContainer) {
+                resultsContainer.style.display = 'none';
+            }
+
+            this.onManualServiceSelected(code);
+        },
+
+        clearManualServiceSearch() {
+            const searchInput = document.getElementById('man-liq-service-search-input');
+            const resultsContainer = document.getElementById('man-liq-service-search-results');
+            const clearBtn = document.getElementById('man-liq-btn-clear-service');
+            const badge = document.getElementById('man-liq-selected-badge');
+            const srvSelect = document.getElementById('man-liq-service-select');
+
+            if (searchInput) {
+                searchInput.value = '';
+                searchInput.focus();
+            }
+            if (srvSelect) {
+                srvSelect.value = '';
+            }
+            if (clearBtn) {
+                clearBtn.style.display = 'none';
+            }
+            if (badge) {
+                badge.style.display = 'none';
+            }
+            if (resultsContainer) {
+                resultsContainer.style.display = 'none';
+            }
+
+            const priceInput = document.getElementById('man-liq-price');
+            if (priceInput) priceInput.value = '0.00';
+            this.recalcManualLiquidationPreview();
         },
 
         onManualServiceSelected(code) {
