@@ -427,12 +427,20 @@ class SupabaseDataService {
                     tagRule: patientObj.tagRule || (patientObj.metadata && patientObj.metadata.tagRule) || null
                 };
 
+                const patientPhotos = (patientObj.metadata && Array.isArray(patientObj.metadata.photos))
+                    ? patientObj.metadata.photos
+                    : (Array.isArray(patientObj.photos) ? patientObj.photos : []);
+
+                // Keep both patientObj.photos and patientObj.metadata.photos synchronized
+                patientObj.photos = patientPhotos;
+                if (patientObj.metadata) patientObj.metadata.photos = patientPhotos;
+
                 const packedOdontogramData = {
                     ...(patientObj.odontogramData || {}),
                     _app_extended: {
                         clinicalNotes: patientObj.clinicalNotes || [],
                         sessions: patientObj.sessions || patientObj.clinicalNotes || [],
-                        photos: patientObj.photos || [],
+                        photos: patientPhotos,
                         payments: patientObj.payments || [],
                         metadata: meta
                     }
@@ -441,7 +449,7 @@ class SupabaseDataService {
                 const payload = {
                     id: patientObj.id,
                     fullname: patientObj.fullname,
-                    birthdate: patientObj.birthdate,
+                    birthdate: (patientObj.birthdate && String(patientObj.birthdate).trim() !== '') ? patientObj.birthdate : null,
                     phone: patientObj.phone,
                     email: patientObj.email || null,
                     occupation: patientObj.occupation || null,
@@ -450,6 +458,7 @@ class SupabaseDataService {
                     medication: patientObj.medication || null,
                     emergency_contact: patientObj.emergencyContact || null,
                     status: patientObj.status || 'Activo',
+                    photos: patientPhotos,
                     odontogram_data: packedOdontogramData
                 };
 
@@ -469,6 +478,135 @@ class SupabaseDataService {
         this._patientsCacheTime = 0;
         this._patientsPromise = null;
         this.notifyDataChanged('patients', patientObj.id);
+    }
+
+    static async updatePatient(patientId, patientObj) {
+        if (!patientObj.id && patientId) patientObj.id = patientId;
+        return await this.savePatient(patientObj);
+    }
+
+    static async addPatientPhoto(patientId, newPhoto) {
+        let localPatients = JSON.parse(localStorage.getItem('dental_patients')) || [];
+        const idx = localPatients.findIndex(p => String(p.id) === String(patientId));
+        let patient = idx >= 0 ? localPatients[idx] : null;
+
+        if (patient) {
+            patient.photos = Array.isArray(patient.photos) ? patient.photos : [];
+            patient.metadata = patient.metadata || {};
+            patient.metadata.photos = Array.isArray(patient.metadata.photos) ? patient.metadata.photos : [];
+
+            patient.photos = patient.photos.filter(p => p.id !== newPhoto.id);
+            patient.photos.unshift(newPhoto);
+
+            patient.metadata.photos = patient.metadata.photos.filter(p => p.id !== newPhoto.id);
+            patient.metadata.photos.unshift(newPhoto);
+
+            localPatients[idx] = patient;
+            localStorage.setItem('dental_patients', JSON.stringify(localPatients));
+        }
+
+        if (this.isCloudConnected()) {
+            try {
+                const { data: cloudPat, error: getErr } = await supabaseClient
+                    .from('patients')
+                    .select('photos, odontogram_data')
+                    .eq('id', patientId)
+                    .single();
+
+                let cloudPhotos = [];
+                let cloudOdontogram = {};
+                if (!getErr && cloudPat) {
+                    cloudPhotos = Array.isArray(cloudPat.photos) ? cloudPat.photos : [];
+                    cloudOdontogram = cloudPat.odontogram_data || {};
+                }
+
+                cloudPhotos = cloudPhotos.filter(p => p.id !== newPhoto.id);
+                cloudPhotos.unshift(newPhoto);
+
+                cloudOdontogram._app_extended = cloudOdontogram._app_extended || {};
+                cloudOdontogram._app_extended.photos = cloudPhotos;
+
+                const { error: updateErr } = await supabaseClient
+                    .from('patients')
+                    .update({
+                        photos: cloudPhotos,
+                        odontogram_data: cloudOdontogram
+                    })
+                    .eq('id', patientId);
+
+                if (updateErr) {
+                    console.error('Supabase addPatientPhoto update error, fallback to savePatient:', updateErr);
+                    if (patient) await this.savePatient(patient);
+                } else {
+                    console.log('✅ Patient photo saved directly to Supabase Cloud:', patientId, newPhoto.id);
+                }
+            } catch (err) {
+                console.error('Supabase addPatientPhoto exception, fallback to savePatient:', err);
+                if (patient) await this.savePatient(patient);
+            }
+        }
+
+        this._patientsCacheTime = 0;
+        this._patientsPromise = null;
+        this.notifyDataChanged('patients', patientId);
+        return patient;
+    }
+
+    static async deletePatientPhoto(patientId, photoId) {
+        let localPatients = JSON.parse(localStorage.getItem('dental_patients')) || [];
+        const idx = localPatients.findIndex(p => String(p.id) === String(patientId));
+        let patient = idx >= 0 ? localPatients[idx] : null;
+
+        if (patient) {
+            if (Array.isArray(patient.photos)) {
+                patient.photos = patient.photos.filter(p => p.id !== photoId);
+            }
+            if (patient.metadata && Array.isArray(patient.metadata.photos)) {
+                patient.metadata.photos = patient.metadata.photos.filter(p => p.id !== photoId);
+            }
+            localPatients[idx] = patient;
+            localStorage.setItem('dental_patients', JSON.stringify(localPatients));
+        }
+
+        if (this.isCloudConnected()) {
+            try {
+                const { data: cloudPat, error: getErr } = await supabaseClient
+                    .from('patients')
+                    .select('photos, odontogram_data')
+                    .eq('id', patientId)
+                    .single();
+
+                if (!getErr && cloudPat) {
+                    const filteredPhotos = (cloudPat.photos || []).filter(p => p.id !== photoId);
+                    const cloudOdontogram = cloudPat.odontogram_data || {};
+                    cloudOdontogram._app_extended = cloudOdontogram._app_extended || {};
+                    cloudOdontogram._app_extended.photos = filteredPhotos;
+
+                    const { error: delErr } = await supabaseClient
+                        .from('patients')
+                        .update({
+                            photos: filteredPhotos,
+                            odontogram_data: cloudOdontogram
+                        })
+                        .eq('id', patientId);
+
+                    if (delErr) {
+                        console.error('Supabase deletePatientPhoto update error:', delErr);
+                        if (patient) await this.savePatient(patient);
+                    } else {
+                        console.log('✅ Patient photo deleted in Supabase Cloud:', photoId);
+                    }
+                }
+            } catch (err) {
+                console.error('Supabase deletePatientPhoto error, fallback to savePatient:', err);
+                if (patient) await this.savePatient(patient);
+            }
+        }
+
+        this._patientsCacheTime = 0;
+        this._patientsPromise = null;
+        this.notifyDataChanged('patients', patientId);
+        return patient;
     }
 
     static async updatePatientBirthdayCongratulated(patientId, year, status = 'congratulated') {

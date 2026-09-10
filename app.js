@@ -6786,49 +6786,7 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
 
             const submitPhotoBtn = document.getElementById('btn-submit-ehr-photo');
             if (submitPhotoBtn) {
-                submitPhotoBtn.onclick = async (e) => {
-                    e.preventDefault();
-                    const fileInput = document.getElementById('ehr-modal-photo-file');
-                    const category = document.getElementById('ehr-modal-photo-category').value;
-                    const title = document.getElementById('ehr-modal-photo-title').value.trim();
-                    const notes = document.getElementById('ehr-modal-photo-notes').value.trim();
-
-                    if (!fileInput.files[0] || !title) {
-                        Swal.fire({ icon: 'warning', text: 'Por favor seleccione una imagen y escriba un título para el estudio.' });
-                        return;
-                    }
-
-                    const reader = new FileReader();
-                    reader.onload = async (event) => {
-                        const photoBase64 = event.target.result;
-                        const newPhoto = {
-                            id: 'photo_' + Date.now(),
-                            url: photoBase64,
-                            category,
-                            title,
-                            notes,
-                            date: new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
-                        };
-
-                        activePatient.metadata = activePatient.metadata || {};
-                        activePatient.metadata.photos = activePatient.metadata.photos || [];
-                        activePatient.metadata.photos.unshift(newPhoto);
-
-                        await SupabaseDataService.updatePatient(activePatient.id, activePatient);
-                        closeModal('modal-ehr-photo-upload');
-
-                        Swal.fire({
-                            icon: 'success',
-                            title: '¡Foto / Rayos X Guardado!',
-                            text: 'El estudio se añadió al álbum clínico del paciente.',
-                            timer: 1800,
-                            showConfirmButton: false
-                        });
-
-                        renderEHRGallery(activePatient, window.currentEHRGalleryFilter || 'all');
-                    };
-                    reader.readAsDataURL(fileInput.files[0]);
-                };
+                submitPhotoBtn.onclick = (e) => window.saveEHRPhoto(e);
             }
         }
     }
@@ -6880,9 +6838,39 @@ function renderEHRGallery(patient, filter = 'all') {
     if (!container) return;
     container.innerHTML = '';
 
-    const photos = (patient.metadata && patient.metadata.photos) || patient.photos || [];
-    let filteredPhotos = [...photos];
+    let photos = [];
+    if (patient && Array.isArray(patient.photos) && patient.photos.length > 0) {
+        photos = patient.photos;
+    } else if (patient && patient.metadata && Array.isArray(patient.metadata.photos)) {
+        photos = patient.metadata.photos;
+    }
 
+    // Keep summary subtab mini gallery synchronized as well
+    const summaryGallery = document.getElementById('ehr-photo-gallery');
+    if (summaryGallery) {
+        summaryGallery.innerHTML = '';
+        if (photos.length > 0) {
+            photos.slice(0, 6).forEach(p => {
+                const card = document.createElement('div');
+                card.className = 'photo-card';
+                card.style.cursor = 'pointer';
+                const sTitle = (p.title || 'Foto Clínica').replace(/'/g, "\\'");
+                const sCat = (p.category || 'Clínica').replace(/'/g, "\\'");
+                const sDate = (p.date || '').replace(/'/g, "\\'");
+                const sNotes = (p.notes || '').replace(/'/g, "\\'");
+                card.onclick = () => window.openEHRPhotoLightbox(p.url, sTitle, sCat, sDate, sNotes);
+                card.innerHTML = `
+                    <img src="${p.url}" alt="${sTitle}" style="object-fit:cover; height:120px; width:100%; border-radius:6px;">
+                    <div class="photo-card-caption"><strong>${p.category || 'Foto'}:</strong> ${p.title}</div>
+                `;
+                summaryGallery.appendChild(card);
+            });
+        } else {
+            summaryGallery.innerHTML = `<p class="text-muted text-center span-2">Sin fotografías radiográficas o intraorales registradas.</p>`;
+        }
+    }
+
+    let filteredPhotos = [...photos];
     if (filter !== 'all') {
         filteredPhotos = filteredPhotos.filter(p => p.category === filter);
     }
@@ -6948,6 +6936,136 @@ function renderEHRGallery(patient, filter = 'all') {
     });
 }
 
+async function compressEHRImage(file, maxWidth = 1280, maxHeight = 1280, quality = 0.82) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                let width = img.width;
+                let height = img.height;
+
+                if (width > maxWidth || height > maxHeight) {
+                    if (width > height) {
+                        height = Math.round((height * maxWidth) / width);
+                        width = maxWidth;
+                    } else {
+                        width = Math.round((width * maxHeight) / height);
+                        height = maxHeight;
+                    }
+                }
+
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                const dataUrl = canvas.toDataURL('image/jpeg', quality);
+                resolve(dataUrl);
+            };
+            img.onerror = () => reject(new Error('No se pudo decodificar la imagen seleccionada.'));
+            img.src = event.target.result;
+        };
+        reader.onerror = () => reject(new Error('Error al leer el archivo.'));
+        reader.readAsDataURL(file);
+    });
+}
+
+window.saveEHRPhoto = async function(e) {
+    if (e && e.preventDefault) e.preventDefault();
+
+    const fileInput = document.getElementById('ehr-modal-photo-file');
+    const categoryEl = document.getElementById('ehr-modal-photo-category');
+    const titleEl = document.getElementById('ehr-modal-photo-title');
+    const notesEl = document.getElementById('ehr-modal-photo-notes');
+    const submitBtn = document.getElementById('btn-submit-ehr-photo');
+
+    const file = fileInput && fileInput.files ? fileInput.files[0] : null;
+    const category = categoryEl ? categoryEl.value : 'Clínica';
+    const title = titleEl ? titleEl.value.trim() : '';
+    const notes = notesEl ? notesEl.value.trim() : '';
+
+    if (!file || !title) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Datos requeridos',
+            text: 'Por favor seleccione un archivo de imagen y escriba un título para el estudio.'
+        });
+        return;
+    }
+
+    const activeId = getActivePatientId();
+    if (!activeId) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Paciente no seleccionado',
+            text: 'No se detectó un paciente activo en el expediente.'
+        });
+        return;
+    }
+
+    const originalBtnHtml = submitBtn ? submitBtn.innerHTML : '';
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando en Nube...';
+    }
+
+    try {
+        // Compress image to ensure high diagnostic quality and zero upload failures
+        const compressedBase64 = await compressEHRImage(file, 1280, 1280, 0.82);
+
+        const newPhoto = {
+            id: 'photo_' + Date.now(),
+            url: compressedBase64,
+            category,
+            title,
+            notes,
+            date: new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
+        };
+
+        // Save to Supabase Cloud & LocalStorage
+        const updatedPatient = await SupabaseDataService.addPatientPhoto(activeId, newPhoto);
+
+        // Reset and close modal
+        if (document.getElementById('form-ehr-photo-upload')) {
+            document.getElementById('form-ehr-photo-upload').reset();
+        }
+        const prevContainer = document.getElementById('ehr-photo-preview-container');
+        if (prevContainer) prevContainer.style.display = 'none';
+        closeModal('modal-ehr-photo-upload');
+
+        // Refresh gallery
+        if (updatedPatient) {
+            renderEHRGallery(updatedPatient, window.currentEHRGalleryFilter || 'all');
+        } else {
+            const patients = await SupabaseDataService.getPatients(true);
+            const freshPatient = patients.find(p => p.id === activeId);
+            if (freshPatient) renderEHRGallery(freshPatient, window.currentEHRGalleryFilter || 'all');
+        }
+
+        Swal.fire({
+            icon: 'success',
+            title: '¡Foto / Rayos X Guardado con Éxito!',
+            text: 'El estudio clínico ha sido registrado en la nube y agregado al expediente del paciente.',
+            timer: 1900,
+            showConfirmButton: false
+        });
+    } catch (err) {
+        console.error('Error saving EHR photo:', err);
+        Swal.fire({
+            icon: 'error',
+            title: 'Error al guardar imagen',
+            text: err.message || 'No se pudo guardar la fotografía en la historia clínica.'
+        });
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalBtnHtml || '<i class="fa-solid fa-floppy-disk"></i> Guardar en Historia';
+        }
+    }
+};
+
 window.openEHRPhotoLightbox = function(url, title, category, date, notes) {
     const imgEl = document.getElementById('ehr-lightbox-img');
     const titleEl = document.getElementById('ehr-lightbox-title');
@@ -6967,7 +7085,7 @@ window.openEHRPhotoLightbox = function(url, title, category, date, notes) {
 window.deleteEHRPhoto = async function(photoId) {
     Swal.fire({
         title: '¿Eliminar imagen clínica?',
-        text: 'Esta fotografía o radiografía será eliminada del expediente del paciente.',
+        text: 'Esta fotografía o radiografía será eliminada del expediente del paciente en la nube.',
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#ef4444',
@@ -6978,13 +7096,20 @@ window.deleteEHRPhoto = async function(photoId) {
         if (result.isConfirmed) {
             const activeId = getActivePatientId();
             if (!activeId) return;
-            const patients = await SupabaseDataService.getPatients();
-            const patient = patients.find(p => p.id === activeId);
-            if (patient && patient.metadata && patient.metadata.photos) {
-                patient.metadata.photos = patient.metadata.photos.filter(p => p.id !== photoId);
-                await SupabaseDataService.updatePatient(patient.id, patient);
-                renderEHRGallery(patient, window.currentEHRGalleryFilter || 'all');
+
+            try {
+                const updatedPatient = await SupabaseDataService.deletePatientPhoto(activeId, photoId);
+                if (updatedPatient) {
+                    renderEHRGallery(updatedPatient, window.currentEHRGalleryFilter || 'all');
+                } else {
+                    const patients = await SupabaseDataService.getPatients(true);
+                    const freshPatient = patients.find(p => p.id === activeId);
+                    if (freshPatient) renderEHRGallery(freshPatient, window.currentEHRGalleryFilter || 'all');
+                }
                 Swal.fire({ icon: 'success', title: 'Imagen eliminada', timer: 1500, showConfirmButton: false });
+            } catch (err) {
+                console.error('Error deleting photo:', err);
+                Swal.fire({ icon: 'error', title: 'Error al eliminar', text: err.message });
             }
         }
     });
