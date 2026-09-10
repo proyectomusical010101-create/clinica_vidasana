@@ -632,6 +632,42 @@ class SupabaseDataService {
     static _inventoryPromise = null;
     static _inventoryCacheTime = 0;
 
+    static _sanitizeDate(val) {
+        if (!val) return null;
+        if (typeof val === 'string') {
+            const trimmed = val.trim();
+            if (!trimmed || trimmed === '—' || trimmed === '-' || trimmed === 'N/A' || trimmed === 'n/a' || trimmed === 'null' || trimmed === 'undefined') {
+                return null;
+            }
+            if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+                return trimmed;
+            }
+            const dmy = trimmed.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+            if (dmy) {
+                const day = dmy[1].padStart(2, '0');
+                const month = dmy[2].padStart(2, '0');
+                const year = dmy[3];
+                return `${year}-${month}-${day}`;
+            }
+            const parsed = new Date(trimmed);
+            if (!isNaN(parsed.getTime())) {
+                return parsed.toISOString().split('T')[0];
+            }
+            return null;
+        }
+        if (val instanceof Date && !isNaN(val.getTime())) {
+            return val.toISOString().split('T')[0];
+        }
+        if (typeof val === 'number' && val > 20000 && val < 100000) {
+            const excelEpoch = new Date(1899, 11, 30);
+            const d = new Date(excelEpoch.getTime() + val * 86400000);
+            if (!isNaN(d.getTime())) {
+                return d.toISOString().split('T')[0];
+            }
+        }
+        return null;
+    }
+
     static async getInventory(forceRefresh = false) {
         const local = JSON.parse(localStorage.getItem('dental_kardex')) || JSON.parse(localStorage.getItem('dental_inventory')) || (typeof INITIAL_INVENTORY !== 'undefined' ? INITIAL_INVENTORY : []);
         if (!this.isCloudConnected()) {
@@ -651,14 +687,14 @@ class SupabaseDataService {
             try {
                 const { data, error } = await supabaseClient.from('kardex_inventory').select('*');
                 if (error) throw error;
-                if (data) {
+                if (data && data.length > 0) {
                     const mapped = data.map(i => ({
                         code: i.code,
                         name: i.name,
                         area: i.area || (typeof detectClinicalArea === 'function' ? detectClinicalArea(i.category, i.name) : 'Odontología'),
                         category: i.category,
-                        currentStock: i.current_stock,
-                        minStock: i.min_stock,
+                        currentStock: Number(i.current_stock) || 0,
+                        minStock: Number(i.min_stock) || 0,
                         unit: i.unit,
                         expiryDate: i.expiry_date
                     }));
@@ -668,7 +704,43 @@ class SupabaseDataService {
                     this._inventoryCacheTime = Date.now();
                     return mapped;
                 }
-                return local;
+
+                // Fallback: If kardex_inventory returned 0 rows, check SYS-INVENTORY-CONFIG backup in patients table
+                try {
+                    const { data: sysData } = await supabaseClient.from('patients').select('odontogram_data').eq('id', 'SYS-INVENTORY-CONFIG').single();
+                    if (sysData && sysData.odontogram_data && Array.isArray(sysData.odontogram_data._inventory) && sysData.odontogram_data._inventory.length > 0) {
+                        const restored = sysData.odontogram_data._inventory;
+                        console.warn(`[getInventory] Restored ${restored.length} items from SYS-INVENTORY-CONFIG backup. Repopulating kardex_inventory...`);
+                        (async () => {
+                            for (const it of restored) {
+                                try {
+                                    await supabaseClient.from('kardex_inventory').upsert({
+                                        code: it.code,
+                                        name: it.name,
+                                        area: it.area || (typeof detectClinicalArea === 'function' ? detectClinicalArea(it.category, it.name) : 'Odontología'),
+                                        category: it.category,
+                                        current_stock: it.currentStock,
+                                        min_stock: it.minStock,
+                                        unit: it.unit,
+                                        expiry_date: SupabaseDataService._sanitizeDate(it.expiryDate)
+                                    });
+                                } catch (e) {}
+                            }
+                        })();
+                        localStorage.setItem('dental_kardex', JSON.stringify(restored));
+                        localStorage.setItem('dental_inventory', JSON.stringify(restored));
+                        if (window.kardex) window.kardex.items = restored;
+                        this._inventoryCacheTime = Date.now();
+                        return restored;
+                    }
+                } catch (sysErr) {
+                    console.warn('[getInventory] SYS-INVENTORY-CONFIG check fallback:', sysErr);
+                }
+
+                if (local && local.length > 0) {
+                    return local;
+                }
+                return [];
             } catch (err) {
                 console.error('Supabase getInventory Error:', err);
                 return local;
@@ -682,6 +754,10 @@ class SupabaseDataService {
     }
 
     static async saveInventoryItem(itemObj) {
+        itemObj.expiryDate = this._sanitizeDate(itemObj.expiryDate);
+        if (!itemObj.area && typeof detectClinicalArea === 'function') {
+            itemObj.area = detectClinicalArea(itemObj.category, itemObj.name);
+        }
         let localInv = JSON.parse(localStorage.getItem('dental_kardex')) || [];
         const idx = localInv.findIndex(i => i.code === itemObj.code);
         if (idx >= 0) localInv[idx] = itemObj;
@@ -696,7 +772,7 @@ class SupabaseDataService {
                 let { error: err1 } = await supabaseClient.from('kardex_inventory').upsert({
                     code: itemObj.code,
                     name: itemObj.name,
-                    area: itemObj.area,
+                    area: itemObj.area || 'Odontología',
                     category: itemObj.category,
                     current_stock: itemObj.currentStock,
                     min_stock: itemObj.minStock,

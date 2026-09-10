@@ -10282,28 +10282,32 @@ function initGlobalEvents() {
 
                     let count = 0;
                     for (const row of jsonData) {
-                        const code = (row["Código"] || "").toString().trim();
-                        const name = (row["Nombre del Insumo"] || "").toString().trim();
-                        const category = (row["Categoría"] || "Materiales").toString().trim();
-                        const currentStock = parseInt(row["Stock Actual"] || 0);
-                        const minStock = parseInt(row["Stock Mínimo"] || 0);
-                        const unit = (row["Unidad de Medida"] || "Unidades").toString().trim();
-                        const expiryDate = row["Fecha de Vencimiento (AAAA-MM-DD)"] || null;
+                        const code = (row["Código"] || row["Codigo"] || row["code"] || row["Code"] || "").toString().trim();
+                        const name = (row["Nombre del Insumo"] || row["Nombre"] || row["name"] || row["Name"] || "").toString().trim();
+                        const category = (row["Categoría"] || row["Categoria"] || row["category"] || row["Category"] || "Materiales").toString().trim();
+                        const area = (row["Área Clínica"] || row["Area Clinica"] || row["Área"] || row["Area"] || row["area"] || "").toString().trim();
+                        const currentStock = parseInt(row["Stock Actual"] || row["Stock"] || row["currentStock"] || 0);
+                        const minStock = parseInt(row["Stock Mínimo"] || row["Stock Minimo"] || row["minStock"] || 0);
+                        const unit = (row["Unidad de Medida"] || row["Unidad"] || row["unit"] || "Unidades").toString().trim();
+                        const rawExpiry = row["Fecha de Vencimiento (AAAA-MM-DD)"] || row["Fecha de Vencimiento"] || row["Vencimiento"] || row["expiryDate"] || null;
+                        const expiryDate = SupabaseDataService._sanitizeDate ? SupabaseDataService._sanitizeDate(rawExpiry) : (rawExpiry === '—' || rawExpiry === '-' ? null : rawExpiry);
 
                         if (code && name) {
                             await SupabaseDataService.saveInventoryItem({
                                 code,
                                 name,
+                                area: area || (typeof detectClinicalArea === 'function' ? detectClinicalArea(category, name) : 'Odontología'),
                                 category,
                                 unit,
-                                currentStock,
-                                minStock,
+                                currentStock: isNaN(currentStock) ? 0 : currentStock,
+                                minStock: isNaN(minStock) ? 0 : minStock,
                                 expiryDate
                             });
                             count++;
                         }
                     }
 
+                    await SupabaseDataService.getInventory(true);
                     await renderInventoryTable();
                     await renderDashboard();
                     Swal.fire({ icon: 'success', title: '¡Importación Completada!', text: `Se cargaron/actualizaron ${count} insumos correctamente.` });
