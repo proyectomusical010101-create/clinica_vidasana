@@ -2992,7 +2992,9 @@
                     <div class="card filter-card" style="margin-bottom: 20px;">
                         <div class="filter-group" id="room-filter-group">
                             <button type="button" class="filter-btn active" onclick="window.ClinicalERP.filterRooms('all', this)">Todos</button>
-                            <button type="button" class="filter-btn" onclick="window.ClinicalERP.filterRooms('Disponible', this)">Disponibles</button>
+                            <button type="button" class="filter-btn" onclick="window.ClinicalERP.filterRooms('disp_manana', this)"><i class="fa-solid fa-sun" style="color: #f59e0b; margin-right: 4px;"></i> Disp. Mañana</button>
+                            <button type="button" class="filter-btn" onclick="window.ClinicalERP.filterRooms('disp_tarde', this)"><i class="fa-solid fa-moon" style="color: #6366f1; margin-right: 4px;"></i> Disp. Tarde</button>
+                            <button type="button" class="filter-btn" onclick="window.ClinicalERP.filterRooms('Disponible', this)">Totalmente Libres</button>
                             <button type="button" class="filter-btn" onclick="window.ClinicalERP.filterRooms('Alquilado', this)">Alquilados</button>
                             <button type="button" class="filter-btn" onclick="window.ClinicalERP.filterRooms('Mantenimiento', this)">Mantenimiento</button>
                         </div>
@@ -5157,13 +5159,13 @@
 
     <!-- MODAL: CONSULTORIO / ÁREA FÍSICA -->
     <div class="modal-overlay hidden" id="modal-room">
-        <div class="modal-dialog">
+        <div class="modal-dialog" style="max-width: 680px; width: 95vw;">
             <div class="modal-header">
                 <h3 id="modal-room-title"><i class="fa-solid fa-door-open text-teal"></i> Consultorio / Espacio</h3>
                 <button class="modal-close" data-close-erp="modal-room">&times;</button>
             </div>
             <form id="form-room">
-                <div class="modal-body">
+                <div class="modal-body" style="max-height: 80vh; overflow-y: auto;">
                     <input type="hidden" id="room-id">
                     <div class="form-row" style="display: grid; grid-template-columns: 1fr 2fr; gap: 12px;">
                         <div class="form-group">
@@ -5188,7 +5190,7 @@
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>Estado Actual</label>
+                            <label>Estado General</label>
                             <select id="room-status" class="form-control">
                                 <option value="disponible">Disponible</option>
                                 <option value="ocupado">En Consulta (Ocupado)</option>
@@ -5201,24 +5203,122 @@
                         <div class="form-group">
                             <label>Modalidad de Alquiler</label>
                             <select id="room-rental-mode" class="form-control">
+                                <option value="por_turno">Por Turno (Mañana y Tarde)</option>
                                 <option value="mensual">Canon Fijo Mensual</option>
-                                <option value="por_turno">Por Turno (Mañana/Tarde)</option>
                                 <option value="por_hora">Por Hora</option>
                                 <option value="propio">Uso Propio de Clínica</option>
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>Canon de Alquiler ($)</label>
+                            <label>Canon Mensual Global ($)</label>
                             <input type="number" id="room-rental-canon" class="form-control" step="0.01" min="0" value="0">
                         </div>
                     </div>
-                    <div class="form-group">
-                        <label>Médico Arrendatario / Asignado</label>
-                        <input type="text" id="room-renter-name" class="form-control" placeholder="Nombre del Dr. que alquila o usa el consultorio">
+
+                    <!-- GESTIÓN DE TURNOS OPERATIVOS (MAÑANA Y TARDE) -->
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; margin: 14px 0;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <strong style="color: #0f172a; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
+                                <i class="fa-solid fa-clock-rotate-left text-cyan"></i> Asignación de Turnos y Horarios
+                            </strong>
+                            <span class="badge-tag blue" style="font-size: 0.75rem;">2 Turnos por Consultorio</span>
+                        </div>
+
+                        <!-- TURNO MAÑANA -->
+                        <div style="background: #ffffff; border: 1px solid #cbd5e1; border-left: 4px solid #f59e0b; border-radius: 10px; padding: 12px; margin-bottom: 12px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <span style="font-weight: 700; color: #b45309; font-size: 0.88rem; display: flex; align-items: center; gap: 6px;">
+                                    <i class="fa-solid fa-sun text-amber"></i> Turno Mañana
+                                </span>
+                                <span id="room-morning-hours-badge" class="badge-tag" style="background: #fef3c7; color: #b45309; font-weight: 700;">5 Horas</span>
+                            </div>
+                            
+                            <div class="form-row" style="display: grid; grid-template-columns: 2fr 1fr; gap: 10px; margin-bottom: 8px;">
+                                <div class="form-group" style="margin: 0;">
+                                    <label style="font-size: 0.8rem;">Doctor Asignado (Mañana) *</label>
+                                    <select id="room-doctor-morning" class="form-control" onchange="window.ClinicalERP.onShiftDoctorChange('morning', this.value)">
+                                        <!-- Real doctors loaded dynamically -->
+                                    </select>
+                                    <input type="text" id="room-doctor-morning-custom" class="form-control hidden" placeholder="Escribir nombre del médico..." style="margin-top: 4px;">
+                                </div>
+                                <div class="form-group" style="margin: 0;">
+                                    <label style="font-size: 0.8rem;">Estado Turno Mañana</label>
+                                    <select id="room-morning-status" class="form-control">
+                                        <option value="disponible">Disponible</option>
+                                        <option value="alquilado">Alquilado a Médico</option>
+                                        <option value="ocupado">En Consulta</option>
+                                        <option value="propio">Uso Propio Clínica</option>
+                                        <option value="mantenimiento">Mantenimiento</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                                <div class="form-group" style="margin: 0;">
+                                    <label style="font-size: 0.8rem;">Hora Inicio</label>
+                                    <input type="time" id="room-morning-start" value="08:00" class="form-control" onchange="window.ClinicalERP.calcShiftHours('morning')">
+                                </div>
+                                <div class="form-group" style="margin: 0;">
+                                    <label style="font-size: 0.8rem;">Hora Fin</label>
+                                    <input type="time" id="room-morning-end" value="13:00" class="form-control" onchange="window.ClinicalERP.calcShiftHours('morning')">
+                                </div>
+                                <div class="form-group" style="margin: 0;">
+                                    <label style="font-size: 0.8rem;">Canon Turno ($)</label>
+                                    <input type="number" id="room-morning-canon" class="form-control" step="0.01" min="0" value="35">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TURNO TARDE -->
+                        <div style="background: #ffffff; border: 1px solid #cbd5e1; border-left: 4px solid #6366f1; border-radius: 10px; padding: 12px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <span style="font-weight: 700; color: #4338ca; font-size: 0.88rem; display: flex; align-items: center; gap: 6px;">
+                                    <i class="fa-solid fa-moon text-indigo"></i> Turno Tarde
+                                </span>
+                                <span id="room-afternoon-hours-badge" class="badge-tag" style="background: #e0e7ff; color: #4338ca; font-weight: 700;">5 Horas</span>
+                            </div>
+
+                            <div class="form-row" style="display: grid; grid-template-columns: 2fr 1fr; gap: 10px; margin-bottom: 8px;">
+                                <div class="form-group" style="margin: 0;">
+                                    <label style="font-size: 0.8rem;">Doctor Asignado (Tarde) *</label>
+                                    <select id="room-doctor-afternoon" class="form-control" onchange="window.ClinicalERP.onShiftDoctorChange('afternoon', this.value)">
+                                        <!-- Real doctors loaded dynamically -->
+                                    </select>
+                                    <input type="text" id="room-doctor-afternoon-custom" class="form-control hidden" placeholder="Escribir nombre del médico..." style="margin-top: 4px;">
+                                </div>
+                                <div class="form-group" style="margin: 0;">
+                                    <label style="font-size: 0.8rem;">Estado Turno Tarde</label>
+                                    <select id="room-afternoon-status" class="form-control">
+                                        <option value="disponible">Disponible</option>
+                                        <option value="alquilado">Alquilado a Médico</option>
+                                        <option value="ocupado">En Consulta</option>
+                                        <option value="propio">Uso Propio Clínica</option>
+                                        <option value="mantenimiento">Mantenimiento</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                                <div class="form-group" style="margin: 0;">
+                                    <label style="font-size: 0.8rem;">Hora Inicio</label>
+                                    <input type="time" id="room-afternoon-start" value="14:00" class="form-control" onchange="window.ClinicalERP.calcShiftHours('afternoon')">
+                                </div>
+                                <div class="form-group" style="margin: 0;">
+                                    <label style="font-size: 0.8rem;">Hora Fin</label>
+                                    <input type="time" id="room-afternoon-end" value="19:00" class="form-control" onchange="window.ClinicalERP.calcShiftHours('afternoon')">
+                                </div>
+                                <div class="form-group" style="margin: 0;">
+                                    <label style="font-size: 0.8rem;">Canon Turno ($)</label>
+                                    <input type="number" id="room-afternoon-canon" class="form-control" step="0.01" min="0" value="35">
+                                </div>
+                            </div>
+                        </div>
                     </div>
+
+                    <input type="hidden" id="room-renter-name">
                     <div class="form-group">
-                        <label>Notas de Equipamiento / Horario</label>
-                        <textarea id="room-notes" class="form-control" rows="2" placeholder="Equipos presentes, camilla, horarios acordados..."></textarea>
+                        <label>Equipamiento / Observaciones Generales</label>
+                        <textarea id="room-notes" class="form-control" rows="2" placeholder="Equipos presentes, camilla, condiciones del consultorio..."></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -6716,14 +6816,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=273"></script>
-    <script src="supabaseClient.js?v=273"></script>
-    <script src="odontogram.js?v=273"></script>
-    <script src="signature.js?v=273"></script>
-    <script src="whatsapp.js?v=273"></script>
-    <script src="kardex.js?v=273"></script>
-    <script src="app.js?v=273"></script>
-    <script src="clinicalERP.js?v=273"></script>
-    <script src="tutorial.js?v=273"></script>
+    <script src="seededData.js?v=274"></script>
+    <script src="supabaseClient.js?v=274"></script>
+    <script src="odontogram.js?v=274"></script>
+    <script src="signature.js?v=274"></script>
+    <script src="whatsapp.js?v=274"></script>
+    <script src="kardex.js?v=274"></script>
+    <script src="app.js?v=274"></script>
+    <script src="clinicalERP.js?v=274"></script>
+    <script src="tutorial.js?v=274"></script>
 </body>
 </html>

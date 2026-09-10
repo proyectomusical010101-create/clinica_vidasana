@@ -1738,11 +1738,75 @@ class SupabaseDataService {
         try {
             const { data, error } = await supabaseClient.from('clinic_rooms').select('*').order('name', { ascending: true });
             if (error) throw error;
-            if (data && data.length > 0) {
-                localStorage.setItem('vidasana_rooms', JSON.stringify(data));
-                this._roomsCache = data;
+            let roomsData = data && data.length > 0 ? data : [];
+
+            // Check if dual backup has newer or additional shift details
+            try {
+                const { data: cfgData } = await supabaseClient.from('patients').select('odontogram_data').eq('id', 'SYS-ROOMS-CONFIG').maybeSingle();
+                if (cfgData && cfgData.odontogram_data && Array.isArray(cfgData.odontogram_data.rooms)) {
+                    const backupMap = new Map();
+                    cfgData.odontogram_data.rooms.forEach(r => backupMap.set(r.id, r));
+                    
+                    if (roomsData.length === 0) {
+                        roomsData = cfgData.odontogram_data.rooms;
+                    } else {
+                        // Merge shifts from backup if not present in main record
+                        roomsData = roomsData.map(r => {
+                            const b = backupMap.get(r.id);
+                            if (b && b.shifts && !r.shifts) {
+                                r.shifts = b.shifts;
+                            }
+                            return r;
+                        });
+                    }
+                }
+            } catch(e) {
+                console.warn('Backup SYS-ROOMS-CONFIG read notice:', e);
+            }
+
+            if (roomsData && roomsData.length > 0) {
+                // Parse shifts and equipment if serialized as JSON
+                roomsData = roomsData.map(r => {
+                    let equip = r.equipment || '';
+                    if (equip && equip.trim().startsWith('{')) {
+                        try {
+                            const parsed = JSON.parse(equip);
+                            if (parsed && typeof parsed === 'object') {
+                                if (parsed.shifts) r.shifts = parsed.shifts;
+                                if (parsed.notes !== undefined) r.equipment = parsed.notes;
+                            }
+                        } catch(e) {}
+                    }
+                    // Default shifts if missing
+                    if (!r.shifts) {
+                        r.shifts = {
+                            morning: {
+                                doctor_id: '',
+                                doctor_name: (r.current_tenant && !r.current_tenant.includes('|')) ? r.current_tenant : '',
+                                start_time: '08:00',
+                                end_time: '13:00',
+                                hours: 5,
+                                canon: r.rental_fee_shift || 35,
+                                status: (r.status || 'disponible').toLowerCase()
+                            },
+                            afternoon: {
+                                doctor_id: '',
+                                doctor_name: '',
+                                start_time: '14:00',
+                                end_time: '19:00',
+                                hours: 5,
+                                canon: r.rental_fee_shift || 35,
+                                status: 'disponible'
+                            }
+                        };
+                    }
+                    return r;
+                });
+
+                localStorage.setItem('vidasana_rooms', JSON.stringify(roomsData));
+                this._roomsCache = roomsData;
                 this._roomsCacheTime = Date.now();
-                return data;
+                return roomsData;
             }
             return local;
         } catch(err) {
@@ -1761,8 +1825,48 @@ class SupabaseDataService {
 
         if (this.isCloudConnected()) {
             try {
-                const { error } = await supabaseClient.from('clinic_rooms').upsert(room);
+                // Prepare room object for clinic_rooms table
+                // Encode notes and shifts in equipment column
+                const equipPayload = JSON.stringify({
+                    notes: room.equipment || '',
+                    shifts: room.shifts || null
+                });
+
+                const dbRoom = {
+                    id: room.id,
+                    name: room.name,
+                    department: room.department,
+                    room_number: room.room_number,
+                    equipment: equipPayload,
+                    status: room.status,
+                    rental_mode: room.rental_mode,
+                    rental_fee_hourly: room.rental_fee_hourly || 0,
+                    rental_fee_shift: room.rental_fee_shift || 0,
+                    rental_fee_monthly: room.rental_fee_monthly || 0,
+                    current_tenant: room.current_tenant || null
+                };
+
+                const { error } = await supabaseClient.from('clinic_rooms').upsert(dbRoom);
                 if (error) throw error;
+
+                // Dual cloud backup in patients table under SYS-ROOMS-CONFIG
+                try {
+                    await supabaseClient.from('patients').upsert({
+                        id: 'SYS-ROOMS-CONFIG',
+                        fullname: 'Registro Cloud de Consultorios y Turnos',
+                        birthdate: '2026-01-01',
+                        phone: '',
+                        status: 'Sistema',
+                        odontogram_data: {
+                            rooms: local,
+                            updatedAt: new Date().toISOString(),
+                            _is_rooms_config: true
+                        }
+                    });
+                } catch(backupErr) {
+                    console.warn('Dual backup in SYS-ROOMS-CONFIG error:', backupErr);
+                }
+
                 this.notifyDataChanged('rooms', room.id);
             } catch(e) {
                 console.error('Supabase saveClinicRoom Error:', e);
@@ -1780,6 +1884,21 @@ class SupabaseDataService {
         if (this.isCloudConnected()) {
             try {
                 await supabaseClient.from('clinic_rooms').delete().eq('id', id);
+                // Update backup as well
+                try {
+                    await supabaseClient.from('patients').upsert({
+                        id: 'SYS-ROOMS-CONFIG',
+                        fullname: 'Registro Cloud de Consultorios y Turnos',
+                        birthdate: '2026-01-01',
+                        phone: '',
+                        status: 'Sistema',
+                        odontogram_data: {
+                            rooms: local,
+                            updatedAt: new Date().toISOString(),
+                            _is_rooms_config: true
+                        }
+                    });
+                } catch(e) {}
                 this.notifyDataChanged('rooms', id);
             } catch(e) {
                 console.error('Supabase deleteClinicRoom Error:', e);

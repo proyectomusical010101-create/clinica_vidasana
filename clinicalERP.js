@@ -307,7 +307,7 @@
         },
 
         // =========================================================
-        // 2. CONSULTORIOS & ESPACIOS FÍSICOS (BLUEPRINT CARDS)
+        // 2. CONSULTORIOS & ESPACIOS FÍSICOS (BLUEPRINT CARDS & DUAL SHIFTS)
         // =========================================================
         filterRooms(status, btn) {
             this.roomsFilter = status;
@@ -330,7 +330,20 @@
             let list = [...this.rooms];
 
             if (this.roomsFilter && this.roomsFilter !== 'all') {
-                list = list.filter(r => (r.status || '').toLowerCase() === this.roomsFilter.toLowerCase());
+                const f = this.roomsFilter.toLowerCase();
+                if (f === 'disp_manana') {
+                    list = list.filter(r => {
+                        const m = r.shifts && r.shifts.morning;
+                        return m ? (m.status === 'disponible' || !m.doctor_name) : (r.status || '').toLowerCase() === 'disponible';
+                    });
+                } else if (f === 'disp_tarde') {
+                    list = list.filter(r => {
+                        const a = r.shifts && r.shifts.afternoon;
+                        return a ? (a.status === 'disponible' || !a.doctor_name) : (r.status || '').toLowerCase() === 'disponible';
+                    });
+                } else {
+                    list = list.filter(r => (r.status || '').toLowerCase() === f);
+                }
             }
 
             if (this.roomsSearch) {
@@ -338,14 +351,31 @@
                     (r.name || '').toLowerCase().includes(this.roomsSearch) ||
                     (r.room_number || '').toLowerCase().includes(this.roomsSearch) ||
                     (r.equipment || '').toLowerCase().includes(this.roomsSearch) ||
-                    (r.department || '').toLowerCase().includes(this.roomsSearch)
+                    (r.department || '').toLowerCase().includes(this.roomsSearch) ||
+                    (r.current_tenant || '').toLowerCase().includes(this.roomsSearch)
                 );
             }
 
             // Room metrics
             const total = this.rooms.length;
-            const disponibles = this.rooms.filter(r => (r.status || '').toLowerCase() === 'disponible').length;
-            const alquilados = this.rooms.filter(r => (r.status || '').toLowerCase() === 'alquilado' || (r.status || '').toLowerCase() === 'ocupado').length;
+            const disponibles = this.rooms.filter(r => {
+                const st = (r.status || '').toLowerCase();
+                const m = r.shifts && r.shifts.morning;
+                const a = r.shifts && r.shifts.afternoon;
+                if (m && a) {
+                    return (m.status === 'disponible' || a.status === 'disponible');
+                }
+                return st === 'disponible';
+            }).length;
+            const alquilados = this.rooms.filter(r => {
+                const st = (r.status || '').toLowerCase();
+                const m = r.shifts && r.shifts.morning;
+                const a = r.shifts && r.shifts.afternoon;
+                if (m && a) {
+                    return (m.status === 'alquilado' || m.status === 'ocupado' || a.status === 'alquilado' || a.status === 'ocupado');
+                }
+                return st === 'alquilado' || st === 'ocupado';
+            }).length;
             const tasaOcupacion = total > 0 ? Math.round((alquilados / total) * 100) : 0;
 
             const elTot = document.getElementById('room-stat-total');
@@ -372,7 +402,17 @@
                 'disponible': { cls: 'disponible', text: 'Disponible', icon: 'fa-circle-check' },
                 'ocupado': { cls: 'ocupado', text: 'En Consulta', icon: 'fa-user-clock' },
                 'alquilado': { cls: 'alquilado', text: 'Alquilado', icon: 'fa-file-signature' },
-                'mantenimiento': { cls: 'mantenimiento', text: 'Mantenimiento', icon: 'fa-screwdriver-wrench' }
+                'mantenimiento': { cls: 'mantenimiento', text: 'Mantenimiento', icon: 'fa-screwdriver-wrench' },
+                'propio': { cls: 'alquilado', text: 'Uso Propio', icon: 'fa-hospital' }
+            };
+
+            const shiftStatusBadge = (stRaw) => {
+                const s = (stRaw || 'disponible').toLowerCase();
+                if (s === 'alquilado') return '<span class="badge-tag blue" style="font-size: 0.68rem; padding: 2px 6px;">Alquilado</span>';
+                if (s === 'ocupado') return '<span class="badge-tag red" style="font-size: 0.68rem; padding: 2px 6px;">Ocupado</span>';
+                if (s === 'mantenimiento') return '<span class="badge-tag amber" style="font-size: 0.68rem; padding: 2px 6px;">Mantenimiento</span>';
+                if (s === 'propio') return '<span class="badge-tag purple" style="font-size: 0.68rem; padding: 2px 6px;">Uso Propio</span>';
+                return '<span class="badge-tag green" style="font-size: 0.68rem; padding: 2px 6px;">Disponible</span>';
             };
 
             container.innerHTML = list.map(r => {
@@ -380,7 +420,27 @@
                 const st = statusMap[stKey] || statusMap['disponible'];
                 const feeShift = r.rental_fee_shift ? ('$' + parseFloat(r.rental_fee_shift).toFixed(2)) : 'N/A';
                 const feeMonth = r.rental_fee_monthly ? ('$' + parseFloat(r.rental_fee_monthly).toFixed(2)) : 'N/A';
-                const tenantName = r.current_tenant || 'Ninguno (Uso Clínica)';
+
+                const morning = (r.shifts && r.shifts.morning) ? r.shifts.morning : {
+                    doctor_name: (r.current_tenant && !r.current_tenant.includes('|')) ? r.current_tenant : '',
+                    start_time: '08:00',
+                    end_time: '13:00',
+                    hours: 5,
+                    canon: r.rental_fee_shift || 35,
+                    status: (r.status || 'disponible').toLowerCase()
+                };
+
+                const afternoon = (r.shifts && r.shifts.afternoon) ? r.shifts.afternoon : {
+                    doctor_name: '',
+                    start_time: '14:00',
+                    end_time: '19:00',
+                    hours: 5,
+                    canon: r.rental_fee_shift || 35,
+                    status: 'disponible'
+                };
+
+                const morningDoc = morning.doctor_name ? morning.doctor_name : '<span style="color: #94a3b8; font-style: italic;">Sin asignar (Disponible)</span>';
+                const afternoonDoc = afternoon.doctor_name ? afternoon.doctor_name : '<span style="color: #94a3b8; font-style: italic;">Sin asignar (Disponible)</span>';
 
                 return `
                     <div class="erp-room-card">
@@ -397,35 +457,66 @@
                         </div>
 
                         <div class="erp-room-card-body">
-                            <div style="display: flex; align-items: center; gap: 8px; font-size: 0.82rem; color: #64748b;">
-                                <i class="fa-solid fa-hospital text-muted"></i>
-                                <span>Área: <strong style="color: #1e293b;">${r.department || 'Consultas Médicas'}</strong></span>
+                            <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.82rem; color: #64748b;">
+                                <span><i class="fa-solid fa-hospital text-muted"></i> Área: <strong style="color: #1e293b;">${r.department || 'Consultas Médicas'}</strong></span>
+                                <span class="badge-tag gray" style="font-size: 0.7rem;">${r.rental_mode || 'Por Turno'}</span>
+                            </div>
+
+                            <!-- BLOQUE DE TURNOS (MAÑANA Y TARDE) -->
+                            <div class="erp-room-shifts-container">
+                                <!-- TURNO MAÑANA -->
+                                <div class="erp-room-shift-block morning">
+                                    <div class="erp-room-shift-header">
+                                        <span style="font-weight: 700; color: #b45309; display: flex; align-items: center; gap: 5px;">
+                                            <i class="fa-solid fa-sun" style="color: #f59e0b;"></i> Turno Mañana
+                                        </span>
+                                        <div style="display: flex; align-items: center; gap: 6px;">
+                                            <span style="font-size: 0.72rem; font-weight: 600; color: #78350f;">$${parseFloat(morning.canon || 35).toFixed(2)}</span>
+                                            ${shiftStatusBadge(morning.status)}
+                                        </div>
+                                    </div>
+                                    <div class="erp-room-shift-doctor">
+                                        <span><i class="fa-solid fa-user-doctor" style="color: #f59e0b; margin-right: 4px;"></i> <strong>${morningDoc}</strong></span>
+                                    </div>
+                                    <div class="erp-room-shift-hours">
+                                        <i class="fa-regular fa-clock"></i> ${morning.start_time || '08:00'} - ${morning.end_time || '13:00'} (${morning.hours || 5} hrs)
+                                    </div>
+                                </div>
+
+                                <!-- TURNO TARDE -->
+                                <div class="erp-room-shift-block afternoon">
+                                    <div class="erp-room-shift-header">
+                                        <span style="font-weight: 700; color: #4338ca; display: flex; align-items: center; gap: 5px;">
+                                            <i class="fa-solid fa-moon" style="color: #6366f1;"></i> Turno Tarde
+                                        </span>
+                                        <div style="display: flex; align-items: center; gap: 6px;">
+                                            <span style="font-size: 0.72rem; font-weight: 600; color: #312e81;">$${parseFloat(afternoon.canon || 35).toFixed(2)}</span>
+                                            ${shiftStatusBadge(afternoon.status)}
+                                        </div>
+                                    </div>
+                                    <div class="erp-room-shift-doctor">
+                                        <span><i class="fa-solid fa-user-doctor" style="color: #6366f1; margin-right: 4px;"></i> <strong>${afternoonDoc}</strong></span>
+                                    </div>
+                                    <div class="erp-room-shift-hours">
+                                        <i class="fa-regular fa-clock"></i> ${afternoon.start_time || '14:00'} - ${afternoon.end_time || '19:00'} (${afternoon.hours || 5} hrs)
+                                    </div>
+                                </div>
                             </div>
 
                             <div class="erp-room-rates-strip">
                                 <div>
-                                    <span style="color: #64748b; display: block; font-size: 0.72rem;">Por Turno</span>
+                                    <span style="color: #64748b; display: block; font-size: 0.72rem;">Por Turno Estándar</span>
                                     <strong style="color: #059669;">${feeShift}</strong>
                                 </div>
                                 <div>
-                                    <span style="color: #64748b; display: block; font-size: 0.72rem;">Canon Mensual</span>
+                                    <span style="color: #64748b; display: block; font-size: 0.72rem;">Canon Mensual Global</span>
                                     <strong style="color: #0284c7;">${feeMonth}</strong>
                                 </div>
                             </div>
 
-                            <div class="erp-room-tenant-box">
-                                <div>
-                                    <small style="color: #64748b; display: block; font-size: 0.72rem;">Médico / Arrendatario</small>
-                                    <strong style="color: #1e293b; font-size: 0.85rem;"><i class="fa-solid fa-user-doctor text-teal" style="margin-right: 4px;"></i> ${tenantName}</strong>
-                                </div>
-                                <span class="badge-tag ${r.current_tenant ? 'blue' : 'gray'}" style="font-size: 0.7rem;">
-                                    ${r.rental_mode || 'Por Turno'}
-                                </span>
-                            </div>
-
                             ${r.equipment ? `
                                 <div style="font-size: 0.76rem; color: #64748b; line-height: 1.4; background: #f8fafc; padding: 8px 10px; border-radius: 8px;">
-                                    <strong style="color: #475569;"><i class="fa-solid fa-screwdriver-wrench text-muted"></i> Equipos:</strong> ${r.equipment}
+                                    <strong style="color: #475569;"><i class="fa-solid fa-screwdriver-wrench text-muted"></i> Observaciones:</strong> ${r.equipment}
                                 </div>
                             ` : ''}
                         </div>
@@ -435,7 +526,7 @@
                                 <i class="fa-solid fa-pen-to-square"></i> Editar
                             </button>
                             <button type="button" class="btn btn-sm btn-primary" onclick="window.ClinicalERP.quickRentRoom('${r.id}')" style="font-weight: 700; border-radius: 8px; background: linear-gradient(135deg, #7fa13c 0%, #608127 100%) !important; border: none !important;">
-                                <i class="fa-solid fa-key"></i> Alquilar / Estado
+                                <i class="fa-solid fa-user-doctor"></i> Gestionar Turnos
                             </button>
                         </div>
                     </div>
@@ -443,27 +534,209 @@
             }).join('');
         },
 
-        openAddRoom() {
+        // Calculates hours elapsed between start and end time for a shift
+        calcShiftHours(shift) {
+            const startInput = document.getElementById(`room-${shift}-start`);
+            const endInput = document.getElementById(`room-${shift}-end`);
+            const badge = document.getElementById(`room-${shift}-hours-badge`);
+            if (!startInput || !endInput) return 5;
+
+            const sVal = startInput.value || '08:00';
+            const eVal = endInput.value || '13:00';
+            const [sh, sm] = sVal.split(':').map(Number);
+            const [eh, em] = eVal.split(':').map(Number);
+
+            let diff = (eh * 60 + em) - (sh * 60 + sm);
+            if (diff < 0) diff += 24 * 60; // Overnight shift support
+            const hours = Math.round((diff / 60) * 10) / 10;
+
+            if (badge) {
+                badge.innerText = `${hours} Hora${hours === 1 ? '' : 's'}`;
+            }
+            return hours;
+        },
+
+        // Handler when a doctor is selected in a shift dropdown
+        onShiftDoctorChange(shift, val) {
+            const statusSelect = document.getElementById(`room-${shift}-status`);
+            const customInput = document.getElementById(`room-${shift}-custom`);
+            if (val === '__custom__') {
+                if (customInput) customInput.classList.remove('hidden');
+            } else {
+                if (customInput) customInput.classList.add('hidden');
+            }
+
+            if (statusSelect) {
+                if (val && val !== '') {
+                    if (statusSelect.value === 'disponible') {
+                        statusSelect.value = 'alquilado';
+                    }
+                } else {
+                    statusSelect.value = 'disponible';
+                }
+            }
+        },
+
+        // Populate doctor dropdowns for both shifts using real system users
+        async populateRoomDoctorSelects() {
+            const morningSelect = document.getElementById('room-doctor-morning');
+            const afternoonSelect = document.getElementById('room-doctor-afternoon');
+            if (!morningSelect || !afternoonSelect) return;
+
+            try {
+                let users = [];
+                if (window.SupabaseDataService) {
+                    users = await window.SupabaseDataService.getUsers();
+                }
+                if (!users || users.length === 0) {
+                    users = (typeof INITIAL_USERS !== 'undefined') ? INITIAL_USERS : [];
+                }
+
+                // Filter active medical doctors / dentists / specialists / admins
+                const doctors = users.filter(u => {
+                    const r = (u.role || '').toLowerCase();
+                    const n = (u.fullname || u.name || '').toLowerCase();
+                    return r.includes('odont') || r.includes('médic') || r.includes('medic') || 
+                           r.includes('doctor') || r.includes('especialista') || r.includes('admin') ||
+                           n.startsWith('dr') || n.startsWith('dra');
+                });
+
+                const buildOptions = (selectedVal) => {
+                    let opts = `<option value="">-- Sin asignar (Turno Disponible) --</option>`;
+                    doctors.forEach(d => {
+                        const name = d.fullname || d.name || 'Médico';
+                        const role = d.role || 'Especialista';
+                        opts += `<option value="${name}" data-id="${d.id}">${name} (${role})</option>`;
+                    });
+                    opts += `<option value="__custom__">+ Otro Profesional Externo...</option>`;
+                    return opts;
+                };
+
+                morningSelect.innerHTML = buildOptions();
+                afternoonSelect.innerHTML = buildOptions();
+            } catch(e) {
+                console.warn('Error populating room doctor selects:', e);
+            }
+        },
+
+        async openAddRoom() {
             document.getElementById('form-room').reset();
             document.getElementById('room-id').value = '';
             document.getElementById('modal-room-title').innerText = 'Nuevo Consultorio / Área Física';
+            
+            await this.populateRoomDoctorSelects();
+
+            // Defaults for new room
+            document.getElementById('room-morning-start').value = '08:00';
+            document.getElementById('room-morning-end').value = '13:00';
+            document.getElementById('room-morning-canon').value = 35;
+            document.getElementById('room-morning-status').value = 'disponible';
+            this.calcShiftHours('morning');
+
+            document.getElementById('room-afternoon-start').value = '14:00';
+            document.getElementById('room-afternoon-end').value = '19:00';
+            document.getElementById('room-afternoon-canon').value = 35;
+            document.getElementById('room-afternoon-status').value = 'disponible';
+            this.calcShiftHours('afternoon');
+
             const modal = document.getElementById('modal-room');
             if (modal) modal.classList.remove('hidden');
         },
 
-        openEditRoom(id) {
+        async openEditRoom(id) {
             const r = this.rooms.find(x => x.id === id);
             if (!r) return;
+
+            await this.populateRoomDoctorSelects();
+
             document.getElementById('room-id').value = r.id;
             document.getElementById('room-code').value = r.room_number || '';
             document.getElementById('room-name').value = r.name || '';
-            document.getElementById('room-type').value = r.department || 'Consultas Médicas';
-            document.getElementById('room-status').value = (r.status || 'Disponible');
-            document.getElementById('room-rental-mode').value = r.rental_mode || 'Por Turno';
+            document.getElementById('room-type').value = r.department || 'consultorio';
+            document.getElementById('room-status').value = (r.status || 'disponible').toLowerCase();
+            document.getElementById('room-rental-mode').value = r.rental_mode || 'por_turno';
             document.getElementById('room-rental-canon').value = r.rental_fee_monthly || 0;
             document.getElementById('room-renter-name').value = r.current_tenant || '';
             document.getElementById('room-notes').value = r.equipment || '';
             document.getElementById('modal-room-title').innerText = 'Editar: ' + r.name;
+
+            // Load shifts data
+            const morning = (r.shifts && r.shifts.morning) ? r.shifts.morning : {
+                doctor_name: (r.current_tenant && !r.current_tenant.includes('|')) ? r.current_tenant : '',
+                start_time: '08:00',
+                end_time: '13:00',
+                hours: 5,
+                canon: r.rental_fee_shift || 35,
+                status: (r.status || 'disponible').toLowerCase()
+            };
+
+            const afternoon = (r.shifts && r.shifts.afternoon) ? r.shifts.afternoon : {
+                doctor_name: '',
+                start_time: '14:00',
+                end_time: '19:00',
+                hours: 5,
+                canon: r.rental_fee_shift || 35,
+                status: 'disponible'
+            };
+
+            // Morning shift form fields
+            const mSelect = document.getElementById('room-doctor-morning');
+            const mCustom = document.getElementById('room-doctor-morning-custom');
+            if (mSelect) {
+                let foundM = false;
+                for (let i = 0; i < mSelect.options.length; i++) {
+                    if (mSelect.options[i].value === morning.doctor_name) {
+                        mSelect.selectedIndex = i;
+                        foundM = true;
+                        break;
+                    }
+                }
+                if (!foundM && morning.doctor_name) {
+                    mSelect.value = '__custom__';
+                    if (mCustom) {
+                        mCustom.value = morning.doctor_name;
+                        mCustom.classList.remove('hidden');
+                    }
+                } else if (mCustom) {
+                    mCustom.value = '';
+                    mCustom.classList.add('hidden');
+                }
+            }
+            document.getElementById('room-morning-start').value = morning.start_time || '08:00';
+            document.getElementById('room-morning-end').value = morning.end_time || '13:00';
+            document.getElementById('room-morning-canon').value = morning.canon || 35;
+            document.getElementById('room-morning-status').value = morning.status || 'disponible';
+            this.calcShiftHours('morning');
+
+            // Afternoon shift form fields
+            const aSelect = document.getElementById('room-doctor-afternoon');
+            const aCustom = document.getElementById('room-doctor-afternoon-custom');
+            if (aSelect) {
+                let foundA = false;
+                for (let i = 0; i < aSelect.options.length; i++) {
+                    if (aSelect.options[i].value === afternoon.doctor_name) {
+                        aSelect.selectedIndex = i;
+                        foundA = true;
+                        break;
+                    }
+                }
+                if (!foundA && afternoon.doctor_name) {
+                    aSelect.value = '__custom__';
+                    if (aCustom) {
+                        aCustom.value = afternoon.doctor_name;
+                        aCustom.classList.remove('hidden');
+                    }
+                } else if (aCustom) {
+                    aCustom.value = '';
+                    aCustom.classList.add('hidden');
+                }
+            }
+            document.getElementById('room-afternoon-start').value = afternoon.start_time || '14:00';
+            document.getElementById('room-afternoon-end').value = afternoon.end_time || '19:00';
+            document.getElementById('room-afternoon-canon').value = afternoon.canon || 35;
+            document.getElementById('room-afternoon-status').value = afternoon.status || 'disponible';
+            this.calcShiftHours('afternoon');
+
             const modal = document.getElementById('modal-room');
             if (modal) modal.classList.remove('hidden');
         },
@@ -477,18 +750,78 @@
             const id = document.getElementById('room-id').value;
             const canonVal = parseFloat(document.getElementById('room-rental-canon').value) || 0;
 
+            // Extract Morning Shift data
+            const mSelect = document.getElementById('room-doctor-morning');
+            const mCustom = document.getElementById('room-doctor-morning-custom');
+            let morningDoc = mSelect ? mSelect.value : '';
+            if (morningDoc === '__custom__' && mCustom) {
+                morningDoc = mCustom.value.trim();
+            }
+            const morningHours = this.calcShiftHours('morning');
+            const morningCanon = parseFloat(document.getElementById('room-morning-canon').value) || 35;
+            const morningStatus = document.getElementById('room-morning-status').value;
+
+            // Extract Afternoon Shift data
+            const aSelect = document.getElementById('room-doctor-afternoon');
+            const aCustom = document.getElementById('room-doctor-afternoon-custom');
+            let afternoonDoc = aSelect ? aSelect.value : '';
+            if (afternoonDoc === '__custom__' && aCustom) {
+                afternoonDoc = aCustom.value.trim();
+            }
+            const afternoonHours = this.calcShiftHours('afternoon');
+            const afternoonCanon = parseFloat(document.getElementById('room-afternoon-canon').value) || 35;
+            const afternoonStatus = document.getElementById('room-afternoon-status').value;
+
+            const shifts = {
+                morning: {
+                    doctor_name: morningDoc,
+                    start_time: document.getElementById('room-morning-start').value || '08:00',
+                    end_time: document.getElementById('room-morning-end').value || '13:00',
+                    hours: morningHours,
+                    canon: morningCanon,
+                    status: morningStatus
+                },
+                afternoon: {
+                    doctor_name: afternoonDoc,
+                    start_time: document.getElementById('room-afternoon-start').value || '14:00',
+                    end_time: document.getElementById('room-afternoon-end').value || '19:00',
+                    hours: afternoonHours,
+                    canon: afternoonCanon,
+                    status: afternoonStatus
+                }
+            };
+
+            // Summary tenant string for compatibility
+            let tenantSummary = '';
+            if (morningDoc && afternoonDoc) {
+                tenantSummary = `Mañana: ${morningDoc} | Tarde: ${afternoonDoc}`;
+            } else if (morningDoc) {
+                tenantSummary = `Mañana: ${morningDoc}`;
+            } else if (afternoonDoc) {
+                tenantSummary = `Tarde: ${afternoonDoc}`;
+            }
+
+            // Determine general status
+            let generalStatus = document.getElementById('room-status').value;
+            if (morningDoc || afternoonDoc) {
+                if (generalStatus === 'disponible') {
+                    generalStatus = (morningDoc && afternoonDoc) ? 'alquilado' : 'alquilado';
+                }
+            }
+
             const data = {
                 id: id || ('room-' + Date.now()),
                 room_number: document.getElementById('room-code').value.trim(),
                 name: document.getElementById('room-name').value.trim(),
                 department: document.getElementById('room-type').value,
-                status: document.getElementById('room-status').value,
+                status: generalStatus,
                 rental_mode: document.getElementById('room-rental-mode').value,
                 rental_fee_monthly: canonVal,
-                rental_fee_shift: Math.round(canonVal / 10),
-                rental_fee_hourly: Math.round(canonVal / 40),
-                current_tenant: document.getElementById('room-renter-name').value.trim() || null,
-                equipment: document.getElementById('room-notes').value.trim()
+                rental_fee_shift: morningCanon || afternoonCanon || 35,
+                rental_fee_hourly: Math.round(canonVal / 40) || 10,
+                current_tenant: tenantSummary || null,
+                equipment: document.getElementById('room-notes').value.trim(),
+                shifts: shifts
             };
 
             try {
@@ -501,7 +834,7 @@
                 const modal = document.getElementById('modal-room');
                 if (modal) modal.classList.add('hidden');
                 if (typeof Swal !== 'undefined') {
-                    Swal.fire({ icon: 'success', title: 'Consultorio Actualizado', timer: 1500, showConfirmButton: false });
+                    Swal.fire({ icon: 'success', title: 'Consultorio Actualizado', text: 'Turnos y doctores guardados correctamente en la nube.', timer: 1700, showConfirmButton: false });
                 }
             } catch (err) {
                 console.error(err);

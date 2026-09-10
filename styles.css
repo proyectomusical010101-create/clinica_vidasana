@@ -5021,6 +5021,55 @@ select, .form-select, select.form-control {
     font-size: 0.82rem;
 }
 
+.erp-room-shifts-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.erp-room-shift-block {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 0.78rem;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.erp-room-shift-block.morning {
+    border-left: 3.5px solid #f59e0b;
+    background: #fffdfa;
+}
+
+.erp-room-shift-block.afternoon {
+    border-left: 3.5px solid #6366f1;
+    background: #fcfcff;
+}
+
+.erp-room-shift-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.erp-room-shift-doctor {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    font-size: 0.8rem;
+}
+
+.erp-room-shift-hours {
+    color: #64748b;
+    font-size: 0.72rem;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
 .erp-room-card-footer {
     padding: 12px 20px;
     background: #f8fafc;
