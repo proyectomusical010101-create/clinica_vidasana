@@ -1463,8 +1463,76 @@ window.updateFloatingBudgetBubble = function() {
 
 window.returnToActiveBudgetView = function() {
     window.navigateToTab('odontogram');
-    const bubble = document.getElementById('floating-budget-bubble');
-    if (bubble) bubble.classList.add('hidden');
+};
+
+// ==========================================
+// DASHBOARD STAT CARDS DIRECT NAVIGATION HELPERS
+// ==========================================
+window.navigateToDailyIncome = async function() {
+    await window.navigateToTab('finance');
+    const btnClosing = document.querySelector('#view-finance .subtab-btn[data-subtab="daily-closing"]');
+    if (btnClosing) {
+        btnClosing.click();
+    } else {
+        const subtabs = document.querySelectorAll('#view-finance .subtab-btn');
+        const subcontents = document.querySelectorAll('#view-finance .subtab-content');
+        subtabs.forEach(b => b.classList.remove('active'));
+        subcontents.forEach(c => c.classList.remove('active'));
+        const target = document.getElementById('subtab-daily-closing');
+        if (target) target.classList.add('active');
+        if (window.renderDailyClosingView) await window.renderDailyClosingView();
+    }
+};
+
+window.navigateToMonthIncome = async function() {
+    await window.navigateToTab('finance');
+    const btnCashFlow = document.querySelector('#view-finance .subtab-btn[data-subtab="cash-flow"]');
+    if (btnCashFlow) {
+        btnCashFlow.click();
+    } else {
+        const subtabs = document.querySelectorAll('#view-finance .subtab-btn');
+        const subcontents = document.querySelectorAll('#view-finance .subtab-content');
+        subtabs.forEach(b => b.classList.remove('active'));
+        subcontents.forEach(c => c.classList.remove('active'));
+        const target = document.getElementById('subtab-cash-flow');
+        if (target) target.classList.add('active');
+        if (window.renderCashFlow) await window.renderCashFlow();
+    }
+};
+
+window.navigateToConversionBudgets = async function() {
+    localStorage.setItem('dental_odontogram_subview', 'list');
+    document.documentElement.setAttribute('data-odontogram-subview', 'list');
+    await window.navigateToTab('odontogram');
+    const editorContainer = document.getElementById('odontogram-editor-container');
+    const listContainer = document.getElementById('odontogram-list-container');
+    if (editorContainer) editorContainer.classList.add('hidden');
+    if (listContainer) listContainer.classList.remove('hidden');
+    if (window.renderBudgetListView) await window.renderBudgetListView();
+};
+
+window.navigateToReceivables = async function() {
+    await window.navigateToTab('finance');
+    const btnReceivables = document.querySelector('#view-finance .subtab-btn[data-subtab="receivables"]');
+    if (btnReceivables) {
+        btnReceivables.click();
+    } else {
+        const subtabs = document.querySelectorAll('#view-finance .subtab-btn');
+        const subcontents = document.querySelectorAll('#view-finance .subtab-content');
+        subtabs.forEach(b => b.classList.remove('active'));
+        subcontents.forEach(c => c.classList.remove('active'));
+        const target = document.getElementById('subtab-receivables');
+        if (target) target.classList.add('active');
+        if (window.renderReceivables) await window.renderReceivables();
+    }
+};
+
+window.navigateToDoctorPerformance = async function() {
+    await window.navigateToTab('users');
+};
+
+window.navigateToSpecialtyPerformance = async function() {
+    await window.navigateToTab('specialties');
 };
 
 window.dismissFloatingBudgetBubble = function() {
@@ -8176,6 +8244,38 @@ async function renderDashboard() {
 
         const metricAttendedToday = document.getElementById('metric-attended-today');
         if (metricAttendedToday) metricAttendedToday.innerText = attendedCount.toString();
+
+        // 6. Rendimiento de Médicos y Especialidades en Dashboard
+        try {
+            if (window.getClinicPerformanceSummary) {
+                const perf = await window.getClinicPerformanceSummary();
+                const docNameEl = document.getElementById('metric-top-doctor-name');
+                const docSubEl = document.getElementById('metric-top-doctor-sub');
+                if (docNameEl) {
+                    if (perf.topDoctor && perf.topDoctor.totalUSD > 0) {
+                        docNameEl.textContent = perf.topDoctor.name;
+                        if (docSubEl) docSubEl.innerHTML = `<i class="fa-solid fa-crown text-amber"></i> $${perf.topDoctor.totalUSD.toFixed(2)} USD (${perf.topDoctor.attendedCount} aten.)`;
+                    } else {
+                        docNameEl.textContent = 'En actividad';
+                        if (docSubEl) docSubEl.innerHTML = `<i class="fa-solid fa-circle-info"></i> Esperando atención`;
+                    }
+                }
+
+                const specNameEl = document.getElementById('metric-top-specialty-name');
+                const specSubEl = document.getElementById('metric-top-specialty-sub');
+                if (specNameEl) {
+                    if (perf.topSpecialty && perf.topSpecialty.totalUSD > 0) {
+                        specNameEl.textContent = perf.topSpecialty.name;
+                        if (specSubEl) specSubEl.innerHTML = `<i class="fa-solid fa-trophy text-amber"></i> $${perf.topSpecialty.totalUSD.toFixed(2)} USD (${perf.topSpecialty.count} aten.)`;
+                    } else {
+                        specNameEl.textContent = 'En actividad';
+                        if (specSubEl) specSubEl.innerHTML = `<i class="fa-solid fa-circle-info"></i> Esperando facturación`;
+                    }
+                }
+            }
+        } catch(perfErr) {
+            console.warn("Could not load performance stats for dashboard cards:", perfErr);
+        }
 
         // Render Popular Treatments
         const popularList = document.getElementById('popular-treatments-list');
