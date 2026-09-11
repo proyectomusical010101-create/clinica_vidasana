@@ -2397,24 +2397,67 @@
                     </div>
                 </section>
 
-                <!-- MODAL: AGREGAR ITEM A FACTURACIÓN -->
+                <!-- MODAL: AGREGAR ITEM A FACTURACIÓN (BUSCADOR INTERACTIVO EN TIEMPO REAL) -->
                 <div class="modal-overlay hidden" id="modal-add-item-billing">
-                    <div class="modal-dialog">
+                    <div class="modal-dialog" style="max-width: 580px; width: 95vw;">
                         <div class="modal-header">
-                            <h3><i class="fa-solid fa-plus-circle text-cyan"></i> Agregar Procedimiento del Baremo</h3>
+                            <h3><i class="fa-solid fa-magnifying-glass text-cyan"></i> Buscar Procedimiento del Baremo</h3>
                             <button class="modal-close" data-close="modal-add-item-billing">&times;</button>
                         </div>
-                        <div class="modal-body">
+                        <div class="modal-body" style="padding: 16px 20px;">
+                            <!-- Buscador en tiempo real -->
                             <div class="form-group mb-15">
-                                <label><strong>Seleccionar Procedimiento del Baremo:</strong></label>
-                                <select id="item-baremo-select-billing" class="form-control">
-                                    <!-- Baremo options loaded dynamically -->
-                                </select>
+                                <label style="font-weight: 700; font-size: 0.85rem; color: #1e293b; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
+                                    <span><i class="fa-solid fa-search text-cyan"></i> Buscar en Baremo:</span>
+                                    <span id="billing-baremo-count-badge" class="badge-tag gray" style="font-size: 0.72rem; font-weight: normal;">Cargando...</span>
+                                </label>
+                                <div style="position: relative;">
+                                    <input type="text" id="billing-baremo-search-input" class="form-control" placeholder="Escriba código o nombre (ej: Resina, Limpieza, Extracción)..." autocomplete="off" style="padding-left: 36px; padding-right: 36px; height: 40px; font-size: 0.88rem; border-radius: 8px;">
+                                    <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94a3b8; pointer-events: none;"></i>
+                                    <button type="button" id="btn-clear-billing-baremo-search" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #94a3b8; cursor: pointer; display: none; font-size: 0.95rem;">
+                                        <i class="fa-solid fa-circle-xmark"></i>
+                                    </button>
+                                </div>
                             </div>
+
+                            <!-- Contenedor de Resultados Filtrados -->
+                            <label style="font-size: 0.76rem; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 4px; display: block;">Resultados de Búsqueda:</label>
+                            <div id="billing-baremo-results-container" style="max-height: 200px; overflow-y: auto; border: 1.5px solid #e2e8f0; border-radius: 8px; background: #ffffff; padding: 6px; display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px;">
+                                <!-- Se llena dinámicamente con las coincidencias mientras escribe -->
+                            </div>
+
+                            <!-- Panel de Item Seleccionado y Cantidad -->
+                            <div id="billing-baremo-selected-box" style="display: none; background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 8px; padding: 12px; margin-bottom: 10px;">
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                                    <div>
+                                        <span id="billing-selected-item-code" class="badge-tag green" style="font-size: 0.72rem; font-weight: 700;"></span>
+                                        <div id="billing-selected-item-name" style="font-weight: 700; color: #14532d; font-size: 0.92rem; margin-top: 3px;"></div>
+                                        <div id="billing-selected-item-cat" style="font-size: 0.75rem; color: #15803d;"></div>
+                                    </div>
+                                    <div style="text-align: right;">
+                                        <div style="font-size: 0.72rem; color: #64748b; font-weight: 600;">PRECIO REF</div>
+                                        <div id="billing-selected-item-price" style="font-size: 1.15rem; font-weight: 800; color: #047857;">$0.00</div>
+                                    </div>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed #bbf7d0; padding-top: 8px;">
+                                    <label style="font-size: 0.8rem; font-weight: 700; color: #166534; margin: 0;">Cantidad a facturar:</label>
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <button type="button" class="btn btn-xs btn-outline" onclick="window.adjustBillingBaremoQty(-1)" style="width: 28px; height: 28px; padding: 0; font-weight: 800;">-</button>
+                                        <input type="number" id="billing-item-qty-input" class="form-control" value="1" min="1" max="99" style="width: 55px; height: 28px; text-align: center; font-weight: 800; padding: 2px;">
+                                        <button type="button" class="btn btn-xs btn-outline" onclick="window.adjustBillingBaremoQty(1)" style="width: 28px; height: 28px; padding: 0; font-weight: 800;">+</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Selector original oculto para 100% retrocompatibilidad (Regla 1) -->
+                            <select id="item-baremo-select-billing" class="form-control" style="display: none !important;">
+                            </select>
                         </div>
-                        <div class="modal-footer">
+                        <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
                             <button class="btn btn-outline" data-close="modal-add-item-billing">Cancelar</button>
-                            <button class="btn btn-primary" id="btn-confirm-add-item-billing">Añadir a la Factura</button>
+                            <button class="btn btn-primary" id="btn-confirm-add-item-billing" disabled style="opacity: 0.6; cursor: not-allowed;">
+                                <i class="fa-solid fa-plus-circle"></i> Añadir a la Factura
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -6889,14 +6932,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=279"></script>
-    <script src="supabaseClient.js?v=279"></script>
-    <script src="odontogram.js?v=279"></script>
-    <script src="signature.js?v=279"></script>
-    <script src="whatsapp.js?v=279"></script>
-    <script src="kardex.js?v=279"></script>
-    <script src="app.js?v=279"></script>
-    <script src="clinicalERP.js?v=279"></script>
-    <script src="tutorial.js?v=279"></script>
+    <script src="seededData.js?v=280"></script>
+    <script src="supabaseClient.js?v=280"></script>
+    <script src="odontogram.js?v=280"></script>
+    <script src="signature.js?v=280"></script>
+    <script src="whatsapp.js?v=280"></script>
+    <script src="kardex.js?v=280"></script>
+    <script src="app.js?v=280"></script>
+    <script src="clinicalERP.js?v=280"></script>
+    <script src="tutorial.js?v=280"></script>
 </body>
 </html>

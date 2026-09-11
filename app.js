@@ -16167,47 +16167,205 @@ async function renderBillingView() {
         }
     };
 
-    // Open add baremo item modal
+    // Global state for billing baremo live search
+    window.billingBaremoList = [];
+    window.selectedBillingBaremoItem = null;
+
+    window.selectBillingBaremoItem = function(code) {
+        const srv = (window.billingBaremoList || []).find(b => b.code === code);
+        if (!srv) return;
+        window.selectedBillingBaremoItem = srv;
+
+        const select = document.getElementById('item-baremo-select-billing');
+        if (select) select.value = code;
+
+        const selectedBox = document.getElementById('billing-baremo-selected-box');
+        const codeBadge = document.getElementById('billing-selected-item-code');
+        const nameEl = document.getElementById('billing-selected-item-name');
+        const catEl = document.getElementById('billing-selected-item-cat');
+        const priceEl = document.getElementById('billing-selected-item-price');
+        const confirmBtn = document.getElementById('btn-confirm-add-item-billing');
+
+        if (codeBadge) codeBadge.textContent = srv.code || 'PROC';
+        if (nameEl) nameEl.textContent = srv.name;
+        if (catEl) catEl.textContent = srv.category ? `Categoría: ${srv.category}` : '';
+        if (priceEl) priceEl.textContent = `$${parseFloat(srv.priceUSD || 0).toFixed(2)}`;
+        if (selectedBox) selectedBox.style.display = 'block';
+
+        if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.style.opacity = '1';
+            confirmBtn.style.cursor = 'pointer';
+        }
+
+        // Highlight selected in results list
+        document.querySelectorAll('#billing-baremo-results-container .billing-baremo-result-card').forEach(el => {
+            if (el.getAttribute('data-code') === code) {
+                el.style.borderColor = '#0284c7';
+                el.style.backgroundColor = '#f0f9ff';
+            } else {
+                el.style.borderColor = '#e2e8f0';
+                el.style.backgroundColor = '#ffffff';
+            }
+        });
+    };
+
+    window.adjustBillingBaremoQty = function(delta) {
+        const qtyIn = document.getElementById('billing-item-qty-input');
+        if (!qtyIn) return;
+        let val = parseInt(qtyIn.value) || 1;
+        val = Math.max(1, Math.min(99, val + delta));
+        qtyIn.value = val;
+    };
+
+    window.renderBillingBaremoSearchResults = function(query = '') {
+        const container = document.getElementById('billing-baremo-results-container');
+        if (!container) return;
+
+        const q = (query || '').trim().toLowerCase();
+        let list = window.billingBaremoList || [];
+
+        if (q) {
+            list = list.filter(s => 
+                (s.name && s.name.toLowerCase().includes(q)) ||
+                (s.code && s.code.toLowerCase().includes(q)) ||
+                (s.category && s.category.toLowerCase().includes(q))
+            );
+        }
+
+        const countBadge = document.getElementById('billing-baremo-count-badge');
+        if (countBadge) {
+            countBadge.textContent = `${list.length} disponibles`;
+        }
+
+        if (list.length === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 25px 15px; color: #94a3b8;">
+                    <i class="fa-solid fa-folder-open" style="font-size: 1.8rem; margin-bottom: 8px; color: #cbd5e1; display: block;"></i>
+                    <span style="font-size: 0.85rem;">No se encontraron procedimientos con "<strong>${query}</strong>"</span>
+                </div>
+            `;
+            return;
+        }
+
+        // Render matched items (limit to top 40 for max UI speed)
+        const displayList = list.slice(0, 40);
+        container.innerHTML = displayList.map(srv => {
+            const isSelected = window.selectedBillingBaremoItem && window.selectedBillingBaremoItem.code === srv.code;
+            const borderCol = isSelected ? '#0284c7' : '#e2e8f0';
+            const bgCol = isSelected ? '#f0f9ff' : '#ffffff';
+            const price = parseFloat(srv.priceUSD || 0).toFixed(2);
+            const bonus = srv.hygienistBonus ? ` • Bonif: $${parseFloat(srv.hygienistBonus).toFixed(2)}` : '';
+            const cat = srv.category ? ` • ${srv.category}` : '';
+
+            return `
+                <div class="billing-baremo-result-card" data-code="${srv.code}" onclick="window.selectBillingBaremoItem('${srv.code}')" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border: 1.5px solid ${borderCol}; background: ${bgCol}; border-radius: 6px; cursor: pointer; transition: all 0.15s ease;">
+                    <div style="display: flex; align-items: center; gap: 8px; overflow: hidden; text-align: left;">
+                        <span class="badge-tag cyan" style="font-size: 0.7rem; font-weight: 700; white-space: nowrap;">${srv.code || 'PROC'}</span>
+                        <div style="overflow: hidden; text-overflow: ellipsis;">
+                            <div style="font-weight: 700; font-size: 0.84rem; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${srv.name}</div>
+                            <small style="color: #64748b; font-size: 0.72rem;">${cat}${bonus}</small>
+                        </div>
+                    </div>
+                    <div style="text-align: right; white-space: nowrap; margin-left: 10px;">
+                        <strong style="color: #0284c7; font-size: 0.92rem;">$${price}</strong>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    };
+
+    // Open add baremo item modal with live search
     document.getElementById('btn-add-baremo-item-billing').onclick = async () => {
         const baremo = await SupabaseDataService.getBaremo();
+        window.billingBaremoList = baremo || [];
+        window.selectedBillingBaremoItem = null;
+
         const select = document.getElementById('item-baremo-select-billing');
-        select.innerHTML = '<option value="">-- Seleccionar Procedimiento --</option>';
-        baremo.forEach(srv => {
-            const opt = document.createElement('option');
-            opt.value = srv.code;
-            opt.innerText = `${srv.name} - $${srv.priceUSD.toFixed(2)} (Bonif: $${(srv.hygienistBonus || 0).toFixed(2)})`;
-            select.appendChild(opt);
-        });
+        if (select) {
+            select.innerHTML = '<option value="">-- Seleccionar Procedimiento --</option>';
+            baremo.forEach(srv => {
+                const opt = document.createElement('option');
+                opt.value = srv.code;
+                opt.innerText = `${srv.name} - $${(srv.priceUSD || 0).toFixed(2)}`;
+                select.appendChild(opt);
+            });
+        }
+
+        const searchInput = document.getElementById('billing-baremo-search-input');
+        const clearBtn = document.getElementById('btn-clear-billing-baremo-search');
+        const selectedBox = document.getElementById('billing-baremo-selected-box');
+        const confirmBtn = document.getElementById('btn-confirm-add-item-billing');
+        const qtyInput = document.getElementById('billing-item-qty-input');
+
+        if (searchInput) searchInput.value = '';
+        if (clearBtn) clearBtn.style.display = 'none';
+        if (selectedBox) selectedBox.style.display = 'none';
+        if (qtyInput) qtyInput.value = '1';
+        if (confirmBtn) {
+            confirmBtn.disabled = true;
+            confirmBtn.style.opacity = '0.6';
+            confirmBtn.style.cursor = 'not-allowed';
+        }
+
+        window.renderBillingBaremoSearchResults('');
+
+        if (searchInput) {
+            searchInput.oninput = (e) => {
+                const val = e.target.value;
+                if (clearBtn) clearBtn.style.display = val.trim() ? 'block' : 'none';
+                window.renderBillingBaremoSearchResults(val);
+            };
+        }
+
+        if (clearBtn && searchInput) {
+            clearBtn.onclick = () => {
+                searchInput.value = '';
+                clearBtn.style.display = 'none';
+                window.renderBillingBaremoSearchResults('');
+                searchInput.focus();
+            };
+        }
+
         openModal('modal-add-item-billing');
+        if (searchInput) {
+            setTimeout(() => searchInput.focus(), 150);
+        }
     };
 
     // Confirm add baremo item
     document.getElementById('btn-confirm-add-item-billing').onclick = async () => {
-        const select = document.getElementById('item-baremo-select-billing');
-        const code = select.value;
-        if (!code) {
-            Swal.fire({ icon: 'warning', text: 'Seleccione un procedimiento' });
+        const srv = window.selectedBillingBaremoItem;
+        if (!srv) {
+            Swal.fire({ icon: 'warning', text: 'Seleccione un procedimiento de la lista' });
             return;
         }
-        const baremo = await SupabaseDataService.getBaremo();
-        const srv = baremo.find(b => b.code === code);
-        if (srv) {
-            const existing = billingItems.find(bi => bi.code === code);
-            if (existing) {
-                existing.qty += 1;
-            } else {
-                billingItems.push({
-                    code: srv.code,
-                    name: srv.name,
-                    price: srv.priceUSD,
-                    hygienistBonus: srv.hygienistBonus || 0,
-                    qty: 1
-                });
-            }
-            closeModal('modal-add-item-billing');
-            renderBillingItemsTable();
-            Swal.fire({ icon: 'success', title: 'Item agregado', timer: 1200, showConfirmButton: false });
+
+        const qtyInput = document.getElementById('billing-item-qty-input');
+        const qty = qtyInput ? Math.max(1, parseInt(qtyInput.value) || 1) : 1;
+
+        const existing = billingItems.find(bi => bi.code === srv.code);
+        if (existing) {
+            existing.qty += qty;
+        } else {
+            billingItems.push({
+                code: srv.code,
+                name: srv.name,
+                price: parseFloat(srv.priceUSD || 0),
+                hygienistBonus: parseFloat(srv.hygienistBonus || 0),
+                qty: qty
+            });
         }
+        closeModal('modal-add-item-billing');
+        renderBillingItemsTable();
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: 'success',
+            title: `✓ ${srv.name} (${qty}x) añadido a la factura`,
+            showConfirmButton: false,
+            timer: 1500
+        });
     };
 
     // Listeners for selectors to update live preview
