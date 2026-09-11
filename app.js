@@ -1613,11 +1613,11 @@ function initMobileFabActions() {
     if (actPatient) {
         actPatient.onclick = () => {
             closeModal('modal-mobile-quick-actions');
-            const patientForm = document.getElementById('form-patient');
-            if (patientForm) patientForm.reset();
-            const patientIdInput = document.getElementById('patient-id');
-            if (patientIdInput) patientIdInput.value = '';
-            openModal('modal-patient');
+            if (typeof window.openPatientModalForNew === 'function') {
+                window.openPatientModalForNew();
+            } else {
+                openModal('modal-patient');
+            }
         };
     }
 
@@ -6618,7 +6618,7 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
                     <div><strong>Medicación Actual:</strong> ${activePatient.medication || 'Sin registrar'}</div>
                     ${repInfo}
                     <div style="grid-column: span 2; margin-top: 12px; display: flex; justify-content: flex-end;">
-                        <button class="btn btn-xs btn-outline" style="border-color:#0891b2; color:#0891b2; font-weight:600;" onclick="window.editPatient('${activePatient.id}')" title="Editar todos los datos del paciente (Paso 1, 2, 3 y 4)">
+                        <button class="btn btn-xs btn-outline" style="border-color:#0891b2; color:#0891b2; font-weight:600;" onclick="window.editPatient('${activePatient.id}')" title="Editar datos del paciente (Paso 1, 2 y 3)">
                             <i class="fa-solid fa-user-pen"></i> Editar Ficha Completa del Paciente
                         </button>
                     </div>
@@ -10489,7 +10489,11 @@ function initGlobalEvents() {
             if (searchInput) searchInput.value = '';
             
             if (val === 'new') {
-                openModal('modal-patient');
+                if (typeof window.openPatientModalForNew === 'function') {
+                    window.openPatientModalForNew();
+                } else {
+                    openModal('modal-patient');
+                }
             } else if (val) {
                 await window.selectPatientAndLoadApprovedBudget(val);
             } else {
@@ -13510,6 +13514,8 @@ function initGlobalEvents() {
                     window.patientModalOpenedFromBudget = true;
                     if (window.openClinicalWizardForPatientId) {
                         window.openClinicalWizardForPatientId(p);
+                    } else if (window.editPatient) {
+                        window.editPatient(p.id);
                     }
                 } else {
                     Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo encontrar al paciente en el sistema.' });
@@ -15160,7 +15166,9 @@ function renderSessionsPlanner() {
 
 function initPatientStepperWizard() {
     let currentStep = 1;
-    const totalSteps = 4;
+    function getTotalSteps() {
+        return window.patientModalOpenedFromBudget ? 4 : 3;
+    }
     window.currentPatientId = null;
     window.wizardMode = 'new_basic';
 
@@ -15169,31 +15177,56 @@ function initPatientStepperWizard() {
     const btnSave = document.getElementById('btn-save-patient');
 
     function showStep(step) {
-        currentStep = step;
-        for (let i = 1; i <= totalSteps; i++) {
+        const totalSteps = getTotalSteps();
+        currentStep = Math.min(step, totalSteps);
+
+        // Control visibility of Step 4 indicator and line 3 based on totalSteps
+        const ind4 = document.getElementById('step-ind-4');
+        const line3 = document.getElementById('step-line-3');
+        if (totalSteps === 3) {
+            if (ind4) ind4.classList.add('hidden');
+            if (line3) line3.classList.add('hidden');
+        } else {
+            if (ind4) ind4.classList.remove('hidden');
+            if (line3) line3.classList.remove('hidden');
+        }
+
+        // Ensure steps 1, 2, 3 and lines 1, 2 are visible
+        const ind1 = document.getElementById('step-ind-1');
+        const ind2 = document.getElementById('step-ind-2');
+        const ind3 = document.getElementById('step-ind-3');
+        const line1 = document.getElementById('step-line-1');
+        const line2 = document.getElementById('step-line-2');
+        if (ind1) ind1.classList.remove('hidden');
+        if (ind2) ind2.classList.remove('hidden');
+        if (ind3) ind3.classList.remove('hidden');
+        if (line1) line1.classList.remove('hidden');
+        if (line2) line2.classList.remove('hidden');
+
+        for (let i = 1; i <= 4; i++) {
             const pane = document.getElementById(`step-content-${i}`);
             const indicator = document.getElementById(`step-ind-${i}`);
             const line = document.getElementById(`step-line-${i}`);
             if (pane) {
-                if (i === step) {
+                if (i === currentStep) {
                     pane.classList.remove('hidden');
                 } else {
                     pane.classList.add('hidden');
                 }
             }
             if (indicator) {
-                if (i === step) {
+                if (i === currentStep) {
                     indicator.classList.add('active');
                     indicator.classList.remove('completed');
-                } else if (i < step) {
+                } else if (i < currentStep) {
                     indicator.classList.remove('active');
                     indicator.classList.add('completed');
                 } else {
                     indicator.classList.remove('active', 'completed');
                 }
             }
-            if (line) {
-                if (i < step) {
+            if (line && i < 4) {
+                if (i < currentStep) {
                     line.classList.add('completed');
                 } else {
                     line.classList.remove('completed');
@@ -15202,21 +15235,21 @@ function initPatientStepperWizard() {
         }
 
         if (btnPrev) {
-            if (step === 1) {
+            if (currentStep === 1) {
                 btnPrev.setAttribute('disabled', 'true');
             } else {
                 btnPrev.removeAttribute('disabled');
             }
         }
         if (btnNext) {
-            if (step === totalSteps) {
+            if (currentStep >= totalSteps) {
                 btnNext.classList.add('hidden');
             } else {
                 btnNext.classList.remove('hidden');
             }
         }
         if (btnSave) {
-            if (step === totalSteps || window.editingPatientId) {
+            if (currentStep === totalSteps || window.editingPatientId) {
                 btnSave.classList.remove('hidden');
             } else {
                 btnSave.classList.add('hidden');
@@ -15246,7 +15279,7 @@ function initPatientStepperWizard() {
             }
         };
 
-        if (step === 4) {
+        if (currentStep === 4) {
             renderSessionsPlanner();
         } else {
             window.updatePatientStep4FooterButtons();
@@ -15261,6 +15294,7 @@ function initPatientStepperWizard() {
             e.preventDefault();
             const targetStep = parseInt(ind.dataset.step);
             if (!targetStep || isNaN(targetStep) || targetStep === currentStep) return;
+            if (targetStep > getTotalSteps()) return;
 
             // If navigating forward from Step 1, validate required patient fields
             if (currentStep === 1 && targetStep > 1) {
@@ -15335,6 +15369,7 @@ function initPatientStepperWizard() {
                 }
             }
 
+            const totalSteps = getTotalSteps();
             if (currentStep < totalSteps) {
                 showStep(currentStep + 1);
             }
@@ -15499,24 +15534,9 @@ function initPatientStepperWizard() {
     };
 
     const openPatientModalForNew = () => {
-        window.currentPatientId = null;
-        window.wizardMode = 'new_basic';
-        resetWizard();
-        
-        // Enable Step 1 inputs
-        toggleStep1InputsReadonly(false);
-        
-        // Hide Step indicators 2, 3, 4 and lines
-        document.getElementById('step-ind-2').classList.add('hidden');
-        document.getElementById('step-ind-3').classList.add('hidden');
-        document.getElementById('step-ind-4').classList.add('hidden');
-        document.getElementById('step-line-1').classList.add('hidden');
-        document.getElementById('step-line-2').classList.add('hidden');
-        document.getElementById('step-line-3').classList.add('hidden');
-        
-        // Show step 1
-        showStep(1);
-        openModal('modal-patient');
+        if (typeof window.openPatientModalForNew === 'function') {
+            window.openPatientModalForNew();
+        }
     };
 
     const openPatientModalForExisting = async () => {
@@ -15627,15 +15647,8 @@ function initPatientStepperWizard() {
                 // Disable Step 1 inputs (read-only)
                 toggleStep1InputsReadonly(true);
 
-                // Show all indicators and lines
-                document.getElementById('step-ind-2').classList.remove('hidden');
-                document.getElementById('step-ind-3').classList.remove('hidden');
-                document.getElementById('step-ind-4').classList.remove('hidden');
-                document.getElementById('step-line-1').classList.remove('hidden');
-                document.getElementById('step-line-2').classList.remove('hidden');
-                document.getElementById('step-line-3').classList.remove('hidden');
-
                 // Open modal starting at step 1
+                window.patientModalOpenedFromBudget = false;
                 showStep(1);
                 openModal('modal-patient');
             }
@@ -15671,14 +15684,6 @@ function initPatientStepperWizard() {
         const preview = document.getElementById('p-tag-benefit-preview');
         if (preview) preview.style.display = 'none';
         
-        // Show all Step indicators 1, 2, 3, 4 and lines
-        document.getElementById('step-ind-2').classList.remove('hidden');
-        document.getElementById('step-ind-3').classList.remove('hidden');
-        document.getElementById('step-ind-4').classList.remove('hidden');
-        document.getElementById('step-line-1').classList.remove('hidden');
-        document.getElementById('step-line-2').classList.remove('hidden');
-        document.getElementById('step-line-3').classList.remove('hidden');
-        
         showStep(1);
         openModal('modal-patient');
     };
@@ -15707,14 +15712,6 @@ function initPatientStepperWizard() {
                 saveBtn.classList.remove('hidden');
             }
 
-            // Show all Step indicators 1, 2, 3, 4 and lines
-            document.getElementById('step-ind-2').classList.remove('hidden');
-            document.getElementById('step-ind-3').classList.remove('hidden');
-            document.getElementById('step-ind-4').classList.remove('hidden');
-            document.getElementById('step-line-1').classList.remove('hidden');
-            document.getElementById('step-line-2').classList.remove('hidden');
-            document.getElementById('step-line-3').classList.remove('hidden');
-
             loadPatientDataIntoForm(p);
 
             const pIdInput = document.getElementById('p-id');
@@ -15728,10 +15725,12 @@ function initPatientStepperWizard() {
     };
 
     window.openClinicalWizardForPatientId = (patient) => {
+        window.patientModalOpenedFromBudget = true;
         window.editPatient(patient.id);
     };
 
     window.selectRegisterFlow = async () => {
+        window.patientModalOpenedFromBudget = false;
         window.openPatientModalForNew();
     };
 
