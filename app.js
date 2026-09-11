@@ -1535,6 +1535,23 @@ window.navigateToSpecialtyPerformance = async function() {
     await window.navigateToTab('specialties');
 };
 
+window.toggleDashboardList = function(containerId, btnId, remainingCount) {
+    const cont = document.getElementById(containerId);
+    const btn = document.getElementById(btnId);
+    if (!cont || !btn) return;
+
+    const isHidden = cont.style.display === 'none' || cont.classList.contains('hidden');
+    if (isHidden) {
+        cont.style.display = 'block';
+        cont.classList.remove('hidden');
+        btn.innerHTML = `<i class="fa-solid fa-chevron-up"></i> Ver menos`;
+    } else {
+        cont.style.display = 'none';
+        cont.classList.add('hidden');
+        btn.innerHTML = `<i class="fa-solid fa-chevron-down"></i> Ver más (${remainingCount} restantes)`;
+    }
+};
+
 window.dismissFloatingBudgetBubble = function() {
     window.hasActiveDraftBudget = false;
     window.currentEditingBudgetId = null;
@@ -8072,7 +8089,7 @@ async function renderDashboard() {
                 </div>
             `;
         } else {
-            sortedAppointments.forEach(app => {
+            const createTimelineItemEl = (app) => {
                 const isTomorrowAppt = app.isTomorrow === true || app.date === 'tomorrow';
                 const isAttended = (app.status === 'Completada' || app.status === 'Atendida');
 
@@ -8128,8 +8145,35 @@ async function renderDashboard() {
                     <div class="timeline-patient-id"><small class="text-muted">C.I: ${app.patientId}</small></div>
                     <div class="timeline-treatment"><small class="text-muted">Procedimiento: ${app.treatment}</small></div>
                 `;
-                agendaList.appendChild(div);
+                return div;
+            };
+
+            const hasMoreThan5 = sortedAppointments.length > 5;
+            const visibleAppts = hasMoreThan5 ? sortedAppointments.slice(0, 5) : sortedAppointments;
+            const remainingAppts = hasMoreThan5 ? sortedAppointments.slice(5) : [];
+
+            visibleAppts.forEach(app => {
+                agendaList.appendChild(createTimelineItemEl(app));
             });
+
+            if (hasMoreThan5) {
+                const extraDiv = document.createElement('div');
+                extraDiv.id = 'dashboard-agenda-extra';
+                extraDiv.style.display = 'none';
+                remainingAppts.forEach(app => {
+                    extraDiv.appendChild(createTimelineItemEl(app));
+                });
+                agendaList.appendChild(extraDiv);
+
+                const toggleDiv = document.createElement('div');
+                toggleDiv.className = 'dashboard-toggle-wrap';
+                toggleDiv.innerHTML = `
+                    <button type="button" class="btn-dashboard-toggle" id="btn-toggle-agenda" onclick="window.toggleDashboardList('dashboard-agenda-extra', 'btn-toggle-agenda', ${remainingAppts.length})">
+                        <i class="fa-solid fa-chevron-down"></i> Ver más (${remainingAppts.length} restantes)
+                    </button>
+                `;
+                agendaList.appendChild(toggleDiv);
+            }
         }
     }
 
@@ -8280,14 +8324,36 @@ async function renderDashboard() {
         // Render Popular Treatments
         const popularList = document.getElementById('popular-treatments-list');
         if (popularList) {
-            const sortedProcedures = Object.entries(procedureCounts).sort((a, b) => b[1] - a[1]).slice(0, 4);
+            const sortedProcedures = Object.entries(procedureCounts).sort((a, b) => b[1] - a[1]);
             if (sortedProcedures.length > 0) {
-                popularList.innerHTML = sortedProcedures.map(([proc, count]) => `
+                const renderProcItem = ([proc, count]) => `
                     <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border-color);">
                         <span style="font-weight:600; color:var(--text-main); font-size:0.85rem;">${proc}</span>
                         <span class="badge-tag cyan">${count} ${count === 1 ? 'asistencia' : 'asistencias'}</span>
                     </div>
-                `).join('');
+                `;
+
+                const hasMoreThan5 = sortedProcedures.length > 5;
+                const visibleProcs = hasMoreThan5 ? sortedProcedures.slice(0, 5) : sortedProcedures;
+                const remainingProcs = hasMoreThan5 ? sortedProcedures.slice(5) : [];
+
+                let listHtml = visibleProcs.map(renderProcItem).join('');
+                let extraHtml = '';
+
+                if (hasMoreThan5) {
+                    extraHtml = `
+                        <div id="popular-treatments-extra" style="display: none;">
+                            ${remainingProcs.map(renderProcItem).join('')}
+                        </div>
+                        <div class="dashboard-toggle-wrap">
+                            <button type="button" class="btn-dashboard-toggle" id="btn-toggle-popular-treatments" onclick="window.toggleDashboardList('popular-treatments-extra', 'btn-toggle-popular-treatments', ${remainingProcs.length})">
+                                <i class="fa-solid fa-chevron-down"></i> Ver más (${remainingProcs.length} restantes)
+                            </button>
+                        </div>
+                    `;
+                }
+
+                popularList.innerHTML = listHtml + extraHtml;
             } else {
                 popularList.innerHTML = `
                     <div style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 0.84rem;">
@@ -9167,14 +9233,34 @@ window.checkGlobalStockAlerts = async function() {
     if (alertBox) {
         alertBox.innerHTML = '';
         if (criticalItems.length > 0) {
-            let itemsHtml = criticalItems.map(a => `
+            const renderStockItem = (a) => `
                 <div style="padding: 8px 12px; border-radius: 6px; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); margin-bottom: 8px; font-size: 0.82rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
                     <div>
                         <strong style="color: #b91c1c;">${a.name}:</strong> ${a.currentStock} ${a.unit || 'U'} restantes (Mín: ${a.minStock || 5})
                     </div>
                     <span class="badge-tag red" style="font-size: 0.7rem; font-weight: 700;">Stock Crítico</span>
                 </div>
-            `).join('');
+            `;
+
+            const hasMoreThan5 = criticalItems.length > 5;
+            const visibleItems = hasMoreThan5 ? criticalItems.slice(0, 5) : criticalItems;
+            const remainingItems = hasMoreThan5 ? criticalItems.slice(5) : [];
+
+            let itemsHtml = visibleItems.map(renderStockItem).join('');
+            let extraHtml = '';
+
+            if (hasMoreThan5) {
+                extraHtml = `
+                    <div id="stock-alerts-extra" style="display: none;">
+                        ${remainingItems.map(renderStockItem).join('')}
+                    </div>
+                    <div class="dashboard-toggle-wrap">
+                        <button type="button" class="btn-dashboard-toggle" id="btn-toggle-stock-alerts" onclick="window.toggleDashboardList('stock-alerts-extra', 'btn-toggle-stock-alerts', ${remainingItems.length})">
+                            <i class="fa-solid fa-chevron-down"></i> Ver más (${remainingItems.length} restantes)
+                        </button>
+                    </div>
+                `;
+            }
 
             alertBox.innerHTML = `
                 <div style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
@@ -9182,6 +9268,7 @@ window.checkGlobalStockAlerts = async function() {
                     <button class="btn btn-xs btn-outline" style="border-color: #0891b2; color: #0891b2; font-weight: 600;" onclick="window.copyStockReorderList()"><i class="fa-solid fa-clipboard-list"></i> Copiar Lista de Reposición</button>
                 </div>
                 ${itemsHtml}
+                ${extraHtml}
             `;
         } else {
             alertBox.innerHTML = `<span class="text-muted" style="font-size: 0.85rem;"><i class="fa-solid fa-circle-check text-green"></i> Todos los insumos cuentan con stock adecuado.</span>`;

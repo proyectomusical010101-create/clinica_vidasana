@@ -1195,6 +1195,42 @@ body.sidebar-collapsed .user-secondary-flyout {
     font-weight: 700 !important;
 }
 
+/* Dashboard List Show More / Show Less Toggle Buttons */
+.dashboard-toggle-wrap {
+    text-align: center;
+    padding-top: 10px;
+    margin-top: 8px;
+    border-top: 1px dashed var(--border-color);
+}
+
+.btn-dashboard-toggle {
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    color: #0284c7;
+    font-size: 0.82rem;
+    font-weight: 700;
+    padding: 6px 16px;
+    border-radius: 20px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.btn-dashboard-toggle:hover {
+    background: #e0f2fe;
+    border-color: #38bdf8;
+    color: #0369a1;
+    transform: translateY(-1px);
+    box-shadow: 0 3px 8px rgba(2, 132, 199, 0.15);
+}
+
+.btn-dashboard-toggle i {
+    transition: transform 0.2s ease;
+}
+
 .grid-2-col {
     display: grid;
     grid-template-columns: 1fr 1fr;

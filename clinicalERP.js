@@ -2468,7 +2468,7 @@
                 return;
             }
 
-            container.innerHTML = bdays.slice(0, 6).map(p => {
+            const renderBirthdayRow = (p) => {
                 const phone = (p.phone || '').replace(/[^0-9]/g, '');
                 return `
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-bottom: 1px solid #f1f5f9;">
@@ -2484,7 +2484,29 @@
                         ` : ''}
                     </div>
                 `;
-            }).join('');
+            };
+
+            const hasMoreThan5 = bdays.length > 5;
+            const visibleBdays = hasMoreThan5 ? bdays.slice(0, 5) : bdays;
+            const remainingBdays = hasMoreThan5 ? bdays.slice(5) : [];
+
+            let listHtml = visibleBdays.map(renderBirthdayRow).join('');
+            let extraHtml = '';
+
+            if (hasMoreThan5) {
+                extraHtml = `
+                    <div id="dashboard-birthdays-extra" style="display: none;">
+                        ${remainingBdays.map(renderBirthdayRow).join('')}
+                    </div>
+                    <div class="dashboard-toggle-wrap">
+                        <button type="button" class="btn-dashboard-toggle" id="btn-toggle-birthdays" onclick="window.toggleDashboardList('dashboard-birthdays-extra', 'btn-toggle-birthdays', ${remainingBdays.length})">
+                            <i class="fa-solid fa-chevron-down"></i> Ver más (${remainingBdays.length} restantes)
+                        </button>
+                    </div>
+                `;
+            }
+
+            container.innerHTML = listHtml + extraHtml;
         },
 
         renderRoomsWidget() {
@@ -2504,20 +2526,44 @@
                 'mantenimiento': { badge: 'amber', text: 'Mantenimiento' }
             };
 
-            container.innerHTML = `
+            const renderRoomCard = (r) => {
+                const stKey = (r.status || 'disponible').toLowerCase();
+                const st = statusColors[stKey] || statusColors['disponible'];
+                return `
+                    <div class="badge-tag ${st.badge}" style="display: flex; flex-direction: column; align-items: center; padding: 8px; border-radius: 10px; text-align: center;">
+                        <strong style="font-size: 0.82rem;">${r.room_number ? ('#' + r.room_number) : (r.name.substring(0, 14))}</strong>
+                        <small style="font-size: 0.68rem; margin-top: 2px;">${st.text.toUpperCase()}</small>
+                    </div>
+                `;
+            };
+
+            const hasMoreThan5 = rms.length > 5;
+            const visibleRooms = hasMoreThan5 ? rms.slice(0, 5) : rms;
+            const remainingRooms = hasMoreThan5 ? rms.slice(5) : [];
+
+            let mainGridHtml = `
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; padding: 4px 0;">
-                    ${rms.slice(0, 6).map(r => {
-                        const stKey = (r.status || 'disponible').toLowerCase();
-                        const st = statusColors[stKey] || statusColors['disponible'];
-                        return `
-                            <div class="badge-tag ${st.badge}" style="display: flex; flex-direction: column; align-items: center; padding: 8px; border-radius: 10px; text-align: center;">
-                                <strong style="font-size: 0.82rem;">${r.room_number ? ('#' + r.room_number) : (r.name.substring(0, 14))}</strong>
-                                <small style="font-size: 0.68rem; margin-top: 2px;">${st.text.toUpperCase()}</small>
-                            </div>
-                        `;
-                    }).join('')}
+                    ${visibleRooms.map(renderRoomCard).join('')}
                 </div>
             `;
+
+            let extraHtml = '';
+            if (hasMoreThan5) {
+                extraHtml = `
+                    <div id="dashboard-rooms-extra" style="display: none; margin-top: 10px;">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; padding: 4px 0;">
+                            ${remainingRooms.map(renderRoomCard).join('')}
+                        </div>
+                    </div>
+                    <div class="dashboard-toggle-wrap">
+                        <button type="button" class="btn-dashboard-toggle" id="btn-toggle-rooms" onclick="window.toggleDashboardList('dashboard-rooms-extra', 'btn-toggle-rooms', ${remainingRooms.length})">
+                            <i class="fa-solid fa-chevron-down"></i> Ver más (${remainingRooms.length} restantes)
+                        </button>
+                    </div>
+                `;
+            }
+
+            container.innerHTML = mainGridHtml + extraHtml;
         },
 
         bindEvents() {
