@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=286">
+    <link rel="stylesheet" href="styles.css?v=287">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -5327,12 +5327,16 @@
             </div>
             
             <div class="sheet-body">
-                <!-- Bloque Clínico -->
-                <div class="sheet-section-title"><i class="fa-solid fa-stethoscope text-cyan"></i> GESTIÓN CLÍNICA</div>
+                <!-- Bloque Clínico & Operativo -->
+                <div class="sheet-section-title"><i class="fa-solid fa-bolt text-amber"></i> ACCIONES PRINCIPALES</div>
                 <div class="sheet-grid">
+                    <button type="button" class="sheet-grid-card" id="fab-act-direct-sale">
+                        <div class="sheet-card-icon emerald"><i class="fa-solid fa-bolt"></i></div>
+                        <span>Venta Directa</span>
+                    </button>
                     <button type="button" class="sheet-grid-card" id="fab-act-patient">
                         <div class="sheet-card-icon cyan"><i class="fa-solid fa-user-plus"></i></div>
-                        <span>Registrar Paciente</span>
+                        <span>Nuevo Paciente</span>
                     </button>
                     <button type="button" class="sheet-grid-card" id="fab-act-appointment">
                         <div class="sheet-card-icon purple"><i class="fa-solid fa-calendar-plus"></i></div>
@@ -7326,14 +7330,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=286"></script>
-    <script src="supabaseClient.js?v=286"></script>
-    <script src="odontogram.js?v=286"></script>
-    <script src="signature.js?v=286"></script>
-    <script src="whatsapp.js?v=286"></script>
-    <script src="kardex.js?v=286"></script>
-    <script src="app.js?v=286"></script>
-    <script src="clinicalERP.js?v=286"></script>
-    <script src="tutorial.js?v=286"></script>
+    <script src="seededData.js?v=287"></script>
+    <script src="supabaseClient.js?v=287"></script>
+    <script src="odontogram.js?v=287"></script>
+    <script src="signature.js?v=287"></script>
+    <script src="whatsapp.js?v=287"></script>
+    <script src="kardex.js?v=287"></script>
+    <script src="app.js?v=287"></script>
+    <script src="clinicalERP.js?v=287"></script>
+    <script src="tutorial.js?v=287"></script>
 </body>
 </html>

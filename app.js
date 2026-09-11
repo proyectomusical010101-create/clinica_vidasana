@@ -1595,7 +1595,20 @@ function initNavigation() {
 }
 
 function initMobileFabActions() {
-    // 1. Registrar Paciente
+    // 0. Venta Directa
+    const actDirectSale = document.getElementById('fab-act-direct-sale');
+    if (actDirectSale) {
+        actDirectSale.onclick = () => {
+            closeModal('modal-mobile-quick-actions');
+            if (window.openDirectSaleModal) {
+                window.openDirectSaleModal();
+            } else if (window.triggerHeaderNewAction) {
+                window.triggerHeaderNewAction('direct-sale');
+            }
+        };
+    }
+
+    // 1. Nuevo Paciente
     const actPatient = document.getElementById('fab-act-patient');
     if (actPatient) {
         actPatient.onclick = () => {

@@ -1,6 +1,6 @@
 /* ==========================================================================
-   DENTALCARE PRO - INTERACTIVE CLINICAL WORKFLOW TUTORIAL
-   Step-by-step guided tour with spotlights and floating tooltips
+   CLÍNICA VIDASANA - INTERACTIVE CLINICAL WORKFLOW TUTORIAL
+   Comprehensive guided tour of all clinical, administrative and financial modules
    ========================================================================== */
 
 (function () {
@@ -9,51 +9,83 @@
     const TUTORIAL_STEPS = [
         {
             tab: "dashboard",
-            target: "#btn-quick-patient",
-            fallbackTarget: "[data-tab=\"patients\"]",
-            title: "1. Registro del Paciente 👤",
-            text: "Comienza haciendo clic en <strong>+ Nuevo Paciente</strong>. Podrás ingresar los datos personales y antecedentes clínicos (Adulto o Infantil). Al llegar al Paso 3, podrás guardar y pasar directamente al presupuesto con un solo clic.",
+            target: "#btn-header-new-menu",
+            fallbackTarget: "#card-metric-today-income",
+            title: "1. Venta Directa y Nuevo Paciente ⚡",
+            text: "Desde el botón superior <strong>+ Nuevo</strong> (o la <strong>Burbuja Flotante</strong> en móvil), puedes abrir <strong>Venta Directa</strong> para cobrar consultas y tratamientos rápidos de inmediato, o registrar un <strong>Nuevo Paciente</strong> con historial clínico completo.",
             position: "bottom"
         },
         {
             tab: "odontogram",
             target: "[data-tab=\"odontogram\"]",
-            fallbackTarget: "#odontogram-editor-container",
-            title: "2. Odontodiagrama y Presupuesto 🦷",
-            text: "En el módulo de <strong>Presupuesto</strong> seleccionas las caras o piezas dentales (Carie, Tratado, Ausencia o Extracción) y agregas los tratamientos del Baremo para cotizar en USD y Bs. oficiales.",
+            fallbackTarget: "#odontogram-list-container",
+            title: "2. Presupuestos y Baremo de Precios 🦷",
+            text: "Crea presupuestos clínicos detallados o cotizaciones rápidas con conversión automática entre <strong>USD ($)</strong> y <strong>Bolívares (Bs. BCV)</strong>. Podrás guardar borradores, aprobarlos y enviarlos a facturar con un solo clic.",
             position: "right"
         },
         {
             tab: "agenda",
             target: "[data-tab=\"agenda\"]",
             fallbackTarget: "#calendar-grid",
-            title: "3. Agenda y Citas 📅",
-            text: "Aquí agendas y organizas los turnos de tus pacientes. Puedes notificar recordatorios por <strong>WhatsApp</strong> y hacer clic en <strong>\"Atender\"</strong> en cuanto el paciente llegue a la clínica.",
+            title: "3. Agenda Inteligente & WhatsApp 📅",
+            text: "Organiza las citas por médico y especialidad. Envía recordatorios automáticos por <strong>WhatsApp</strong> con un solo toque y presiona <strong>\"Atender\"</strong> en cuanto el paciente ingrese al consultorio.",
             position: "right"
         },
         {
             tab: "ehr",
             target: "[data-tab=\"ehr\"]",
             fallbackTarget: "#view-ehr",
-            title: "4. Atención Clínica y Evoluciones 🩺",
-            text: "En <strong>Historias</strong> llevas el control integral de cada sesión: el procedimiento realizado, la evolución clínica, el descargo automático de materiales del Kardex y la firma médica digital.",
+            title: "4. Historias Clínicas & Descargo Kardex 🩺",
+            text: "Registra evoluciones y notas médicas por consulta. Los insumos y medicamentos utilizados se descuentan automáticamente del inventario <strong>Kardex</strong>, y el médico puede firmar digitalmente en pantalla.",
             position: "right"
         },
         {
             tab: "billing",
             target: "[data-tab=\"billing\"]",
             fallbackTarget: "#view-billing",
-            title: "5. Pagos, Abonos y Bancos 💳",
-            text: "Registra los abonos y facturas indicando el método (Pago Móvil, Zelle, Divisas, Bs.), el <strong>Banco</strong> y el <strong>Nº de Referencia</strong>. Podrás imprimir o descargar el comprobante en PDF de inmediato.",
+            title: "5. Facturación & Pagos Mixtos 💳",
+            text: "Emite facturas y recibos con pagos mixtos (Pago Móvil, Efectivo, Zelle, Binance o Cashea). El sistema calcula el vuelto exacto y genera el comprobante en formato membretado PDF descargable.",
+            position: "right"
+        },
+        {
+            tab: "finance",
+            target: "[data-tab=\"finance\"]",
+            fallbackTarget: "#subtab-daily-closing",
+            title: "6. Finanzas y Cierre de Caja Diario 💰",
+            text: "Lleva el control de <strong>Cuentas por Pagar</strong>, <strong>Cuentas por Cobrar</strong> y audita el <strong>Cierre de Caja Diario</strong> por departamentos clínicos (turnos Mañana y Tarde) con respaldo bancario.",
+            position: "right"
+        },
+        {
+            tab: "specialties",
+            target: "[data-tab=\"specialties\"]",
+            fallbackTarget: "#spec-stat-top-specialty",
+            title: "7. Especialidades y Comisiones Médicas 🏆",
+            text: "Monitorea la distribución de ingresos (% Médico vs % Clínica) de cada especialidad. El sistema calcula en tiempo real qué área médica lidera la facturación del centro asistencial.",
+            position: "right"
+        },
+        {
+            tab: "users",
+            target: "[data-tab=\"users\"]",
+            fallbackTarget: "#user-stat-top-doctor-name",
+            title: "8. Rendimiento del Personal Médico 👑",
+            text: "Consulta el ranking del <strong>Top Médico en Ingresos</strong>, pacientes atendidos y promedios por especialista, asegurando un control transparente del talento clínico y asistencial.",
             position: "right"
         },
         {
             tab: "dashboard",
-            target: "#metric-today-income",
-            fallbackTarget: "[data-tab=\"dashboard\"]",
-            title: "6. Métricas en Tiempo Real 📊",
-            text: "Tu panel principal calcula automáticamente los ingresos diarios, cobros del mes y pacientes atendidos hoy. ¡Puedes repetir este tutorial cuando quieras pulsando el botón <strong>\"Tutorial Guiado\"</strong> arriba!",
+            target: "#card-metric-today-income",
+            fallbackTarget: ".stats-grid",
+            title: "9. Dashboard Ejecutivo Interactivo 📊",
+            text: "Tu panel de control central. Cada tarjeta es interactiva: haz clic sobre cualquier métrica para ir directamente a su detalle (Cierre Diario, Flujo de Caja, Rendimiento Médico y Especialidades).",
             position: "bottom"
+        },
+        {
+            tab: "dashboard",
+            target: "#user-profile-trigger",
+            fallbackTarget: "#app-sidebar",
+            title: "10. Menú Colapsable & Perfil Flotante ⚙️",
+            text: "Minimiza el menú lateral con el botón superior para mayor amplitud. En la parte inferior, tu perfil abre un menú secundario flotante con <strong>Ajustes</strong>, <strong>Ayuda</strong> y <strong>Cierre de Sesión</strong>.",
+            position: "right"
         }
     ];
 
@@ -197,8 +229,14 @@
         async renderStep() {
             const step = TUTORIAL_STEPS[this.currentStep];
             if (!step) return;
-            if (step.tab && typeof switchTab === "function") switchTab(step.tab);
-            await new Promise(r => setTimeout(r, 140));
+            if (step.tab) {
+                if (typeof window.navigateToTab === "function") {
+                    await window.navigateToTab(step.tab);
+                } else if (typeof switchTab === "function") {
+                    switchTab(step.tab);
+                }
+            }
+            await new Promise(r => setTimeout(r, 200));
             let targetEl = document.querySelector(step.target);
             if (!targetEl && step.fallbackTarget) targetEl = document.querySelector(step.fallbackTarget);
             if (targetEl) {
