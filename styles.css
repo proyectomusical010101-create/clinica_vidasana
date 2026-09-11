@@ -5248,6 +5248,79 @@ select, .form-select, select.form-control {
     gap: 6px;
 }
 
+/* Mobile 2-column layout for ERP stat cards with odd-item full-width spanning */
+@media (max-width: 768px) {
+    #view-specialties .erp-stats-grid,
+    #view-rooms .erp-stats-grid,
+    #view-payroll .erp-stats-grid,
+    .erp-stats-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 10px !important;
+        margin-bottom: 16px !important;
+    }
+
+    #view-specialties .erp-stats-grid > .erp-stat-card:last-child:nth-child(odd),
+    #view-rooms .erp-stats-grid > .erp-stat-card:last-child:nth-child(odd),
+    #view-payroll .erp-stats-grid > .erp-stat-card:last-child:nth-child(odd),
+    .erp-stats-grid > .erp-stat-card:last-child:nth-child(odd) {
+        grid-column: 1 / -1 !important;
+    }
+
+    #view-specialties .erp-stat-card,
+    #view-rooms .erp-stat-card,
+    #view-payroll .erp-stat-card,
+    .erp-stat-card {
+        padding: 12px 14px !important;
+        border-radius: 14px !important;
+    }
+
+    #view-specialties .erp-stat-header,
+    #view-rooms .erp-stat-header,
+    #view-payroll .erp-stat-header,
+    .erp-stat-header {
+        margin-bottom: 6px !important;
+        gap: 6px !important;
+    }
+
+    #view-specialties .erp-stat-title,
+    #view-rooms .erp-stat-title,
+    #view-payroll .erp-stat-title,
+    .erp-stat-title {
+        font-size: 0.7rem !important;
+        letter-spacing: 0.2px !important;
+        line-height: 1.2 !important;
+    }
+
+    #view-specialties .erp-stat-icon-wrap,
+    #view-rooms .erp-stat-icon-wrap,
+    #view-payroll .erp-stat-icon-wrap,
+    .erp-stat-icon-wrap {
+        width: 32px !important;
+        height: 32px !important;
+        min-width: 32px !important;
+        border-radius: 8px !important;
+        font-size: 0.85rem !important;
+        flex-shrink: 0 !important;
+    }
+
+    #view-specialties .erp-stat-value,
+    #view-rooms .erp-stat-value,
+    #view-payroll .erp-stat-value,
+    .erp-stat-value {
+        font-size: 1.2rem !important;
+        margin-bottom: 4px !important;
+        line-height: 1.15 !important;
+    }
+
+    #view-specialties .erp-stat-sub,
+    #view-rooms .erp-stat-sub,
+    #view-payroll .erp-stat-sub,
+    .erp-stat-sub {
+        font-size: 0.68rem !important;
+        line-height: 1.25 !important;
+    }
+}
+
 /* Split Commission Graphical Bar */
 .erp-commission-bar-container {
     display: flex;
