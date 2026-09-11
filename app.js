@@ -853,19 +853,13 @@ function checkAuthSession() {
             document.documentElement.classList.remove('no-auth-session');
             if (loginOverlay) loginOverlay.classList.add('hidden');
             
-            document.getElementById('dr-name-display').innerText = user.fullname;
-            const roleEl = document.getElementById('dr-role-display');
-            if (roleEl) {
-                roleEl.innerText = user.role;
-                roleEl.className = 'role-badge-tag';
-                const r = user.role.toLowerCase();
-                if (r.includes('admin') || r.includes('super')) {
-                    roleEl.classList.add('badge-admin');
-                } else if (r.includes('medico') || r.includes('odont') || r.includes('doctor')) {
-                    roleEl.classList.add('badge-doctor');
-                } else {
-                    roleEl.classList.add('badge-assistant');
-                }
+            if (window.updateUserProfileUI) {
+                window.updateUserProfileUI(user);
+            } else {
+                const nameEl = document.getElementById('dr-name-display');
+                if (nameEl) nameEl.innerText = user.fullname;
+                const roleEl = document.getElementById('dr-role-display');
+                if (roleEl) roleEl.innerText = user.role;
             }
 
             applyRolePermissionsUI(user.role);
@@ -1193,9 +1187,143 @@ let pendingToothFaceKey = null;
 let activeEditingBudgetId = null;
 
 // ==========================================
+// CONTROL DE SIDEBAR (COLAPSO/EXPANSIÓN) Y PERFIL DE USUARIO
+// ==========================================
+window.toggleSidebarCollapse = function() {
+    const isCollapsed = document.body.classList.toggle('sidebar-collapsed');
+    try {
+        localStorage.setItem('vidasana_sidebar_collapsed', isCollapsed ? 'true' : 'false');
+    } catch(e) {}
+    if (isCollapsed) {
+        window.closeUserSecondaryMenu();
+    }
+};
+
+window.updateUserProfileUI = function(user) {
+    if (!user) return;
+    const name = user.fullname || user.name || 'Usuario';
+    const role = user.role || 'Personal Médico';
+    const email = user.email || '';
+
+    // 1. Sidebar trigger elements
+    const roleEl = document.getElementById('dr-role-display');
+    if (roleEl) {
+        roleEl.innerText = role;
+        roleEl.className = 'role-badge-tag';
+        const r = role.toLowerCase();
+        if (r.includes('admin') || r.includes('super')) {
+            roleEl.classList.add('badge-admin');
+        } else if (r.includes('medico') || r.includes('odont') || r.includes('doctor')) {
+            roleEl.classList.add('badge-doctor');
+        } else {
+            roleEl.classList.add('badge-assistant');
+        }
+    }
+
+    const previewNameEl = document.getElementById('sidebar-user-name-preview');
+    if (previewNameEl) {
+        previewNameEl.innerText = name;
+    }
+
+    const sidebarIcon = document.getElementById('sidebar-user-icon');
+    const flyoutIcon = document.getElementById('flyout-user-icon');
+    let iconClass = 'fa-user-doctor';
+    let iconColor = 'var(--primary-cyan)';
+    const rLower = role.toLowerCase();
+    if (rLower.includes('super') || rLower.includes('admin')) {
+        iconClass = 'fa-user-shield';
+        iconColor = '#ef4444';
+    } else if (rLower.includes('gerente') || rLower.includes('direc')) {
+        iconClass = 'fa-user-tie';
+        iconColor = '#0284c7';
+    } else if (rLower.includes('odont')) {
+        iconClass = 'fa-tooth';
+        iconColor = 'var(--primary-cyan)';
+    } else if (rLower.includes('asist') || rLower.includes('enferm') || rLower.includes('auxiliar')) {
+        iconClass = 'fa-user-nurse';
+        iconColor = '#10b981';
+    } else if (rLower.includes('recep') || rLower.includes('caja')) {
+        iconClass = 'fa-headset';
+        iconColor = '#06b6d4';
+    }
+
+    if (sidebarIcon) {
+        sidebarIcon.className = `fa-solid ${iconClass}`;
+        sidebarIcon.style.color = iconColor;
+    }
+    if (flyoutIcon) {
+        flyoutIcon.className = `fa-solid ${iconClass}`;
+        flyoutIcon.style.color = iconColor;
+    }
+
+    // 2. Flyout elements
+    const flyoutRole = document.getElementById('flyout-user-role');
+    if (flyoutRole) flyoutRole.innerText = role;
+
+    const flyoutName = document.getElementById('dr-name-display');
+    if (flyoutName) flyoutName.innerText = name;
+
+    const flyoutEmail = document.getElementById('flyout-user-email');
+    if (flyoutEmail) flyoutEmail.innerText = email || 'usuario@vidasana.com';
+};
+
+window.toggleUserSecondaryMenu = function(e) {
+    if (e) e.stopPropagation();
+    const flyout = document.getElementById('user-secondary-flyout');
+    if (!flyout) return;
+    const isHidden = flyout.classList.contains('hidden');
+    if (isHidden) {
+        const user = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+        if (user && window.updateUserProfileUI) {
+            window.updateUserProfileUI(user);
+        }
+        flyout.classList.remove('hidden');
+    } else {
+        flyout.classList.add('hidden');
+    }
+};
+
+window.closeUserSecondaryMenu = function() {
+    const flyout = document.getElementById('user-secondary-flyout');
+    if (flyout) flyout.classList.add('hidden');
+};
+
+window.navigateFromUserFlyout = function(tabName) {
+    window.closeUserSecondaryMenu();
+    if (window.navigateToTab) {
+        window.navigateToTab(tabName);
+    }
+};
+
+// Cerrar menú secundario con tecla Escape o clic fuera
+window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' || e.keyCode === 27) {
+        window.closeUserSecondaryMenu();
+    }
+});
+
+document.addEventListener('click', (e) => {
+    const flyout = document.getElementById('user-secondary-flyout');
+    const trigger = document.getElementById('user-profile-trigger');
+    if (flyout && !flyout.classList.contains('hidden')) {
+        if (!flyout.contains(e.target) && (!trigger || !trigger.contains(e.target))) {
+            window.closeUserSecondaryMenu();
+        }
+    }
+});
+
+// Restaurar preferencia guardada de sidebar colapsado
+try {
+    if (localStorage.getItem('vidasana_sidebar_collapsed') === 'true') {
+        document.body.classList.add('sidebar-collapsed');
+    }
+} catch(e) {}
+
+// ==========================================
 // NAVIGATION & TABS
 // ==========================================
 window.navigateToTab = async function(tabName) {
+    window.closeUserSecondaryMenu();
     const navItems = document.querySelectorAll('.nav-item');
     const mobNavBtns = document.querySelectorAll('.mobile-nav-btn');
     const tabViews = document.querySelectorAll('.tab-view');
@@ -15814,19 +15942,13 @@ function initSettingsEvents() {
                 await SupabaseDataService.saveUser(currentUser);
                 sessionStorage.setItem('dental_current_user', JSON.stringify(currentUser));
                 
-                document.getElementById('dr-name-display').innerText = currentUser.fullname;
-                const roleEl = document.getElementById('dr-role-display');
-                if (roleEl) {
-                    roleEl.innerText = currentUser.role;
-                    roleEl.className = 'role-badge-tag';
-                    const r = currentUser.role.toLowerCase();
-                    if (r.includes('admin') || r.includes('super')) {
-                        roleEl.classList.add('badge-admin');
-                    } else if (r.includes('medico') || r.includes('odont') || r.includes('doctor')) {
-                        roleEl.classList.add('badge-doctor');
-                    } else {
-                        roleEl.classList.add('badge-assistant');
-                    }
+                if (window.updateUserProfileUI) {
+                    window.updateUserProfileUI(currentUser);
+                } else {
+                    const nameEl = document.getElementById('dr-name-display');
+                    if (nameEl) nameEl.innerText = currentUser.fullname;
+                    const roleEl = document.getElementById('dr-role-display');
+                    if (roleEl) roleEl.innerText = currentUser.role;
                 }
 
                 document.getElementById('set-pwd-current').value = '';

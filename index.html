@@ -187,97 +187,136 @@
         <div id="mobile-sidebar-backdrop" class="mobile-backdrop hidden"></div>
 
         <!-- Sidebar Navigation -->
-        <aside class="sidebar">
-            <div class="brand vs-brand-sidebar">
+        <aside class="sidebar" id="app-sidebar">
+            <div class="brand vs-brand-sidebar" style="position: relative;">
                 <div class="brand-icon" id="sidebar-brand-logo-container" style="width: 100%; display: flex; justify-content: center; min-width: unset;">
-                    <img src="logo-vidasana.png" alt="Clínica VidaSana" class="clinic-logo-sidebar">
+                    <img src="logo-vidasana.png" alt="Clínica VidaSana" class="clinic-logo-sidebar" id="sidebar-logo-full">
+                    <div class="clinic-logo-collapsed" id="sidebar-logo-collapsed" style="width: 42px; height: 42px; border-radius: 10px; background: linear-gradient(135deg, var(--primary-cyan), var(--primary-blue)); display: none; align-items: center; justify-content: center; color: white; font-size: 1.25rem; box-shadow: 0 4px 10px rgba(127, 161, 60, 0.3);">
+                        <i class="fa-solid fa-leaf"></i>
+                    </div>
                 </div>
                 <div class="brand-info" style="display: none;">
                     <h2 id="sidebar-brand-name">Clínica VidaSana <small style="display: block; font-size: 0.65rem; color: var(--primary-cyan); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px;">Centro Médico Odontológico</small></h2>
                 </div>
+                <button type="button" class="btn-sidebar-collapse" id="btn-sidebar-collapse" onclick="window.toggleSidebarCollapse()" title="Minimizar / Expandir Menú">
+                    <i class="fa-solid fa-chevron-left" id="sidebar-collapse-icon"></i>
+                </button>
             </div>
 
             <nav class="nav-menu">
-                <a href="#dashboard" class="nav-item active mobile-sidebar-hide" data-tab="dashboard">
+                <a href="#dashboard" class="nav-item active mobile-sidebar-hide" data-tab="dashboard" data-tooltip="Home">
                     <i class="fa-solid fa-chart-pie"></i>
                     <span>Home</span>
                 </a>
-                <a href="#patients" class="nav-item mobile-sidebar-hide" data-tab="patients">
+                <a href="#patients" class="nav-item mobile-sidebar-hide" data-tab="patients" data-tooltip="Pacientes">
                     <i class="fa-solid fa-hospital-user"></i>
                     <span>Pacientes</span>
                 </a>
-                <a href="#odontogram" class="nav-item mobile-sidebar-hide" data-tab="odontogram">
+                <a href="#odontogram" class="nav-item mobile-sidebar-hide" data-tab="odontogram" data-tooltip="Presupuesto">
                     <i class="fa-solid fa-file-invoice-dollar"></i>
                     <span>Presupuesto</span>
                 </a>
-                <a href="#agenda" class="nav-item mobile-sidebar-hide" data-tab="agenda">
+                <a href="#agenda" class="nav-item mobile-sidebar-hide" data-tab="agenda" data-tooltip="Agenda">
                     <i class="fa-solid fa-calendar-day"></i>
                     <span>Agenda</span>
                 </a>
-                <a href="#billing" class="nav-item mobile-sidebar-hide" data-tab="billing">
+                <a href="#billing" class="nav-item mobile-sidebar-hide" data-tab="billing" data-tooltip="Facturación">
                     <i class="fa-solid fa-receipt"></i>
                     <span>Facturación</span>
                 </a>
-                <a href="#ehr" class="nav-item" data-tab="ehr">
+                <a href="#ehr" class="nav-item" data-tab="ehr" data-tooltip="Historias">
                     <i class="fa-solid fa-notes-medical"></i>
                     <span>Historias</span>
                 </a>
-                <a href="#pricing" class="nav-item mobile-sidebar-hide" data-tab="pricing">
+                <a href="#pricing" class="nav-item mobile-sidebar-hide" data-tab="pricing" data-tooltip="Servicios">
                     <i class="fa-solid fa-tags"></i>
                     <span>Servicios</span>
                 </a>
-                <a href="#inventory" class="nav-item" data-tab="inventory" style="position: relative;">
+                <a href="#inventory" class="nav-item" data-tab="inventory" data-tooltip="Insumos" style="position: relative;">
                     <i class="fa-solid fa-boxes-stacked"></i>
                     <span>Insumos</span>
                     <span class="badge-tag red hidden" id="nav-stock-alert-badge" style="position: absolute; right: 12px; font-size: 0.68rem; padding: 2px 6px; border-radius: 10px; font-weight: 700;">0</span>
                 </a>
-                <a href="#finance" class="nav-item mobile-sidebar-hide" data-tab="finance">
+                <a href="#finance" class="nav-item mobile-sidebar-hide" data-tab="finance" data-tooltip="Finanzas">
                     <i class="fa-solid fa-wallet"></i>
                     <span>Finanzas</span>
                 </a>
-                <a href="#stationery" class="nav-item" data-tab="stationery">
+                <a href="#stationery" class="nav-item" data-tab="stationery" data-tooltip="Papelería">
                     <i class="fa-solid fa-file-signature"></i>
                     <span>Papelería</span>
                 </a>
-                <a href="#users" class="nav-item" data-tab="users">
+                <a href="#users" class="nav-item" data-tab="users" data-tooltip="Personal Médico">
                     <i class="fa-solid fa-user-doctor"></i>
                     <span>Personal Médico</span>
                 </a>
-                <a href="#specialties" class="nav-item" data-tab="specialties">
+                <a href="#specialties" class="nav-item" data-tab="specialties" data-tooltip="Especialidades">
                     <i class="fa-solid fa-stethoscope"></i>
                     <span>Especialidades</span>
                 </a>
-                <a href="#rooms" class="nav-item" data-tab="rooms">
+                <a href="#rooms" class="nav-item" data-tab="rooms" data-tooltip="Consultorios">
                     <i class="fa-solid fa-door-open"></i>
                     <span>Consultorios</span>
                 </a>
-                <a href="#payroll" class="nav-item" data-tab="payroll">
+                <a href="#payroll" class="nav-item" data-tab="payroll" data-tooltip="Nómina Médica">
                     <i class="fa-solid fa-hand-holding-dollar"></i>
                     <span>Nómina Médica</span>
                 </a>
-                <a href="#settings" class="nav-item" data-tab="settings">
-                    <i class="fa-solid fa-gears"></i>
-                    <span>Configuraciones</span>
-                </a>
-                <a href="#help" class="nav-item" data-tab="help">
-                    <i class="fa-solid fa-circle-question"></i>
-                    <span>Ayuda</span>
-                </a>
             </nav>
 
-            <div class="sidebar-footer">
-                <div class="doctor-profile">
-                    <div class="avatar">
-                        <i class="fa-solid fa-user-md"></i>
+            <div class="sidebar-footer" style="position: relative;">
+                <div class="user-profile-trigger" id="user-profile-trigger" onclick="window.toggleUserSecondaryMenu(event)" title="Cuenta, Ajustes y Opciones">
+                    <div class="avatar" id="sidebar-user-avatar">
+                        <i class="fa-solid fa-user-doctor" id="sidebar-user-icon"></i>
                     </div>
-                    <div class="profile-info">
-                        <strong id="dr-name-display">Director(a) Médico</strong>
-                        <small id="dr-role-display">Área de Odontología</small>
+                    <div class="profile-info" id="sidebar-profile-info">
+                        <strong id="dr-role-display" class="role-badge-tag badge-doctor" style="margin: 0; font-size: 0.78rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; display: block;">Director(a) Médico</strong>
+                        <small id="sidebar-user-name-preview" style="font-size: 0.72rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; display: block;">Clínica VidaSana</small>
+                    </div>
+                    <div class="profile-menu-dots" id="sidebar-profile-dots">
+                        <i class="fa-solid fa-ellipsis-vertical" style="color: var(--text-muted); font-size: 0.9rem;"></i>
                     </div>
                 </div>
-                <button class="btn-logout" id="btn-logout" title="Cerrar Sesión">
-                    <i class="fa-solid fa-arrow-right-from-bracket"></i> Cerrar Sesión
-                </button>
+
+                <!-- Menú Secundario Emergente Flotante -->
+                <div id="user-secondary-flyout" class="user-secondary-flyout hidden" onclick="event.stopPropagation()">
+                    <div class="user-flyout-header">
+                        <div class="user-flyout-avatar" id="flyout-user-avatar">
+                            <i class="fa-solid fa-user-doctor" id="flyout-user-icon"></i>
+                        </div>
+                        <div class="user-flyout-details">
+                            <div class="user-flyout-role-pill" id="flyout-user-role">Director(a) Médico</div>
+                            <strong class="user-flyout-name" id="dr-name-display">Dr. Médico Tratante</strong>
+                            <small class="user-flyout-email" id="flyout-user-email">usuario@vidasana.com</small>
+                        </div>
+                    </div>
+                    <div class="user-flyout-divider"></div>
+                    <div class="user-flyout-items">
+                        <button type="button" class="user-flyout-item" onclick="window.navigateFromUserFlyout('settings')">
+                            <div class="user-flyout-item-icon" style="background: rgba(2, 132, 199, 0.12); color: #0284c7;">
+                                <i class="fa-solid fa-gears"></i>
+                            </div>
+                            <div class="user-flyout-item-text">
+                                <strong>Configuraciones y Ajustes</strong>
+                                <small>Parámetros, clínica y usuarios</small>
+                            </div>
+                        </button>
+                        <button type="button" class="user-flyout-item" onclick="window.navigateFromUserFlyout('help')">
+                            <div class="user-flyout-item-icon" style="background: rgba(16, 185, 129, 0.12); color: #10b981;">
+                                <i class="fa-solid fa-circle-question"></i>
+                            </div>
+                            <div class="user-flyout-item-text">
+                                <strong>Ayuda y Soporte</strong>
+                                <small>Guías de uso y asistencia técnica</small>
+                            </div>
+                        </button>
+                    </div>
+                    <div class="user-flyout-divider"></div>
+                    <div class="user-flyout-footer">
+                        <button type="button" class="btn-logout" id="btn-logout" title="Cerrar Sesión">
+                            <i class="fa-solid fa-arrow-right-from-bracket"></i> Cerrar Sesión
+                        </button>
+                    </div>
+                </div>
             </div>
         </aside>
 
@@ -7269,14 +7308,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=283"></script>
-    <script src="supabaseClient.js?v=283"></script>
-    <script src="odontogram.js?v=283"></script>
-    <script src="signature.js?v=283"></script>
-    <script src="whatsapp.js?v=283"></script>
-    <script src="kardex.js?v=283"></script>
-    <script src="app.js?v=283"></script>
-    <script src="clinicalERP.js?v=283"></script>
-    <script src="tutorial.js?v=283"></script>
+    <script src="seededData.js?v=284"></script>
+    <script src="supabaseClient.js?v=284"></script>
+    <script src="odontogram.js?v=284"></script>
+    <script src="signature.js?v=284"></script>
+    <script src="whatsapp.js?v=284"></script>
+    <script src="kardex.js?v=284"></script>
+    <script src="app.js?v=284"></script>
+    <script src="clinicalERP.js?v=284"></script>
+    <script src="tutorial.js?v=284"></script>
 </body>
 </html>
