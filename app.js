@@ -5175,6 +5175,12 @@ window.triggerHeaderNewAction = async function(action) {
         } else if (typeof openModal === 'function') {
             openModal('modal-patient');
         }
+    } else if (action === 'new-appointment' || action === 'add-appointment') {
+        if (typeof window.openNewAppointmentModal === 'function') {
+            await window.openNewAppointmentModal();
+        } else if (typeof openModal === 'function') {
+            openModal('modal-appointment');
+        }
     } else if (action === 'new-budget') {
         const budgetNav = document.querySelector('[data-tab="odontogram"]');
         if (budgetNav) {
@@ -8112,6 +8118,20 @@ async function renderAgendaView(filter = 'pending', searchQuery = '') {
     const agendaListMain = document.getElementById('agenda-list-main');
     if (!agendaListMain) return;
 
+    // Ensure Agenda buttons are immediately bound before any early returns
+    const addAppointmentBtn = document.getElementById('btn-add-appointment-agenda');
+    if (addAppointmentBtn) {
+        addAppointmentBtn.onclick = async () => {
+            await window.openNewAppointmentModal();
+        };
+    }
+    const sendRemindersBtn = document.getElementById('btn-send-reminders-all-agenda');
+    if (sendRemindersBtn) {
+        sendRemindersBtn.onclick = () => {
+            window.sendRemindersForAllTomorrow();
+        };
+    }
+
     agendaListMain.innerHTML = '';
     const allAppointments = await SupabaseDataService.getAppointments();
     const currentUser = getCurrentUser();
@@ -8246,21 +8266,6 @@ async function renderAgendaView(filter = 'pending', searchQuery = '') {
         `;
         agendaListMain.appendChild(div);
     });
-
-    // Bind action buttons for Agenda view
-    const sendRemindersBtn = document.getElementById('btn-send-reminders-all-agenda');
-    if (sendRemindersBtn) {
-        sendRemindersBtn.onclick = () => {
-            window.sendRemindersForAllTomorrow();
-        };
-    }
-
-    const addAppointmentBtn = document.getElementById('btn-add-appointment-agenda');
-    if (addAppointmentBtn) {
-        addAppointmentBtn.onclick = async () => {
-            await window.openNewAppointmentModal();
-        };
-    }
 }
 window.renderAgendaView = renderAgendaView;
 
@@ -10939,7 +10944,11 @@ function initGlobalEvents() {
 
     // Modal Cita Helpers: New & Edit
     window.openNewAppointmentModal = async function() {
-        await populateAppointmentPatientSelect();
+        try {
+            await populateAppointmentPatientSelect();
+        } catch(err) {
+            console.error("Error populating appointment patients:", err);
+        }
 
         const titleEl = document.getElementById('modal-appointment-title');
         if (titleEl) titleEl.innerHTML = '<i class="fa-solid fa-calendar-plus text-cyan"></i> Agendar Nueva Cita Médica';
@@ -10961,8 +10970,12 @@ function initGlobalEvents() {
 
         const daySel = document.getElementById('app-day-target');
         const customGrp = document.getElementById('app-custom-date-group');
+        const customDateInput = document.getElementById('app-custom-date');
         if (daySel) daySel.value = 'today';
         if (customGrp) customGrp.classList.add('hidden');
+        if (customDateInput) {
+            customDateInput.value = new Date().toISOString().split('T')[0];
+        }
 
         openModal('modal-appointment');
     };
@@ -11031,6 +11044,12 @@ function initGlobalEvents() {
     const btnAddAppt = document.getElementById('btn-add-appointment');
     if (btnAddAppt) {
         btnAddAppt.onclick = async () => {
+            await window.openNewAppointmentModal();
+        };
+    }
+    const btnAddApptAgenda = document.getElementById('btn-add-appointment-agenda');
+    if (btnAddApptAgenda) {
+        btnAddApptAgenda.onclick = async () => {
             await window.openNewAppointmentModal();
         };
     }
@@ -13358,15 +13377,35 @@ async function populateAppointmentPatientSelect() {
     const select = document.getElementById('app-patient-select');
     if (!select) return;
 
-    select.innerHTML = '';
-    const patients = await SupabaseDataService.getPatients();
-    patients.forEach(p => {
-        const opt = document.createElement('option');
-        opt.value = p.id;
-        opt.dataset.name = p.fullname;
-        opt.innerText = `${p.fullname} (${p.id})`;
-        select.appendChild(opt);
-    });
+    select.innerHTML = '<option value="">Cargando pacientes...</option>';
+    try {
+        const patients = await SupabaseDataService.getPatients();
+        select.innerHTML = '';
+        if (!patients || patients.length === 0) {
+            select.innerHTML = '<option value="">-- No hay pacientes registrados --</option>';
+            return;
+        }
+
+        const activePatientId = (typeof getActivePatientId === 'function') ? getActivePatientId() : null;
+
+        patients.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.id;
+            opt.dataset.name = p.fullname;
+            opt.innerText = `${p.fullname} (${p.id})`;
+            if (activePatientId && p.id === activePatientId) {
+                opt.selected = true;
+            }
+            select.appendChild(opt);
+        });
+
+        if (activePatientId && Array.from(select.options).some(o => o.value === activePatientId)) {
+            select.value = activePatientId;
+        }
+    } catch(err) {
+        console.error("Error populating appointment patient select:", err);
+        select.innerHTML = '<option value="">Error al cargar pacientes</option>';
+    }
 }
 
 window.openAppointmentModalForNextSession = async (patientId, nextSessionNum) => {

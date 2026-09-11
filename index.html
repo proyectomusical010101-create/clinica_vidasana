@@ -347,6 +347,15 @@
                                     <small style="color: #64748b; font-size: 0.72rem; font-weight: normal; display: block;">Registrar nueva ficha</small>
                                 </div>
                             </a>
+                            <a href="javascript:void(0)" class="header-dropdown-item" onclick="window.triggerHeaderNewAction('new-appointment')">
+                                <span class="header-dropdown-icon" style="background: rgba(139, 92, 246, 0.12); color: #8b5cf6;">
+                                    <i class="fa-solid fa-calendar-plus"></i>
+                                </span>
+                                <div>
+                                    <div style="font-weight: 700;">Agregar Cita</div>
+                                    <small style="color: #64748b; font-size: 0.72rem; font-weight: normal; display: block;">Planificar en agenda</small>
+                                </div>
+                            </a>
                             <div style="height: 1px; background: var(--border-color, #e2e8f0); margin: 3px 0;"></div>
                             <a href="javascript:void(0)" class="header-dropdown-item" onclick="window.triggerHeaderNewAction('new-budget')">
                                 <span class="header-dropdown-icon" style="background: rgba(168, 85, 247, 0.12); color: #a855f7;">
@@ -442,7 +451,7 @@
                                     <h3 style="margin: 0;"><i class="fa-solid fa-calendar-day"></i> Agenda de Citas</h3>
                                     <span class="badge-tag blue" id="dashboard-agenda-counter" style="font-size: 0.76rem; font-weight: 700; padding: 3px 10px; border-radius: 12px;">0 Citas</span>
                                 </div>
-                                <button class="btn btn-sm btn-outline" id="btn-add-appointment" style="width: auto;">+ Agregar Cita</button>
+                                <button class="btn btn-sm btn-outline" id="btn-add-appointment" onclick="window.openNewAppointmentModal()" style="width: auto;">+ Agregar Cita</button>
                             </div>
                             <div class="card-body" style="padding: 16px;">
                                 <div class="timeline" id="dashboard-agenda-list" style="max-height: 460px; overflow-y: auto; padding-right: 6px;">
@@ -590,7 +599,7 @@
                             <h1>Agenda de Citas del Consultorio</h1>
                             <p class="subtitle">Planificación diaria y recordatorios automatizados de citas por WhatsApp.</p>
                         </div>
-                        <button class="btn btn-primary" id="btn-add-appointment-agenda">+ Agregar Cita</button>
+                        <button class="btn btn-primary" id="btn-add-appointment-agenda" onclick="window.openNewAppointmentModal()">+ Agregar Cita</button>
                     </div>
 
                     <!-- Filters bar -->
@@ -6880,14 +6889,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=278"></script>
-    <script src="supabaseClient.js?v=278"></script>
-    <script src="odontogram.js?v=278"></script>
-    <script src="signature.js?v=278"></script>
-    <script src="whatsapp.js?v=278"></script>
-    <script src="kardex.js?v=278"></script>
-    <script src="app.js?v=278"></script>
-    <script src="clinicalERP.js?v=278"></script>
-    <script src="tutorial.js?v=278"></script>
+    <script src="seededData.js?v=279"></script>
+    <script src="supabaseClient.js?v=279"></script>
+    <script src="odontogram.js?v=279"></script>
+    <script src="signature.js?v=279"></script>
+    <script src="whatsapp.js?v=279"></script>
+    <script src="kardex.js?v=279"></script>
+    <script src="app.js?v=279"></script>
+    <script src="clinicalERP.js?v=279"></script>
+    <script src="tutorial.js?v=279"></script>
 </body>
 </html>
