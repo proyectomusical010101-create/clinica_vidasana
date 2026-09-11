@@ -16810,18 +16810,23 @@ async function renderFinanceView() {
     const subcontents = document.querySelectorAll('#view-finance .subtab-content');
 
     subtabs.forEach(btn => {
-        btn.onclick = () => {
+        btn.onclick = async () => {
             subtabs.forEach(b => b.classList.remove('active'));
             subcontents.forEach(c => c.classList.remove('active'));
             btn.classList.add('active');
             const target = document.getElementById(`subtab-${btn.dataset.subtab}`);
             if (target) target.classList.add('active');
+
+            if (btn.dataset.subtab === 'daily-closing') {
+                await window.renderDailyClosingView();
+            }
         };
     });
 
     await renderProviderBills();
     await renderReceivables();
     await renderCashFlow();
+    await window.renderDailyClosingView();
 
     const formPayable = document.getElementById('form-payable');
     formPayable.onsubmit = async (e) => {
@@ -18022,6 +18027,521 @@ window.renderCashFlowAreaDetailsView = function(areaName, period) {
             }).join('');
         }
     }
+};
+
+// ============================================================================
+// MÓDULO DE CIERRE DE CAJA DIARIO POR DEPARTAMENTO (TURNOS MAÑANA Y TARDE)
+// ============================================================================
+
+window.dailyClosingSelectedDate = new Date().toISOString().split('T')[0];
+window.currentDailyClosingArea = 'Odontología';
+window.currentDailyClosingShift = 'all';
+window.dailyClosingTransactionsCache = [];
+
+window.setDailyClosingToday = function() {
+    window.dailyClosingSelectedDate = new Date().toISOString().split('T')[0];
+    const picker = document.getElementById('dc-date-picker');
+    if (picker) picker.value = window.dailyClosingSelectedDate;
+    window.renderDailyClosingView();
+};
+
+window.onDailyClosingDateChange = function(val) {
+    if (!val) return;
+    window.dailyClosingSelectedDate = val;
+    window.renderDailyClosingView();
+};
+
+window.renderDailyClosingView = async function() {
+    const picker = document.getElementById('dc-date-picker');
+    if (picker && !picker.value) {
+        picker.value = window.dailyClosingSelectedDate;
+    } else if (picker && picker.value) {
+        window.dailyClosingSelectedDate = picker.value;
+    }
+
+    const targetDate = window.dailyClosingSelectedDate;
+    const rate = getExchangeRate();
+
+    // 1. Fetch Invoices and Patient Transactions
+    const invoices = await SupabaseDataService.getInvoices();
+    const patients = await SupabaseDataService.getPatients();
+
+    const dailyTransactions = [];
+    const processedKeys = new Set();
+
+    // Helper to format time & shift
+    const parseTimeAndShift = (rawDateStr) => {
+        if (!rawDateStr) return { timeStr: '10:00 AM', shift: 'morning' };
+        if (rawDateStr.includes('T')) {
+            const d = new Date(rawDateStr);
+            if (!isNaN(d.getTime())) {
+                const hours = d.getHours();
+                const minutes = String(d.getMinutes()).padStart(2, '0');
+                const ampm = hours >= 12 ? 'PM' : 'AM';
+                const formattedHours = hours % 12 || 12;
+                return {
+                    timeStr: `${String(formattedHours).padStart(2, '0')}:${minutes} ${ampm}`,
+                    shift: hours >= 13 ? 'afternoon' : 'morning'
+                };
+            }
+        }
+        return { timeStr: '10:00 AM', shift: 'morning' };
+    };
+
+    // A. Parse from Patient Ledgers (payments on target date)
+    patients.forEach(p => {
+        (p.ledger || []).forEach(pay => {
+            const payDate = (pay.date || '').split('T')[0];
+            if (payDate === targetDate && parseFloat(pay.paidUSD || 0) > 0) {
+                const key = `${p.id}_${pay.id || pay.concept}_${pay.paidUSD}`;
+                if (!processedKeys.has(key)) {
+                    processedKeys.add(key);
+
+                    const timeInfo = parseTimeAndShift(pay.date || pay.timestamp || pay.createdAt);
+                    
+                    // Match with invoice to get doctor, assistant, area
+                    let matchedArea = pay.specialty || '';
+                    let matchedDoctor = pay.doctor || pay.specialist || '';
+                    let matchedAssistant = pay.assistant || '';
+                    let matchedConcept = pay.concept || 'Atención en Consulta';
+
+                    const matchInv = invoices.find(inv => String(inv.id) === String(pay.id) || String(inv.id) === String(pay.docId));
+                    if (matchInv) {
+                        matchedArea = matchedArea || matchInv.specialty || matchInv.category || '';
+                        matchedDoctor = matchedDoctor || matchInv.doctor || '';
+                        matchedAssistant = matchedAssistant || matchInv.assistant || '';
+                        if (matchInv.items && matchInv.items.length > 0) {
+                            matchedConcept = matchInv.items.map(i => i.name).join(', ');
+                            if (!matchedAssistant) {
+                                const itemWithAssistant = matchInv.items.find(i => i.assistant);
+                                if (itemWithAssistant) matchedAssistant = itemWithAssistant.assistant;
+                            }
+                        }
+                    }
+
+                    if (!matchedDoctor && p.sessions && p.sessions.length > 0) {
+                        matchedDoctor = p.sessions[p.sessions.length - 1].specialist || p.sessions[p.sessions.length - 1].doctor || '';
+                        matchedAssistant = matchedAssistant || p.sessions[p.sessions.length - 1].assistant || '';
+                    }
+
+                    const finalArea = detectClinicalArea(matchedArea, matchedConcept);
+                    const cleanMethod = (pay.method || 'cash').toLowerCase();
+
+                    dailyTransactions.push({
+                        id: pay.id || `REC-${Date.now().toString().slice(-4)}`,
+                        date: targetDate,
+                        time: timeInfo.timeStr,
+                        shift: timeInfo.shift,
+                        patientId: p.id,
+                        patientName: p.fullname,
+                        area: finalArea,
+                        doctor: matchedDoctor || 'Dr. Médico Tratante',
+                        assistant: matchedAssistant || '',
+                        concept: matchedConcept,
+                        method: pay.method ? getPaymentMethodLabel(pay.method) : 'Efectivo USD',
+                        rawMethod: cleanMethod,
+                        amountUSD: parseFloat(pay.paidUSD || 0),
+                        amountBs: parseFloat(pay.paidUSD || 0) * rate,
+                        splitDetails: pay.splitDetails || null
+                    });
+                }
+            }
+        });
+    });
+
+    // B. Parse from Invoices (direct sales, invoices on target date not already processed)
+    invoices.forEach(inv => {
+        const invDate = (inv.invoiceDate || '').split('T')[0];
+        if (invDate === targetDate && parseFloat(inv.paidRef || inv.totalUSD || 0) > 0) {
+            if (!processedKeys.has(inv.id)) {
+                processedKeys.add(inv.id);
+
+                const timeInfo = parseTimeAndShift(inv.createdAt || inv.invoiceDate);
+                const itemsConcept = (inv.items || []).map(i => i.name).join(', ') || 'Procedimiento Clínico';
+                const finalArea = detectClinicalArea(inv.specialty || inv.category || '', itemsConcept);
+
+                let asst = inv.assistant || '';
+                if (!asst && inv.items && inv.items.length > 0) {
+                    const itmAsst = inv.items.find(i => i.assistant);
+                    if (itmAsst) asst = itmAsst.assistant;
+                }
+
+                const invPaid = parseFloat(inv.paidRef || inv.totalUSD || 0);
+
+                dailyTransactions.push({
+                    id: inv.id,
+                    date: targetDate,
+                    time: timeInfo.timeStr,
+                    shift: timeInfo.shift,
+                    patientId: inv.patientId || 'S/C',
+                    patientName: inv.patientName || 'Paciente Particular',
+                    area: finalArea,
+                    doctor: inv.doctor || 'Dr. Médico Tratante',
+                    assistant: asst || '',
+                    concept: itemsConcept,
+                    method: inv.paymentMethod ? getPaymentMethodLabel(inv.paymentMethod) : 'Efectivo USD',
+                    rawMethod: (inv.paymentMethod || 'cash').toLowerCase(),
+                    amountUSD: invPaid,
+                    amountBs: invPaid * rate,
+                    splitDetails: inv.splitDetails || null,
+                    is_cashea: inv.is_cashea || false
+                });
+            }
+        }
+    });
+
+    window.dailyClosingTransactionsCache = dailyTransactions;
+
+    // 2. Compute Global Daily KPIs
+    const grandTotalUSD = dailyTransactions.reduce((acc, t) => acc + t.amountUSD, 0);
+    const grandTotalBs = grandTotalUSD * rate;
+    const uniquePatients = new Set(dailyTransactions.map(t => t.patientId)).size;
+    const totalServicesCount = dailyTransactions.length;
+
+    const elTotalUsd = document.getElementById('dc-kpi-total-usd');
+    const elTotalBs = document.getElementById('dc-kpi-total-bs');
+    const elPatients = document.getElementById('dc-kpi-patients-count');
+    const elServices = document.getElementById('dc-kpi-services-count');
+
+    if (elTotalUsd) elTotalUsd.textContent = `$${grandTotalUSD.toFixed(2)}`;
+    if (elTotalBs) elTotalBs.textContent = `Bs. ${grandTotalBs.toFixed(2)}`;
+    if (elPatients) elPatients.textContent = uniquePatients;
+    if (elServices) elServices.textContent = totalServicesCount;
+
+    // 3. Render Department Summary Cards
+    const baseAreas = [
+        'Odontología',
+        'Medicina General',
+        'Laboratorio',
+        'Rayos X e Imagen',
+        'Cardiología',
+        'Ginecología',
+        'Pediatría'
+    ];
+
+    const areaMap = {};
+    baseAreas.forEach(a => {
+        areaMap[a] = { name: a, totalUSD: 0, count: 0, morningCount: 0, afternoonCount: 0 };
+    });
+
+    dailyTransactions.forEach(t => {
+        const a = t.area || 'Medicina General';
+        if (!areaMap[a]) {
+            areaMap[a] = { name: a, totalUSD: 0, count: 0, morningCount: 0, afternoonCount: 0 };
+        }
+        areaMap[a].totalUSD += t.amountUSD;
+        areaMap[a].count++;
+        if (t.shift === 'afternoon') areaMap[a].afternoonCount++;
+        else areaMap[a].morningCount++;
+    });
+
+    const grid = document.getElementById('dc-areas-summary-grid');
+    if (grid) {
+        const areaList = Object.values(areaMap);
+        // Sort active revenue first
+        areaList.sort((a, b) => b.totalUSD - a.totalUSD);
+
+        grid.innerHTML = areaList.map(a => {
+            const iconInfo = getAreaIconInfo(a.name);
+            const totalBs = a.totalUSD * rate;
+
+            return `
+                <div class="dc-area-card" onclick="window.openDailyClosingDept('${a.name}')" 
+                     style="cursor: pointer; background: var(--bg-card); border: 1.5px solid var(--border-color); border-left: 5px solid ${iconInfo.color}; border-radius: 12px; padding: 14px 16px; transition: all 0.22s ease-in-out; box-shadow: 0 1px 3px rgba(0,0,0,0.03);"
+                     onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 16px rgba(0,0,0,0.06)';"
+                     onmouseout="this.style.transform='none'; this.style.boxShadow='0 1px 3px rgba(0,0,0,0.03)';">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <div style="width: 36px; height: 36px; border-radius: 10px; background: ${iconInfo.bg}; color: ${iconInfo.color}; display: flex; align-items: center; justify-content: center; font-size: 1.15rem;">
+                                <i class="fa-solid ${iconInfo.icon}"></i>
+                            </div>
+                            <div>
+                                <strong style="font-size: 0.96rem; color: #0f172a; display: block;">${a.name}</strong>
+                                <small style="color: #64748b; font-size: 0.72rem;">${a.morningCount} mñn / ${a.afternoonCount} tarde</small>
+                            </div>
+                        </div>
+                        <span class="badge-tag" style="background: #f1f5f9; color: #334155; font-size: 0.72rem; font-weight: 700;">${a.count} servicios</span>
+                    </div>
+                    
+                    <div style="font-size: 1.35rem; font-weight: 800; color: #0f172a; line-height: 1.15; margin-top: 6px;">
+                        $${a.totalUSD.toFixed(2)} <small style="font-size: 0.75rem; font-weight: 600; color: #64748b;">USD</small>
+                    </div>
+                    <div style="font-size: 0.78rem; font-weight: 700; color: #0284c7; margin-top: 2px;">
+                        Bs. ${totalBs.toFixed(2)}
+                    </div>
+
+                    <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: #64748b;">
+                        <span>Auditar Turnos</span>
+                        <span style="color: ${iconInfo.color}; font-weight: 700;">Ver Cierre <i class="fa-solid fa-arrow-right"></i></span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+};
+
+window.openDailyClosingDept = function(areaName, shift = 'all') {
+    window.currentDailyClosingArea = areaName;
+    window.currentDailyClosingShift = shift;
+
+    const modal = document.getElementById('modal-daily-closing-dept');
+    if (!modal) return;
+
+    // Update Header
+    const titleEl = document.getElementById('dc-modal-title');
+    const dateBadge = document.getElementById('dc-modal-date-badge');
+    const iconBadge = document.getElementById('dc-modal-icon-badge');
+    const iconInfo = getAreaIconInfo(areaName);
+
+    if (titleEl) titleEl.innerText = `Cierre de Caja: ${areaName}`;
+    if (dateBadge) dateBadge.innerText = `Fecha: ${window.dailyClosingSelectedDate}`;
+    if (iconBadge) {
+        iconBadge.style.color = iconInfo.color;
+        iconBadge.style.background = iconInfo.bg;
+        iconBadge.innerHTML = `<i class="fa-solid ${iconInfo.icon}"></i>`;
+    }
+
+    // Reset shift buttons
+    document.querySelectorAll('#modal-daily-closing-dept .filter-btn').forEach(b => b.classList.remove('active'));
+    const activeBtn = document.getElementById(`dc-shift-${shift}`);
+    if (activeBtn) activeBtn.classList.add('active');
+
+    openModal('modal-daily-closing-dept');
+    window.renderDailyClosingDeptShiftView();
+};
+
+window.setDailyClosingShift = function(shift, btn) {
+    window.currentDailyClosingShift = shift;
+    if (btn) {
+        document.querySelectorAll('#modal-daily-closing-dept .filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    }
+    window.renderDailyClosingDeptShiftView();
+};
+
+window.renderDailyClosingDeptShiftView = function() {
+    const areaName = window.currentDailyClosingArea;
+    const shift = window.currentDailyClosingShift;
+    const rate = getExchangeRate();
+
+    // Filter transactions for this area and shift
+    const areaTxs = (window.dailyClosingTransactionsCache || []).filter(t => t.area === areaName);
+
+    let filtered = areaTxs;
+    if (shift === 'morning') {
+        filtered = areaTxs.filter(t => t.shift === 'morning');
+    } else if (shift === 'afternoon') {
+        filtered = areaTxs.filter(t => t.shift === 'afternoon');
+    }
+
+    // Update Shift Count Badge
+    const shiftBadge = document.getElementById('dc-shift-count-badge');
+    if (shiftBadge) {
+        const shiftLabel = shift === 'morning' ? 'Turno Mañana' : (shift === 'afternoon' ? 'Turno Tarde' : 'Todo el Día');
+        shiftBadge.textContent = `${filtered.length} transacciones en ${shiftLabel}`;
+    }
+
+    // Calculate Payment Methods Breakdown
+    const methodTotals = {
+        cash_usd: 0,
+        cash_bs: 0,
+        pagomovil: 0,
+        pos: 0,
+        zelle: 0,
+        cashea: 0
+    };
+    let grandTotal = 0;
+
+    filtered.forEach(t => {
+        grandTotal += t.amountUSD;
+        const m = (t.rawMethod || '').toLowerCase();
+
+        if (t.splitDetails) {
+            for (const sm in t.splitDetails) {
+                const subAmt = parseFloat(t.splitDetails[sm]) || 0;
+                const cleanSm = sm.toLowerCase();
+                if (cleanSm.includes('pagomovil') || cleanSm.includes('movil') || cleanSm.includes('pago')) methodTotals.pagomovil += subAmt;
+                else if (cleanSm.includes('pos') || cleanSm.includes('punto')) methodTotals.pos += subAmt;
+                else if (cleanSm.includes('zelle')) methodTotals.zelle += subAmt;
+                else if (cleanSm.includes('cashea')) methodTotals.cashea += subAmt;
+                else methodTotals.cash_usd += subAmt;
+            }
+        } else if (t.is_cashea || m.includes('cashea')) {
+            methodTotals.cashea += t.amountUSD;
+        } else if (m.includes('pos') || m.includes('punto') || m.includes('tarjeta') || m.includes('debito')) {
+            methodTotals.pos += t.amountUSD;
+        } else if (m.includes('pago') || m.includes('movil') || m.includes('móvil') || m.includes('transferencia')) {
+            methodTotals.pagomovil += t.amountUSD;
+        } else if (m.includes('zelle')) {
+            methodTotals.zelle += t.amountUSD;
+        } else if (m.includes('bs') || m.includes('bolivares') || m.includes('bolívares')) {
+            methodTotals.cash_bs += t.amountBs;
+        } else {
+            methodTotals.cash_usd += t.amountUSD;
+        }
+    });
+
+    // Populate Method Cards
+    const elGrandTotal = document.getElementById('dc-shift-grand-total');
+    if (elGrandTotal) elGrandTotal.textContent = `Total Turno: $${grandTotal.toFixed(2)} (Bs. ${(grandTotal * rate).toFixed(2)})`;
+
+    const elCashUsd = document.getElementById('dc-met-cash-usd');
+    const elCashBs = document.getElementById('dc-met-cash-bs');
+    const elPagoMovil = document.getElementById('dc-met-pagomovil');
+    const elPos = document.getElementById('dc-met-pos');
+    const elZelle = document.getElementById('dc-met-zelle');
+    const elCashea = document.getElementById('dc-met-cashea');
+
+    if (elCashUsd) elCashUsd.textContent = `$${methodTotals.cash_usd.toFixed(2)}`;
+    if (elCashBs) elCashBs.textContent = `Bs. ${methodTotals.cash_bs.toFixed(2)}`;
+    if (elPagoMovil) elPagoMovil.textContent = `$${methodTotals.pagomovil.toFixed(2)}`;
+    if (elPos) elPos.textContent = `$${methodTotals.pos.toFixed(2)}`;
+    if (elZelle) elZelle.textContent = `$${methodTotals.zelle.toFixed(2)}`;
+    if (elCashea) elCashea.textContent = `$${methodTotals.cashea.toFixed(2)}`;
+
+    // Populate Table of Services
+    const tableBadge = document.getElementById('dc-table-services-badge');
+    if (tableBadge) tableBadge.textContent = `${filtered.length} servicios`;
+
+    const tbody = document.getElementById('dc-shift-transactions-tbody');
+    if (tbody) {
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted" style="padding: 24px;">No hay servicios registrados en este turno y departamento.</td></tr>';
+        } else {
+            tbody.innerHTML = filtered.map(t => {
+                const shiftIcon = t.shift === 'morning' ? '<i class="fa-solid fa-sun text-amber" title="Turno Mañana"></i>' : '<i class="fa-solid fa-moon text-indigo" title="Turno Tarde"></i>';
+                const asstBadge = t.assistant ? `<span class="badge-tag green" style="font-size: 0.72rem;"><i class="fa-solid fa-user-nurse"></i> ${t.assistant}</span>` : '<span style="color: #94a3b8;">--</span>';
+
+                return `
+                    <tr style="font-size: 0.82rem; border-bottom: 1px solid var(--border-color);">
+                        <td style="white-space: nowrap;">${shiftIcon} <strong>${t.time}</strong></td>
+                        <td><strong class="text-cyan">${t.id}</strong></td>
+                        <td>
+                            <strong>${t.patientName}</strong><br>
+                            <small class="text-muted">C.I: ${t.patientId}</small>
+                        </td>
+                        <td><strong>${t.concept}</strong></td>
+                        <td><i class="fa-solid fa-user-doctor text-cyan"></i> ${t.doctor}</td>
+                        <td>${asstBadge}</td>
+                        <td><span class="badge-tag" style="background:#f1f5f9; font-size:0.75rem;">${t.method}</span></td>
+                        <td class="text-right" style="font-weight: 800; color: #059669; white-space: nowrap;">
+                            $${t.amountUSD.toFixed(2)}<br>
+                            <small style="color: #0284c7; font-weight: normal;">Bs. ${t.amountBs.toFixed(2)}</small>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+    }
+};
+
+window.printDailyClosingDept = function() {
+    const areaName = window.currentDailyClosingArea;
+    const shift = window.currentDailyClosingShift;
+    const shiftLabel = shift === 'morning' ? 'Turno Mañana' : (shift === 'afternoon' ? 'Turno Tarde' : 'Jornada Completa');
+    const date = window.dailyClosingSelectedDate;
+    const rate = getExchangeRate();
+
+    const areaTxs = (window.dailyClosingTransactionsCache || []).filter(t => t.area === areaName);
+    const filtered = shift === 'morning' ? areaTxs.filter(t => t.shift === 'morning') : (shift === 'afternoon' ? areaTxs.filter(t => t.shift === 'afternoon') : areaTxs);
+
+    const totalUSD = filtered.reduce((acc, t) => acc + t.amountUSD, 0);
+    const totalBs = totalUSD * rate;
+
+    const printWin = window.open('', '_blank', 'width=900,height=700');
+    if (!printWin) return;
+
+    printWin.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Cierre de Caja - ${areaName} (${shiftLabel})</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 25px; color: #1e293b; font-size: 12px; }
+                h1 { margin: 0; font-size: 18px; color: #0f172a; }
+                .subtitle { color: #64748b; font-size: 12px; margin-top: 4px; }
+                .header-box { border-bottom: 2px solid #0284c7; padding-bottom: 12px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+                .kpi-box { display: flex; gap: 15px; margin-bottom: 16px; }
+                .kpi-card { border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 12px; flex: 1; background: #f8fafc; }
+                .kpi-card span { font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: bold; }
+                .kpi-card div { font-size: 16px; font-weight: bold; color: #0f172a; margin-top: 2px; }
+                table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px; }
+                th { background: #f1f5f9; padding: 8px; text-align: left; border-bottom: 1.5px solid #cbd5e1; text-transform: uppercase; font-size: 10px; }
+                td { padding: 7px 8px; border-bottom: 1px solid #e2e8f0; }
+                .text-right { text-align: right; }
+                .footer { margin-top: 30px; display: flex; justify-content: space-between; border-top: 1px solid #cbd5e1; padding-top: 12px; }
+                .signature-line { width: 200px; border-top: 1px solid #0f172a; text-align: center; font-size: 10px; padding-top: 4px; margin-top: 30px; }
+            </style>
+        </head>
+        <body>
+            <div class="header-box">
+                <div>
+                    <h1>CENTRO MÉDICO Y ODONTOLÓGICO VIDA SANA</h1>
+                    <div class="subtitle">COMPROBANTE OFICIAL DE CIERRE DE CAJA DIARIO</div>
+                </div>
+                <div style="text-align: right;">
+                    <strong>Departamento:</strong> ${areaName}<br>
+                    <strong>Fecha:</strong> ${date}<br>
+                    <strong>Turno:</strong> ${shiftLabel}
+                </div>
+            </div>
+
+            <div class="kpi-box">
+                <div class="kpi-card">
+                    <span>Total Recaudado</span>
+                    <div style="color: #059669;">$${totalUSD.toFixed(2)} USD</div>
+                    <small style="color: #0284c7; font-weight: bold;">Bs. ${totalBs.toFixed(2)}</small>
+                </div>
+                <div class="kpi-card">
+                    <span>Servicios Realizados</span>
+                    <div>${filtered.length} Procedimientos</div>
+                </div>
+                <div class="kpi-card">
+                    <span>Tasa BCV</span>
+                    <div>Bs. ${rate.toFixed(2)} / USD</div>
+                </div>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Hora</th>
+                        <th>Recibo</th>
+                        <th>Paciente</th>
+                        <th>Procedimiento</th>
+                        <th>Médico Tratante</th>
+                        <th>Asistente</th>
+                        <th>Método</th>
+                        <th class="text-right">Monto ($)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${filtered.map(t => `
+                        <tr>
+                            <td>${t.time}</td>
+                            <td>${t.id}</td>
+                            <td>${t.patientName} (${t.patientId})</td>
+                            <td>${t.concept}</td>
+                            <td>${t.doctor}</td>
+                            <td>${t.assistant || '--'}</td>
+                            <td>${t.method}</td>
+                            <td class="text-right"><strong>$${t.amountUSD.toFixed(2)}</strong></td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+
+            <div class="footer">
+                <div class="signature-line">Firma Cajero / Recepción</div>
+                <div class="signature-line">Firma Administración / Auditoría</div>
+            </div>
+            <script>
+                window.onload = function() { window.print(); };
+            </script>
+        </body>
+        </html>
+    `);
+    printWin.document.close();
 };
 
 window.deleteAccountTransfer = async function(transferId) {
