@@ -1638,6 +1638,45 @@
                         </div>
                     </div>
 
+                    <!-- Executive Performance Stats Grid for Medical Staff -->
+                    <div class="erp-stats-grid" style="margin-bottom: 16px;">
+                        <div class="erp-stat-card accent-amber" style="border-left: 4px solid #f59e0b; background: linear-gradient(135deg, rgba(245, 158, 11, 0.04) 0%, rgba(251, 191, 36, 0.08) 100%);">
+                            <div class="erp-stat-header">
+                                <span class="erp-stat-title" style="color: #b45309; font-weight: 700;"><i class="fa-solid fa-crown text-amber"></i> Top Médico en Ingresos</span>
+                                <div class="erp-stat-icon-wrap amber" style="background: rgba(245, 158, 11, 0.15); color: #d97706;"><i class="fa-solid fa-trophy"></i></div>
+                            </div>
+                            <div class="erp-stat-value" id="user-stat-top-doctor-name" style="font-size: 1.25rem; font-weight: 800; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">--</div>
+                            <div class="erp-stat-sub" id="user-stat-top-doctor-sub" style="font-weight: 600; color: #b45309;"><i class="fa-solid fa-arrow-trend-up"></i> $0.00 USD generado</div>
+                        </div>
+
+                        <div class="erp-stat-card accent-green" style="border-left: 4px solid #10b981;">
+                            <div class="erp-stat-header">
+                                <span class="erp-stat-title">Ingresos Totales del Equipo</span>
+                                <div class="erp-stat-icon-wrap green"><i class="fa-solid fa-hand-holding-dollar"></i></div>
+                            </div>
+                            <div class="erp-stat-value text-green" id="user-stat-total-revenue">$0.00 <small style="font-size: 0.75rem; color: #64748b;">USD</small></div>
+                            <div class="erp-stat-sub"><i class="fa-solid fa-circle-check text-green"></i> Facturación acumulada del personal médico</div>
+                        </div>
+
+                        <div class="erp-stat-card accent-blue" style="border-left: 4px solid #0284c7;">
+                            <div class="erp-stat-header">
+                                <span class="erp-stat-title">Atenciones / Procedimientos</span>
+                                <div class="erp-stat-icon-wrap blue"><i class="fa-solid fa-stethoscope"></i></div>
+                            </div>
+                            <div class="erp-stat-value text-cyan" id="user-stat-total-attended">0</div>
+                            <div class="erp-stat-sub">Consultas y procedimientos completados</div>
+                        </div>
+
+                        <div class="erp-stat-card accent-purple" style="border-left: 4px solid #8b5cf6;">
+                            <div class="erp-stat-header">
+                                <span class="erp-stat-title">Promedio por Especialista</span>
+                                <div class="erp-stat-icon-wrap purple"><i class="fa-solid fa-chart-line"></i></div>
+                            </div>
+                            <div class="erp-stat-value" id="user-stat-avg-revenue" style="color: #7c3aed;">$0.00 <small style="font-size: 0.75rem; color: #64748b;">USD</small></div>
+                            <div class="erp-stat-sub">Rendimiento medio por profesional</div>
+                        </div>
+                    </div>
+
                     <!-- Banner Informativo: Separación de Roles Asistenciales vs Administrativos -->
                     <div class="card" style="margin-bottom: 20px; background: linear-gradient(135deg, rgba(8, 145, 178, 0.05) 0%, rgba(20, 184, 166, 0.05) 100%); border-left: 4px solid var(--primary-cyan); padding: 14px 20px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
@@ -1669,8 +1708,13 @@
                             <button class="filter-btn" data-filter="Especialista">Especialistas</button>
                             <button class="filter-btn" data-filter="Asistente">Asistentes / Enfermeros</button>
                         </div>
-                        <div class="search-box">
-                            <input type="text" id="users-table-search" placeholder="Buscar médico, cargo o MPPS...">
+                        <div style="display: flex; gap: 8px; align-items: center; flex: 1; min-width: 260px;">
+                            <div class="search-box" style="flex: 1;">
+                                <input type="text" id="users-table-search" placeholder="Buscar médico, cargo o MPPS...">
+                            </div>
+                            <button type="button" class="btn btn-outline" id="btn-sort-doctor-revenue" onclick="window.toggleDoctorRevenueSort()" style="border-radius: 8px; font-size: 0.82rem; height: 38px; padding: 6px 12px; white-space: nowrap; font-weight: 600; border-color: #cbd5e1;" title="Alternar orden por mayor facturación">
+                                <i class="fa-solid fa-arrow-down-wide-short text-amber"></i> <span id="sort-doctor-btn-text">Mayor Ingreso</span>
+                            </button>
                         </div>
                     </div>
 
@@ -1683,6 +1727,7 @@
                                         <th>Correo Electrónico</th>
                                         <th>Rol / Cargo</th>
                                         <th>Nº Colegiado / Licencia</th>
+                                        <th style="min-width: 170px;">Rendimiento / Facturación</th>
                                         <th>Estado</th>
                                         <th>Fecha Registro</th>
                                         <th>Acciones</th>
@@ -3007,40 +3052,40 @@
 
                     <!-- Top Executive Stats -->
                     <div class="erp-stats-grid">
-                        <div class="erp-stat-card accent-green">
+                        <div class="erp-stat-card accent-amber" style="border-left: 4px solid #f59e0b; background: linear-gradient(135deg, rgba(245, 158, 11, 0.04) 0%, rgba(251, 191, 36, 0.08) 100%);">
+                            <div class="erp-stat-header">
+                                <span class="erp-stat-title" style="color: #b45309; font-weight: 700;"><i class="fa-solid fa-crown text-amber"></i> Especialidad Líder</span>
+                                <div class="erp-stat-icon-wrap amber" style="background: rgba(245, 158, 11, 0.15); color: #d97706;"><i class="fa-solid fa-trophy"></i></div>
+                            </div>
+                            <div class="erp-stat-value" id="spec-stat-top-specialty" style="font-size: 1.25rem; font-weight: 800; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">--</div>
+                            <div class="erp-stat-sub" id="spec-stat-top-sub" style="font-weight: 600; color: #b45309;"><i class="fa-solid fa-arrow-trend-up"></i> $0.00 USD generado</div>
+                        </div>
+
+                        <div class="erp-stat-card accent-green" style="border-left: 4px solid #10b981;">
+                            <div class="erp-stat-header">
+                                <span class="erp-stat-title">Facturación Especialidades</span>
+                                <div class="erp-stat-icon-wrap green"><i class="fa-solid fa-hand-holding-dollar"></i></div>
+                            </div>
+                            <div class="erp-stat-value text-green" id="spec-stat-total-revenue">$0.00 <small style="font-size: 0.75rem; color: #64748b;">USD</small></div>
+                            <div class="erp-stat-sub"><i class="fa-solid fa-circle-check text-green"></i> Total facturado en todas las áreas</div>
+                        </div>
+
+                        <div class="erp-stat-card accent-blue" style="border-left: 4px solid #0284c7;">
                             <div class="erp-stat-header">
                                 <span class="erp-stat-title">Especialidades Activas</span>
-                                <div class="erp-stat-icon-wrap green"><i class="fa-solid fa-heart-pulse"></i></div>
+                                <div class="erp-stat-icon-wrap blue"><i class="fa-solid fa-heart-pulse"></i></div>
                             </div>
-                            <div class="erp-stat-value" id="spec-stat-total">13</div>
-                            <div class="erp-stat-sub"><i class="fa-solid fa-circle-check text-green"></i> Disponibles en recepción y citas</div>
+                            <div class="erp-stat-value text-cyan" id="spec-stat-total">13</div>
+                            <div class="erp-stat-sub">Disponibles en citas y recepción</div>
                         </div>
 
-                        <div class="erp-stat-card accent-blue">
+                        <div class="erp-stat-card accent-purple" style="border-left: 4px solid #8b5cf6;">
                             <div class="erp-stat-header">
-                                <span class="erp-stat-title">Promedio Comisión Médicos</span>
-                                <div class="erp-stat-icon-wrap blue"><i class="fa-solid fa-user-doctor"></i></div>
+                                <span class="erp-stat-title">Distribución Media</span>
+                                <div class="erp-stat-icon-wrap purple"><i class="fa-solid fa-scale-balanced"></i></div>
                             </div>
-                            <div class="erp-stat-value text-teal" id="spec-stat-doc-avg">62%</div>
-                            <div class="erp-stat-sub">Honorarios directos por atención</div>
-                        </div>
-
-                        <div class="erp-stat-card accent-purple">
-                            <div class="erp-stat-header">
-                                <span class="erp-stat-title">Retención Media Clínica</span>
-                                <div class="erp-stat-icon-wrap purple"><i class="fa-solid fa-hospital"></i></div>
-                            </div>
-                            <div class="erp-stat-value" id="spec-stat-cli-avg" style="color: #608127;">38%</div>
-                            <div class="erp-stat-sub">Canon institucional y operatividad</div>
-                        </div>
-
-                        <div class="erp-stat-card accent-red">
-                            <div class="erp-stat-header">
-                                <span class="erp-stat-title">Departamentos Clínicos</span>
-                                <div class="erp-stat-icon-wrap red"><i class="fa-solid fa-layer-group"></i></div>
-                            </div>
-                            <div class="erp-stat-value" id="spec-stat-depts">3 Áreas</div>
-                            <div class="erp-stat-sub">Consultas, Diagnóstico y Salud Bucal</div>
+                            <div class="erp-stat-value" id="spec-stat-doc-avg" style="font-size: 1.25rem; color: #7c3aed;">60% / 40%</div>
+                            <div class="erp-stat-sub" id="spec-stat-doc-avg-sub">Honorarios Dr. / Clínica</div>
                         </div>
                     </div>
 
@@ -3065,7 +3110,8 @@
                                     <tr>
                                         <th>Especialidad Médica</th>
                                         <th>Departamento</th>
-                                        <th style="min-width: 220px;">Distribución Ganancia (% Dr / % Clínica)</th>
+                                        <th style="min-width: 140px;">Distribución</th>
+                                        <th style="min-width: 170px;">Rendimiento Financiero</th>
                                         <th class="text-center">Estado</th>
                                         <th class="text-right">Acciones</th>
                                     </tr>
@@ -7223,14 +7269,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=282"></script>
-    <script src="supabaseClient.js?v=282"></script>
-    <script src="odontogram.js?v=282"></script>
-    <script src="signature.js?v=282"></script>
-    <script src="whatsapp.js?v=282"></script>
-    <script src="kardex.js?v=282"></script>
-    <script src="app.js?v=282"></script>
-    <script src="clinicalERP.js?v=282"></script>
-    <script src="tutorial.js?v=282"></script>
+    <script src="seededData.js?v=283"></script>
+    <script src="supabaseClient.js?v=283"></script>
+    <script src="odontogram.js?v=283"></script>
+    <script src="signature.js?v=283"></script>
+    <script src="whatsapp.js?v=283"></script>
+    <script src="kardex.js?v=283"></script>
+    <script src="app.js?v=283"></script>
+    <script src="clinicalERP.js?v=283"></script>
+    <script src="tutorial.js?v=283"></script>
 </body>
 </html>

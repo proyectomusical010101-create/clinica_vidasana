@@ -9124,6 +9124,183 @@ function isSystemAdminRole(roleStr) {
 window.isSystemAdminRole = isSystemAdminRole;
 
 // ==========================================
+// MOTOR DE RENDIMIENTO CLÍNICO & INGRESOS
+// ==========================================
+let _clinicPerfCache = null;
+let _clinicPerfCacheTime = 0;
+
+window.getClinicPerformanceSummary = async function(forceRefresh = false) {
+    const now = Date.now();
+    if (!forceRefresh && _clinicPerfCache && (now - _clinicPerfCacheTime < 4000)) {
+        return _clinicPerfCache;
+    }
+
+    let invoices = [];
+    try { invoices = await SupabaseDataService.getInvoices(forceRefresh); } catch(e) {}
+    
+    let patients = [];
+    try { patients = await SupabaseDataService.getPatients(); } catch(e) {}
+    
+    let appointments = [];
+    try { appointments = await SupabaseDataService.getAppointments(); } catch(e) {}
+
+    let users = [];
+    try { users = await SupabaseDataService.getUsers(); } catch(e) {}
+
+    const doctorStats = {};
+    const specialtyStats = {};
+    let totalRevenueUSD = 0;
+    let totalAttended = 0;
+
+    // Initialize doctorStats for all users
+    users.forEach(u => {
+        const docKey = String(u.id);
+        doctorStats[docKey] = {
+            id: u.id,
+            name: u.fullname || u.name || 'Médico',
+            role: u.role || 'Especialista',
+            specialty: (u.doctorProfile && u.doctorProfile.specialty) || '',
+            totalUSD: 0,
+            attendedCount: 0
+        };
+    });
+
+    const findDoctor = (docName, docId) => {
+        if (docId && doctorStats[String(docId)]) return doctorStats[String(docId)];
+        if (!docName) return null;
+        const norm = docName.toLowerCase().replace(/^(dr\.|dra\.|doctor|doctora)\s+/i, '').trim();
+        for (const k in doctorStats) {
+            const uName = doctorStats[k].name.toLowerCase().replace(/^(dr\.|dra\.|doctor|doctora)\s+/i, '').trim();
+            if (uName && (uName.includes(norm) || norm.includes(uName))) return doctorStats[k];
+        }
+        return null;
+    };
+
+    const normalizeArea = (rawArea, concept) => {
+        if (typeof detectClinicalArea === 'function') {
+            return detectClinicalArea(rawArea || '', concept || '');
+        }
+        return rawArea || 'Medicina General';
+    };
+
+    const processedPaymentIds = new Set();
+
+    // 1. Ingresos por abonos de pacientes (historial clínico y caja)
+    patients.forEach(p => {
+        const payments = (p.metadata && p.metadata.payments) || p.payments || [];
+        payments.forEach(pay => {
+            const payId = pay.id || pay.docId || `${p.id}-${pay.date}-${pay.paidUSD}`;
+            if (processedPaymentIds.has(payId)) return;
+            processedPaymentIds.add(payId);
+
+            const amt = parseFloat(pay.paidUSD || pay.amountRef || pay.amount || 0);
+            if (amt <= 0) return;
+
+            totalRevenueUSD += amt;
+
+            const area = normalizeArea(pay.specialty || pay.area, pay.concept);
+            if (!specialtyStats[area]) specialtyStats[area] = { name: area, totalUSD: 0, count: 0 };
+            specialtyStats[area].totalUSD += amt;
+            specialtyStats[area].count++;
+
+            const doc = findDoctor(pay.doctor, pay.doctorId);
+            if (doc) {
+                doc.totalUSD += amt;
+                doc.attendedCount++;
+            }
+        });
+    });
+
+    // 2. Ingresos por facturas clínicas
+    invoices.forEach(inv => {
+        if (processedPaymentIds.has(inv.id)) return;
+        processedPaymentIds.add(inv.id);
+
+        const amt = parseFloat(inv.paidRef || inv.totalRef || inv.totalUSD || inv.total || 0);
+        if (amt <= 0) return;
+
+        totalRevenueUSD += amt;
+
+        const conceptStr = (inv.items || []).map(i => i.name).join(' ');
+        const area = normalizeArea(inv.specialty || inv.category, conceptStr);
+        if (!specialtyStats[area]) specialtyStats[area] = { name: area, totalUSD: 0, count: 0 };
+        specialtyStats[area].totalUSD += amt;
+        specialtyStats[area].count++;
+
+        const doc = findDoctor(inv.doctor || inv.doctorName, inv.doctorId || inv.doctor_id);
+        if (doc) {
+            doc.totalUSD += amt;
+            doc.attendedCount++;
+        }
+    });
+
+    // 3. Citas asistenciales atendidas
+    appointments.forEach(app => {
+        if (app.status === 'Completada' || app.status === 'Atendida') {
+            totalAttended++;
+            const doc = findDoctor(app.doctorName, app.doctorId || app.doctor_id);
+            if (doc) {
+                if (doc.attendedCount === 0) doc.attendedCount++;
+            }
+            const area = normalizeArea(app.specialty, app.treatment);
+            if (!specialtyStats[area]) specialtyStats[area] = { name: area, totalUSD: 0, count: 0 };
+            if (specialtyStats[area].count === 0) specialtyStats[area].count++;
+        }
+    });
+
+    // Determine Top Doctor
+    const clinicalDocs = Object.values(doctorStats).filter(d => !isSystemAdminRole(d.role));
+    clinicalDocs.sort((a, b) => b.totalUSD - a.totalUSD);
+    const topDoctor = clinicalDocs.length > 0 ? clinicalDocs[0] : null;
+
+    // Determine Top Specialty
+    const allSpecs = Object.values(specialtyStats);
+    allSpecs.sort((a, b) => b.totalUSD - a.totalUSD);
+    const topSpecialty = allSpecs.length > 0 ? allSpecs[0] : null;
+
+    const activeDocsCount = clinicalDocs.length || 1;
+    const avgDoctorRevenue = totalRevenueUSD / activeDocsCount;
+
+    _clinicPerfCache = {
+        doctorStats,
+        specialtyStats,
+        findDoctor,
+        topDoctor,
+        topSpecialty,
+        totalRevenueUSD,
+        totalAttended,
+        avgDoctorRevenue
+    };
+    _clinicPerfCacheTime = now;
+    return _clinicPerfCache;
+};
+
+window.doctorRevenueSortDesc = false;
+
+window.toggleDoctorRevenueSort = async function() {
+    window.doctorRevenueSortDesc = !window.doctorRevenueSortDesc;
+    const sortBtn = document.getElementById('btn-sort-doctor-revenue');
+    const sortText = document.getElementById('sort-doctor-btn-text');
+    if (sortBtn) {
+        if (window.doctorRevenueSortDesc) {
+            sortBtn.style.backgroundColor = 'rgba(245, 158, 11, 0.15)';
+            sortBtn.style.borderColor = '#f59e0b';
+            sortBtn.style.color = '#b45309';
+            if (sortText) sortText.textContent = 'Mayor a Menor $';
+        } else {
+            sortBtn.style.backgroundColor = '';
+            sortBtn.style.borderColor = '#cbd5e1';
+            sortBtn.style.color = '';
+            if (sortText) sortText.textContent = 'Mayor Ingreso';
+        }
+    }
+    const activeFilterBtn = document.querySelector('#view-users .filter-card .filter-btn.active');
+    const filter = activeFilterBtn ? activeFilterBtn.dataset.filter : 'all';
+    const searchQuery = document.getElementById('users-table-search')?.value || '';
+    await renderUsersTable(filter, searchQuery);
+};
+
+// ==========================================
 // GESTIÓN DE PERSONAL MÉDICO Y ASISTENCIAL
 // ==========================================
 async function renderUsersTable(filter = 'all', searchQuery = '') {
@@ -9135,6 +9312,29 @@ async function renderUsersTable(filter = 'all', searchQuery = '') {
 
     // In Personal Médico view, ONLY show clinical staff (exclude pure system/administrative roles)
     users = users.filter(u => !isSystemAdminRole(u.role));
+
+    // Performance metrics
+    const perf = await window.getClinicPerformanceSummary();
+
+    // Update Top 4 KPI cards in view-users
+    const topDocNameEl = document.getElementById('user-stat-top-doctor-name');
+    const topDocSubEl = document.getElementById('user-stat-top-doctor-sub');
+    const totalRevEl = document.getElementById('user-stat-total-revenue');
+    const totalAttEl = document.getElementById('user-stat-total-attended');
+    const avgRevEl = document.getElementById('user-stat-avg-revenue');
+
+    if (topDocNameEl) {
+        if (perf.topDoctor && perf.topDoctor.totalUSD > 0) {
+            topDocNameEl.textContent = perf.topDoctor.name;
+            if (topDocSubEl) topDocSubEl.innerHTML = `<i class="fa-solid fa-arrow-trend-up"></i> $${perf.topDoctor.totalUSD.toFixed(2)} USD (${perf.topDoctor.attendedCount} ${perf.topDoctor.attendedCount === 1 ? 'atención' : 'atenciones'})`;
+        } else {
+            topDocNameEl.textContent = users[0] ? (users[0].fullname || users[0].name) : 'Sin registro';
+            if (topDocSubEl) topDocSubEl.innerHTML = `<i class="fa-solid fa-circle-info"></i> Esperando atención`;
+        }
+    }
+    if (totalRevEl) totalRevEl.innerHTML = `$${perf.totalRevenueUSD.toFixed(2)} <small style="font-size: 0.75rem; color: #64748b;">USD</small>`;
+    if (totalAttEl) totalAttEl.textContent = perf.totalAttended;
+    if (avgRevEl) avgRevEl.innerHTML = `$${perf.avgDoctorRevenue.toFixed(2)} <small style="font-size: 0.75rem; color: #64748b;">USD</small>`;
 
     // Apply Filter
     if (filter !== 'all') {
@@ -9163,18 +9363,42 @@ async function renderUsersTable(filter = 'all', searchQuery = '') {
         );
     }
 
+    // Apply Revenue Sort if active
+    if (window.doctorRevenueSortDesc) {
+        users.sort((a, b) => {
+            const revA = (perf.doctorStats[String(a.id)] || perf.findDoctor(a.fullname))?.totalUSD || 0;
+            const revB = (perf.doctorStats[String(b.id)] || perf.findDoctor(b.fullname))?.totalUSD || 0;
+            return revB - revA;
+        });
+    }
+
     if (users.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted" style="padding: 24px;">No se encontró personal médico o asistencial registrado con estos filtros.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted" style="padding: 24px;">No se encontró personal médico o asistencial registrado con estos filtros.</td></tr>`;
         return;
     }
 
     users.forEach(u => {
         const tr = document.createElement('tr');
+        const docPerf = (perf.doctorStats && (perf.doctorStats[String(u.id)] || perf.findDoctor(u.fullname))) || { totalUSD: 0, attendedCount: 0 };
+        const isTop = perf.topDoctor && (String(perf.topDoctor.id) === String(u.id) || perf.topDoctor.name === u.fullname) && docPerf.totalUSD > 0;
+
         tr.innerHTML = `
             <td><strong>${u.fullname}</strong></td>
             <td>${u.email}</td>
             <td><span class="badge-tag blue" style="font-weight:600;"><i class="fa-solid fa-stethoscope"></i> ${u.role}</span></td>
             <td>${u.license && u.license !== 'N/A' ? `<span style="font-family:monospace; font-weight:700; color:#0369a1;">${u.license}</span>` : '<span class="text-muted">N/A</span>'}</td>
+            <td>
+                <div style="display: flex; flex-direction: column; gap: 2px;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <strong style="font-size: 0.95rem; color: #0f172a;">$${docPerf.totalUSD.toFixed(2)}</strong>
+                        <small style="color: #64748b; font-size: 0.72rem; font-weight: 600;">USD</small>
+                        ${isTop ? '<span class="badge-tag amber" style="font-size: 0.68rem; padding: 1px 6px; font-weight: 700; background: rgba(245, 158, 11, 0.15); color: #b45309;"><i class="fa-solid fa-crown"></i> #1 Top</span>' : ''}
+                    </div>
+                    <small style="color: #64748b; font-size: 0.78rem;">
+                        <i class="fa-solid fa-clipboard-check text-green"></i> ${docPerf.attendedCount} ${docPerf.attendedCount === 1 ? 'atención' : 'atenciones'}
+                    </small>
+                </div>
+            </td>
             <td><span class="badge-tag green">${u.status || 'Activo'}</span></td>
             <td>${u.createdAt || '-'}</td>
             <td>

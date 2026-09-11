@@ -102,7 +102,7 @@
             this.renderSpecialties();
         },
 
-        renderSpecialties() {
+        async renderSpecialties() {
             const container = document.getElementById('specialties-table-body');
             if (!container) return;
 
@@ -122,6 +122,12 @@
                 );
             }
 
+            // Get performance metrics from universal performance engine
+            let perf = { specialtyStats: {}, totalRevenueUSD: 0 };
+            if (window.getClinicPerformanceSummary) {
+                try { perf = await window.getClinicPerformanceSummary(); } catch(e) {}
+            }
+
             // Calculate top stats
             const totalActive = this.specialties.filter(s => s.status !== 'Inactivo').length;
             let sumDoc = 0;
@@ -133,17 +139,39 @@
             const avgDoc = this.specialties.length ? Math.round(sumDoc / this.specialties.length) : 60;
             const avgCli = this.specialties.length ? Math.round(sumCli / this.specialties.length) : 40;
 
+            // Specialty revenue leader & totals
+            let topSpec = perf.topSpecialty || null;
+            let totalSpecRevenue = 0;
+            for (const k in (perf.specialtyStats || {})) {
+                totalSpecRevenue += perf.specialtyStats[k].totalUSD || 0;
+                if (!topSpec || (perf.specialtyStats[k].totalUSD > (topSpec.totalUSD || 0))) {
+                    topSpec = perf.specialtyStats[k];
+                }
+            }
+
+            const elTopSpec = document.getElementById('spec-stat-top-specialty');
+            const elTopSub = document.getElementById('spec-stat-top-sub');
+            const elTotalRev = document.getElementById('spec-stat-total-revenue');
             const elTotal = document.getElementById('spec-stat-total');
-            if (elTotal) elTotal.innerText = totalActive;
             const elDocAvg = document.getElementById('spec-stat-doc-avg');
-            if (elDocAvg) elDocAvg.innerText = avgDoc + '%';
-            const elCliAvg = document.getElementById('spec-stat-cli-avg');
-            if (elCliAvg) elCliAvg.innerText = avgCli + '%';
+
+            if (elTopSpec) {
+                if (topSpec && topSpec.totalUSD > 0) {
+                    elTopSpec.textContent = topSpec.name;
+                    if (elTopSub) elTopSub.innerHTML = `<i class="fa-solid fa-arrow-trend-up"></i> $${topSpec.totalUSD.toFixed(2)} USD (${topSpec.count} atenciones)`;
+                } else {
+                    elTopSpec.textContent = this.specialties[0] ? this.specialties[0].name : 'Sin facturación';
+                    if (elTopSub) elTopSub.innerHTML = `<i class="fa-solid fa-circle-info"></i> Esperando atención`;
+                }
+            }
+            if (elTotalRev) elTotalRev.innerHTML = `$${totalSpecRevenue.toFixed(2)} <small style="font-size: 0.75rem; color: #64748b;">USD</small>`;
+            if (elTotal) elTotal.innerText = totalActive;
+            if (elDocAvg) elDocAvg.innerText = `${avgDoc}% / ${avgCli}%`;
 
             if (list.length === 0) {
                 container.innerHTML = `
                     <tr>
-                        <td colspan="5" style="padding: 40px; text-align: center; color: #64748b;">
+                        <td colspan="6" style="padding: 40px; text-align: center; color: #64748b;">
                             <div style="font-size: 2.2rem; margin-bottom: 10px; color: #cbd5e1;"><i class="fa-solid fa-stethoscope"></i></div>
                             <strong style="font-size: 1rem; color: #1e293b;">No se encontraron especialidades</strong>
                             <p style="margin: 4px 0 0 0; font-size: 0.85rem;">Intente con otro filtro o agregue una nueva especialidad.</p>
@@ -153,12 +181,20 @@
                 return;
             }
 
+            const grandTotalRevenue = perf.totalRevenueUSD || totalSpecRevenue || 1;
+
             container.innerHTML = list.map(s => {
                 const docPct = parseFloat(s.doctor_commission_pct || s.doctor_percentage || 60);
                 const cliPct = parseFloat(s.clinic_commission_pct || s.clinic_percentage || 40);
                 const isActive = s.status ? s.status === 'Activo' : (s.active !== false);
                 const iconClass = s.icon || 'fa-stethoscope';
                 const colorCode = s.color || '#7fa13c';
+
+                // Find performance for this specialty
+                const specName = s.name || '';
+                const specPerf = (perf.specialtyStats && (perf.specialtyStats[specName] || perf.specialtyStats[specName.toLowerCase()])) || { totalUSD: 0, count: 0 };
+                const isTop = topSpec && (topSpec.name === specName || topSpec.name.toLowerCase() === specName.toLowerCase()) && specPerf.totalUSD > 0;
+                const sharePct = specPerf.totalUSD > 0 ? Math.round((specPerf.totalUSD / grandTotalRevenue) * 100) : 0;
 
                 return `
                     <tr>
@@ -179,14 +215,20 @@
                             </span>
                         </td>
                         <td>
-                            <div class="erp-commission-bar-container">
-                                <div class="erp-split-bar">
-                                    <div class="erp-split-doctor" style="width: ${docPct}%;"></div>
-                                    <div class="erp-split-clinic" style="width: ${cliPct}%;"></div>
+                            <span class="badge-tag" style="background: rgba(8, 145, 178, 0.08); color: #0e7490; font-size: 0.8rem; font-weight: 700; padding: 5px 10px; border-radius: 8px; border: 1px solid rgba(8, 145, 178, 0.2); white-space: nowrap;">
+                                <i class="fa-solid fa-user-doctor text-cyan"></i> ${docPct}% &nbsp;|&nbsp; <i class="fa-solid fa-hospital text-green"></i> ${cliPct}%
+                            </span>
+                        </td>
+                        <td>
+                            <div style="display: flex; flex-direction: column; gap: 3px;">
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <strong style="font-size: 0.95rem; color: #0f172a;">$${specPerf.totalUSD.toFixed(2)}</strong>
+                                    <small style="color: #64748b; font-size: 0.72rem; font-weight: 600;">USD</small>
+                                    ${isTop ? '<span class="badge-tag amber" style="font-size: 0.68rem; padding: 1px 6px; font-weight: 700; background: rgba(245, 158, 11, 0.15); color: #b45309;"><i class="fa-solid fa-crown"></i> Líder</span>' : ''}
                                 </div>
-                                <div class="erp-split-labels">
-                                    <span class="doc-label"><i class="fa-solid fa-user-doctor"></i> Médico: <strong>${docPct}%</strong></span>
-                                    <span class="cli-label"><i class="fa-solid fa-hospital"></i> Clínica: <strong>${cliPct}%</strong></span>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <small style="color: #64748b; font-size: 0.76rem;">${specPerf.count} ${specPerf.count === 1 ? 'atención' : 'atenciones'}</small>
+                                    ${sharePct > 0 ? `<small style="font-size: 0.72rem; color: #0284c7; font-weight: 700;">(${sharePct}% del total)</small>` : ''}
                                 </div>
                             </div>
                         </td>
