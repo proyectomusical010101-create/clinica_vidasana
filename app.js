@@ -1635,7 +1635,6 @@ function initMobileFabActions() {
     if (actBudget) {
         actBudget.onclick = async () => {
             closeModal('modal-mobile-quick-actions');
-            await window.navigateToTab('odontogram');
             openModal('modal-select-budget-type');
         };
     }
@@ -1968,7 +1967,9 @@ window.selectPatientAndLoadApprovedBudget = async function(patientId) {
     document.documentElement.setAttribute('data-odontogram-subview', 'editor');
     const listContainer = document.getElementById('odontogram-list-container');
     const editorContainer = document.getElementById('odontogram-editor-container');
+    const medEditorContainer = document.getElementById('medical-budget-editor-container');
     if (listContainer) listContainer.classList.add('hidden');
+    if (medEditorContainer) medEditorContainer.classList.add('hidden');
     if (editorContainer) editorContainer.classList.remove('hidden');
 
     const navOdontogram = document.querySelector('.nav-item[data-tab="odontogram"]') || document.getElementById('mob-nav-odontogram');
@@ -2550,6 +2551,9 @@ window.activeMedicalSpecialtyCategory = 'Consultas Médicas';
 
 window.startBudgetCreation = async function(category) {
     closeModal('modal-select-budget-type');
+    if (typeof window.navigateToTab === 'function') {
+        await window.navigateToTab('odontogram');
+    }
     if (category === 'Odontología') {
         await window.selectPatientAndLoadApprovedBudget(null);
     } else {
@@ -2568,6 +2572,11 @@ window.openMedicalBudgetEditor = async function({ budgetId = null, specialtyCate
     if (listContainer) listContainer.classList.add('hidden');
     if (editorContainer) editorContainer.classList.add('hidden');
     if (medEditorContainer) medEditorContainer.classList.remove('hidden');
+
+    const navOdontogram = document.querySelector('.nav-item[data-tab="odontogram"]') || document.getElementById('mob-nav-odontogram');
+    if (navOdontogram && !navOdontogram.classList.contains('active')) {
+        navOdontogram.click();
+    }
 
     window.activeMedicalSpecialtyCategory = specialtyCategory;
     window.activeEditingMedicalBudgetId = budgetId;
@@ -5408,10 +5417,6 @@ window.triggerHeaderNewAction = async function(action) {
             openModal('modal-appointment');
         }
     } else if (action === 'new-budget') {
-        const budgetNav = document.querySelector('[data-tab="odontogram"]');
-        if (budgetNav) {
-            budgetNav.click();
-        }
         if (typeof openModal === 'function') {
             openModal('modal-select-budget-type');
         }
