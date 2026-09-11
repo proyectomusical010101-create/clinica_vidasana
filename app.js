@@ -14433,6 +14433,37 @@ async function renderSettingsView() {
 
     const navButtons = document.querySelectorAll('.settings-nav-btn');
     const panes = document.querySelectorAll('.settings-pane');
+    const accordionBtn = document.getElementById('btn-settings-mobile-accordion');
+    const accordionCurrentLabel = document.getElementById('settings-accordion-current-label');
+    const navMenuList = document.getElementById('settings-nav-menu-list');
+
+    const updateAccordionLabel = (btn) => {
+        if (!accordionCurrentLabel || !btn) return;
+        const icon = btn.querySelector('i');
+        const text = btn.querySelector('span');
+        if (text) {
+            const iconHtml = icon ? icon.outerHTML : '<i class="fa-solid fa-gear"></i>';
+            accordionCurrentLabel.innerHTML = `${iconHtml}<span>${text.textContent.trim()}</span>`;
+        }
+    };
+
+    if (accordionBtn && navMenuList) {
+        accordionBtn.onclick = (e) => {
+            e.stopPropagation();
+            const isOpen = navMenuList.classList.toggle('open');
+            accordionBtn.classList.toggle('expanded', isOpen);
+            accordionBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        };
+
+        // Close on tap outside
+        document.addEventListener('click', (e) => {
+            if (!accordionBtn.contains(e.target) && !navMenuList.contains(e.target)) {
+                navMenuList.classList.remove('open');
+                accordionBtn.classList.remove('expanded');
+                accordionBtn.setAttribute('aria-expanded', 'false');
+            }
+        });
+    }
 
     navButtons.forEach(btn => {
         btn.onclick = (e) => {
@@ -14443,6 +14474,15 @@ async function renderSettingsView() {
             panes.forEach(p => p.classList.remove('active'));
 
             btn.classList.add('active');
+            updateAccordionLabel(btn);
+
+            // Collapse accordion menu on selection
+            if (navMenuList) navMenuList.classList.remove('open');
+            if (accordionBtn) {
+                accordionBtn.classList.remove('expanded');
+                accordionBtn.setAttribute('aria-expanded', 'false');
+            }
+
             const targetPane = document.getElementById(`pane-${paneName}`);
             if (targetPane) targetPane.classList.add('active');
 
@@ -14463,7 +14503,10 @@ async function renderSettingsView() {
         const busBtn = document.getElementById('btn-pane-business');
         const profileBtn = document.querySelector('.settings-nav-btn[data-pane="profile"]');
         if (busBtn) busBtn.classList.remove('active');
-        if (profileBtn) profileBtn.classList.add('active');
+        if (profileBtn) {
+            profileBtn.classList.add('active');
+            updateAccordionLabel(profileBtn);
+        }
     } else {
         // If admin, default back to business pane active
         const paneBus = document.getElementById('pane-business');
@@ -14474,7 +14517,10 @@ async function renderSettingsView() {
         }
         const busBtn = document.getElementById('btn-pane-business');
         const profileBtn = document.querySelector('.settings-nav-btn[data-pane="profile"]');
-        if (busBtn) busBtn.classList.add('active');
+        if (busBtn) {
+            busBtn.classList.add('active');
+            updateAccordionLabel(busBtn);
+        }
         if (profileBtn) profileBtn.classList.remove('active');
     }
 

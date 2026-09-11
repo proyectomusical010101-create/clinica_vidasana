@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=290">
+    <link rel="stylesheet" href="styles.css?v=291">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -2654,31 +2654,42 @@
 
                     <div class="settings-layout">
                         <!-- Sidebar de Ajustes -->
-                        <div class="settings-sidebar">
-                            <button class="settings-nav-btn active" data-pane="business" id="btn-pane-business">
-                                <i class="fa-solid fa-building"></i>
-                                <span>Datos del Negocio</span>
+                        <div class="settings-sidebar" id="settings-sidebar-nav">
+                            <!-- Mobile Accordion Trigger -->
+                            <button type="button" class="settings-mobile-accordion-btn" id="btn-settings-mobile-accordion" aria-expanded="false">
+                                <span class="settings-accordion-current" id="settings-accordion-current-label">
+                                    <i class="fa-solid fa-building"></i>
+                                    <span>Datos del Negocio</span>
+                                </span>
+                                <i class="fa-solid fa-chevron-down settings-accordion-arrow"></i>
                             </button>
-                            <button class="settings-nav-btn" data-pane="profile">
-                                <i class="fa-solid fa-user-gear"></i>
-                                <span>Mi Perfil Personal</span>
-                            </button>
-                            <button class="settings-nav-btn" data-pane="appearance" id="btn-pane-appearance">
-                                <i class="fa-solid fa-palette"></i>
-                                <span>Apariencia y Tema</span>
-                            </button>
-                            <button class="settings-nav-btn" data-pane="system-users" id="btn-pane-system-users">
-                                <i class="fa-solid fa-users-gear text-cyan"></i>
-                                <span>Usuarios del Sistema</span>
-                            </button>
-                            <button class="settings-nav-btn" data-pane="trash" id="btn-pane-trash">
-                                <i class="fa-solid fa-trash-arrow-up text-amber"></i>
-                                <span>Papelera de Reciclaje</span>
-                            </button>
-                            <button class="settings-nav-btn" data-pane="audit" id="btn-pane-audit">
-                                <i class="fa-solid fa-clock-rotate-left text-cyan"></i>
-                                <span>Historial de Acciones</span>
-                            </button>
+                            <!-- Menu options -->
+                            <div class="settings-nav-menu" id="settings-nav-menu-list">
+                                <button class="settings-nav-btn active" data-pane="business" id="btn-pane-business">
+                                    <i class="fa-solid fa-building"></i>
+                                    <span>Datos del Negocio</span>
+                                </button>
+                                <button class="settings-nav-btn" data-pane="profile">
+                                    <i class="fa-solid fa-user-gear"></i>
+                                    <span>Mi Perfil Personal</span>
+                                </button>
+                                <button class="settings-nav-btn" data-pane="appearance" id="btn-pane-appearance">
+                                    <i class="fa-solid fa-palette"></i>
+                                    <span>Apariencia y Tema</span>
+                                </button>
+                                <button class="settings-nav-btn" data-pane="system-users" id="btn-pane-system-users">
+                                    <i class="fa-solid fa-users-gear text-cyan"></i>
+                                    <span>Usuarios del Sistema</span>
+                                </button>
+                                <button class="settings-nav-btn" data-pane="trash" id="btn-pane-trash">
+                                    <i class="fa-solid fa-trash-arrow-up text-amber"></i>
+                                    <span>Papelera de Reciclaje</span>
+                                </button>
+                                <button class="settings-nav-btn" data-pane="audit" id="btn-pane-audit">
+                                    <i class="fa-solid fa-clock-rotate-left text-cyan"></i>
+                                    <span>Historial de Acciones</span>
+                                </button>
+                            </div>
                         </div>
 
                         <!-- Panel de Contenido -->
@@ -7318,14 +7329,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=290"></script>
-    <script src="supabaseClient.js?v=290"></script>
-    <script src="odontogram.js?v=290"></script>
-    <script src="signature.js?v=290"></script>
-    <script src="whatsapp.js?v=290"></script>
-    <script src="kardex.js?v=290"></script>
-    <script src="app.js?v=290"></script>
-    <script src="clinicalERP.js?v=290"></script>
-    <script src="tutorial.js?v=290"></script>
+    <script src="seededData.js?v=291"></script>
+    <script src="supabaseClient.js?v=291"></script>
+    <script src="odontogram.js?v=291"></script>
+    <script src="signature.js?v=291"></script>
+    <script src="whatsapp.js?v=291"></script>
+    <script src="kardex.js?v=291"></script>
+    <script src="app.js?v=291"></script>
+    <script src="clinicalERP.js?v=291"></script>
+    <script src="tutorial.js?v=291"></script>
 </body>
 </html>

@@ -2711,20 +2711,71 @@ html, body {
 
     .settings-sidebar {
         display: flex !important;
-        flex-direction: row !important;
-        overflow-x: auto !important;
-        -webkit-overflow-scrolling: touch !important;
-        gap: 8px !important;
-        padding: 8px !important;
+        flex-direction: column !important;
+        overflow-x: visible !important;
+        gap: 0 !important;
+        padding: 0 !important;
         width: 100% !important;
+        box-sizing: border-box !important;
+        border: none !important;
+        background: transparent !important;
+    }
+
+    .settings-mobile-accordion-btn {
+        display: flex !important;
+        width: 100% !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        background: #ffffff !important;
+        border: 1px solid var(--border-color, #e2e8f0) !important;
+        border-radius: 12px !important;
+        padding: 12px 16px !important;
+        font-size: 0.92rem !important;
+        font-weight: 700 !important;
+        color: var(--text-main, #1e293b) !important;
+        cursor: pointer !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
         box-sizing: border-box !important;
     }
 
+    .settings-nav-menu {
+        display: none !important;
+        flex-direction: column !important;
+        gap: 4px !important;
+        width: 100% !important;
+        background: #ffffff !important;
+        border: 1px solid var(--border-color, #e2e8f0) !important;
+        border-radius: 12px !important;
+        padding: 8px !important;
+        margin-top: 6px !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+        box-sizing: border-box !important;
+        animation: fadeInDownSettings 0.2s ease-out !important;
+    }
+
+    .settings-nav-menu.open {
+        display: flex !important;
+    }
+
+    @keyframes fadeInDownSettings {
+        from {
+            opacity: 0;
+            transform: translateY(-6px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
     .settings-nav-btn {
-        flex: 1 0 auto !important;
-        white-space: nowrap !important;
-        justify-content: center !important;
-        padding: 8px 14px !important;
+        flex: none !important;
+        width: 100% !important;
+        white-space: normal !important;
+        justify-content: flex-start !important;
+        padding: 10px 14px !important;
+        font-size: 0.88rem !important;
+        border-radius: 8px !important;
     }
 
     .settings-content-pane {
@@ -4009,6 +4060,54 @@ html, body {
     align-self: start;
 }
 
+/* Mobile Accordion Toggle Button (Hidden on Desktop) */
+.settings-mobile-accordion-btn {
+    display: none;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    background: #ffffff;
+    border: 1px solid var(--border-color, #e2e8f0);
+    border-radius: 12px;
+    padding: 12px 16px;
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--text-main, #1e293b);
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.settings-mobile-accordion-btn:hover {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+}
+
+.settings-accordion-current {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.settings-accordion-arrow {
+    font-size: 0.85rem;
+    color: #64748b;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0;
+}
+
+.settings-mobile-accordion-btn.expanded .settings-accordion-arrow {
+    transform: rotate(180deg);
+}
+
+.settings-nav-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+}
+
 .settings-nav-btn {
     display: flex;
     align-items: center;
@@ -4193,21 +4292,60 @@ html, body {
     /* Settings View Mobile Stacking */
     .settings-sidebar {
         display: flex !important;
-        flex-direction: row !important;
-        overflow-x: auto !important;
-        -webkit-overflow-scrolling: touch !important;
-        gap: 8px !important;
-        padding: 8px !important;
+        flex-direction: column !important;
+        overflow-x: visible !important;
+        gap: 0 !important;
+        padding: 0 !important;
         width: 100% !important;
+        box-sizing: border-box !important;
+        border: none !important;
+        background: transparent !important;
+    }
+
+    .settings-mobile-accordion-btn {
+        display: flex !important;
+        width: 100% !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        background: #ffffff !important;
+        border: 1px solid var(--border-color, #e2e8f0) !important;
+        border-radius: 12px !important;
+        padding: 12px 16px !important;
+        font-size: 0.92rem !important;
+        font-weight: 700 !important;
+        color: var(--text-main, #1e293b) !important;
+        cursor: pointer !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
         box-sizing: border-box !important;
     }
 
+    .settings-nav-menu {
+        display: none !important;
+        flex-direction: column !important;
+        gap: 4px !important;
+        width: 100% !important;
+        background: #ffffff !important;
+        border: 1px solid var(--border-color, #e2e8f0) !important;
+        border-radius: 12px !important;
+        padding: 8px !important;
+        margin-top: 6px !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+        box-sizing: border-box !important;
+    }
+
+    .settings-nav-menu.open {
+        display: flex !important;
+    }
+
     .settings-nav-btn {
-        flex: 1 0 auto !important;
-        white-space: nowrap !important;
-        justify-content: center !important;
-        padding: 8px 14px !important;
-        text-align: center !important;
+        flex: none !important;
+        width: 100% !important;
+        white-space: normal !important;
+        justify-content: flex-start !important;
+        padding: 10px 14px !important;
+        text-align: left !important;
+        font-size: 0.88rem !important;
+        border-radius: 8px !important;
     }
 
     .settings-content-pane {
