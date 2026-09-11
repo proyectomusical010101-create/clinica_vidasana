@@ -8173,13 +8173,69 @@ async function renderAgendaView(filter = 'pending', searchQuery = '') {
         appointments = appointments.filter(app => app.status === filter);
     }
 
+    // Populate dynamic filters if needed
+    const filterSpecSel = document.getElementById('agenda-filter-specialty');
+    if (filterSpecSel && filterSpecSel.options.length <= 1) {
+        let dynamicSpecs = [];
+        if (window.ClinicalERP && window.ClinicalERP.specialties && window.ClinicalERP.specialties.length > 0) {
+            dynamicSpecs = window.ClinicalERP.specialties;
+        } else {
+            try { dynamicSpecs = JSON.parse(localStorage.getItem('vidasana_specialties')) || []; } catch(e) {}
+        }
+        const allSpecs = Array.from(new Set([
+            'Odontología', 'Medicina General', 'Laboratorio', 'Rayos X e Imagen',
+            'Cardiología', 'Ginecología', 'Pediatría', 'Traumatología', 'Oftalmología',
+            ...dynamicSpecs.map(s => s.name || s.nombre).filter(Boolean)
+        ]));
+        const currVal = filterSpecSel.value;
+        filterSpecSel.innerHTML = '<option value="all">🏥 Todas las Especialidades</option>' + 
+            allSpecs.map(s => `<option value="${s}">${s}</option>`).join('');
+        if (currVal) filterSpecSel.value = currVal;
+    }
+
+    const filterDocSel = document.getElementById('agenda-filter-doctor');
+    if (filterDocSel && filterDocSel.options.length <= 1) {
+        let users = [];
+        try { users = await SupabaseDataService.getUsers(); } catch(e) {}
+        const doctors = users.filter(u => {
+            const r = (u.role || '').toLowerCase();
+            return r.includes('odont') || r.includes('especialista') || r.includes('cirujano') || r.includes('médico') || r.includes('medico') || r.includes('doctor');
+        });
+        const currVal = filterDocSel.value;
+        filterDocSel.innerHTML = '<option value="all">👨‍⚕️ Todos los Médicos</option>' + 
+            doctors.map(d => `<option value="${d.id}">${d.fullname || d.name}</option>`).join('');
+        if (currVal) filterDocSel.value = currVal;
+    }
+
+    // Apply Secondary Filters (Specialty, Doctor, Shift)
+    const selectedSpecialty = document.getElementById('agenda-filter-specialty')?.value || 'all';
+    const selectedDoctor = document.getElementById('agenda-filter-doctor')?.value || 'all';
+    const selectedShift = document.getElementById('agenda-filter-shift')?.value || 'all';
+
+    if (selectedSpecialty !== 'all') {
+        appointments = appointments.filter(app => (app.specialty || '').toLowerCase() === selectedSpecialty.toLowerCase());
+    }
+    if (selectedDoctor !== 'all') {
+        appointments = appointments.filter(app => String(app.doctorId || app.doctor_id) === String(selectedDoctor));
+    }
+    if (selectedShift !== 'all') {
+        appointments = appointments.filter(app => {
+            const s = (app.shift || '').toLowerCase();
+            if (selectedShift === 'morning') return s === 'morning' || s === 'mañana' || s === 'both';
+            if (selectedShift === 'afternoon') return s === 'afternoon' || s === 'tarde' || s === 'both';
+            return true;
+        });
+    }
+
     // Apply Search
     if (searchQuery && searchQuery.trim() !== '') {
         const q = searchQuery.toLowerCase();
         appointments = appointments.filter(app => 
             (app.patientName && app.patientName.toLowerCase().includes(q)) ||
             (app.patientId && app.patientId.toLowerCase().includes(q)) ||
-            (app.treatment && app.treatment.toLowerCase().includes(q))
+            (app.treatment && app.treatment.toLowerCase().includes(q)) ||
+            (app.doctorName && app.doctorName.toLowerCase().includes(q)) ||
+            (app.specialty && app.specialty.toLowerCase().includes(q))
         );
     }
 
@@ -8250,6 +8306,11 @@ async function renderAgendaView(filter = 'pending', searchQuery = '') {
                     ${formatApptDateTag(app.date, isTomorrowAppt)}
                     <span class="timeline-time"><i class="fa-solid fa-clock text-cyan"></i> ${app.time}</span>
                     ${statusBadgeHtml}
+                    ${app.doctorName ? `<span class="badge-tag blue" style="font-size:0.75rem; background:rgba(37,99,235,0.1); color:#1d4ed8;"><i class="fa-solid fa-user-doctor"></i> ${app.doctorName}</span>` : ''}
+                    ${app.specialty ? `<span class="badge-tag" style="font-size:0.75rem; background:rgba(147,51,234,0.1); color:#7e22ce;"><i class="fa-solid fa-stethoscope"></i> ${app.specialty}</span>` : ''}
+                    ${app.shift ? `<span class="badge-tag" style="font-size:0.75rem; background:rgba(245,158,11,0.12); color:#b45309;"><i class="fa-regular fa-sun"></i> Turno ${app.shift === 'morning' ? 'Mañana' : (app.shift === 'afternoon' ? 'Tarde' : 'Completo')}</span>` : ''}
+                    ${app.assistantName ? `<span class="badge-tag green" style="font-size:0.75rem; background:rgba(16,185,129,0.12); color:#047857;"><i class="fa-solid fa-user-nurse"></i> Asist: ${app.assistantName}</span>` : ''}
+                    ${app.roomName ? `<span class="badge-tag" style="font-size:0.75rem; background:rgba(6,182,212,0.12); color:#0e7490;"><i class="fa-solid fa-door-open"></i> ${app.roomName}</span>` : ''}
                 </div>
                 <div class="timeline-actions">
                     ${whatsappBtnHtml}
@@ -8268,6 +8329,13 @@ async function renderAgendaView(filter = 'pending', searchQuery = '') {
     });
 }
 window.renderAgendaView = renderAgendaView;
+
+window.onAgendaFilterChange = function() {
+    const activeBtn = document.querySelector('#view-agenda .filter-card .filter-btn.active');
+    const filter = activeBtn ? activeBtn.dataset.filter : 'pending';
+    const searchQuery = document.getElementById('agenda-table-search')?.value || '';
+    renderAgendaView(filter, searchQuery);
+};
 
 window.toggleApptConfirmation = async function(apptId) {
     try {
@@ -9309,6 +9377,66 @@ function updateRoleScopeHint(role) {
 }
 window.updateRoleScopeHint = updateRoleScopeHint;
 
+window.populateUserModalSelects = async function(docProf = {}) {
+    // 1. Especialidad Principal (u-specialty)
+    const specSel = document.getElementById('u-specialty');
+    if (specSel) {
+        let dynamicSpecs = [];
+        if (window.ClinicalERP && window.ClinicalERP.specialties && window.ClinicalERP.specialties.length > 0) {
+            dynamicSpecs = window.ClinicalERP.specialties;
+        } else {
+            try { dynamicSpecs = JSON.parse(localStorage.getItem('vidasana_specialties')) || []; } catch(e) {}
+        }
+        const allSpecs = Array.from(new Set([
+            'Odontología', 'Medicina General', 'Laboratorio', 'Rayos X e Imagen',
+            'Cardiología', 'Ginecología', 'Pediatría', 'Traumatología', 'Oftalmología',
+            ...dynamicSpecs.map(s => s.name || s.nombre).filter(Boolean)
+        ]));
+        specSel.innerHTML = allSpecs.map(s => `<option value="${s}">${s}</option>`).join('');
+        if (docProf.specialty) specSel.value = docProf.specialty;
+    }
+
+    // 2. Turno (u-shift)
+    const shiftSel = document.getElementById('u-shift');
+    if (shiftSel) {
+        shiftSel.value = docProf.shift || 'morning';
+    }
+
+    // 3. Asistente Asignado(a) (u-assistant)
+    const asstSel = document.getElementById('u-assistant');
+    if (asstSel) {
+        let users = await SupabaseDataService.getUsers();
+        let staff = [];
+        if (SupabaseDataService.getPayrollStaff) {
+            staff = await SupabaseDataService.getPayrollStaff().catch(() => []);
+        }
+        const assistants = users.filter(u => {
+            const r = (u.role || '').toLowerCase();
+            return r.includes('asist') || r.includes('enferm') || r.includes('auxiliar') || r.includes('higien');
+        });
+        (staff || []).forEach(st => {
+            const r = (st.role || st.puesto || '').toLowerCase();
+            if (r.includes('asist') || r.includes('enferm') || r.includes('auxiliar') || r.includes('higien')) {
+                if (!assistants.some(a => (a.fullname || '').toLowerCase() === (st.name || '').toLowerCase())) {
+                    assistants.push({ id: st.id, fullname: st.name || st.fullname, role: st.role || 'Asistente' });
+                }
+            }
+        });
+        asstSel.innerHTML = '<option value="">-- Sin Asistente Asignado --</option>' +
+            assistants.map(a => `<option value="${a.id}">${a.fullname} (${a.role || 'Asistente'})</option>`).join('');
+        if (docProf.assistantId) asstSel.value = docProf.assistantId;
+    }
+
+    // 4. Consultorio Asignado (u-room)
+    const roomSel = document.getElementById('u-room');
+    if (roomSel) {
+        let rooms = await SupabaseDataService.getClinicRooms();
+        roomSel.innerHTML = '<option value="">-- Sin Consultorio Fijo --</option>' +
+            rooms.map(rm => `<option value="${rm.id}">${rm.name || rm.room_number}</option>`).join('');
+        if (docProf.roomId) roomSel.value = docProf.roomId;
+    }
+};
+
 window.openCreateUserModal = async function() {
     const form = document.getElementById('form-user');
     if (form) form.reset();
@@ -9332,6 +9460,7 @@ window.openCreateUserModal = async function() {
     if (passHint) passHint.classList.add('hidden');
 
     await populateDoctorServicesSelect();
+    await window.populateUserModalSelects({});
 
     const roleSelect = document.getElementById('u-role');
     if (roleSelect) {
@@ -9396,6 +9525,8 @@ window.editUser = async function(userId) {
     }
 
     const docProf = user.doctorProfile || user.doctor_profile || {};
+    await window.populateUserModalSelects(docProf);
+
     if (docProf) {
         if (docProf.schedule && document.getElementById('u-schedule')) document.getElementById('u-schedule').value = docProf.schedule;
         if (docProf.commission && document.getElementById('u-commission')) document.getElementById('u-commission').value = docProf.commission;
@@ -10942,12 +11073,206 @@ function initGlobalEvents() {
         };
     }
 
+    // Dynamic Appointment Helpers: Doctors, Specialties, Shifts, Assistants, and Rooms
+    window._availableDoctorsCache = [];
+
+    window.populateAppointmentDropdowns = async function(appt = {}) {
+        // 1. Especialidad
+        const specSel = document.getElementById('app-specialty-select');
+        let dynamicSpecs = [];
+        if (window.ClinicalERP && window.ClinicalERP.specialties && window.ClinicalERP.specialties.length > 0) {
+            dynamicSpecs = window.ClinicalERP.specialties;
+        } else {
+            try { dynamicSpecs = JSON.parse(localStorage.getItem('vidasana_specialties')) || []; } catch(e) {}
+        }
+        const allSpecs = Array.from(new Set([
+            'Odontología', 'Medicina General', 'Laboratorio', 'Rayos X e Imagen',
+            'Cardiología', 'Ginecología', 'Pediatría', 'Traumatología', 'Oftalmología',
+            ...dynamicSpecs.map(s => s.name || s.nombre).filter(Boolean)
+        ]));
+
+        if (specSel) {
+            specSel.innerHTML = allSpecs.map(s => `<option value="${s}">${s}</option>`).join('');
+            if (appt.specialty) specSel.value = appt.specialty;
+        }
+
+        // 2. Load Doctors, Staff & Rooms
+        const [users, staff, rooms] = await Promise.all([
+            SupabaseDataService.getUsers(),
+            SupabaseDataService.getPayrollStaff ? SupabaseDataService.getPayrollStaff().catch(() => []) : [],
+            SupabaseDataService.getClinicRooms ? SupabaseDataService.getClinicRooms().catch(() => []) : []
+        ]);
+
+        const doctors = users.filter(u => {
+            const r = (u.role || '').toLowerCase();
+            const n = (u.fullname || '').toLowerCase();
+            return r.includes('odont') || r.includes('médic') || r.includes('medic') || 
+                   r.includes('doctor') || r.includes('especialista') || r.includes('admin') ||
+                   n.startsWith('dr') || n.startsWith('dra');
+        });
+
+        (staff || []).forEach(st => {
+            const r = (st.role || st.puesto || '').toLowerCase();
+            const n = (st.name || st.fullname || '').toLowerCase();
+            if (r.includes('médic') || r.includes('doctor') || r.includes('odont') || n.startsWith('dr') || n.startsWith('dra')) {
+                if (!doctors.some(d => (d.fullname || '').toLowerCase() === n)) {
+                    doctors.push({
+                        id: st.id,
+                        fullname: st.name || st.fullname,
+                        role: st.role || st.puesto || 'Médico Especialista',
+                        doctorProfile: { specialty: st.department || 'Medicina General' }
+                    });
+                }
+            }
+        });
+
+        window._availableDoctorsCache = doctors;
+
+        // 3. Assistants
+        const asstSel = document.getElementById('app-assistant-select');
+        if (asstSel) {
+            const assistants = users.filter(u => {
+                const r = (u.role || '').toLowerCase();
+                return r.includes('asist') || r.includes('enferm') || r.includes('auxiliar') || r.includes('higien');
+            });
+            (staff || []).forEach(st => {
+                const r = (st.role || st.puesto || '').toLowerCase();
+                if (r.includes('asist') || r.includes('enferm') || r.includes('auxiliar') || r.includes('higien')) {
+                    if (!assistants.some(a => (a.fullname || '').toLowerCase() === (st.name || '').toLowerCase())) {
+                        assistants.push({ id: st.id, fullname: st.name || st.fullname, role: st.role || 'Asistente' });
+                    }
+                }
+            });
+            asstSel.innerHTML = '<option value="">-- Sin Asistente --</option>' +
+                assistants.map(a => `<option value="${a.id}" data-name="${a.fullname}">${a.fullname} (${a.role || 'Asistente'})</option>`).join('');
+            if (appt.assistantId) asstSel.value = appt.assistantId;
+            else if (appt.assistantName) {
+                for (let i = 0; i < asstSel.options.length; i++) {
+                    if (asstSel.options[i].text.includes(appt.assistantName)) {
+                        asstSel.selectedIndex = i;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // 4. Rooms
+        const roomSel = document.getElementById('app-room-select');
+        if (roomSel) {
+            roomSel.innerHTML = '<option value="">-- Sin Consultorio Asignado --</option>' +
+                rooms.map(rm => `<option value="${rm.id}" data-name="${rm.name || rm.room_number}">${rm.name || rm.room_number}</option>`).join('');
+            if (appt.roomId) roomSel.value = appt.roomId;
+            else if (appt.roomName) {
+                for (let i = 0; i < roomSel.options.length; i++) {
+                    if (roomSel.options[i].text.includes(appt.roomName)) {
+                        roomSel.selectedIndex = i;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // 5. Populate doctors matching specialty
+        window.updateAppointmentDoctorOptions(appt.specialty || (specSel ? specSel.value : 'Odontología'), appt.doctorId || appt.doctorName);
+
+        // 6. Shift
+        const shiftSel = document.getElementById('app-shift-select');
+        if (shiftSel && appt.shift) {
+            shiftSel.value = appt.shift;
+        }
+    };
+
+    window.updateAppointmentDoctorOptions = function(selectedSpec, preselectVal) {
+        const docSel = document.getElementById('app-doctor-select');
+        if (!docSel) return;
+        const docs = window._availableDoctorsCache || [];
+        
+        const specLower = (selectedSpec || '').toLowerCase();
+        const sortedDocs = [...docs].sort((a, b) => {
+            const aProf = a.doctorProfile || a.doctor_profile || {};
+            const bProf = b.doctorProfile || b.doctor_profile || {};
+            const aSpec = (aProf.specialty || a.role || '').toLowerCase();
+            const bSpec = (bProf.specialty || b.role || '').toLowerCase();
+            const aMatch = aSpec.includes(specLower) ? 1 : 0;
+            const bMatch = bSpec.includes(specLower) ? 1 : 0;
+            return bMatch - aMatch;
+        });
+
+        docSel.innerHTML = '<option value="">-- Seleccionar Médico Tratante --</option>' +
+            sortedDocs.map(d => {
+                const docProf = d.doctorProfile || d.doctor_profile || {};
+                const spec = docProf.specialty || d.role || 'Especialista';
+                const shift = docProf.shift === 'afternoon' ? 'Tarde' : (docProf.shift === 'both' ? 'Completo' : 'Mañana');
+                return `<option value="${d.id}" data-name="${d.fullname}" data-specialty="${spec}" data-shift="${docProf.shift || ''}" data-assistant-id="${docProf.assistantId || ''}" data-assistant-name="${docProf.assistantName || ''}" data-room-id="${docProf.roomId || ''}" data-room-name="${docProf.roomName || ''}">${d.fullname} (${spec} • Turno ${shift})</option>`;
+            }).join('');
+
+        if (preselectVal) {
+            let found = false;
+            for (let i = 0; i < docSel.options.length; i++) {
+                if (docSel.options[i].value === preselectVal || (docSel.options[i].dataset.name && docSel.options[i].dataset.name.includes(preselectVal))) {
+                    docSel.selectedIndex = i;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found && docSel.options.length > 1) docSel.selectedIndex = 1;
+        } else if (docSel.options.length > 1) {
+            docSel.selectedIndex = 1;
+        }
+        window.onAppointmentDoctorChange(docSel.value);
+    };
+
+    window.onAppointmentSpecialtyChange = function(spec) {
+        window.updateAppointmentDoctorOptions(spec, null);
+    };
+
+    window.onAppointmentDoctorChange = function(docId) {
+        const docSel = document.getElementById('app-doctor-select');
+        if (!docSel || docSel.selectedIndex <= 0) return;
+        const opt = docSel.options[docSel.selectedIndex];
+        
+        // Auto-set shift
+        const shiftSel = document.getElementById('app-shift-select');
+        if (shiftSel && opt.dataset.shift) {
+            shiftSel.value = opt.dataset.shift === 'afternoon' ? 'afternoon' : 'morning';
+        }
+
+        // Auto-set assistant
+        const asstSel = document.getElementById('app-assistant-select');
+        if (asstSel && (opt.dataset.assistantId || opt.dataset.assistantName)) {
+            if (opt.dataset.assistantId) asstSel.value = opt.dataset.assistantId;
+            else {
+                for (let i = 0; i < asstSel.options.length; i++) {
+                    if (asstSel.options[i].text.includes(opt.dataset.assistantName)) {
+                        asstSel.selectedIndex = i;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Auto-set room
+        const roomSel = document.getElementById('app-room-select');
+        if (roomSel && (opt.dataset.roomId || opt.dataset.roomName)) {
+            if (opt.dataset.roomId) roomSel.value = opt.dataset.roomId;
+            else {
+                for (let i = 0; i < roomSel.options.length; i++) {
+                    if (roomSel.options[i].text.includes(opt.dataset.roomName)) {
+                        roomSel.selectedIndex = i;
+                        break;
+                    }
+                }
+            }
+        }
+    };
+
     // Modal Cita Helpers: New & Edit
     window.openNewAppointmentModal = async function() {
         try {
             await populateAppointmentPatientSelect();
+            await window.populateAppointmentDropdowns({});
         } catch(err) {
-            console.error("Error populating appointment patients:", err);
+            console.error("Error populating appointment patients/dropdowns:", err);
         }
 
         const titleEl = document.getElementById('modal-appointment-title');
@@ -10990,6 +11315,7 @@ function initGlobalEvents() {
             }
 
             await populateAppointmentPatientSelect();
+            await window.populateAppointmentDropdowns(app);
 
             const titleEl = document.getElementById('modal-appointment-title');
             if (titleEl) titleEl.innerHTML = '<i class="fa-solid fa-pen-to-square text-cyan"></i> Editar Cita Médica';
@@ -11060,7 +11386,6 @@ function initGlobalEvents() {
             const webhookUrl = localStorage.getItem('dental_google_calendar_webhook');
             if (!webhookUrl) return;
             try {
-                // Parse hours and minutes from time string (e.g. "09:30 AM", "3:00 PM", "9")
                 let hours = 9;
                 let minutes = 0;
                 const match = (appt.time || '').match(/(\d+):?(\d*)\s*(AM|PM)?/i);
@@ -11072,7 +11397,6 @@ function initGlobalEvents() {
                     if (ampm === 'AM' && hours === 12) hours = 0;
                 }
 
-                // Calculate actual target date
                 const targetDate = new Date();
                 if (appt.isTomorrow) {
                     targetDate.setDate(targetDate.getDate() + 1);
@@ -11080,7 +11404,6 @@ function initGlobalEvents() {
                 targetDate.setHours(hours, minutes, 0, 0);
                 const startDateISO = targetDate.toISOString();
 
-                // End date is 1 hour later
                 targetDate.setHours(targetDate.getHours() + 1);
                 const endDateISO = targetDate.toISOString();
 
@@ -11129,6 +11452,26 @@ function initGlobalEvents() {
             const finalDate = (dayTarget === 'custom' && customDate) ? customDate : (dayTarget === 'tomorrow' ? 'tomorrow' : 'today');
             const isTomorrow = dayTarget === 'tomorrow';
 
+            const specSel = document.getElementById('app-specialty-select');
+            const docSel = document.getElementById('app-doctor-select');
+            const shiftSel = document.getElementById('app-shift-select');
+            const asstSel = document.getElementById('app-assistant-select');
+            const roomSel = document.getElementById('app-room-select');
+
+            const specialty = specSel ? specSel.value : 'Odontología';
+            const selectedDocOpt = docSel && docSel.selectedIndex > 0 ? docSel.options[docSel.selectedIndex] : null;
+            const doctorId = selectedDocOpt ? selectedDocOpt.value : '';
+            const doctorName = selectedDocOpt ? (selectedDocOpt.dataset.name || selectedDocOpt.text.split('(')[0].trim()) : '';
+            const shift = shiftSel ? shiftSel.value : 'morning';
+
+            const selectedAsstOpt = asstSel && asstSel.selectedIndex > 0 ? asstSel.options[asstSel.selectedIndex] : null;
+            const assistantId = selectedAsstOpt ? selectedAsstOpt.value : '';
+            const assistantName = selectedAsstOpt ? (selectedAsstOpt.dataset.name || selectedAsstOpt.text) : '';
+
+            const selectedRoomOpt = roomSel && roomSel.selectedIndex > 0 ? roomSel.options[roomSel.selectedIndex] : null;
+            const roomId = selectedRoomOpt ? selectedRoomOpt.value : '';
+            const roomName = selectedRoomOpt ? (selectedRoomOpt.dataset.name || selectedRoomOpt.text) : '';
+
             const appointmentObj = {
                 id: existingId || ('appt-' + Date.now()),
                 time,
@@ -11137,7 +11480,15 @@ function initGlobalEvents() {
                 treatment,
                 status: statusVal,
                 isTomorrow: isTomorrow,
-                date: finalDate
+                date: finalDate,
+                specialty,
+                doctorId,
+                doctorName,
+                shift,
+                assistantId,
+                assistantName,
+                roomId,
+                roomName
             };
 
             await SupabaseDataService.saveAppointment(appointmentObj);
@@ -11409,7 +11760,22 @@ function initGlobalEvents() {
                 const commission = parseFloat(document.getElementById('u-commission').value) || 0;
                 const availability = document.getElementById('u-availability').value.trim();
 
+                const specialty = document.getElementById('u-specialty')?.value || '';
+                const shift = document.getElementById('u-shift')?.value || 'both';
+                const asstSel = document.getElementById('u-assistant');
+                const assistantId = asstSel?.value || '';
+                const assistantName = asstSel && asstSel.selectedIndex >= 0 && asstSel.value ? asstSel.options[asstSel.selectedIndex].text : '';
+                const roomSel = document.getElementById('u-room');
+                const roomId = roomSel?.value || '';
+                const roomName = roomSel && roomSel.selectedIndex >= 0 && roomSel.value ? roomSel.options[roomSel.selectedIndex].text : '';
+
                 doctorProfile = {
+                    specialty,
+                    shift,
+                    assistantId,
+                    assistantName,
+                    roomId,
+                    roomName,
                     assignedServices,
                     schedule,
                     commission,
@@ -11451,6 +11817,36 @@ function initGlobalEvents() {
 
             try {
                 await SupabaseDataService.saveUser(userObj);
+
+                // Sincronizar consultorio si se asignó uno al especialista
+                if (doctorProfile && doctorProfile.roomId && SupabaseDataService.getClinicRooms && SupabaseDataService.saveClinicRoom) {
+                    try {
+                        const rooms = await SupabaseDataService.getClinicRooms();
+                        const room = rooms.find(r => String(r.id) === String(doctorProfile.roomId));
+                        if (room) {
+                            if (!room.shifts) room.shifts = { morning: {}, afternoon: {} };
+                            const docData = { doctorId: userObj.id, doctorName: fullname, specialty: doctorProfile.specialty };
+                            if (doctorProfile.shift === 'morning' || doctorProfile.shift === 'both') {
+                                room.shifts.morning = { ...room.shifts.morning, ...docData };
+                            }
+                            if (doctorProfile.shift === 'afternoon' || doctorProfile.shift === 'both') {
+                                room.shifts.afternoon = { ...room.shifts.afternoon, ...docData };
+                            }
+                            await SupabaseDataService.saveClinicRoom(room);
+                        }
+                    } catch (errRoom) {
+                        console.warn('Error sincronizando consultorio con el médico:', errRoom);
+                    }
+                }
+
+                // Notificar a los selectores reactivos
+                if (window.ClinicalERP && window.ClinicalERP.populateRoomDoctorSelects) {
+                    window.ClinicalERP.populateRoomDoctorSelects();
+                }
+                if (window.populateAppointmentDropdowns) {
+                    window.populateAppointmentDropdowns();
+                }
+
                 closeModal('modal-user');
                 await renderUsersTable();
                 Swal.fire({
@@ -17424,6 +17820,32 @@ window.currentCFAreaPeriod = 'today';
 
 function detectClinicalArea(rawArea, concept = '') {
     const str = ((rawArea || '') + ' ' + (concept || '')).toLowerCase();
+    
+    // Dynamic matching against all created specialties first
+    let dynamicSpecs = [];
+    if (window.ClinicalERP && window.ClinicalERP.specialties && window.ClinicalERP.specialties.length > 0) {
+        dynamicSpecs = window.ClinicalERP.specialties;
+    } else {
+        try {
+            dynamicSpecs = JSON.parse(localStorage.getItem('vidasana_specialties')) || [];
+        } catch(e) {}
+    }
+    
+    // Check if rawArea matches an exact dynamic specialty
+    if (rawArea) {
+        const trimmedRaw = rawArea.trim().toLowerCase();
+        const foundExact = dynamicSpecs.find(s => (s.name || s.nombre || '').trim().toLowerCase() === trimmedRaw);
+        if (foundExact) return foundExact.name || foundExact.nombre;
+    }
+
+    // Check if any registered specialty name is contained in the concept/str
+    for (const spec of dynamicSpecs) {
+        const sName = (spec.name || spec.nombre || '').trim().toLowerCase();
+        if (sName && sName.length >= 4 && str.includes(sName)) {
+            return spec.name || spec.nombre;
+        }
+    }
+
     if (str.includes('odont') || str.includes('dent') || str.includes('endod') || str.includes('ortod') || str.includes('period') || str.includes('implante') || str.includes('resina') || str.includes('muela') || str.includes('profilaxis') || str.includes('diente') || str.includes('cirugía bucal') || str.includes('operatoria') || str.includes('prótesis') || str.includes('protesis') || str.includes('estética') || str.includes('estetica') || str.includes('blanqueamiento') || str.includes('conducto') || str.includes('cordal') || str.includes('exodoncia')) return 'Odontología';
     if (str.includes('lab') || str.includes('perfil') || str.includes('examen') || str.includes('hematolog') || str.includes('orina') || str.includes('heces') || str.includes('química') || str.includes('sangre') || str.includes('reactivo') || str.includes('tubo')) return 'Laboratorio';
     if (str.includes('rayos') || str.includes('rx') || str.includes('panorám') || str.includes('periapical') || str.includes('imagen') || str.includes('ecograf') || str.includes('tomograf') || str.includes('placa')) return 'Rayos X e Imagen';
@@ -17432,14 +17854,33 @@ function detectClinicalArea(rawArea, concept = '') {
     if (str.includes('pediatr') || str.includes('niño') || str.includes('vacuna') || str.includes('bebé') || str.includes('infantil')) return 'Pediatría';
     if (str.includes('traumat') || str.includes('ortop') || str.includes('yeso') || str.includes('fractura')) return 'Traumatología';
     if (str.includes('oftalm') || str.includes('vista') || str.includes('ojo') || str.includes('lentes')) return 'Oftalmología';
+    if (str.includes('dermat') || str.includes('piel')) return 'Dermatología';
     if (str.includes('medicina general') || str.includes('médica general') || str.includes('consulta general') || str.includes('triaje') || str.includes('medicina interna') || str.includes('integral') || str.includes('consulta')) return 'Medicina General';
     
-    const knownAreas = ['Odontología', 'Medicina General', 'Laboratorio', 'Rayos X e Imagen', 'Cardiología', 'Ginecología', 'Pediatría', 'Traumatología', 'Oftalmología'];
-    if (rawArea && knownAreas.includes(rawArea.trim())) return rawArea.trim();
+    if (rawArea && rawArea.trim()) return rawArea.trim();
     return 'Medicina General';
 }
 
 function getAreaIconInfo(areaName) {
+    let dynamicSpecs = [];
+    if (window.ClinicalERP && window.ClinicalERP.specialties && window.ClinicalERP.specialties.length > 0) {
+        dynamicSpecs = window.ClinicalERP.specialties;
+    } else {
+        try {
+            dynamicSpecs = JSON.parse(localStorage.getItem('vidasana_specialties')) || [];
+        } catch(e) {}
+    }
+    const matched = dynamicSpecs.find(s => (s.name || s.nombre || '').trim().toLowerCase() === (areaName || '').trim().toLowerCase());
+    if (matched) {
+        const col = matched.color || '#0d9488';
+        const ic = matched.icon || 'fa-stethoscope';
+        return {
+            icon: ic.startsWith('fa-') ? ic : `fa-${ic}`,
+            color: col,
+            bg: col.startsWith('#') ? `${col}18` : 'rgba(13, 148, 136, 0.1)'
+        };
+    }
+
     switch (areaName) {
         case 'Odontología': return { icon: 'fa-tooth', color: '#0891b2', bg: 'rgba(8, 145, 178, 0.1)' };
         case 'Medicina General': return { icon: 'fa-user-doctor', color: '#10b981', bg: 'rgba(16, 185, 129, 0.1)' };
@@ -17448,6 +17889,9 @@ function getAreaIconInfo(areaName) {
         case 'Cardiología': return { icon: 'fa-heart-pulse', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.1)' };
         case 'Ginecología': return { icon: 'fa-person-pregnant', color: '#ec4899', bg: 'rgba(236, 72, 153, 0.1)' };
         case 'Pediatría': return { icon: 'fa-baby', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)' };
+        case 'Traumatología': return { icon: 'fa-bone', color: '#6366f1', bg: 'rgba(99, 102, 241, 0.1)' };
+        case 'Oftalmología': return { icon: 'fa-eye', color: '#14b8a6', bg: 'rgba(20, 184, 166, 0.1)' };
+        case 'Dermatología': return { icon: 'fa-hand-dots', color: '#f97316', bg: 'rgba(249, 115, 22, 0.1)' };
         default: return { icon: 'fa-hospital', color: '#64748b', bg: 'rgba(100, 116, 139, 0.1)' };
     }
 }
@@ -17760,16 +18204,26 @@ function renderCashFlowAreasGrid(rate) {
     const grid = document.getElementById('cf-areas-summary-grid');
     if (!grid) return;
 
-    // Base departments to ensure clinical showcase
-    const baseAreas = [
+    let dynamicSpecs = [];
+    if (window.ClinicalERP && window.ClinicalERP.specialties && window.ClinicalERP.specialties.length > 0) {
+        dynamicSpecs = window.ClinicalERP.specialties;
+    } else {
+        try { dynamicSpecs = JSON.parse(localStorage.getItem('vidasana_specialties')) || []; } catch(e) {}
+    }
+
+    // Merge base departments with all dynamically created specialties
+    const baseAreas = Array.from(new Set([
         'Odontología',
         'Medicina General',
         'Laboratorio',
         'Rayos X e Imagen',
         'Cardiología',
         'Ginecología',
-        'Pediatría'
-    ];
+        'Pediatría',
+        'Traumatología',
+        'Oftalmología',
+        ...dynamicSpecs.map(s => s.name || s.nombre).filter(Boolean)
+    ]));
 
     const areaMap = {};
     baseAreas.forEach(a => {
@@ -18209,15 +18663,25 @@ window.renderDailyClosingView = async function() {
     if (elServices) elServices.textContent = totalServicesCount;
 
     // 3. Render Department Summary Cards
-    const baseAreas = [
+    let dynamicSpecs = [];
+    if (window.ClinicalERP && window.ClinicalERP.specialties && window.ClinicalERP.specialties.length > 0) {
+        dynamicSpecs = window.ClinicalERP.specialties;
+    } else {
+        try { dynamicSpecs = JSON.parse(localStorage.getItem('vidasana_specialties')) || []; } catch(e) {}
+    }
+
+    const baseAreas = Array.from(new Set([
         'Odontología',
         'Medicina General',
         'Laboratorio',
         'Rayos X e Imagen',
         'Cardiología',
         'Ginecología',
-        'Pediatría'
-    ];
+        'Pediatría',
+        'Traumatología',
+        'Oftalmología',
+        ...dynamicSpecs.map(s => s.name || s.nombre).filter(Boolean)
+    ]));
 
     const areaMap = {};
     baseAreas.forEach(a => {

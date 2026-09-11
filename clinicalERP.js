@@ -251,6 +251,34 @@
                 return;
             }
 
+            const nameLower = (document.getElementById('specialty-name').value || '').toLowerCase();
+            const catLower = (document.getElementById('specialty-category').value || '').toLowerCase();
+            
+            let icon = 'fa-stethoscope';
+            let color = '#0d9488';
+
+            if (catLower.includes('odont') || nameLower.includes('odont') || nameLower.includes('dent') || nameLower.includes('ortod') || nameLower.includes('endod')) {
+                icon = 'fa-tooth'; color = '#0d9488';
+            } else if (catLower.includes('lab') || nameLower.includes('lab') || nameLower.includes('analis') || nameLower.includes('sangre')) {
+                icon = 'fa-vials'; color = '#0284c7';
+            } else if (catLower.includes('imag') || nameLower.includes('rayos') || nameLower.includes('rx') || nameLower.includes('eco')) {
+                icon = 'fa-x-ray'; color = '#8b5cf6';
+            } else if (nameLower.includes('cardio')) {
+                icon = 'fa-heart-pulse'; color = '#ef4444';
+            } else if (nameLower.includes('gineco') || nameLower.includes('obstet')) {
+                icon = 'fa-venus'; color = '#ec4899';
+            } else if (nameLower.includes('pediatr') || nameLower.includes('infant')) {
+                icon = 'fa-baby'; color = '#f59e0b';
+            } else if (nameLower.includes('traumat') || nameLower.includes('ortop')) {
+                icon = 'fa-bone'; color = '#6366f1';
+            } else if (nameLower.includes('oftalm')) {
+                icon = 'fa-eye'; color = '#14b8a6';
+            } else if (nameLower.includes('dermat')) {
+                icon = 'fa-hand-dots'; color = '#f97316';
+            } else if (nameLower.includes('quir')) {
+                icon = 'fa-syringe'; color = '#e11d48';
+            }
+
             const data = {
                 id: id || ('esp-' + Date.now()),
                 name: document.getElementById('specialty-name').value.trim(),
@@ -259,8 +287,8 @@
                 clinic_commission_pct: cliPct,
                 description: document.getElementById('specialty-desc').value.trim(),
                 status: document.getElementById('specialty-active').checked ? 'Activo' : 'Inactivo',
-                icon: 'fa-stethoscope',
-                color: '#7fa13c'
+                icon: icon,
+                color: color
             };
 
             try {
@@ -271,6 +299,19 @@
                 this.renderSpecialties();
                 const modal = document.getElementById('modal-specialty');
                 if (modal) modal.classList.add('hidden');
+
+                // Dynamic reactivity across the entire platform
+                if (typeof window.renderCashFlowAreasGrid === 'function') {
+                    const rate = typeof getExchangeRate === 'function' ? getExchangeRate() : 1;
+                    window.renderCashFlowAreasGrid(rate);
+                }
+                if (typeof window.renderDailyClosingView === 'function') {
+                    window.renderDailyClosingView();
+                }
+                if (typeof window.populateAllSpecialtySelects === 'function') {
+                    window.populateAllSpecialtySelects();
+                }
+
                 if (typeof Swal !== 'undefined') {
                     Swal.fire({ icon: 'success', title: 'Especialidad Guardada', timer: 1500, showConfirmButton: false });
                 }
@@ -585,8 +626,12 @@
 
             try {
                 let users = [];
+                let staff = [];
                 if (window.SupabaseDataService) {
-                    users = await window.SupabaseDataService.getUsers();
+                    [users, staff] = await Promise.all([
+                        window.SupabaseDataService.getUsers().catch(() => []),
+                        window.SupabaseDataService.getPayrollStaff().catch(() => [])
+                    ]);
                 }
                 if (!users || users.length === 0) {
                     users = (typeof INITIAL_USERS !== 'undefined') ? INITIAL_USERS : [];
@@ -601,12 +646,32 @@
                            n.startsWith('dr') || n.startsWith('dra');
                 });
 
+                // Add medical staff from payrollStaff if not already present
+                (staff || []).forEach(st => {
+                    const r = (st.role || st.puesto || '').toLowerCase();
+                    const n = (st.name || st.fullname || '').toLowerCase();
+                    if (r.includes('médic') || r.includes('doctor') || r.includes('odont') || n.startsWith('dr') || n.startsWith('dra')) {
+                        if (!doctors.some(d => (d.fullname || d.name || '').toLowerCase() === n)) {
+                            doctors.push({
+                                id: st.id,
+                                fullname: st.name || st.fullname,
+                                role: st.role || st.puesto || 'Médico Especialista',
+                                doctorProfile: { specialty: st.department || 'Medicina General' }
+                            });
+                        }
+                    }
+                });
+
                 const buildOptions = (selectedVal) => {
                     let opts = `<option value="">-- Sin asignar (Turno Disponible) --</option>`;
                     doctors.forEach(d => {
                         const name = d.fullname || d.name || 'Médico';
                         const role = d.role || 'Especialista';
-                        opts += `<option value="${name}" data-id="${d.id}">${name} (${role})</option>`;
+                        const docProf = d.doctorProfile || d.doctor_profile || {};
+                        const spec = docProf.specialty || '';
+                        const shift = docProf.shift === 'afternoon' ? 'Tarde' : (docProf.shift === 'both' ? 'Completo' : 'Mañana');
+                        const labelDetail = spec ? `${spec} • Turno ${shift}` : role;
+                        opts += `<option value="${name}" data-id="${d.id}" data-specialty="${spec}" data-shift="${docProf.shift || ''}" data-assistant="${docProf.assistantName || ''}">${name} (${labelDetail})</option>`;
                     });
                     opts += `<option value="__custom__">+ Otro Profesional Externo...</option>`;
                     return opts;

@@ -611,8 +611,21 @@
                             <button class="filter-btn" data-filter="today">Citas de Hoy</button>
                             <button class="filter-btn" data-filter="week">Esta Semana</button>
                         </div>
-                        <div class="search-box">
-                            <input type="text" id="agenda-table-search" placeholder="Buscar cita o paciente...">
+                        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px;">
+                            <select id="agenda-filter-specialty" class="form-control" style="width: auto; padding: 6px 10px; font-size: 0.82rem; height: 38px; border-radius: 8px;" onchange="window.onAgendaFilterChange()">
+                                <option value="all">🏥 Todas las Especialidades</option>
+                            </select>
+                            <select id="agenda-filter-doctor" class="form-control" style="width: auto; padding: 6px 10px; font-size: 0.82rem; height: 38px; border-radius: 8px;" onchange="window.onAgendaFilterChange()">
+                                <option value="all">👨‍⚕️ Todos los Médicos</option>
+                            </select>
+                            <select id="agenda-filter-shift" class="form-control" style="width: auto; padding: 6px 10px; font-size: 0.82rem; height: 38px; border-radius: 8px;" onchange="window.onAgendaFilterChange()">
+                                <option value="all">⏰ Todos los Turnos</option>
+                                <option value="morning">🌅 Turno Mañana</option>
+                                <option value="afternoon">🌇 Turno Tarde</option>
+                            </select>
+                            <div class="search-box" style="flex: 1; min-width: 180px;">
+                                <input type="text" id="agenda-table-search" placeholder="Buscar cita o paciente...">
+                            </div>
                         </div>
                     </div>
 
@@ -3664,6 +3677,46 @@
                             <!-- Dynamic patient options -->
                         </select>
                     </div>
+
+                    <!-- Especialidad y Médico Asignado -->
+                    <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; grid-column: span 2;">
+                        <div class="form-group" style="margin: 0;">
+                            <label><i class="fa-solid fa-stethoscope text-cyan"></i> Especialidad Clínica *</label>
+                            <select id="app-specialty-select" class="form-control" onchange="window.onAppointmentSpecialtyChange(this.value)">
+                                <!-- Dynamic specialties -->
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin: 0;">
+                            <label><i class="fa-solid fa-user-doctor text-cyan"></i> Médico / Especialista *</label>
+                            <select id="app-doctor-select" class="form-control" onchange="window.onAppointmentDoctorChange(this.value)">
+                                <!-- Dynamic doctors filtered by specialty -->
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Turno, Asistente y Consultorio -->
+                    <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; grid-column: span 2;">
+                        <div class="form-group" style="margin: 0;">
+                            <label><i class="fa-solid fa-clock text-cyan"></i> Turno *</label>
+                            <select id="app-shift-select" class="form-control">
+                                <option value="morning">Mañana 🌅</option>
+                                <option value="afternoon">Tarde 🌇</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin: 0;">
+                            <label><i class="fa-solid fa-user-nurse text-cyan"></i> Asistente / Aux.</label>
+                            <select id="app-assistant-select" class="form-control">
+                                <!-- Dynamic assistants -->
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin: 0;">
+                            <label><i class="fa-solid fa-door-open text-cyan"></i> Consultorio</label>
+                            <select id="app-room-select" class="form-control">
+                                <!-- Dynamic rooms -->
+                            </select>
+                        </div>
+                    </div>
+
                     <div class="form-group">
                         <label>Hora de la Cita *</label>
                         <input type="text" id="app-time" required placeholder="ej: 09:30 AM / 03:00 PM">
@@ -3750,6 +3803,36 @@
                     <div id="doctor-profile-fields" class="span-2" style="border: 1px solid var(--border-color); padding: 14px; border-radius: 8px; background-color: rgba(0,0,0,0.02); margin-top: 10px;">
                         <h4 style="margin-top: 0; margin-bottom: 10px; color: var(--primary-cyan); font-size: 0.95rem;"><i class="fa-solid fa-user-md"></i> Perfil Clínico / Asignación Médica</h4>
                         <div class="grid-form" style="grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <!-- Especialidad y Turno Asignado -->
+                            <div class="form-group">
+                                <label><i class="fa-solid fa-stethoscope text-cyan"></i> Especialidad Principal *</label>
+                                <select id="u-specialty" class="form-control">
+                                    <!-- Dynamic specialties -->
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fa-solid fa-clock text-cyan"></i> Turno de Consulta *</label>
+                                <select id="u-shift" class="form-control">
+                                    <option value="morning">Turno Mañana 🌅 (08:00 - 13:00)</option>
+                                    <option value="afternoon">Turno Tarde 🌇 (14:00 - 19:00)</option>
+                                    <option value="both">Ambos Turnos / Completo</option>
+                                </select>
+                            </div>
+
+                            <!-- Asistente y Consultorio Predeterminado -->
+                            <div class="form-group">
+                                <label><i class="fa-solid fa-user-nurse text-cyan"></i> Asistente Asignado(a)</label>
+                                <select id="u-assistant" class="form-control">
+                                    <!-- Dynamic assistants -->
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fa-solid fa-door-open text-cyan"></i> Consultorio Asignado</label>
+                                <select id="u-room" class="form-control">
+                                    <!-- Dynamic rooms -->
+                                </select>
+                            </div>
+
                             <div class="form-group span-2">
                                 <label>Asignación de Servicios (Seleccione múltiples del Baremo) *</label>
                                 <select id="u-services" class="form-control" multiple style="height: 105px;">
@@ -3758,7 +3841,7 @@
                                 <small class="text-muted">Mantenga presionado Ctrl (o Cmd) para seleccionar múltiples servicios.</small>
                             </div>
                             <div class="form-group">
-                                <label>Horario / Turnos Asignados *</label>
+                                <label>Horario Detallado *</label>
                                 <input type="text" id="u-schedule" placeholder="ej: Lunes a Viernes 8:00 AM - 1:00 PM">
                             </div>
                             <div class="form-group">
@@ -7140,14 +7223,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=281"></script>
-    <script src="supabaseClient.js?v=281"></script>
-    <script src="odontogram.js?v=281"></script>
-    <script src="signature.js?v=281"></script>
-    <script src="whatsapp.js?v=281"></script>
-    <script src="kardex.js?v=281"></script>
-    <script src="app.js?v=281"></script>
-    <script src="clinicalERP.js?v=281"></script>
-    <script src="tutorial.js?v=281"></script>
+    <script src="seededData.js?v=282"></script>
+    <script src="supabaseClient.js?v=282"></script>
+    <script src="odontogram.js?v=282"></script>
+    <script src="signature.js?v=282"></script>
+    <script src="whatsapp.js?v=282"></script>
+    <script src="kardex.js?v=282"></script>
+    <script src="app.js?v=282"></script>
+    <script src="clinicalERP.js?v=282"></script>
+    <script src="tutorial.js?v=282"></script>
 </body>
 </html>

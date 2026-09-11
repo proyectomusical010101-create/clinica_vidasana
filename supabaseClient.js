@@ -681,16 +681,33 @@ class SupabaseDataService {
                 const { data, error } = await supabaseClient.from('appointments').select('*');
                 if (error) throw error;
                 if (data) {
-                    const mapped = data.map(a => ({
-                        id: a.id,
-                        patientId: a.patient_id,
-                        patientName: a.patient_name,
-                        time: a.appointment_time,
-                        treatment: a.treatment,
-                        status: a.status || 'Programada',
-                        isTomorrow: a.is_tomorrow || false,
-                        date: a.appointment_date || (a.is_tomorrow ? 'tomorrow' : 'today')
-                    }));
+                    const mapped = data.map(a => {
+                        let pureTreatment = a.treatment || '';
+                        let ext = {};
+                        if (pureTreatment && pureTreatment.includes('|||')) {
+                            const parts = pureTreatment.split('|||');
+                            pureTreatment = parts[0].trim();
+                            try { ext = JSON.parse(parts[1].trim()) || {}; } catch(e) {}
+                        }
+                        return {
+                            id: a.id,
+                            patientId: a.patient_id,
+                            patientName: a.patient_name,
+                            time: a.appointment_time,
+                            treatment: pureTreatment,
+                            status: a.status || 'Programada',
+                            isTomorrow: a.is_tomorrow || false,
+                            date: ext.date || a.appointment_date || (a.is_tomorrow ? 'tomorrow' : 'today'),
+                            doctorId: a.doctor_id || ext.doctorId || '',
+                            doctorName: ext.doctorName || '',
+                            specialty: a.specialty || ext.specialty || '',
+                            shift: ext.shift || 'morning',
+                            assistantId: ext.assistantId || '',
+                            assistantName: ext.assistantName || '',
+                            roomId: a.room_id || ext.roomId || '',
+                            roomName: ext.roomName || ''
+                        };
+                    });
                     localStorage.setItem('dental_appointments', JSON.stringify(mapped));
                     this._apptsCacheTime = Date.now();
                     return mapped;
@@ -716,22 +733,45 @@ class SupabaseDataService {
     }
 
     static async saveAppointment(appointmentObj) {
+        const ext = {
+            doctorId: appointmentObj.doctorId || '',
+            doctorName: appointmentObj.doctorName || '',
+            specialty: appointmentObj.specialty || '',
+            shift: appointmentObj.shift || 'morning',
+            assistantId: appointmentObj.assistantId || '',
+            assistantName: appointmentObj.assistantName || '',
+            roomId: appointmentObj.roomId || '',
+            roomName: appointmentObj.roomName || '',
+            date: appointmentObj.date || (appointmentObj.isTomorrow ? 'tomorrow' : 'today')
+        };
+        const pureTreatment = (appointmentObj.treatment || '').split('|||')[0].trim();
+        const packedTreatment = `${pureTreatment} ||| ${JSON.stringify(ext)}`;
+
+        const apptToStore = {
+            ...appointmentObj,
+            treatment: pureTreatment,
+            ...ext
+        };
+
         let localAppts = JSON.parse(localStorage.getItem('dental_appointments')) || [];
-        const idx = localAppts.findIndex(a => a.id === appointmentObj.id);
-        if (idx >= 0) localAppts[idx] = appointmentObj;
-        else localAppts.push(appointmentObj);
+        const idx = localAppts.findIndex(a => a.id === apptToStore.id);
+        if (idx >= 0) localAppts[idx] = apptToStore;
+        else localAppts.push(apptToStore);
         localStorage.setItem('dental_appointments', JSON.stringify(localAppts));
 
         if (this.isCloudConnected()) {
             try {
                 const { error } = await supabaseClient.from('appointments').upsert({
-                    id: appointmentObj.id,
-                    patient_id: appointmentObj.patientId || null,
-                    patient_name: appointmentObj.patientName,
-                    appointment_time: appointmentObj.time,
-                    treatment: appointmentObj.treatment,
-                    status: appointmentObj.status || 'Programada',
-                    is_tomorrow: appointmentObj.isTomorrow || false
+                    id: apptToStore.id,
+                    patient_id: apptToStore.patientId || null,
+                    patient_name: apptToStore.patientName,
+                    appointment_time: apptToStore.time,
+                    treatment: packedTreatment,
+                    status: apptToStore.status || 'Programada',
+                    is_tomorrow: apptToStore.isTomorrow || false,
+                    doctor_id: apptToStore.doctorId || null,
+                    specialty: apptToStore.specialty || null,
+                    room_id: apptToStore.roomId || null
                 });
                 if (error) {
                     console.error('Supabase saveAppointment Cloud Error:', error);
