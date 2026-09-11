@@ -2506,7 +2506,7 @@
                             </div>
                             <div class="card-body flex-column gap-15">
                                 <p style="font-size: 0.88rem; color: var(--text-muted); margin: 0;">
-                                    Generador directo de documentos. Seleccione el modelo para imprimir o descargar en PDF usando su membrete y logo configurados:
+                                    Generador directo de documentos. Seleccione el modelo para abrir la vista previa y guardarlo en PDF o imprimirlo usando su membrete y logo configurados:
                                 </p>
 
                                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 15px;">
@@ -2519,12 +2519,9 @@
                                                 <span style="font-size: 0.78rem; color: var(--text-muted);">Modelo oficial con desglose de servicios</span>
                                             </div>
                                         </div>
-                                        <div style="display: flex; gap: 8px; margin-top: auto;">
-                                            <button class="btn btn-sm btn-outline flex-1" onclick="handleStationeryAction('factura', 'print')">
-                                                <i class="fa-solid fa-print"></i> Imprimir
-                                            </button>
-                                            <button class="btn btn-sm btn-primary flex-1" onclick="handleStationeryAction('factura', 'pdf')">
-                                                <i class="fa-solid fa-file-pdf"></i> Descargar PDF
+                                        <div style="margin-top: auto;">
+                                            <button class="btn btn-sm btn-primary" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; padding: 9px 14px;" onclick="handleStationeryAction('factura', 'preview')">
+                                                <i class="fa-solid fa-eye"></i> Vista Previa
                                             </button>
                                         </div>
                                     </div>
@@ -2538,12 +2535,9 @@
                                                 <span style="font-size: 0.78rem; color: var(--text-muted);">Formato de propuesta económica</span>
                                             </div>
                                         </div>
-                                        <div style="display: flex; gap: 8px; margin-top: auto;">
-                                            <button class="btn btn-sm btn-outline flex-1" onclick="handleStationeryAction('cotizacion', 'print')">
-                                                <i class="fa-solid fa-print"></i> Imprimir
-                                            </button>
-                                            <button class="btn btn-sm btn-primary flex-1" onclick="handleStationeryAction('cotizacion', 'pdf')">
-                                                <i class="fa-solid fa-file-pdf"></i> Descargar PDF
+                                        <div style="margin-top: auto;">
+                                            <button class="btn btn-sm btn-primary" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; padding: 9px 14px; background: var(--primary-cyan) !important;" onclick="handleStationeryAction('cotizacion', 'preview')">
+                                                <i class="fa-solid fa-eye"></i> Vista Previa
                                             </button>
                                         </div>
                                     </div>
@@ -2557,12 +2551,9 @@
                                                 <span style="font-size: 0.78rem; color: var(--text-muted);">Comprobante de abono o consulta</span>
                                             </div>
                                         </div>
-                                        <div style="display: flex; gap: 8px; margin-top: auto;">
-                                            <button class="btn btn-sm btn-outline flex-1" onclick="handleStationeryAction('recibo', 'print')">
-                                                <i class="fa-solid fa-print"></i> Imprimir
-                                            </button>
-                                            <button class="btn btn-sm btn-primary flex-1" onclick="handleStationeryAction('recibo', 'pdf')">
-                                                <i class="fa-solid fa-file-pdf"></i> Descargar PDF
+                                        <div style="margin-top: auto;">
+                                            <button class="btn btn-sm btn-primary" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; padding: 9px 14px; background: #059669 !important;" onclick="handleStationeryAction('recibo', 'preview')">
+                                                <i class="fa-solid fa-eye"></i> Vista Previa
                                             </button>
                                         </div>
                                     </div>
@@ -2576,12 +2567,9 @@
                                                 <span style="font-size: 0.78rem; color: var(--text-muted);">Prescripción médica y recomendaciones</span>
                                             </div>
                                         </div>
-                                        <div style="display: flex; gap: 8px; margin-top: auto;">
-                                            <button class="btn btn-sm btn-outline flex-1" onclick="handleStationeryAction('recipe', 'print')">
-                                                <i class="fa-solid fa-print"></i> Imprimir
-                                            </button>
-                                            <button class="btn btn-sm btn-primary flex-1" onclick="handleStationeryAction('recipe', 'pdf')">
-                                                <i class="fa-solid fa-file-pdf"></i> Descargar PDF
+                                        <div style="margin-top: auto;">
+                                            <button class="btn btn-sm btn-primary" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; padding: 9px 14px; background: #0d9488 !important;" onclick="handleStationeryAction('recipe', 'preview')">
+                                                <i class="fa-solid fa-eye"></i> Vista Previa
                                             </button>
                                         </div>
                                     </div>
@@ -7330,14 +7318,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=289"></script>
-    <script src="supabaseClient.js?v=289"></script>
-    <script src="odontogram.js?v=289"></script>
-    <script src="signature.js?v=289"></script>
-    <script src="whatsapp.js?v=289"></script>
-    <script src="kardex.js?v=289"></script>
-    <script src="app.js?v=289"></script>
-    <script src="clinicalERP.js?v=289"></script>
-    <script src="tutorial.js?v=289"></script>
+    <script src="seededData.js?v=290"></script>
+    <script src="supabaseClient.js?v=290"></script>
+    <script src="odontogram.js?v=290"></script>
+    <script src="signature.js?v=290"></script>
+    <script src="whatsapp.js?v=290"></script>
+    <script src="kardex.js?v=290"></script>
+    <script src="app.js?v=290"></script>
+    <script src="clinicalERP.js?v=290"></script>
+    <script src="tutorial.js?v=290"></script>
 </body>
 </html>

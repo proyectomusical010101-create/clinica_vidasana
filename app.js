@@ -19929,12 +19929,22 @@ async function handleStationeryAction(templateType, action) {
         const container = document.createElement('div');
         container.innerHTML = docHtml;
 
-        if (action === 'print') {
+        if (action === 'preview' || action === 'print') {
             container.classList.add('print-section');
             container.style.background = '#ffffff';
             document.body.appendChild(container);
+
+            const cleanup = () => {
+                if (document.body.contains(container)) {
+                    document.body.removeChild(container);
+                }
+                window.removeEventListener('afterprint', cleanup);
+            };
+            window.addEventListener('afterprint', cleanup);
+
             window.print();
-            document.body.removeChild(container);
+
+            setTimeout(cleanup, 2500);
         } else if (action === 'pdf') {
             const templateName = (templateType || 'documento').toUpperCase();
             const filename = `Papeleria_${templateName}.pdf`;
