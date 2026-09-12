@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=293">
+    <link rel="stylesheet" href="styles.css?v=294">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -3954,12 +3954,47 @@
                                 </select>
                             </div>
 
-                            <div class="form-group span-2">
-                                <label>Asignación de Servicios (Seleccione múltiples del Baremo) *</label>
-                                <select id="u-services" class="form-control" multiple style="height: 105px;">
-                                    <!-- Populated dynamically from baremo -->
-                                </select>
-                                <small class="text-muted">Mantenga presionado Ctrl (o Cmd) para seleccionar múltiples servicios.</small>
+                            <div class="form-group span-2" id="u-services-picker-group">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                    <label style="margin-bottom: 0; font-weight: 700; color: var(--text-heading);"><i class="fa-solid fa-list-check text-cyan"></i> Asignación de Servicios del Baremo *</label>
+                                    <span id="u-services-counter" class="badge-tag blue" style="font-size: 0.75rem; font-weight: 700;">0 servicios asignados</span>
+                                </div>
+
+                                <!-- Toolbar: Search & Action Buttons -->
+                                <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 8px;">
+                                    <div style="flex: 1; min-width: 180px; position: relative;">
+                                        <input type="text" id="u-services-search" class="form-control" placeholder="🔍 Buscar servicio o código..." oninput="window.filterDoctorServicesList()" style="height: 34px; font-size: 0.82rem; border-radius: 6px; padding: 4px 10px;">
+                                    </div>
+                                    <div style="display: flex; gap: 5px;">
+                                        <button type="button" class="btn btn-xs btn-outline" onclick="window.toggleAllDoctorServices(true)" style="font-size: 0.72rem; padding: 4px 8px; font-weight: 600;" title="Marcar todos los servicios visibles">
+                                            <i class="fa-solid fa-check-double text-cyan"></i> Marcar Visibles
+                                        </button>
+                                        <button type="button" class="btn btn-xs btn-outline" onclick="window.toggleAllDoctorServices(false)" style="font-size: 0.72rem; padding: 4px 8px; font-weight: 600; color: #ef4444;" title="Deseleccionar todos">
+                                            <i class="fa-solid fa-xmark"></i> Desmarcar Todo
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Category Filter Pills -->
+                                <div id="u-services-category-pills" style="display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 8px;">
+                                    <button type="button" class="btn btn-xs btn-outline active-category-pill" data-category="all" onclick="window.setDoctorServiceCategoryFilter('all', this)" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px;">Todos</button>
+                                    <button type="button" class="btn btn-xs btn-outline" data-category="odontologia" onclick="window.setDoctorServiceCategoryFilter('odontologia', this)" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px;"><i class="fa-solid fa-tooth text-cyan"></i> Odontología</button>
+                                    <button type="button" class="btn btn-xs btn-outline" data-category="medicina" onclick="window.setDoctorServiceCategoryFilter('medicina', this)" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px;"><i class="fa-solid fa-stethoscope text-emerald"></i> Medicina</button>
+                                    <button type="button" class="btn btn-xs btn-outline" data-category="laboratorio" onclick="window.setDoctorServiceCategoryFilter('laboratorio', this)" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px;"><i class="fa-solid fa-vials text-purple"></i> Laboratorio</button>
+                                    <button type="button" class="btn btn-xs btn-outline" data-category="selected" onclick="window.setDoctorServiceCategoryFilter('selected', this)" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; border-color: #0284c7; color: #0284c7;"><i class="fa-solid fa-star text-amber"></i> Solo Asignados</button>
+                                </div>
+
+                                <!-- Visual Interactive Services List -->
+                                <div id="u-services-list-container" style="max-height: 220px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-card); padding: 4px; display: flex; flex-direction: column; gap: 4px;">
+                                    <!-- Dynamic service rows -->
+                                </div>
+
+                                <!-- Hidden native select to preserve 100% backward compatibility -->
+                                <select id="u-services" multiple style="display: none !important;"></select>
+
+                                <small class="text-muted" style="font-size: 0.74rem; display: block; margin-top: 5px;">
+                                    <i class="fa-solid fa-hand-pointer text-cyan"></i> Haga clic o toque en cualquier servicio para asignarlo o removerlo fácilmente.
+                                </small>
                             </div>
                             <div class="form-group">
                                 <label>Horario Detallado *</label>
@@ -7348,14 +7383,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=293"></script>
-    <script src="supabaseClient.js?v=293"></script>
-    <script src="odontogram.js?v=293"></script>
-    <script src="signature.js?v=293"></script>
-    <script src="whatsapp.js?v=293"></script>
-    <script src="kardex.js?v=293"></script>
-    <script src="app.js?v=293"></script>
-    <script src="clinicalERP.js?v=293"></script>
-    <script src="tutorial.js?v=293"></script>
+    <script src="seededData.js?v=294"></script>
+    <script src="supabaseClient.js?v=294"></script>
+    <script src="odontogram.js?v=294"></script>
+    <script src="signature.js?v=294"></script>
+    <script src="whatsapp.js?v=294"></script>
+    <script src="kardex.js?v=294"></script>
+    <script src="app.js?v=294"></script>
+    <script src="clinicalERP.js?v=294"></script>
+    <script src="tutorial.js?v=294"></script>
 </body>
 </html>

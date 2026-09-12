@@ -6179,4 +6179,48 @@ select, .form-select, select.form-control {
     color: #ffffff !important;
 }
 
+/* ==========================================================
+   DOCTOR SERVICES VISUAL ASSIGNMENT LIST
+   ========================================================== */
+.u-service-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: #ffffff;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+    gap: 10px;
+}
+
+.u-service-item:hover {
+    background: #f0fdfa;
+    border-color: #06b6d4;
+    transform: translateY(-1px);
+}
+
+.u-service-item.selected {
+    background: rgba(8, 145, 178, 0.08);
+    border-color: var(--primary-cyan);
+    box-shadow: 0 1px 4px rgba(8, 145, 178, 0.15);
+}
+
+.u-service-item .u-service-checkbox {
+    width: 17px;
+    height: 17px;
+    cursor: pointer;
+    accent-color: var(--primary-cyan);
+    flex-shrink: 0;
+}
+
+.active-category-pill {
+    background: var(--primary-cyan) !important;
+    color: #ffffff !important;
+    border-color: var(--primary-cyan) !important;
+}
+
+
 

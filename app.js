@@ -10217,7 +10217,15 @@ window.openCreateUserModal = async function() {
     const passHint = document.getElementById('u-password-hint');
     if (passHint) passHint.classList.add('hidden');
 
-    await populateDoctorServicesSelect();
+    const srvSearch = document.getElementById('u-services-search');
+    if (srvSearch) srvSearch.value = '';
+    window._doctorServicesCategoryFilter = 'all';
+    document.querySelectorAll('#u-services-category-pills button').forEach(b => {
+        if (b.dataset.category === 'all') b.classList.add('active-category-pill');
+        else b.classList.remove('active-category-pill');
+    });
+
+    await populateDoctorServicesSelect([]);
     await window.populateUserModalSelects({});
 
     const roleSelect = document.getElementById('u-role');
@@ -10276,13 +10284,22 @@ window.editUser = async function(userId) {
     const licInput = document.getElementById('u-license');
     if (licInput) licInput.value = (user.license && user.license !== 'N/A') ? user.license : '';
 
-    await populateDoctorServicesSelect();
+    const docProf = user.doctorProfile || user.doctor_profile || {};
+
+    const srvSearch = document.getElementById('u-services-search');
+    if (srvSearch) srvSearch.value = '';
+    window._doctorServicesCategoryFilter = 'all';
+    document.querySelectorAll('#u-services-category-pills button').forEach(b => {
+        if (b.dataset.category === 'all') b.classList.add('active-category-pill');
+        else b.classList.remove('active-category-pill');
+    });
+
+    await populateDoctorServicesSelect(docProf.assignedServices || []);
 
     if (roleSelect) {
         roleSelect.dispatchEvent(new Event('change'));
     }
 
-    const docProf = user.doctorProfile || user.doctor_profile || {};
     await window.populateUserModalSelects(docProf);
 
     if (docProf) {
@@ -10296,6 +10313,9 @@ window.editUser = async function(userId) {
                     opt.selected = docProf.assignedServices.includes(opt.value);
                 });
             }
+        }
+        if (typeof window.renderDoctorServicesVisualList === 'function') {
+            window.renderDoctorServicesVisualList();
         }
     }
 
@@ -10332,19 +10352,159 @@ window.deleteUser = async function(userId) {
     });
 };
 
-async function populateDoctorServicesSelect() {
+window._allDoctorBaremoServices = [];
+window._doctorServicesCategoryFilter = 'all';
+
+async function populateDoctorServicesSelect(preSelectedCodes = null) {
     const select = document.getElementById('u-services');
     if (!select) return;
+
+    let currentlySelected = new Set();
+    if (Array.isArray(preSelectedCodes)) {
+        preSelectedCodes.forEach(c => currentlySelected.add(String(c)));
+    } else {
+        Array.from(select.selectedOptions).forEach(o => currentlySelected.add(o.value));
+    }
+
     select.innerHTML = '';
     const baremo = await SupabaseDataService.getBaremo();
-    baremo.forEach(proc => {
+    window._allDoctorBaremoServices = baremo || [];
+
+    window._allDoctorBaremoServices.forEach(proc => {
         const opt = document.createElement('option');
         opt.value = proc.code;
         opt.innerText = `${proc.name} ($${proc.priceUSD})`;
+        if (currentlySelected.has(String(proc.code))) {
+            opt.selected = true;
+        }
         select.appendChild(opt);
     });
+
+    if (typeof window.renderDoctorServicesVisualList === 'function') {
+        window.renderDoctorServicesVisualList();
+    }
 }
 window.populateDoctorServicesSelect = populateDoctorServicesSelect;
+
+window.renderDoctorServicesVisualList = function() {
+    const container = document.getElementById('u-services-list-container');
+    const select = document.getElementById('u-services');
+    const counterEl = document.getElementById('u-services-counter');
+    if (!container || !select) return;
+
+    const q = (document.getElementById('u-services-search')?.value || '').toLowerCase().trim();
+    const categoryFilter = window._doctorServicesCategoryFilter || 'all';
+
+    const selectedSet = new Set(Array.from(select.selectedOptions).map(o => o.value));
+
+    // Update live counter badge
+    if (counterEl) {
+        const count = selectedSet.size;
+        counterEl.innerHTML = `<i class="fa-solid fa-check"></i> ${count} ${count === 1 ? 'servicio asignado' : 'servicios asignados'}`;
+        if (count > 0) {
+            counterEl.className = 'badge-tag green';
+        } else {
+            counterEl.className = 'badge-tag blue';
+        }
+    }
+
+    const services = window._allDoctorBaremoServices || [];
+    const filtered = services.filter(proc => {
+        const code = String(proc.code || '').toLowerCase();
+        const name = String(proc.name || '').toLowerCase();
+        const dept = String(proc.category || proc.department || '').toLowerCase();
+
+        // Category filter
+        if (categoryFilter === 'selected') {
+            if (!selectedSet.has(proc.code)) return false;
+        } else if (categoryFilter === 'odontologia') {
+            const isOdonto = dept.includes('odont') || dept.includes('dent') || name.includes('dient') || name.includes('molar') || name.includes('resina') || name.includes('limpieza') || name.includes('extrac') || name.includes('ortod') || name.includes('endod') || name.includes('profilax');
+            if (!isOdonto) return false;
+        } else if (categoryFilter === 'medicina') {
+            const isMed = dept.includes('medic') || dept.includes('general') || dept.includes('pediatr') || dept.includes('gineco') || dept.includes('cardio') || name.includes('consulta') || name.includes('médic') || name.includes('curacion') || name.includes('sutura');
+            if (!isMed) return false;
+        } else if (categoryFilter === 'laboratorio') {
+            const isLab = dept.includes('lab') || dept.includes('analis') || name.includes('sangre') || name.includes('perfil') || name.includes('hemograma') || name.includes('uro');
+            if (!isLab) return false;
+        }
+
+        // Search text filter
+        if (q) {
+            if (!name.includes(q) && !code.includes(q)) return false;
+        }
+
+        return true;
+    });
+
+    container.innerHTML = '';
+
+    if (filtered.length === 0) {
+        container.innerHTML = `
+            <div class="text-center text-muted" style="padding: 22px; font-size: 0.84rem;">
+                <i class="fa-solid fa-magnifying-glass" style="margin-bottom: 6px; display: block; font-size: 1.2rem; color: #94a3b8;"></i>
+                No se encontraron servicios ${categoryFilter === 'selected' ? 'asignados' : 'con ese término de búsqueda'}.
+            </div>
+        `;
+        return;
+    }
+
+    filtered.forEach(proc => {
+        const isSelected = selectedSet.has(proc.code);
+        const item = document.createElement('div');
+        item.className = `u-service-item ${isSelected ? 'selected' : ''}`;
+        item.dataset.code = proc.code;
+
+        item.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0;">
+                <input type="checkbox" class="u-service-checkbox" ${isSelected ? 'checked' : ''} tabindex="-1">
+                <span class="badge-tag blue" style="font-size: 0.68rem; font-weight: 700; font-family: monospace; flex-shrink: 0;">${proc.code}</span>
+                <span style="font-size: 0.82rem; font-weight: 600; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${proc.name}">${proc.name}</span>
+            </div>
+            <div style="font-size: 0.82rem; font-weight: 700; color: #059669; flex-shrink: 0; margin-left: 8px;">
+                $${parseFloat(proc.priceUSD || 0).toFixed(2)}
+            </div>
+        `;
+
+        item.onclick = (e) => {
+            e.preventDefault();
+            const opt = select.querySelector(`option[value="${proc.code}"]`);
+            if (opt) {
+                opt.selected = !opt.selected;
+            }
+            window.renderDoctorServicesVisualList();
+        };
+
+        container.appendChild(item);
+    });
+};
+
+window.filterDoctorServicesList = function() {
+    window.renderDoctorServicesVisualList();
+};
+
+window.setDoctorServiceCategoryFilter = function(category, btnEl) {
+    window._doctorServicesCategoryFilter = category;
+    document.querySelectorAll('#u-services-category-pills button').forEach(b => b.classList.remove('active-category-pill'));
+    if (btnEl) btnEl.classList.add('active-category-pill');
+    window.renderDoctorServicesVisualList();
+};
+
+window.toggleAllDoctorServices = function(selectFlag) {
+    const container = document.getElementById('u-services-list-container');
+    const select = document.getElementById('u-services');
+    if (!container || !select) return;
+
+    const visibleItems = container.querySelectorAll('.u-service-item');
+    visibleItems.forEach(item => {
+        const code = item.dataset.code;
+        const opt = select.querySelector(`option[value="${code}"]`);
+        if (opt) {
+            opt.selected = Boolean(selectFlag);
+        }
+    });
+
+    window.renderDoctorServicesVisualList();
+};
 
 // ==========================================
 // GLOBAL EVENTS & MODALS BINDING
@@ -10385,19 +10545,6 @@ function initGlobalEvents() {
             }
             updateRoleScopeHint(role);
         };
-    }
-
-    async function populateDoctorServicesSelect() {
-        const select = document.getElementById('u-services');
-        if (!select) return;
-        select.innerHTML = '';
-        const baremo = await SupabaseDataService.getBaremo();
-        baremo.forEach(proc => {
-            const opt = document.createElement('option');
-            opt.value = proc.code;
-            opt.innerText = `${proc.name} ($${proc.priceUSD})`;
-            select.appendChild(opt);
-        });
     }
 
     const loginForm = document.getElementById('form-login');
