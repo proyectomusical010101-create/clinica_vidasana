@@ -5769,6 +5769,14 @@ window.resetDirectSaleForm = function() {
     if (qtyIn) qtyIn.value = '1';
     const priceIn = document.getElementById('ds-item-price');
     if (priceIn) priceIn.value = '';
+    const amountPaidIn = document.getElementById('ds-amount-paid');
+    if (amountPaidIn) amountPaidIn.value = '0.00';
+    const amountPaidBsIn = document.getElementById('ds-amount-paid-bs');
+    if (amountPaidBsIn) amountPaidBsIn.value = '0.00';
+    const payMethodSelect = document.getElementById('ds-payment-method');
+    if (payMethodSelect) payMethodSelect.value = 'pagomovil';
+    const pmBanner = document.getElementById('ds-pagomovil-info-banner');
+    if (pmBanner) pmBanner.style.display = 'flex';
     const notesIn = document.getElementById('ds-notes');
     if (notesIn) notesIn.value = '';
     window.clearDirectSalePatientSearch();
@@ -6247,6 +6255,28 @@ window.calculateDirectSaleTotals = function() {
     if (totalBsEl) totalBsEl.innerText = `Bs. ${totalBs.toFixed(2)}`;
     if (rateLabel) rateLabel.innerText = `Tasa BCV: Bs. ${rate.toFixed(2)}`;
 
+    // Sync dual amount inputs if active element is not the Bs input
+    const amountPaidIn = document.getElementById('ds-amount-paid');
+    const amountPaidBsIn = document.getElementById('ds-amount-paid-bs');
+    if (amountPaidIn && amountPaidBsIn && document.activeElement !== amountPaidBsIn) {
+        const paidUSD = parseFloat(amountPaidIn.value) || 0;
+        amountPaidBsIn.value = (paidUSD * rate).toFixed(2);
+    }
+
+    const pmRateBadge = document.getElementById('ds-pagomovil-rate-badge');
+    if (pmRateBadge) pmRateBadge.innerText = `Tasa BCV: Bs. ${rate.toFixed(2)}`;
+
+    // Update split hints
+    const pmSplit = parseFloat(document.getElementById('ds-split-pm')?.value || 0);
+    const cashSplit = parseFloat(document.getElementById('ds-split-cash')?.value || 0);
+    const posSplit = parseFloat(document.getElementById('ds-split-pos')?.value || 0);
+    const pmHint = document.getElementById('ds-split-pm-bs-hint');
+    const cashHint = document.getElementById('ds-split-cash-bs-hint');
+    const posHint = document.getElementById('ds-split-pos-bs-hint');
+    if (pmHint) pmHint.innerText = `≈ Bs. ${(pmSplit * rate).toFixed(2)}`;
+    if (cashHint) cashHint.innerText = `≈ Bs. ${(cashSplit * rate).toFixed(2)}`;
+    if (posHint) posHint.innerText = `≈ Bs. ${(posSplit * rate).toFixed(2)}`;
+
     window.updateDirectSaleDocIndicator(totalUSD, isCashea, casheaFinancedUSD);
 };
 
@@ -6256,16 +6286,45 @@ window.setDirectSaleFullPayment = function() {
         const initialIn = document.getElementById('ds-cashea-initial-input');
         if (initialIn) initialIn.value = '0.00';
     }
+    const amountPaidIn = document.getElementById('ds-amount-paid');
+    if (amountPaidIn) amountPaidIn.dataset.autoFilled = 'true';
     window.calculateDirectSaleTotals();
 };
 
 window.onDirectSaleAmountPaidChange = function(val) {
     const amountPaidIn = document.getElementById('ds-amount-paid');
+    const amountPaidBsIn = document.getElementById('ds-amount-paid-bs');
     if (amountPaidIn) amountPaidIn.dataset.autoFilled = 'false';
+
+    const usdVal = parseFloat(val) || 0;
+    const rate = getExchangeRate();
+    if (amountPaidBsIn && document.activeElement === amountPaidIn) {
+        amountPaidBsIn.value = (usdVal * rate).toFixed(2);
+    }
+
     const paymentMethod = document.getElementById('ds-payment-method')?.value || 'pagomovil';
     if (paymentMethod === 'cashea') {
         const initialIn = document.getElementById('ds-cashea-initial-input');
         if (initialIn) initialIn.value = val;
+    }
+    window.calculateDirectSaleTotals();
+};
+
+window.onDirectSaleAmountPaidBsChange = function(valBs) {
+    const amountPaidIn = document.getElementById('ds-amount-paid');
+    const amountPaidBsIn = document.getElementById('ds-amount-paid-bs');
+    if (amountPaidIn) amountPaidIn.dataset.autoFilled = 'false';
+
+    const bsVal = parseFloat(valBs) || 0;
+    const rate = getExchangeRate();
+    if (amountPaidIn && rate > 0) {
+        amountPaidIn.value = (bsVal / rate).toFixed(2);
+    }
+
+    const paymentMethod = document.getElementById('ds-payment-method')?.value || 'pagomovil';
+    if (paymentMethod === 'cashea') {
+        const initialIn = document.getElementById('ds-cashea-initial-input');
+        if (initialIn && amountPaidIn) initialIn.value = amountPaidIn.value;
     }
     window.calculateDirectSaleTotals();
 };
@@ -6318,6 +6377,7 @@ window.updateDirectSaleDocIndicator = function(totalUSD, isCashea = false, finan
 window.onDirectSalePaymentMethodChange = function(method) {
     const splitContainer = document.getElementById('ds-split-container');
     const casheaBox = document.getElementById('ds-cashea-config-container');
+    const pmBanner = document.getElementById('ds-pagomovil-info-banner');
     
     if (splitContainer) {
         splitContainer.style.display = method === 'split' ? 'block' : 'none';
@@ -6325,8 +6385,123 @@ window.onDirectSalePaymentMethodChange = function(method) {
     if (casheaBox) {
         casheaBox.style.display = method === 'cashea' ? 'block' : 'none';
     }
+    if (pmBanner) {
+        pmBanner.style.display = (method === 'pagomovil' || method === 'pos') ? 'flex' : 'none';
+    }
 
     window.calculateDirectSaleTotals();
+};
+
+// Global helpers for cross-system Bolivares conversion and reconciliation
+window.syncModalPaymentUsdToBs = function(usdVal) {
+    const rate = getExchangeRate();
+    const bsInput = document.getElementById('pay-paid-bs');
+    if (bsInput) {
+        const usd = parseFloat(usdVal) || 0;
+        bsInput.value = (usd * rate).toFixed(2);
+    }
+};
+
+window.syncModalPaymentBsToUsd = function(bsVal) {
+    const rate = getExchangeRate();
+    const usdInput = document.getElementById('pay-paid-usd');
+    if (usdInput && rate > 0) {
+        const bs = parseFloat(bsVal) || 0;
+        usdInput.value = (bs / rate).toFixed(2);
+    }
+};
+
+window.onModalPaymentMethodChange = function(method) {
+    const bsGroup = document.getElementById('pay-paid-bs-group');
+    const rateHint = document.getElementById('pay-bcv-rate-hint');
+    const rate = getExchangeRate();
+    if (rateHint) rateHint.innerText = `Tasa BCV: Bs. ${rate.toFixed(2)}`;
+    if (bsGroup) {
+        if (method === 'pagomovil' || method === 'transferencia' || method === 'punto') {
+            bsGroup.style.background = '#f0fdf4';
+            bsGroup.style.padding = '6px 8px';
+            bsGroup.style.borderRadius = '6px';
+            bsGroup.style.border = '1px solid #bbf7d0';
+        } else {
+            bsGroup.style.background = 'none';
+            bsGroup.style.padding = '0';
+            bsGroup.style.border = 'none';
+        }
+    }
+};
+
+window.syncSessionPaymentUsdToBs = function(usdVal) {
+    const rate = getExchangeRate();
+    const bsInput = document.getElementById('s-payment-amount-bs');
+    if (bsInput && document.activeElement !== bsInput) {
+        const usd = parseFloat(usdVal) || 0;
+        bsInput.value = (usd * rate).toFixed(2);
+    }
+};
+
+window.syncSessionPaymentBsToUsd = function(bsVal) {
+    const rate = getExchangeRate();
+    const usdInput = document.getElementById('s-payment-amount');
+    if (usdInput && rate > 0) {
+        const bs = parseFloat(bsVal) || 0;
+        usdInput.value = (bs / rate).toFixed(2);
+    }
+};
+
+window.onSessionPaymentMethodChange = function(method) {
+    const bsInput = document.getElementById('s-payment-amount-bs');
+    const usdInput = document.getElementById('s-payment-amount');
+    const rate = getExchangeRate();
+    if (usdInput && bsInput) {
+        const usd = parseFloat(usdInput.value) || 0;
+        bsInput.value = (usd * rate).toFixed(2);
+        if (method === 'pagomovil' || method === 'punto') {
+            bsInput.style.background = '#f0fdf4';
+            bsInput.style.borderColor = '#10b981';
+        } else {
+            bsInput.style.background = '#fff';
+            bsInput.style.borderColor = '#38bdf8';
+        }
+    }
+};
+
+window.updateSessionSplitBsHints = function() {
+    const rate = getExchangeRate();
+    const pmInput = document.querySelector('.s-split-input[data-method="pagomovil"]');
+    const pmHint = document.getElementById('s-split-pm-bs');
+    if (pmInput && pmHint) {
+        const usd = parseFloat(pmInput.value) || 0;
+        pmHint.innerText = `≈ Bs. ${(usd * rate).toFixed(2)}`;
+    }
+};
+
+window.updateNotePaymentBsHint = function(usdVal) {
+    const rate = getExchangeRate();
+    const hint = document.getElementById('note-payment-bs');
+    if (hint) {
+        const usd = parseFloat(usdVal) || 0;
+        hint.innerText = `≈ Bs. ${(usd * rate).toFixed(2)} (Tasa BCV: ${rate.toFixed(2)})`;
+    }
+};
+
+window.updateBudgetSplitBsHints = function() {
+    const rate = getExchangeRate();
+    const pmInput = document.getElementById('budget-split-pagomovil');
+    const pmHint = document.getElementById('budget-split-pm-bs');
+    if (pmInput && pmHint) {
+        const usd = parseFloat(pmInput.value) || 0;
+        pmHint.innerText = `≈ Bs. ${(usd * rate).toFixed(2)}`;
+    }
+};
+
+window.updateBillingSplitBsHints = function() {
+    const rate = getExchangeRate();
+    const pmInput = document.getElementById('billing-split-pagomovil');
+    const pmHint = document.getElementById('billing-split-pm-bs');
+    if (pmInput && pmHint) {
+        const usd = parseFloat(pmInput.value) || 0;
+        pmHint.innerText = `≈ Bs. ${(usd * rate).toFixed(2)}`;
+    }
 };
 
 window.processDirectSale = async function() {
@@ -9143,6 +9318,16 @@ window.openPaymentModalForAppointment = async function(patientId, patientName, t
             const dateInput = document.getElementById('pay-date');
             if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
 
+            const rate = getExchangeRate();
+            const paidBsInput = document.getElementById('pay-paid-bs');
+            if (paidBsInput) paidBsInput.value = (50.00 * rate).toFixed(2);
+            const rateHint = document.getElementById('pay-bcv-rate-hint');
+            if (rateHint) rateHint.innerText = `Tasa BCV: Bs. ${rate.toFixed(2)}`;
+            const payMethodSelect = document.getElementById('pay-method');
+            if (payMethodSelect && typeof window.onModalPaymentMethodChange === 'function') {
+                window.onModalPaymentMethodChange(payMethodSelect.value);
+            }
+
             openModal('modal-payment');
         }
     } catch(e) {
@@ -11156,6 +11341,16 @@ function initGlobalEvents() {
                 return;
             }
             document.getElementById('pay-date').value = new Date().toISOString().split('T')[0];
+            const rate = getExchangeRate();
+            const paidUsd = parseFloat(document.getElementById('pay-paid-usd')?.value) || 50;
+            const paidBsInput = document.getElementById('pay-paid-bs');
+            if (paidBsInput) paidBsInput.value = (paidUsd * rate).toFixed(2);
+            const rateHint = document.getElementById('pay-bcv-rate-hint');
+            if (rateHint) rateHint.innerText = `Tasa BCV: Bs. ${rate.toFixed(2)}`;
+            const payMethodSelect = document.getElementById('pay-method');
+            if (payMethodSelect && typeof window.onModalPaymentMethodChange === 'function') {
+                window.onModalPaymentMethodChange(payMethodSelect.value);
+            }
             openModal('modal-payment');
         };
     }

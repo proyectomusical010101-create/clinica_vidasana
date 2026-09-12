@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=295">
+    <link rel="stylesheet" href="styles.css?v=296">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -978,7 +978,8 @@
                                                   <div class="grid-form" style="grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px;">
                                                       <div class="form-group" style="margin-bottom:0;">
                                                           <label style="font-size:0.75rem; font-weight:600;">Pago Móvil ($)</label>
-                                                          <input type="number" id="budget-split-pagomovil" class="form-control budget-split-input" value="0" min="0" step="0.01" style="padding:4px 8px; font-size:0.85rem;">
+                                                          <input type="number" id="budget-split-pagomovil" class="form-control budget-split-input" value="0" min="0" step="0.01" style="padding:4px 8px; font-size:0.85rem;" oninput="window.updateBudgetSplitBsHints()">
+                                                          <small id="budget-split-pm-bs" style="font-size: 0.7rem; color: #0284c7; font-weight: 700; display: block; margin-top: 2px;">≈ Bs. 0.00</small>
                                                       </div>
                                                       <div class="form-group" style="margin-bottom:0;">
                                                           <label style="font-size:0.75rem; font-weight:600;">Efectivo ($)</label>
@@ -1859,7 +1860,8 @@
                                     <div class="grid-form" style="grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px;">
                                         <div class="form-group" style="margin-bottom:0;">
                                             <label style="font-size:0.75rem; font-weight:600;">Pago Móvil ($)</label>
-                                            <input type="number" id="billing-split-pagomovil" class="form-control billing-split-input" value="0" min="0" step="0.01" style="padding:4px 8px; font-size:0.85rem;">
+                                            <input type="number" id="billing-split-pagomovil" class="form-control billing-split-input" value="0" min="0" step="0.01" style="padding:4px 8px; font-size:0.85rem;" oninput="window.updateBillingSplitBsHints()">
+                                            <small id="billing-split-pm-bs" style="font-size: 0.7rem; color: #0284c7; font-weight: 700; display: block; margin-top: 2px;">≈ Bs. 0.00</small>
                                         </div>
                                         <div class="form-group" style="margin-bottom:0;">
                                             <label style="font-size:0.75rem; font-weight:600;">Efectivo ($)</label>
@@ -3568,7 +3570,12 @@
                     </div>
                     <div class="form-group">
                         <label>Monto Abonado en esta fecha ($ USD) *</label>
-                        <input type="number" id="pay-paid-usd" step="0.01" required value="50.00">
+                        <input type="number" id="pay-paid-usd" step="0.01" required value="50.00" oninput="window.syncModalPaymentUsdToBs(this.value)">
+                    </div>
+                    <div class="form-group" id="pay-paid-bs-group">
+                        <label style="color: #0284c7; font-weight: 700;">Equivalente en Bolívares (Bs.):</label>
+                        <input type="number" id="pay-paid-bs" class="form-control" step="0.01" placeholder="0.00" oninput="window.syncModalPaymentBsToUsd(this.value)" style="border-color: #38bdf8; font-weight: 700; color: #0369a1;">
+                        <small id="pay-bcv-rate-hint" style="font-size: 0.72rem; color: #64748b; margin-top: 2px; display: block;">Tasa BCV: Bs. 0.00</small>
                     </div>
                     <div class="form-group span-2">
                         <label>Fecha de Pago *</label>
@@ -3576,12 +3583,12 @@
                     </div>
                     <div class="form-group">
                         <label>Método de Pago *</label>
-                        <select id="pay-method" class="form-control">
-                            <option value="pagomovil">Pago Móvil</option>
-                            <option value="transferencia">Transferencia Bancaria</option>
-                            <option value="zelle">Zelle</option>
+                        <select id="pay-method" class="form-control" onchange="window.onModalPaymentMethodChange(this.value)">
+                            <option value="pagomovil">Pago Móvil (Bs.)</option>
+                            <option value="transferencia">Transferencia Bancaria (Bs.)</option>
+                            <option value="zelle">Zelle ($ USD)</option>
                             <option value="cash">Efectivo ($ USD / Bs.)</option>
-                            <option value="punto">Punto de Venta / Débito</option>
+                            <option value="punto">Punto de Venta / Débito (Bs.)</option>
                             <option value="binance">Binance (USDT)</option>
                             <option value="otro">Otro Método</option>
                         </select>
@@ -4978,17 +4985,18 @@
                     </div>
                     <div class="form-group">
                         <label>Abono Realizado en la Cita ($ USD)</label>
-                        <input type="number" id="note-payment" step="0.01" value="0.00">
+                        <input type="number" id="note-payment" step="0.01" value="0.00" oninput="window.updateNotePaymentBsHint(this.value)">
+                        <small id="note-payment-bs" style="font-size: 0.72rem; color: #0284c7; font-weight: 700; display: block; margin-top: 2px;">≈ Bs. 0.00</small>
                     </div>
                     <div class="form-group">
                         <label>Método de Pago del Abono</label>
                         <select id="note-payment-method" class="form-control">
+                            <option value="pagomovil">Pago Móvil (Bs.)</option>
+                            <option value="transferencia">Transferencia (Bs.)</option>
                             <option value="cash">Cash (Efectivo)</option>
-                            <option value="pagomovil">Pago Móvil</option>
-                            <option value="transferencia">Transferencia</option>
-                            <option value="zelle">Zelle</option>
-                            <option value="binance">Binance</option>
-                            <option value="punto">Punto de Venta</option>
+                            <option value="punto">Punto de Venta (Bs.)</option>
+                            <option value="zelle">Zelle ($ USD)</option>
+                            <option value="binance">Binance (USDT)</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -5060,19 +5068,23 @@
                         <label style="font-weight: 700; color: #1e40af; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
                             <i class="fa-solid fa-money-bill-wave text-green"></i> Cobro / Abono de la Sesión (Opcional)
                         </label>
-                        <div class="grid-form" style="grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px;">
+                        <div class="grid-form" style="grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 8px;">
                             <div>
                                 <label style="font-size: 0.8rem; font-weight: 600;">Monto Cobrado ($ USD)</label>
-                                <input type="number" id="s-payment-amount" class="form-input" min="0" step="0.01" value="0.00" placeholder="0.00" style="font-weight: 700; color: #15803d;">
+                                <input type="number" id="s-payment-amount" class="form-input" min="0" step="0.01" value="0.00" placeholder="0.00" style="font-weight: 700; color: #15803d;" oninput="window.syncSessionPaymentUsdToBs(this.value)">
+                            </div>
+                            <div>
+                                <label style="font-size: 0.8rem; font-weight: 700; color: #0284c7;">Equivalente en Bs.</label>
+                                <input type="number" id="s-payment-amount-bs" class="form-input" min="0" step="0.01" value="0.00" placeholder="0.00" style="font-weight: 700; color: #0284c7; border-color: #38bdf8;" oninput="window.syncSessionPaymentBsToUsd(this.value)">
                             </div>
                             <div>
                                 <label style="font-size: 0.8rem; font-weight: 600;">Método de Pago</label>
-                                <select id="s-payment-method" class="form-input">
+                                <select id="s-payment-method" class="form-input" onchange="window.onSessionPaymentMethodChange(this.value)">
                                     <option value="cash">Efectivo / Cash ($ USD / Bs.)</option>
-                                    <option value="pagomovil">Pago Móvil / Transferencia</option>
-                                    <option value="zelle">Zelle</option>
+                                    <option value="pagomovil">Pago Móvil (Bs.)</option>
+                                    <option value="zelle">Zelle ($ USD)</option>
                                     <option value="binance">Binance (USDT)</option>
-                                    <option value="punto">Punto de Venta / Tarjeta</option>
+                                    <option value="punto">Punto de Venta / Débito (Bs.)</option>
                                     <option value="split">⚡ Pago Mixto (Varios Métodos)</option>
                                 </select>
                             </div>
@@ -5098,7 +5110,8 @@
                                 </div>
                                 <div>
                                     <label style="font-size: 0.75rem; color: #64748b;">Pago Móvil ($ USD eq.):</label>
-                                    <input type="number" class="s-split-input form-input" data-method="pagomovil" step="0.01" value="0.00" style="padding: 4px 8px; font-size: 0.8rem;">
+                                    <input type="number" class="s-split-input form-input" data-method="pagomovil" step="0.01" value="0.00" style="padding: 4px 8px; font-size: 0.8rem;" oninput="window.updateSessionSplitBsHints()">
+                                    <small id="s-split-pm-bs" style="font-size: 0.7rem; color: #0284c7; font-weight: 700; display: block; margin-top: 2px;">≈ Bs. 0.00</small>
                                 </div>
                                 <div>
                                     <label style="font-size: 0.75rem; color: #64748b;">Zelle ($ USD):</label>
@@ -6759,24 +6772,48 @@
                         <div>
                             <label style="font-size: 0.8rem; font-weight: 700; color: #334155; display: block; margin-bottom: 4px;">Método de Pago *</label>
                             <select id="ds-payment-method" class="form-control" onchange="window.onDirectSalePaymentMethodChange(this.value)" style="height: 38px; border-radius: 8px; font-size: 0.88rem; font-weight: 600; width: 100%;">
-                                <option value="pagomovil">Pago Móvil</option>
+                                <option value="pagomovil">Pago Móvil (Bs.)</option>
                                 <option value="cash">Efectivo (Dólares o Bs.)</option>
-                                <option value="pos">Punto de Venta / Débito</option>
-                                <option value="zelle">Zelle</option>
+                                <option value="pos">Punto de Venta / Débito (Bs.)</option>
+                                <option value="zelle">Zelle ($ USD)</option>
                                 <option value="binance">Binance USDT</option>
                                 <option value="cashea">Cashea (Financiamiento por Cuotas)</option>
                                 <option value="split">Mixto (Dividido con Cashea o Varios)</option>
                             </select>
                         </div>
 
+                        <!-- Pago Móvil Info Banner (Active when 'pagomovil' or 'pos') -->
+                        <div id="ds-pagomovil-info-banner" style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 8px 12px; font-size: 0.78rem; color: #166534; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <i class="fa-solid fa-mobile-screen-button text-green" style="font-size: 1rem;"></i>
+                                <span><strong>Pago Móvil:</strong> Banesco (0134) • J-50781755-5 • 0424-1894138</span>
+                            </div>
+                            <div style="font-weight: 700; color: #15803d;" id="ds-pagomovil-rate-badge">Tasa BCV: Bs. 0.00</div>
+                        </div>
+
                         <!-- Split Payment Details (Hidden unless 'split') -->
                         <div id="ds-split-container" style="display: none; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px;">
                             <div style="font-size: 0.78rem; font-weight: 700; color: #334155; margin-bottom: 6px;">Distribución Mixta ($ USD):</div>
                             <div class="ds-split-grid">
-                                <div><small>Pago Móvil ($):</small><input type="number" id="ds-split-pm" class="form-control btn-xs" value="0" min="0" step="0.01" oninput="window.onDirectSaleSplitChange()"></div>
-                                <div><small>Efectivo ($):</small><input type="number" id="ds-split-cash" class="form-control btn-xs" value="0" min="0" step="0.01" oninput="window.onDirectSaleSplitChange()"></div>
-                                <div><small>Zelle ($):</small><input type="number" id="ds-split-zelle" class="form-control btn-xs" value="0" min="0" step="0.01" oninput="window.onDirectSaleSplitChange()"></div>
-                                <div><small>Punto / Tarjeta ($):</small><input type="number" id="ds-split-pos" class="form-control btn-xs" value="0" min="0" step="0.01" oninput="window.onDirectSaleSplitChange()"></div>
+                                <div>
+                                    <small>Pago Móvil ($):</small>
+                                    <input type="number" id="ds-split-pm" class="form-control btn-xs" value="0" min="0" step="0.01" oninput="window.onDirectSaleSplitChange()">
+                                    <small id="ds-split-pm-bs-hint" style="color: #0284c7; font-weight: 700; font-size: 0.7rem; display: block; margin-top: 2px;">≈ Bs. 0.00</small>
+                                </div>
+                                <div>
+                                    <small>Efectivo ($):</small>
+                                    <input type="number" id="ds-split-cash" class="form-control btn-xs" value="0" min="0" step="0.01" oninput="window.onDirectSaleSplitChange()">
+                                    <small id="ds-split-cash-bs-hint" style="color: #64748b; font-size: 0.7rem; display: block; margin-top: 2px;">≈ Bs. 0.00</small>
+                                </div>
+                                <div>
+                                    <small>Zelle ($):</small>
+                                    <input type="number" id="ds-split-zelle" class="form-control btn-xs" value="0" min="0" step="0.01" oninput="window.onDirectSaleSplitChange()">
+                                </div>
+                                <div>
+                                    <small>Punto / Tarjeta ($):</small>
+                                    <input type="number" id="ds-split-pos" class="form-control btn-xs" value="0" min="0" step="0.01" oninput="window.onDirectSaleSplitChange()">
+                                    <small id="ds-split-pos-bs-hint" style="color: #0284c7; font-weight: 700; font-size: 0.7rem; display: block; margin-top: 2px;">≈ Bs. 0.00</small>
+                                </div>
                                 <div style="grid-column: span 2; background: #f0f9ff; padding: 6px 8px; border-radius: 6px; border: 1px solid #bae6fd;">
                                     <small style="color: #0284c7; font-weight: 700;"><i class="fa-solid fa-credit-card"></i> Cashea Financiado ($):</small>
                                     <input type="number" id="ds-split-cashea" class="form-control btn-xs" value="0" min="0" step="0.01" oninput="window.onDirectSaleSplitChange()" style="font-weight: 800; color: #0369a1;">
@@ -6834,15 +6871,33 @@
                             </div>
                         </div>
 
-                        <!-- Amount Paid & Full / Partial Toggle -->
+                        <!-- Amount Paid & Dual Currency Converter ($ USD <-> Bs.) -->
                         <div style="background: #fff; border: 1px solid #cbd5e1; border-radius: 10px; padding: 12px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                                <label style="font-size: 0.82rem; font-weight: 700; color: #0f172a; margin: 0;">Monto Abonado / Pagado Hoy ($)</label>
+                                <label style="font-size: 0.82rem; font-weight: 700; color: #0f172a; margin: 0; display: flex; align-items: center; gap: 6px;">
+                                    <i class="fa-solid fa-right-left text-cyan"></i> Monto Abonado / Pagado Hoy
+                                </label>
                                 <button type="button" class="btn btn-xs btn-outline" onclick="window.setDirectSaleFullPayment()" style="font-size: 0.75rem; padding: 2px 8px; font-weight: 700;">
                                     Pago Total (100%)
                                 </button>
                             </div>
-                            <input type="number" id="ds-amount-paid" class="form-control" min="0" step="0.01" value="0.00" oninput="window.onDirectSaleAmountPaidChange(this.value)" style="height: 40px; font-size: 1.15rem; font-weight: 800; color: #0f172a; border-radius: 6px;">
+
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: center;">
+                                <div>
+                                    <label style="font-size: 0.75rem; font-weight: 700; color: #475569; display: block; margin-bottom: 2px;">Monto en Dólares ($ USD):</label>
+                                    <div style="position: relative;">
+                                        <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-weight: 700; color: #64748b;">$</span>
+                                        <input type="number" id="ds-amount-paid" class="form-control" min="0" step="0.01" value="0.00" oninput="window.onDirectSaleAmountPaidChange(this.value)" style="height: 38px; font-size: 1.05rem; font-weight: 800; color: #0f172a; border-radius: 6px; padding-left: 24px;">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label style="font-size: 0.75rem; font-weight: 700; color: #0284c7; display: block; margin-bottom: 2px;">Equivalente en Bolívares (Bs.):</label>
+                                    <div style="position: relative;">
+                                        <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-weight: 700; color: #0284c7;">Bs.</span>
+                                        <input type="number" id="ds-amount-paid-bs" class="form-control" min="0" step="0.01" value="0.00" oninput="window.onDirectSaleAmountPaidBsChange(this.value)" style="height: 38px; font-size: 1.05rem; font-weight: 800; color: #0284c7; border-radius: 6px; padding-left: 36px; border-color: #38bdf8;">
+                                    </div>
+                                </div>
+                            </div>
                             
                             <!-- Smart Status Indicator (Factura vs Recibo de Abono) -->
                             <div id="ds-doc-indicator" style="margin-top: 8px;">
@@ -7395,14 +7450,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=295"></script>
-    <script src="supabaseClient.js?v=295"></script>
-    <script src="odontogram.js?v=295"></script>
-    <script src="signature.js?v=295"></script>
-    <script src="whatsapp.js?v=295"></script>
-    <script src="kardex.js?v=295"></script>
-    <script src="app.js?v=295"></script>
-    <script src="clinicalERP.js?v=295"></script>
-    <script src="tutorial.js?v=295"></script>
+    <script src="seededData.js?v=296"></script>
+    <script src="supabaseClient.js?v=296"></script>
+    <script src="odontogram.js?v=296"></script>
+    <script src="signature.js?v=296"></script>
+    <script src="whatsapp.js?v=296"></script>
+    <script src="kardex.js?v=296"></script>
+    <script src="app.js?v=296"></script>
+    <script src="clinicalERP.js?v=296"></script>
+    <script src="tutorial.js?v=296"></script>
 </body>
 </html>
