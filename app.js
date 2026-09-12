@@ -18021,20 +18021,19 @@ async function renderBillingView() {
         patientSelect.appendChild(opt);
     });
 
-    // Load assistants (users whose role includes "asistente")
+    // Load assistants / hygienists (users whose role includes "asistente" or "higienista")
     const users = await SupabaseDataService.getUsers();
-    assistantSelect.innerHTML = '<option value="">-- Seleccionar Asistente --</option>';
+    assistantSelect.innerHTML = '<option value="">-- Sin Higienista / No Aplica --</option>';
     users.forEach(u => {
-        if (u.role.toLowerCase().includes('asistente')) {
+        const role = (u.role || '').toLowerCase();
+        if (role.includes('asistente') || role.includes('higienista')) {
             const opt = document.createElement('option');
             opt.value = u.id;
-            opt.innerText = u.fullname;
+            opt.innerText = `${u.fullname} (${u.role})`;
             assistantSelect.appendChild(opt);
         }
     });
-    if (assistantSelect.options.length > 1) {
-        assistantSelect.selectedIndex = 1;
-    }
+    assistantSelect.onchange = () => refreshBillingLivePreview();
 
     // Load BCV Rate
     const rate = getExchangeRate();
@@ -18324,17 +18323,13 @@ async function renderBillingView() {
             Swal.fire({ icon: 'warning', title: 'Paciente requerido', text: 'Debe seleccionar un paciente para emitir la factura.' });
             return;
         }
-        if (!assistantId) {
-            Swal.fire({ icon: 'warning', title: 'Asistente requerido', text: 'Debe seleccionar el asistente de turno.' });
-            return;
-        }
         if (billingItems.length === 0) {
             Swal.fire({ icon: 'warning', title: 'Sin items', text: 'Debe cargar al menos un tratamiento para facturar.' });
             return;
         }
 
         const activePatient = patients.find(p => p.id === pId);
-        const selectedAssistant = users.find(u => u.id === assistantId);
+        const selectedAssistant = assistantId ? users.find(u => u.id === assistantId) : null;
 
         const currency = document.getElementById('bill-currency').value;
         const terms = document.getElementById('bill-terms').value;
@@ -18474,10 +18469,14 @@ async function renderBillingView() {
         // Show action buttons
         document.getElementById('invoice-processed-actions').classList.remove('hidden');
 
+        const bonusMsg = (selectedAssistant && totalHygienistBonus > 0)
+            ? `Factura ${invoiceId} registrada. Comisiones higienista aplicadas: $${totalHygienistBonus.toFixed(2)}.`
+            : `Factura ${invoiceId} registrada exitosamente.`;
+
         Swal.fire({
             icon: 'success',
             title: '¡Factura Procesada!',
-            text: `Factura ${invoiceId} registrada. Comisiones higienista aplicadas: $${totalHygienistBonus.toFixed(2)}.`,
+            text: bonusMsg,
             confirmButtonText: 'Ver Factura'
         });
     };
