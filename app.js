@@ -9755,10 +9755,23 @@ async function renderUsersTable(filter = 'all', searchQuery = '') {
         const docPerf = (perf.doctorStats && (perf.doctorStats[String(u.id)] || perf.findDoctor(u.fullname))) || { totalUSD: 0, attendedCount: 0 };
         const isTop = perf.topDoctor && (String(perf.topDoctor.id) === String(u.id) || perf.topDoctor.name === u.fullname) && docPerf.totalUSD > 0;
 
+        const docProf = u.doctorProfile || u.doctor_profile || {};
+        const extraSpecs = docProf.additionalSpecialties || [];
+        let extraSpecsHtml = '';
+        if (extraSpecs && extraSpecs.length > 0) {
+            extraSpecsHtml = `<div style="display:flex; flex-wrap:wrap; gap:3px; margin-top:4px;">` + 
+                extraSpecs.map(es => `<span class="badge-tag purple" style="font-size:0.68rem; padding:1px 5px;"><i class="fa-solid fa-tag"></i> ${es}</span>`).join('') +
+                `</div>`;
+        }
+
         tr.innerHTML = `
             <td><strong>${u.fullname}</strong></td>
             <td>${u.email}</td>
-            <td><span class="badge-tag blue" style="font-weight:600;"><i class="fa-solid fa-stethoscope"></i> ${u.role}</span></td>
+            <td>
+                <span class="badge-tag blue" style="font-weight:600;"><i class="fa-solid fa-stethoscope"></i> ${u.role}</span>
+                ${docProf.specialty && docProf.specialty !== u.role ? `<div style="font-size:0.75rem; color:#0284c7; font-weight:600; margin-top:2px;">${docProf.specialty}</div>` : ''}
+                ${extraSpecsHtml}
+            </td>
             <td>${u.license && u.license !== 'N/A' ? `<span style="font-family:monospace; font-weight:700; color:#0369a1;">${u.license}</span>` : '<span class="text-muted">N/A</span>'}</td>
             <td>
                 <div style="display: flex; flex-direction: column; gap: 2px;">
@@ -9975,22 +9988,85 @@ function updateRoleScopeHint(role) {
 window.updateRoleScopeHint = updateRoleScopeHint;
 
 window.populateUserModalSelects = async function(docProf = {}) {
-    // 1. Especialidad Principal (u-specialty)
+    // 1. Especialidad Principal (u-specialty) & Especialidades Adicionales
     const specSel = document.getElementById('u-specialty');
+    const addContainer = document.getElementById('u-additional-specialties-container');
+
+    let dynamicSpecs = [];
+    if (window.ClinicalERP && window.ClinicalERP.specialties && window.ClinicalERP.specialties.length > 0) {
+        dynamicSpecs = window.ClinicalERP.specialties;
+    } else {
+        try { dynamicSpecs = JSON.parse(localStorage.getItem('vidasana_specialties')) || []; } catch(e) {}
+    }
+
+    const existingDocSpecs = [
+        docProf.specialty,
+        ...(Array.isArray(docProf.additionalSpecialties) ? docProf.additionalSpecialties : []),
+        ...(Array.isArray(docProf.specialties) ? docProf.specialties : [])
+    ].filter(Boolean);
+
+    const allSpecs = Array.from(new Set([
+        'Odontología General', 'Ortodoncia', 'Endodoncia', 'Periodoncia', 'Cirugía Maxilofacial', 'Odontopediatría', 'Prótesis Dental', 'Implantología', 'Odontología Estética',
+        'Medicina General', 'Pediatría', 'Ginecología y Obstetricia', 'Cardiología', 'Traumatología y Ortopedia', 'Dermatología', 'Oftalmología', 'Nutrición y Dietética', 'Psicología Clínica',
+        'Laboratorio Clínico', 'Rayos X e Imagenología',
+        ...dynamicSpecs.map(s => s.name || s.nombre).filter(Boolean),
+        ...existingDocSpecs
+    ])).sort((a, b) => a.localeCompare(b));
+
     if (specSel) {
-        let dynamicSpecs = [];
-        if (window.ClinicalERP && window.ClinicalERP.specialties && window.ClinicalERP.specialties.length > 0) {
-            dynamicSpecs = window.ClinicalERP.specialties;
-        } else {
-            try { dynamicSpecs = JSON.parse(localStorage.getItem('vidasana_specialties')) || []; } catch(e) {}
-        }
-        const allSpecs = Array.from(new Set([
-            'Odontología', 'Medicina General', 'Laboratorio', 'Rayos X e Imagen',
-            'Cardiología', 'Ginecología', 'Pediatría', 'Traumatología', 'Oftalmología',
-            ...dynamicSpecs.map(s => s.name || s.nombre).filter(Boolean)
-        ]));
         specSel.innerHTML = allSpecs.map(s => `<option value="${s}">${s}</option>`).join('');
-        if (docProf.specialty) specSel.value = docProf.specialty;
+        if (docProf.specialty && allSpecs.includes(docProf.specialty)) {
+            specSel.value = docProf.specialty;
+        } else if (allSpecs.length > 0) {
+            specSel.value = allSpecs[0];
+        }
+    }
+
+    // Render Additional Specialty Chips
+    if (addContainer) {
+        const renderChips = () => {
+            const currentPrimary = specSel ? specSel.value : '';
+            const activeAdditional = new Set(
+                (Array.isArray(docProf.additionalSpecialties) ? docProf.additionalSpecialties : (Array.isArray(docProf.specialties) ? docProf.specialties.filter(s => s !== currentPrimary) : []))
+            );
+
+            // Preserve any currently clicked active chips before re-rendering
+            const existingChips = addContainer.querySelectorAll('.spec-chip.active');
+            existingChips.forEach(c => {
+                if (c.dataset.specialty && c.dataset.specialty !== currentPrimary) {
+                    activeAdditional.add(c.dataset.specialty);
+                }
+            });
+
+            addContainer.innerHTML = '';
+            allSpecs.forEach(spec => {
+                if (spec === currentPrimary) return; // Primary specialty is already handled
+                const isActive = activeAdditional.has(spec);
+                const chip = document.createElement('button');
+                chip.type = 'button';
+                chip.className = `spec-chip ${isActive ? 'active' : ''}`;
+                chip.dataset.specialty = spec;
+                chip.innerHTML = `<i class="fa-solid ${isActive ? 'fa-check' : 'fa-plus'}" style="font-size: 0.7rem;"></i> <span>${spec}</span>`;
+                chip.onclick = (e) => {
+                    e.preventDefault();
+                    chip.classList.toggle('active');
+                    const nowActive = chip.classList.contains('active');
+                    const icon = chip.querySelector('i');
+                    if (icon) {
+                        icon.className = `fa-solid ${nowActive ? 'fa-check' : 'fa-plus'}`;
+                    }
+                };
+                addContainer.appendChild(chip);
+            });
+        };
+
+        renderChips();
+
+        if (specSel) {
+            specSel.onchange = () => {
+                renderChips();
+            };
+        }
     }
 
     // 2. Turno (u-shift)
@@ -10032,6 +10108,91 @@ window.populateUserModalSelects = async function(docProf = {}) {
             rooms.map(rm => `<option value="${rm.id}">${rm.name || rm.room_number}</option>`).join('');
         if (docProf.roomId) roomSel.value = docProf.roomId;
     }
+};
+
+window.quickAddNewSpecialty = async function() {
+    const { value: newSpec } = await Swal.fire({
+        title: '<i class="fa-solid fa-stethoscope text-cyan"></i> Nueva Especialidad',
+        text: 'Ingrese el nombre de la nueva especialidad médica u odontológica:',
+        input: 'text',
+        inputPlaceholder: 'ej: Periodoncia, Dermatología, Nutrición...',
+        showCancelButton: true,
+        confirmButtonText: '<i class="fa-solid fa-check"></i> Guardar y Seleccionar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#0891b2',
+        inputValidator: (val) => {
+            if (!val || !val.trim()) {
+                return 'El nombre de la especialidad no puede estar vacío';
+            }
+        }
+    });
+
+    if (!newSpec || !newSpec.trim()) return;
+    const specName = newSpec.trim();
+
+    // Categorize
+    const lower = specName.toLowerCase();
+    let dept = 'Medicina General';
+    let icon = 'fa-stethoscope';
+    let color = '#0d9488';
+    if (lower.includes('odont') || lower.includes('dent') || lower.includes('ortod') || lower.includes('endod') || lower.includes('periodon') || lower.includes('maxilo') || lower.includes('bucal') || lower.includes('protes') || lower.includes('implant')) {
+        dept = 'Odontología';
+        icon = 'fa-tooth';
+    } else if (lower.includes('lab') || lower.includes('analis') || lower.includes('sangre')) {
+        dept = 'Laboratorio';
+        icon = 'fa-vials';
+        color = '#0284c7';
+    } else if (lower.includes('rayos') || lower.includes('rx') || lower.includes('eco') || lower.includes('imagen')) {
+        dept = 'Rayos X e Imagen';
+        icon = 'fa-x-ray';
+        color = '#8b5cf6';
+    }
+
+    const specObj = {
+        id: 'esp-' + Date.now(),
+        name: specName,
+        department: dept,
+        doctor_commission_pct: 60,
+        clinic_commission_pct: 40,
+        description: `Especialidad clínica de ${specName}`,
+        status: 'Activo',
+        icon: icon,
+        color: color
+    };
+
+    try {
+        if (window.SupabaseDataService && window.SupabaseDataService.saveSpecialty) {
+            await window.SupabaseDataService.saveSpecialty(specObj);
+        }
+        if (window.ClinicalERP) {
+            if (!window.ClinicalERP.specialties) window.ClinicalERP.specialties = [];
+            if (!window.ClinicalERP.specialties.some(s => (s.name || s.nombre).toLowerCase() === specName.toLowerCase())) {
+                window.ClinicalERP.specialties.push(specObj);
+            }
+            if (typeof window.ClinicalERP.renderSpecialties === 'function') {
+                window.ClinicalERP.renderSpecialties();
+            }
+        }
+    } catch(e) {
+        console.error('Error guardando nueva especialidad:', e);
+    }
+
+    // Preserve currently selected additional specialties
+    const currentActiveAdditional = Array.from(document.querySelectorAll('#u-additional-specialties-container .spec-chip.active')).map(c => c.dataset.specialty);
+
+    // Re-populate selects and set newly created as primary specialty
+    await window.populateUserModalSelects({
+        specialty: specName,
+        additionalSpecialties: currentActiveAdditional
+    });
+
+    Swal.fire({
+        icon: 'success',
+        title: '¡Especialidad Registrada!',
+        text: `La especialidad "${specName}" se ha creado y seleccionado exitosamente.`,
+        timer: 1800,
+        showConfirmButton: false
+    });
 };
 
 window.openCreateUserModal = async function() {
@@ -12370,8 +12531,15 @@ function initGlobalEvents() {
                 const roomId = roomSel?.value || '';
                 const roomName = roomSel && roomSel.selectedIndex >= 0 && roomSel.value ? roomSel.options[roomSel.selectedIndex].text : '';
 
+                // Collect additional specialties from active chips
+                const additionalChips = document.querySelectorAll('#u-additional-specialties-container .spec-chip.active');
+                const additionalSpecialties = Array.from(additionalChips).map(c => c.dataset.specialty).filter(Boolean);
+                const allSpecialties = Array.from(new Set([specialty, ...additionalSpecialties].filter(Boolean)));
+
                 doctorProfile = {
                     specialty,
+                    additionalSpecialties,
+                    specialties: allSpecialties,
                     shift,
                     assistantId,
                     assistantName,

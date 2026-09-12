@@ -6142,3 +6142,41 @@ select, .form-select, select.form-control {
     animation: patientRowFlash 3s ease-out forwards;
 }
 
+/* ==========================================================
+   DOCTOR PROFILE MULTI-SPECIALTY CHIPS
+   ========================================================== */
+.spec-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    border: 1px solid var(--border-color);
+    background: #f8fafc;
+    color: #475569;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.18s ease;
+}
+
+.spec-chip:hover {
+    border-color: var(--primary-cyan);
+    background: #f0fdfa;
+    color: var(--primary-cyan);
+    transform: translateY(-1px);
+}
+
+.spec-chip.active {
+    background: linear-gradient(135deg, #0891b2 0%, #06b6d4 100%) !important;
+    border-color: #0891b2 !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 6px rgba(8, 145, 178, 0.35);
+}
+
+.spec-chip.active i {
+    color: #ffffff !important;
+}
+
+

@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=292">
+    <link rel="stylesheet" href="styles.css?v=293">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -3905,9 +3905,14 @@
                     <div id="doctor-profile-fields" class="span-2" style="border: 1px solid var(--border-color); padding: 14px; border-radius: 8px; background-color: rgba(0,0,0,0.02); margin-top: 10px;">
                         <h4 style="margin-top: 0; margin-bottom: 10px; color: var(--primary-cyan); font-size: 0.95rem;"><i class="fa-solid fa-user-md"></i> Perfil Clínico / Asignación Médica</h4>
                         <div class="grid-form" style="grid-template-columns: 1fr 1fr; gap: 10px;">
-                            <!-- Especialidad y Turno Asignado -->
+                            <!-- Especialidad Principal y Botón Rápido Nueva Especialidad -->
                             <div class="form-group">
-                                <label><i class="fa-solid fa-stethoscope text-cyan"></i> Especialidad Principal *</label>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                                    <label style="margin-bottom: 0;"><i class="fa-solid fa-stethoscope text-cyan"></i> Especialidad Principal *</label>
+                                    <button type="button" class="btn btn-xs btn-outline" id="btn-quick-add-specialty" onclick="window.quickAddNewSpecialty()" style="font-size: 0.72rem; padding: 2px 8px; color: var(--primary-cyan); border-color: var(--primary-cyan); display: inline-flex; align-items: center; gap: 4px;" title="Registrar una nueva especialidad médica u odontológica">
+                                        <i class="fa-solid fa-plus"></i> Nueva Especialidad
+                                    </button>
+                                </div>
                                 <select id="u-specialty" class="form-control">
                                     <!-- Dynamic specialties -->
                                 </select>
@@ -3919,6 +3924,20 @@
                                     <option value="afternoon">Turno Tarde 🌇 (14:00 - 19:00)</option>
                                     <option value="both">Ambos Turnos / Completo</option>
                                 </select>
+                            </div>
+
+                            <!-- Especialidades Adicionales / Múltiples -->
+                            <div class="form-group span-2" id="u-additional-specialties-group">
+                                <label style="font-size: 0.82rem; font-weight: 600; color: var(--text-heading); display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+                                    <i class="fa-solid fa-tags text-cyan"></i> Especialidades Adicionales que atiende (Opcional / Múltiples)
+                                    <span class="badge-tag blue" style="font-size: 0.68rem; padding: 1px 6px;">Múltiples</span>
+                                </label>
+                                <div id="u-additional-specialties-container" style="display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-card); min-height: 42px; align-items: center;">
+                                    <!-- Dynamic specialty chips populated by populateUserModalSelects -->
+                                </div>
+                                <small class="text-muted" style="font-size: 0.74rem; display: block; margin-top: 4px;">
+                                    <i class="fa-solid fa-circle-info"></i> Haga clic sobre las especialidades adicionales que cubre este profesional para seleccionarlas.
+                                </small>
                             </div>
 
                             <!-- Asistente y Consultorio Predeterminado -->
@@ -7329,14 +7348,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=292"></script>
-    <script src="supabaseClient.js?v=292"></script>
-    <script src="odontogram.js?v=292"></script>
-    <script src="signature.js?v=292"></script>
-    <script src="whatsapp.js?v=292"></script>
-    <script src="kardex.js?v=292"></script>
-    <script src="app.js?v=292"></script>
-    <script src="clinicalERP.js?v=292"></script>
-    <script src="tutorial.js?v=292"></script>
+    <script src="seededData.js?v=293"></script>
+    <script src="supabaseClient.js?v=293"></script>
+    <script src="odontogram.js?v=293"></script>
+    <script src="signature.js?v=293"></script>
+    <script src="whatsapp.js?v=293"></script>
+    <script src="kardex.js?v=293"></script>
+    <script src="app.js?v=293"></script>
+    <script src="clinicalERP.js?v=293"></script>
+    <script src="tutorial.js?v=293"></script>
 </body>
 </html>
