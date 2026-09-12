@@ -374,6 +374,8 @@ class SupabaseDataService {
                             sessions: ext.sessions || ext.clinicalNotes || p.clinical_notes || [],
                             photos: p.photos || ext.photos || (p.metadata && p.metadata._fallback_photos) || [],
                             payments: p.payments || ext.payments || (p.metadata && p.metadata._fallback_payments) || [],
+                            createdAt: p.created_at || (p.metadata && p.metadata.createdAt) || (ext.metadata && ext.metadata.createdAt) || p.createdAt || '',
+                            updatedAt: p.updated_at || (p.metadata && p.metadata.updatedAt) || (ext.metadata && ext.metadata.updatedAt) || p.updatedAt || '',
                             metadata: (p.metadata && Object.keys(p.metadata).length > 0)
                                 ? { ...(ext.metadata || {}), ...p.metadata }
                                 : (ext.metadata || p.metadata || {})
@@ -413,7 +415,7 @@ class SupabaseDataService {
         let localPatients = JSON.parse(localStorage.getItem('dental_patients')) || [];
         const idx = localPatients.findIndex(p => p.id === patientObj.id);
         if (idx >= 0) localPatients[idx] = patientObj;
-        else localPatients.push(patientObj);
+        else localPatients.unshift(patientObj);
         localStorage.setItem('dental_patients', JSON.stringify(localPatients));
 
         if (this.isCloudConnected()) {
@@ -2926,7 +2928,7 @@ class SupabaseDataService {
             const isEditingAppt = document.getElementById('modal-appointment') && !document.getElementById('modal-appointment').classList.contains('hidden');
             const isEditingUser = document.getElementById('modal-user') && !document.getElementById('modal-user').classList.contains('hidden');
 
-            const activeView = document.querySelector('.view-pane:not(.hidden)');
+            const activeView = document.querySelector('.tab-view.active') || document.querySelector('.view-pane:not(.hidden)');
             const viewId = activeView ? activeView.id : '';
 
             if (viewId === 'view-dashboard') {
@@ -2950,6 +2952,12 @@ class SupabaseDataService {
                 if (typeof renderPricingTable === 'function') await renderPricingTable();
             } else if (viewId === 'view-users' && !isEditingUser) {
                 if (typeof renderUsersTable === 'function') await renderUsersTable();
+            } else if (viewId === 'view-specialties') {
+                if (window.ClinicalERP && window.ClinicalERP.renderSpecialties) window.ClinicalERP.renderSpecialties();
+            } else if (viewId === 'view-rooms') {
+                if (window.ClinicalERP && window.ClinicalERP.renderRooms) window.ClinicalERP.renderRooms();
+            } else if (viewId === 'view-payroll') {
+                if (window.ClinicalERP && window.ClinicalERP.renderPayroll) window.ClinicalERP.renderPayroll();
             }
 
             // Always update system alerts & birthday notifications badge

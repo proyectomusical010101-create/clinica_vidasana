@@ -4617,9 +4617,21 @@ window.onPatientTagSelectChange = async function() {
 // ==========================================
 // PACIENTES VIEW & HIGH-END BBDD TABLE WITH DELETE
 // ==========================================
-async function renderPatientsTable(filter = 'all', searchQuery = '') {
+async function renderPatientsTable(filter = null, searchQuery = null, highlightPatientId = null) {
     const tbody = document.getElementById('patients-table-body');
     if (!tbody) return;
+
+    // Detect active filter button if filter is null or undefined
+    if (filter === null || filter === undefined) {
+        const activeBtn = document.querySelector('#view-patients .filter-btn.active');
+        filter = activeBtn ? (activeBtn.dataset.filter || 'all') : 'all';
+    }
+
+    // Detect search input value if searchQuery is null or undefined
+    if (searchQuery === null || searchQuery === undefined) {
+        const searchInp = document.getElementById('patient-table-search');
+        searchQuery = searchInp ? searchInp.value : '';
+    }
 
     tbody.innerHTML = '';
 
@@ -4658,6 +4670,20 @@ async function renderPatientsTable(filter = 'all', searchQuery = '') {
                    tagName.includes(q);
         });
     }
+
+    // Sort patients: highlightPatientId always first, then newest / most recently updated
+    patients.sort((a, b) => {
+        if (highlightPatientId) {
+            if (a.id === highlightPatientId) return -1;
+            if (b.id === highlightPatientId) return 1;
+        }
+        const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+        const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+        if (timeA && timeB && !isNaN(timeA) && !isNaN(timeB) && timeA !== timeB) {
+            return timeB - timeA;
+        }
+        return 0;
+    });
 
     if (patients.length === 0) {
         tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted" style="padding: 24px;">No se encontraron pacientes en este filtro.</td></tr>`;
@@ -4704,7 +4730,11 @@ async function renderPatientsTable(filter = 'all', searchQuery = '') {
 
         const deleteBtnHtml = isAssistant ? '' : `<button class="btn btn-xs btn-outline text-red" onclick="deletePatient('${p.id}')" title="Eliminar Paciente"><i class="fa-solid fa-trash"></i></button>`;
 
+        const isHighlighted = highlightPatientId && (p.id === highlightPatientId);
         const tr = document.createElement('tr');
+        if (isHighlighted) {
+            tr.className = 'newly-created-patient-row';
+        }
         tr.innerHTML = `
             <td><strong class="badge-tag blue">${p.id}</strong></td>
             <td>
@@ -4726,6 +4756,7 @@ async function renderPatientsTable(filter = 'all', searchQuery = '') {
             </td>
             <td>${alertsHtml}</td>
             <td><span class="badge-tag ${statusClass}">${p.status}</span></td>
+            <td>
                 <div class="patient-actions-cluster">
                     <button class="btn btn-xs btn-outline btn-act-cobrar" onclick="window.openDirectSaleModal('${p.id}')" title="Venta Directa / Cobro Rápido">
                         <i class="fa-solid fa-bolt"></i> <span>Cobrar</span>
@@ -4744,6 +4775,15 @@ async function renderPatientsTable(filter = 'all', searchQuery = '') {
         `;
         tbody.appendChild(tr);
     });
+
+    if (highlightPatientId) {
+        const highlightRow = tbody.querySelector('.newly-created-patient-row');
+        if (highlightRow) {
+            try {
+                highlightRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } catch(e) {}
+        }
+    }
 }
 
 window.openPatientRowActionsMenu = function(patientId, btnEl, event, isAssistant) {
@@ -12717,6 +12757,7 @@ function initGlobalEvents() {
                     tagName,
                     tagColor,
                     tagRule,
+                    updatedAt: new Date().toISOString(),
                     odontogramData: (existing && existing.odontogramData) ? existing.odontogramData : {},
                     metadata: {
                         ...(existing.metadata || {}),
@@ -12724,6 +12765,7 @@ function initGlobalEvents() {
                         tagName,
                         tagColor,
                         tagRule,
+                        updatedAt: new Date().toISOString(),
                         type,
                         age,
                         gender,
@@ -12799,7 +12841,8 @@ function initGlobalEvents() {
                     tagColor,
                     tagRule,
                     status: 'Activo',
-                    createdAt: new Date().toISOString().split('T')[0],
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
                     odontogramData: {},
                     clinicalNotes: [],
                     photos: [],
@@ -12809,6 +12852,8 @@ function initGlobalEvents() {
                         tagName,
                         tagColor,
                         tagRule,
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString(),
                         type,
                         age,
                         gender,
@@ -12913,7 +12958,18 @@ function initGlobalEvents() {
 
             await closeModal('modal-patient', true);
             setActivePatientId(id);
-            await renderPatientsTable();
+
+            // Reset search and filters in Pacientes table so the new patient is immediately visible
+            const searchInp = document.getElementById('patient-table-search');
+            if (searchInp) searchInp.value = '';
+            document.querySelectorAll('#view-patients .filter-btn').forEach(b => {
+                if (b.dataset.filter === 'all' || b.dataset.filter === (patientToSave.status || 'Activo')) b.classList.add('active');
+                else b.classList.remove('active');
+            });
+            const tagFilterEl = document.getElementById('patient-tag-filter');
+            if (tagFilterEl) tagFilterEl.value = 'all';
+
+            await renderPatientsTable('all', '', id);
             await renderEHRView();
             await renderDashboard();
             await renderAgendaView();
