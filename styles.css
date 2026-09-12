@@ -5859,6 +5859,31 @@ select, .form-select, select.form-control {
     background-color: #ccfbf1 !important;
 }
 
+/* Autocomplete live search dropdown for Services in Direct Sale */
+#ds-service-search-results {
+    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.18), 0 8px 10px -6px rgba(0,0,0,0.1) !important;
+    scrollbar-width: thin;
+}
+
+.ds-service-search-item {
+    padding: 9px 12px;
+    border-bottom: 1px solid #f1f5f9;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.ds-service-search-item:last-child {
+    border-bottom: none;
+}
+
+.ds-service-search-item:hover {
+    background-color: #f0fdfa !important;
+}
+
+.ds-service-search-item.active {
+    background-color: #ccfbf1 !important;
+}
+
 @media (max-width: 640px) {
     #ds-btn-new-patient .btn-text {
         display: none !important;

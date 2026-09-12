@@ -5528,7 +5528,7 @@ window.openDirectSaleModal = async function(preselectedPatientId = null) {
         });
     }
 
-    // Outside click dismisser
+    // Outside click dismisser for patient and service search dropdowns
     if (!window._dsSearchOutsideClickAttached) {
         window._dsSearchOutsideClickAttached = true;
         document.addEventListener('click', (e) => {
@@ -5537,6 +5537,14 @@ window.openDirectSaleModal = async function(preselectedPatientId = null) {
             if (res && sInput) {
                 if (!sInput.contains(e.target) && !res.contains(e.target)) {
                     res.style.display = 'none';
+                }
+            }
+
+            const srvInput = document.getElementById('ds-service-search-input');
+            const srvRes = document.getElementById('ds-service-search-results');
+            if (srvRes && srvInput) {
+                if (!srvInput.contains(e.target) && !srvRes.contains(e.target)) {
+                    srvRes.style.display = 'none';
                 }
             }
         });
@@ -5576,7 +5584,33 @@ window.openDirectSaleModal = async function(preselectedPatientId = null) {
             assistants.map(a => `<option value="${a.fullname}">${a.fullname}</option>`).join('');
     }
 
-    // 3. Populate Baremo Services
+    // 3. Populate Baremo Services & Setup Service Search Autocomplete
+    const srvSearchInput = document.getElementById('ds-service-search-input');
+    if (srvSearchInput && !srvSearchInput.dataset.initialized) {
+        srvSearchInput.dataset.initialized = 'true';
+        srvSearchInput.addEventListener('input', (e) => {
+            window.renderDirectSaleServiceSearchResults(e.target.value);
+        });
+        srvSearchInput.addEventListener('focus', (e) => {
+            window.renderDirectSaleServiceSearchResults(e.target.value);
+        });
+        srvSearchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const res = document.getElementById('ds-service-search-results');
+                if (res) res.style.display = 'none';
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                const firstItem = document.querySelector('#ds-service-search-results .ds-service-search-item');
+                if (firstItem) {
+                    firstItem.click();
+                }
+            }
+        });
+    }
+
+    const specSelect = document.getElementById('ds-specialty-select');
+    if (specSelect) specSelect.value = 'all';
+    window.clearDirectSaleServiceSearch(false);
     await window.onDirectSaleSpecialtyChange('all');
 
     // 4. Reset Inputs & Render empty items table
@@ -5738,6 +5772,7 @@ window.resetDirectSaleForm = function() {
     const notesIn = document.getElementById('ds-notes');
     if (notesIn) notesIn.value = '';
     window.clearDirectSalePatientSearch();
+    window.clearDirectSaleServiceSearch(false);
 };
 
 window.onDirectSalePatientChange = async function(patientId) {
@@ -5798,10 +5833,14 @@ window.onDirectSalePatientChange = async function(patientId) {
 
 window.onDirectSaleSpecialtyChange = async function(specialty) {
     const baremoSelect = document.getElementById('ds-baremo-select');
-    if (!baremoSelect) return;
+    const badge = document.getElementById('ds-service-count-badge');
+    const searchInput = document.getElementById('ds-service-search-input');
 
-    baremoSelect.innerHTML = '<option value="">Cargando servicios...</option>';
+    if (baremoSelect) {
+        baremoSelect.innerHTML = '<option value="">Cargando servicios...</option>';
+    }
     const baremo = await SupabaseDataService.getBaremo();
+    window._cachedDirectSaleServices = baremo;
 
     let filtered = baremo;
     if (specialty && specialty !== 'all') {
@@ -5816,11 +5855,201 @@ window.onDirectSaleSpecialtyChange = async function(specialty) {
         filtered = baremo;
     }
 
-    baremoSelect.innerHTML = '<option value="">-- Seleccionar Servicio del Baremo --</option>' +
-        filtered.map(s => {
+    window._currentFilteredDirectSaleServices = filtered;
+
+    if (badge) {
+        badge.textContent = `${filtered.length} disponible${filtered.length === 1 ? '' : 's'}`;
+    }
+
+    if (searchInput) {
+        if (specialty && specialty !== 'all') {
+            searchInput.placeholder = `🔍 Buscar en ${specialty} (ej: consulta, resina)...`;
+        } else {
+            searchInput.placeholder = '🔍 Escribe nombre o código del servicio...';
+        }
+        const resultsContainer = document.getElementById('ds-service-search-results');
+        if (resultsContainer && resultsContainer.style.display === 'block') {
+            window.renderDirectSaleServiceSearchResults(searchInput.value);
+        }
+    }
+
+    if (baremoSelect) {
+        baremoSelect.innerHTML = '<option value="">-- Seleccionar Servicio del Baremo --</option>' +
+            filtered.map(s => {
+                const price = parseFloat(s.priceUSD || s.price || 0).toFixed(2);
+                return `<option value="${s.code || s.name}" data-name="${s.name}" data-price="${price}" data-spec="${s.category || specialty}">[${s.code || 'SRV'}] ${s.name} ($${price})</option>`;
+            }).join('');
+    }
+};
+
+window.renderDirectSaleServiceSearchResults = async function(query) {
+    const resultsContainer = document.getElementById('ds-service-search-results');
+    const clearBtn = document.getElementById('ds-service-clear-btn');
+    if (!resultsContainer) return;
+
+    const normalizeStr = (s) => (s || '').toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const term = normalizeStr(query).trim();
+    if (clearBtn) {
+        clearBtn.style.display = term.length > 0 ? 'block' : 'none';
+    }
+
+    const baremo = window._cachedDirectSaleServices || await SupabaseDataService.getBaremo();
+    window._cachedDirectSaleServices = baremo;
+
+    const specialty = document.getElementById('ds-specialty-select')?.value || 'all';
+
+    let specialtyPool = baremo;
+    if (specialty && specialty !== 'all') {
+        const specMatches = baremo.filter(s => {
+            const cat = normalizeStr(s.category);
+            const spec = normalizeStr(specialty);
+            return cat.includes(spec) || spec.includes(cat);
+        });
+        if (specMatches.length > 0) {
+            specialtyPool = specMatches;
+        }
+    }
+
+    let matches = [];
+    if (!term) {
+        matches = specialtyPool.slice(0, 25);
+    } else {
+        matches = specialtyPool.filter(s => {
+            const name = normalizeStr(s.name);
+            const code = normalizeStr(s.code);
+            const cat = normalizeStr(s.category);
+            return name.includes(term) || code.includes(term) || cat.includes(term);
+        }).slice(0, 30);
+
+        // If no matches in selected specialty, check entire baremo catalog as fallback
+        if (matches.length === 0 && specialty !== 'all') {
+            matches = baremo.filter(s => {
+                const name = normalizeStr(s.name);
+                const code = normalizeStr(s.code);
+                const cat = normalizeStr(s.category);
+                return name.includes(term) || code.includes(term) || cat.includes(term);
+            }).slice(0, 20);
+        }
+    }
+
+    if (matches.length === 0) {
+        const safeTerm = term.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        resultsContainer.innerHTML = `
+            <div style="padding: 14px; text-align: center; color: #64748b; font-size: 0.84rem;">
+                <div style="margin-bottom: 6px;"><i class="fa-solid fa-file-circle-question" style="font-size: 1.2rem; color: #94a3b8;"></i></div>
+                <div>No se encontraron servicios para "<strong>${safeTerm}</strong>"</div>
+                <div style="font-size: 0.76rem; color: #94a3b8; margin-top: 4px;">Intenta con otra palabra clave o selecciona "Todas las Especialidades".</div>
+            </div>
+        `;
+        resultsContainer.style.display = 'block';
+        return;
+    }
+
+    const header = !term
+        ? `<div style="padding: 6px 12px; background: #f8fafc; font-size: 0.72rem; font-weight: 700; color: #64748b; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between;">
+            <span>${specialty !== 'all' ? specialty : 'Catálogo Completo'} (${specialtyPool.length})</span>
+            <span style="color: #94a3b8;">Mostrando ${matches.length} servicios</span>
+           </div>`
+        : `<div style="padding: 6px 12px; background: #f0fdfa; font-size: 0.72rem; font-weight: 700; color: #0f766e; border-bottom: 1px solid #ccfbf1; display: flex; justify-content: space-between;">
+            <span>Coincidencias encontradas (${matches.length})</span>
+            <span style="font-weight: 500;">Enter para seleccionar</span>
+           </div>`;
+
+    const itemsHtml = matches.map(s => {
+        const price = parseFloat(s.priceUSD || s.price || 0).toFixed(2);
+        const code = s.code || 'SRV';
+        const safeCode = String(code).replace(/'/g, "\\'");
+        const safeIdOrName = String(s.code || s.name).replace(/'/g, "\\'");
+        const safeName = (s.name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const safeCat = (s.category || 'General').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+        return `
+            <div class="ds-service-search-item" onclick="window.selectDirectSaleService('${safeIdOrName}')">
+                <div style="font-weight: 600; color: #0f172a; font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                    <span style="display: flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        <span style="font-family: monospace; font-size: 0.72rem; padding: 2px 6px; background: #e2e8f0; color: #334155; border-radius: 4px; font-weight: 700; flex-shrink: 0;">${safeCode}</span>
+                        <span style="overflow: hidden; text-overflow: ellipsis;">${safeName}</span>
+                    </span>
+                    <span style="font-weight: 700; color: #0d9488; font-size: 0.88rem; flex-shrink: 0; white-space: nowrap;">$${price}</span>
+                </div>
+                <div style="font-size: 0.72rem; color: #64748b; margin-top: 3px; display: flex; justify-content: space-between; align-items: center;">
+                    <span><i class="fa-solid fa-folder text-slate" style="font-size: 0.7rem; margin-right: 4px;"></i>${safeCat}</span>
+                    <span style="color: #94a3b8; font-size: 0.7rem;">Click para seleccionar</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    resultsContainer.innerHTML = header + itemsHtml;
+    resultsContainer.style.display = 'block';
+};
+
+window.selectDirectSaleService = function(serviceKey) {
+    const searchInput = document.getElementById('ds-service-search-input');
+    const resultsContainer = document.getElementById('ds-service-search-results');
+    const clearBtn = document.getElementById('ds-service-clear-btn');
+    const baremoSelect = document.getElementById('ds-baremo-select');
+
+    const baremo = window._cachedDirectSaleServices || [];
+    const s = baremo.find(item => (item.code && item.code === serviceKey) || item.name === serviceKey);
+
+    if (baremoSelect) {
+        let opt = Array.from(baremoSelect.options).find(o => o.value === serviceKey);
+        if (!opt && s) {
             const price = parseFloat(s.priceUSD || s.price || 0).toFixed(2);
-            return `<option value="${s.code || s.name}" data-name="${s.name}" data-price="${price}" data-spec="${s.category || specialty}">[${s.code || 'SRV'}] ${s.name} ($${price})</option>`;
-        }).join('');
+            opt = new Option(`[${s.code || 'SRV'}] ${s.name} ($${price})`, serviceKey);
+            opt.setAttribute('data-name', s.name);
+            opt.setAttribute('data-price', price);
+            opt.setAttribute('data-spec', s.category || 'General');
+            baremoSelect.add(opt);
+        }
+        baremoSelect.value = serviceKey;
+    }
+
+    if (s && searchInput) {
+        const price = parseFloat(s.priceUSD || s.price || 0).toFixed(2);
+        searchInput.value = `[${s.code || 'SRV'}] ${s.name} ($${price})`;
+        if (clearBtn) clearBtn.style.display = 'block';
+    } else if (searchInput && baremoSelect && baremoSelect.selectedOptions && baremoSelect.selectedOptions[0]) {
+        searchInput.value = baremoSelect.selectedOptions[0].text;
+        if (clearBtn) clearBtn.style.display = 'block';
+    }
+
+    if (resultsContainer) {
+        resultsContainer.style.display = 'none';
+    }
+
+    // Trigger price calculation with tag rules
+    window.onDirectSaleBaremoSelected(serviceKey);
+
+    // Focus quantity for quick workflow
+    const qtyInput = document.getElementById('ds-item-qty');
+    if (qtyInput) qtyInput.focus();
+};
+
+window.clearDirectSaleServiceSearch = function(shouldFocus = true) {
+    const searchInput = document.getElementById('ds-service-search-input');
+    const resultsContainer = document.getElementById('ds-service-search-results');
+    const clearBtn = document.getElementById('ds-service-clear-btn');
+    const baremoSelect = document.getElementById('ds-baremo-select');
+    const priceInput = document.getElementById('ds-item-price');
+
+    if (searchInput) {
+        searchInput.value = '';
+        if (shouldFocus) searchInput.focus();
+    }
+    if (baremoSelect) {
+        baremoSelect.value = '';
+    }
+    if (priceInput) {
+        priceInput.value = '';
+    }
+    if (clearBtn) {
+        clearBtn.style.display = 'none';
+    }
+    if (resultsContainer) {
+        resultsContainer.style.display = 'none';
+    }
 };
 
 window.onDirectSaleBaremoSelected = function(val) {
@@ -5884,6 +6113,14 @@ window.addDirectSaleService = function() {
     if (srvSelect) srvSelect.value = '';
     if (priceIn) priceIn.value = '';
     if (qtyIn) qtyIn.value = '1';
+
+    // Reset predictive search UI
+    const srvSearchInput = document.getElementById('ds-service-search-input');
+    if (srvSearchInput) srvSearchInput.value = '';
+    const srvClearBtn = document.getElementById('ds-service-clear-btn');
+    if (srvClearBtn) srvClearBtn.style.display = 'none';
+    const srvResults = document.getElementById('ds-service-search-results');
+    if (srvResults) srvResults.style.display = 'none';
 
     window.renderDirectSaleItems();
     window.calculateDirectSaleTotals();

@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=294">
+    <link rel="stylesheet" href="styles.css?v=295">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -6660,9 +6660,21 @@
                                         <option value="Procedimientos Ambulatorios">Procedimientos Ambulatorios</option>
                                     </select>
                                 </div>
-                                <div>
-                                    <label style="font-size: 0.78rem; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Servicio del Baremo:</label>
-                                    <select id="ds-baremo-select" class="form-control" onchange="window.onDirectSaleBaremoSelected(this.value)" style="height: 38px; border-radius: 6px; font-size: 0.85rem;">
+                                <div style="position: relative;">
+                                    <label style="font-size: 0.78rem; font-weight: 600; color: #475569; display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                                        <span><i class="fa-solid fa-magnifying-glass text-cyan"></i> Buscar Servicio:</span>
+                                        <span id="ds-service-count-badge" style="font-size: 0.7rem; color: #64748b; font-weight: 500;"></span>
+                                    </label>
+                                    <div style="position: relative;">
+                                        <input type="text" id="ds-service-search-input" class="form-control" placeholder="🔍 Escribe nombre o código del servicio..." autocomplete="off" style="height: 38px; border-radius: 6px; font-size: 0.85rem; padding-right: 32px; width: 100%; box-sizing: border-box;">
+                                        <button type="button" id="ds-service-clear-btn" onclick="window.clearDirectSaleServiceSearch()" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #94a3b8; cursor: pointer; display: none; padding: 4px;" title="Limpiar servicio">
+                                            <i class="fa-solid fa-xmark"></i>
+                                        </button>
+                                    </div>
+                                    <!-- Floating Autocomplete Results Container -->
+                                    <div id="ds-service-search-results" style="position: absolute; top: 62px; left: 0; right: 0; background: #ffffff; border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.18), 0 8px 10px -6px rgba(0,0,0,0.1); z-index: 10800; max-height: 250px; overflow-y: auto; display: none;"></div>
+                                    <!-- Hidden select to preserve 100% backward compatibility with internal scripts -->
+                                    <select id="ds-baremo-select" class="form-control" onchange="window.onDirectSaleBaremoSelected(this.value)" style="display: none !important;">
                                         <option value="">-- Seleccionar Servicio --</option>
                                     </select>
                                 </div>
@@ -7383,14 +7395,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=294"></script>
-    <script src="supabaseClient.js?v=294"></script>
-    <script src="odontogram.js?v=294"></script>
-    <script src="signature.js?v=294"></script>
-    <script src="whatsapp.js?v=294"></script>
-    <script src="kardex.js?v=294"></script>
-    <script src="app.js?v=294"></script>
-    <script src="clinicalERP.js?v=294"></script>
-    <script src="tutorial.js?v=294"></script>
+    <script src="seededData.js?v=295"></script>
+    <script src="supabaseClient.js?v=295"></script>
+    <script src="odontogram.js?v=295"></script>
+    <script src="signature.js?v=295"></script>
+    <script src="whatsapp.js?v=295"></script>
+    <script src="kardex.js?v=295"></script>
+    <script src="app.js?v=295"></script>
+    <script src="clinicalERP.js?v=295"></script>
+    <script src="tutorial.js?v=295"></script>
 </body>
 </html>
