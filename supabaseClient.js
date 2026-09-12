@@ -338,7 +338,7 @@ class SupabaseDataService {
                     const realPatients = data.filter(p => {
                         if (!p.id) return false;
                         const idStr = String(p.id);
-                        if (idStr.startsWith('SYS-') || idStr.startsWith('PRE-') || idStr.startsWith('FAC-') || idStr.startsWith('INV-') || idStr.startsWith('BILL-')) return false;
+                        if (idStr.startsWith('SYS-') || idStr.startsWith('PRE-') || idStr.startsWith('FAC-') || idStr.startsWith('INV-') || idStr.startsWith('BILL-') || idStr.startsWith('REC-')) return false;
                         if (p.odontogram_data && (p.odontogram_data._is_system_config || p.odontogram_data._is_invoice || p.odontogram_data._is_bill)) return false;
                         return true;
                     });
@@ -1117,22 +1117,30 @@ class SupabaseDataService {
                     const budgetRows = pData.filter(p => {
                         if (!p.id) return false;
                         const sId = String(p.id);
-                        return sId.startsWith('PRE-') || sId.startsWith('FAC-') || sId.startsWith('INV-') || (p.odontogram_data && p.odontogram_data._is_invoice);
+                        return sId.startsWith('PRE-') || sId.startsWith('FAC-') || sId.startsWith('INV-') || sId.startsWith('REC-') || (p.odontogram_data && p.odontogram_data._is_invoice);
                     });
 
                     budgetRows.forEach(row => {
                         const od = row.odontogram_data || {};
                         const meta = od.metadata || {};
+                        const totRef = parseFloat(od.totalRef !== undefined ? od.totalRef : (od.totalUSD || 0));
+                        const pdRef = parseFloat(od.paidRef !== undefined ? od.paidRef : (meta.paidUSD !== undefined ? meta.paidUSD : (od.status === 'Pagado' || String(row.id).startsWith('FAC-') ? totRef : 0)));
+                        const balRef = parseFloat(od.balanceRef !== undefined ? od.balanceRef : (meta.balanceUSD !== undefined ? meta.balanceUSD : Math.max(0, totRef - pdRef)));
+
                         cloudInvoices.push({
                             id: od.id || row.id,
                             patientId: od.patientId || row.phone,
+                            patientName: od.patientName || meta.patientName || row.fullname || '',
                             invoiceDate: od.invoiceDate || row.birthdate,
                             paymentMethod: od.paymentMethod || 'Efectivo USD',
                             paymentTerms: od.paymentTerms || 'Contado',
                             currency: od.currency || 'REF',
                             items: od.items || [],
-                            totalRef: parseFloat(od.totalRef || 0),
+                            totalRef: totRef,
                             totalBcv: parseFloat(od.totalBcv || 0),
+                            paidRef: pdRef,
+                            paidBcv: parseFloat(od.paidBcv || 0),
+                            balanceRef: balRef,
                             status: od.status || row.status || 'Emitida',
                             doctorSignature: od.doctorSignature || '',
                             patientSignature: od.patientSignature || '',
@@ -1140,8 +1148,14 @@ class SupabaseDataService {
                             category: od.category || meta.category || 'Odontología',
                             specialty: od.specialty || meta.specialty || '',
                             doctor: od.doctor || meta.doctor || '',
+                            assistant: od.assistant || meta.assistant || '',
                             notes: od.notes || meta.notes || '',
                             validUntil: od.validUntil || meta.validUntil || 30,
+                            isDirectSale: !!(od.isDirectSale || meta.isDirectSale || String(row.id).startsWith('FAC-') || String(row.id).startsWith('REC-')),
+                            docType: od.docType || meta.docType || (String(row.id).startsWith('FAC-') ? 'Factura' : (String(row.id).startsWith('REC-') ? 'Recibo de Abono' : 'Presupuesto')),
+                            is_cashea: !!(od.is_cashea || meta.isCashea || meta.is_cashea),
+                            casheaDetails: od.casheaDetails || meta.casheaDetails || null,
+                            splitDetails: od.splitDetails || meta.splitDetails || null,
                             odontogramData: od.odontogramData || (od.metadata && od.metadata.odontogramData) || {},
                             metadata: od.metadata || {}
                         });
@@ -1153,16 +1167,24 @@ class SupabaseDataService {
                     invData.forEach(i => {
                         if (!cloudInvoices.find(c => c.id === i.id)) {
                             const meta = i.metadata || {};
+                            const totRef = parseFloat(i.total_ref !== undefined ? i.total_ref : (meta.totalUSD || 0));
+                            const pdRef = parseFloat(meta.paidUSD !== undefined ? meta.paidUSD : (i.paid_ref !== undefined ? i.paid_ref : (i.status === 'Pagado' || String(i.id).startsWith('FAC-') ? totRef : 0)));
+                            const balRef = parseFloat(meta.balanceUSD !== undefined ? meta.balanceUSD : (i.balance_ref !== undefined ? i.balance_ref : Math.max(0, totRef - pdRef)));
+
                             cloudInvoices.push({
                                 id: i.id,
                                 patientId: i.patient_id,
+                                patientName: meta.patientName || i.patient_name || '',
                                 invoiceDate: i.invoice_date,
                                 paymentMethod: i.payment_method,
                                 paymentTerms: i.payment_terms,
                                 currency: i.currency,
                                 items: i.items || [],
-                                totalRef: parseFloat(i.total_ref || 0),
+                                totalRef: totRef,
                                 totalBcv: parseFloat(i.total_bcv || 0),
+                                paidRef: pdRef,
+                                paidBcv: parseFloat(i.paid_bcv !== undefined ? i.paid_bcv : (meta.paidBs || 0)),
+                                balanceRef: balRef,
                                 status: i.status || 'Emitida',
                                 doctorSignature: i.doctor_signature || i.doctorSignature || '',
                                 patientSignature: i.patient_signature || i.patientSignature || '',
@@ -1170,8 +1192,14 @@ class SupabaseDataService {
                                 category: i.category || meta.category || 'Odontología',
                                 specialty: i.specialty || meta.specialty || '',
                                 doctor: i.doctor || meta.doctor || '',
+                                assistant: meta.assistant || '',
                                 notes: i.notes || meta.notes || '',
                                 validUntil: i.valid_until || i.validUntil || meta.validUntil || 30,
+                                isDirectSale: !!(meta.isDirectSale || i.is_direct_sale || String(i.id).startsWith('FAC-') || String(i.id).startsWith('REC-')),
+                                docType: meta.docType || i.doc_type || (String(i.id).startsWith('FAC-') ? 'Factura' : (String(i.id).startsWith('REC-') ? 'Recibo de Abono' : 'Presupuesto')),
+                                is_cashea: !!(meta.isCashea || meta.is_cashea || i.is_cashea),
+                                casheaDetails: meta.casheaDetails || i.cashea_details || null,
+                                splitDetails: meta.splitDetails || i.split_details || null,
                                 odontogramData: (i.metadata && i.metadata.odontogramData) || {},
                                 metadata: i.metadata || {}
                             });
@@ -1204,10 +1232,12 @@ class SupabaseDataService {
         if (this.isCloudConnected()) {
             try {
                 // 1. Guaranteed persistence in patients table with JSONB
-                const odData = invoiceObj.odontogramData || (invoiceObj.metadata && invoiceObj.metadata.odontogramData) || {};
+                const pdRef = parseFloat(invoiceObj.paidRef !== undefined ? invoiceObj.paidRef : (invoiceObj.metadata?.paidUSD !== undefined ? invoiceObj.metadata.paidUSD : (invoiceObj.status === 'Pagado' || String(invoiceObj.id).startsWith('FAC-') ? invoiceObj.totalRef : 0)));
+                const balRef = parseFloat(invoiceObj.balanceRef !== undefined ? invoiceObj.balanceRef : (invoiceObj.metadata?.balanceUSD !== undefined ? invoiceObj.metadata.balanceUSD : Math.max(0, (invoiceObj.totalRef || 0) - pdRef)));
+
                 const cloudPayload = {
                     id: invoiceObj.id,
-                    fullname: 'Presupuesto: ' + (invoiceObj.id || ''),
+                    fullname: invoiceObj.patientName ? `${invoiceObj.patientName} (${invoiceObj.id})` : ('Presupuesto: ' + (invoiceObj.id || '')),
                     birthdate: invoiceObj.invoiceDate || new Date().toISOString().split('T')[0],
                     phone: invoiceObj.patientId || '',
                     status: invoiceObj.status || 'Emitida',
@@ -1215,6 +1245,7 @@ class SupabaseDataService {
                         _is_invoice: true,
                         id: invoiceObj.id,
                         patientId: invoiceObj.patientId,
+                        patientName: invoiceObj.patientName || '',
                         invoiceDate: invoiceObj.invoiceDate,
                         paymentMethod: invoiceObj.paymentMethod,
                         paymentTerms: invoiceObj.paymentTerms,
@@ -1222,6 +1253,9 @@ class SupabaseDataService {
                         items: invoiceObj.items || [],
                         totalRef: invoiceObj.totalRef || 0,
                         totalBcv: invoiceObj.totalBcv || 0,
+                        paidRef: pdRef,
+                        paidBcv: invoiceObj.paidBcv || 0,
+                        balanceRef: balRef,
                         status: invoiceObj.status || 'Emitida',
                         doctorSignature: invoiceObj.doctorSignature || '',
                         patientSignature: invoiceObj.patientSignature || '',
@@ -1229,8 +1263,14 @@ class SupabaseDataService {
                         category: invoiceObj.category || 'Odontología',
                         specialty: invoiceObj.specialty || '',
                         doctor: invoiceObj.doctor || '',
+                        assistant: invoiceObj.assistant || (invoiceObj.metadata && invoiceObj.metadata.assistant) || '',
                         notes: invoiceObj.notes || '',
                         validUntil: invoiceObj.validUntil || 30,
+                        isDirectSale: !!(invoiceObj.isDirectSale || (invoiceObj.metadata && invoiceObj.metadata.isDirectSale)),
+                        docType: invoiceObj.docType || (invoiceObj.metadata && invoiceObj.metadata.docType) || '',
+                        is_cashea: !!(invoiceObj.is_cashea || (invoiceObj.metadata && invoiceObj.metadata.isCashea)),
+                        casheaDetails: invoiceObj.casheaDetails || (invoiceObj.metadata && invoiceObj.metadata.casheaDetails) || null,
+                        splitDetails: invoiceObj.splitDetails || (invoiceObj.metadata && invoiceObj.metadata.splitDetails) || null,
                         odontogramData: odData,
                         metadata: {
                             ...(invoiceObj.metadata || {}),
@@ -1239,6 +1279,14 @@ class SupabaseDataService {
                             doctor: invoiceObj.doctor || '',
                             notes: invoiceObj.notes || '',
                             validUntil: invoiceObj.validUntil || 30,
+                            paidUSD: pdRef,
+                            balanceUSD: balRef,
+                            patientName: invoiceObj.patientName || '',
+                            isDirectSale: !!(invoiceObj.isDirectSale || (invoiceObj.metadata && invoiceObj.metadata.isDirectSale)),
+                            docType: invoiceObj.docType || (invoiceObj.metadata && invoiceObj.metadata.docType) || '',
+                            isCashea: !!(invoiceObj.is_cashea || (invoiceObj.metadata && invoiceObj.metadata.isCashea)),
+                            casheaDetails: invoiceObj.casheaDetails || (invoiceObj.metadata && invoiceObj.metadata.casheaDetails) || null,
+                            splitDetails: invoiceObj.splitDetails || (invoiceObj.metadata && invoiceObj.metadata.splitDetails) || null,
                             odontogramData: odData
                         }
                     }
@@ -1265,7 +1313,15 @@ class SupabaseDataService {
                         specialty: invoiceObj.specialty || '',
                         doctor: invoiceObj.doctor || '',
                         notes: invoiceObj.notes || '',
-                        validUntil: invoiceObj.validUntil || 30
+                        validUntil: invoiceObj.validUntil || 30,
+                        paidUSD: pdRef,
+                        balanceUSD: balRef,
+                        patientName: invoiceObj.patientName || '',
+                        isDirectSale: !!(invoiceObj.isDirectSale || (invoiceObj.metadata && invoiceObj.metadata.isDirectSale)),
+                        docType: invoiceObj.docType || (invoiceObj.metadata && invoiceObj.metadata.docType) || '',
+                        isCashea: !!(invoiceObj.is_cashea || (invoiceObj.metadata && invoiceObj.metadata.isCashea)),
+                        casheaDetails: invoiceObj.casheaDetails || (invoiceObj.metadata && invoiceObj.metadata.casheaDetails) || null,
+                        splitDetails: invoiceObj.splitDetails || (invoiceObj.metadata && invoiceObj.metadata.splitDetails) || null
                     }
                 });
                 console.log('✅ Invoice / Budget synced to Supabase Cloud:', invoiceObj.id);
@@ -1366,6 +1422,7 @@ class SupabaseDataService {
                 p.payments = p.payments || [];
                 p.payments.push({
                     id: docId,
+                    docId: docId,
                     date: invoiceObj.invoiceDate,
                     concept: isCashea ? `Factura Cashea (${docId}): ${(saleData.items || []).map(i => i.name).join(', ')} [Inicial: $${invoiceObj.paidRef.toFixed(2)} | Financiado Cashea: $${casheaFinancedUSD.toFixed(2)}]` : `${invoiceObj.docType} (${docId}): ${(saleData.items || []).map(i => i.name).join(', ')}`,
                     method: saleData.paymentMethod,
@@ -1374,7 +1431,14 @@ class SupabaseDataService {
                     totalUSD: invoiceObj.totalRef,
                     paidUSD: invoiceObj.paidRef,
                     balanceUSD: isCashea ? 0 : invoiceObj.balanceRef,
-                    status: invoiceObj.status
+                    status: invoiceObj.status,
+                    isDirectSale: true,
+                    isCashea: isCashea,
+                    casheaDetails: invoiceObj.casheaDetails || null,
+                    splitDetails: saleData.splitDetails || null,
+                    specialty: saleData.specialty || '',
+                    doctor: saleData.doctor || 'Dr. Médico Tratante',
+                    assistant: saleData.assistant || ''
                 });
 
                 p.sessions = p.sessions || [];
@@ -1396,6 +1460,13 @@ class SupabaseDataService {
         } catch(pErr) {
             console.warn('Error recording direct sale in patient history:', pErr);
         }
+
+        this._invoicesCacheTime = 0;
+        this._invoicesPromise = null;
+        this._patientsCacheTime = 0;
+        this._patientsPromise = null;
+        this.notifyDataChanged('invoices', docId);
+        if (saleData.patientId) this.notifyDataChanged('patients', saleData.patientId);
 
         return invoiceObj;
     }

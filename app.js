@@ -2067,7 +2067,7 @@ async function renderBudgetListView(forceRefresh = false) {
     if (!tableBody) return;
 
     const invoices = await SupabaseDataService.getInvoices(forceRefresh);
-    let budgets = invoices.filter(inv => inv.id && inv.id.startsWith('PRE-'));
+    let budgets = invoices.filter(inv => inv.id && (inv.id.startsWith('PRE-') || inv.id.startsWith('FAC-') || inv.id.startsWith('REC-') || inv.isDirectSale));
 
     // Calcular contadores por área clínica
     let countAll = budgets.length;
@@ -2126,16 +2126,17 @@ async function renderBudgetListView(forceRefresh = false) {
 
         let filtered = budgets.filter(b => {
             const patient = patients.find(p => p.id === b.patientId);
-            const patientName = patient ? patient.fullname.toLowerCase() : '';
+            const patientName = (patient ? patient.fullname : (b.patientName || '')).toLowerCase();
             const spec = b.items && b.items[0] && b.items[0].specialist ? b.items[0].specialist.toLowerCase() : '';
             const docName = (b.doctor || '').toLowerCase();
             const catName = (b.category || '').toLowerCase();
+            const isDirect = b.isDirectSale || String(b.id).startsWith('FAC-') || String(b.id).startsWith('REC-');
             const matchText = b.id.toLowerCase().includes(query) || patientName.includes(query) || spec.includes(query) || docName.includes(query) || catName.includes(query);
 
             if (status === 'all') return matchText;
-            if (status === 'Presupuesto') return matchText && b.status !== 'Aprobado' && b.status !== 'Facturado';
-            if (status === 'Aprobado') return matchText && b.status === 'Aprobado';
-            if (status === 'Facturado') return matchText && b.status === 'Facturado';
+            if (status === 'Presupuesto') return matchText && !isDirect && b.status !== 'Aprobado' && b.status !== 'Facturado';
+            if (status === 'Aprobado') return matchText && (b.status === 'Aprobado' || b.status === 'Pagado');
+            if (status === 'Facturado') return matchText && (b.status === 'Facturado' || isDirect);
             return matchText;
         });
 
@@ -2151,19 +2152,37 @@ async function renderBudgetListView(forceRefresh = false) {
 
         tableBody.innerHTML = '';
         if (filtered.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="8" class="text-center text-muted" style="padding: 30px;">No se encontraron presupuestos en este filtro.</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="8" class="text-center text-muted" style="padding: 30px;">No se encontraron comprobantes en este filtro.</td></tr>';
             return;
         }
 
         filtered.forEach(b => {
             const patient = patients.find(p => p.id === b.patientId);
-            const patientName = patient ? patient.fullname : 'Desconocido';
+            const patientName = patient ? patient.fullname : (b.patientName || 'Desconocido');
             const spec = b.items && b.items[0] && b.items[0].specialist ? b.items[0].specialist : (b.doctor || 'Especialista');
             
-            const isApproved = b.status === 'Aprobado';
+            const isDirect = b.isDirectSale || String(b.id).startsWith('FAC-') || String(b.id).startsWith('REC-');
+            const isFacturaDirecta = String(b.id).startsWith('FAC-') || b.docType === 'Factura';
+            const isReciboAbono = String(b.id).startsWith('REC-') || b.docType === 'Recibo de Abono';
+            const isApproved = b.status === 'Aprobado' || b.status === 'Pagado';
             const isFacturado = b.status === 'Facturado';
-            const badgeClass = isFacturado ? 'badge-tag blue' : (isApproved ? 'badge-tag green' : 'badge-tag orange');
-            const statusLabel = isFacturado ? 'Finalizado' : (isApproved ? 'Aprobado' : 'Borrador');
+
+            let badgeClass = 'badge-tag orange';
+            let statusLabel = 'Borrador';
+
+            if (isFacturaDirecta) {
+                badgeClass = 'badge-tag green';
+                statusLabel = '✓ Venta Directa (Pagada)';
+            } else if (isReciboAbono) {
+                badgeClass = 'badge-tag amber';
+                statusLabel = '✓ Venta Directa (Abono)';
+            } else if (isFacturado) {
+                badgeClass = 'badge-tag blue';
+                statusLabel = 'Finalizado';
+            } else if (isApproved) {
+                badgeClass = 'badge-tag green';
+                statusLabel = 'Aprobado';
+            }
 
             // Category badge
             let categoryBadge = '';
@@ -2180,6 +2199,27 @@ async function renderBudgetListView(forceRefresh = false) {
                 categoryBadge = `<span class="badge-tag red" style="font-size:0.74rem; font-weight:700;"><i class="fa-solid fa-syringe"></i> ${b.specialty || 'Procedimiento'}</span>`;
             } else {
                 categoryBadge = `<span class="badge-tag gray" style="font-size:0.74rem; font-weight:700;">${cat}</span>`;
+            }
+
+            let actionButtons = '';
+            if (isDirect) {
+                actionButtons = `
+                    <button class="btn btn-xs btn-outline" onclick="window.printDirectSaleReceipt('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer;" title="Reimprimir Comprobante"><i class="fa-solid fa-print"></i> Imprimir</button>
+                    <button class="btn btn-xs btn-outline" onclick="window.downloadDirectSaleReceiptPDF('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; color: #0284c7; border-color: #bae6fd;" title="Descargar PDF"><i class="fa-solid fa-file-pdf"></i> PDF</button>
+                    <button class="btn btn-xs btn-success" onclick="window.sendDirectSaleReceiptWhatsApp('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; background:#25D366; border:none; color:#fff;" title="Enviar por WhatsApp"><i class="fa-brands fa-whatsapp"></i> WhatsApp</button>
+                    <button class="btn btn-xs btn-outline text-red" onclick="window.deleteBudget('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; border-color: #ef4444; color: #ef4444;" title="Eliminar Venta"><i class="fa-solid fa-trash-can"></i></button>
+                `;
+            } else {
+                actionButtons = `
+                    <button class="btn btn-xs btn-outline" onclick="loadBudgetIntoEditor('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer;" title="Abrir y Editar Presupuesto"><i class="fa-solid fa-folder-open"></i> Abrir</button>
+                    ${b.category && b.category !== 'Odontología' 
+                        ? `<button class="btn btn-xs btn-outline" onclick="window.printMedicalBudgetPDF('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; color: #0284c7; border-color: #bae6fd;" title="Imprimir Presupuesto PDF"><i class="fa-solid fa-file-pdf"></i> PDF</button>`
+                        : ''
+                    }
+                    <button class="btn btn-xs btn-success" onclick="${b.category && b.category !== 'Odontología' ? `window.sendMedicalBudgetWhatsApp('${b.id}')` : `window.sendBudgetWhatsApp('${b.id}')`}" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; background:#25D366; border:none; color:#fff;" title="Enviar Presupuesto por WhatsApp"><i class="fa-brands fa-whatsapp"></i> WhatsApp</button>
+                    ${isApproved ? `<button class="btn btn-xs btn-success" onclick="window.finalizeBudgetDirect('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; background:#10b981; border:none; color:#fff;" title="Finalizar Tratamiento / Presupuesto"><i class="fa-solid fa-circle-check"></i> Finalizar</button>` : ''}
+                    <button class="btn btn-xs btn-outline text-red" onclick="window.deleteBudget('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; border-color: #ef4444; color: #ef4444;" title="Eliminar Presupuesto (Enviar a Papelera)"><i class="fa-solid fa-trash-can"></i></button>
+                `;
             }
 
             const tr = document.createElement('tr');
@@ -2199,14 +2239,7 @@ async function renderBudgetListView(forceRefresh = false) {
                 <td><span class="${badgeClass}" style="font-size:0.75rem; text-transform:none; padding: 2px 6px;">${statusLabel}</span></td>
                 <td style="text-align: center;">
                     <div style="display: flex; gap: 4px; justify-content: center; flex-wrap: wrap;">
-                        <button class="btn btn-xs btn-outline" onclick="loadBudgetIntoEditor('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer;" title="Abrir y Editar Presupuesto"><i class="fa-solid fa-folder-open"></i> Abrir</button>
-                        ${b.category && b.category !== 'Odontología' 
-                            ? `<button class="btn btn-xs btn-outline" onclick="window.printMedicalBudgetPDF('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; color: #0284c7; border-color: #bae6fd;" title="Imprimir Presupuesto PDF"><i class="fa-solid fa-file-pdf"></i> PDF</button>`
-                            : ''
-                        }
-                        <button class="btn btn-xs btn-success" onclick="${b.category && b.category !== 'Odontología' ? `window.sendMedicalBudgetWhatsApp('${b.id}')` : `window.sendBudgetWhatsApp('${b.id}')`}" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; background:#25D366; border:none; color:#fff;" title="Enviar Presupuesto por WhatsApp"><i class="fa-brands fa-whatsapp"></i> WhatsApp</button>
-                        ${isApproved ? `<button class="btn btn-xs btn-success" onclick="window.finalizeBudgetDirect('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; background:#10b981; border:none; color:#fff;" title="Finalizar Tratamiento / Presupuesto"><i class="fa-solid fa-circle-check"></i> Finalizar</button>` : ''}
-                        <button class="btn btn-xs btn-outline text-red" onclick="window.deleteBudget('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; border-color: #ef4444; color: #ef4444;" title="Eliminar Presupuesto (Enviar a Papelera)"><i class="fa-solid fa-trash-can"></i></button>
+                        ${actionButtons}
                     </div>
                 </td>
             `;
@@ -6626,6 +6659,37 @@ window.processDirectSale = async function() {
         const invoiceDoc = await SupabaseDataService.registerDirectSale(salePayload);
         window.lastProcessedDirectSaleDoc = invoiceDoc;
 
+        // Invalidate Supabase caches & force reload across all views
+        await SupabaseDataService.getPatients(true);
+        await SupabaseDataService.getInvoices(true);
+
+        // Synchronize activePatient in memory if open
+        if (window.activePatient && String(window.activePatient.id) === String(patientId)) {
+            const allPats = await SupabaseDataService.getPatients();
+            const updatedP = allPats.find(p => String(p.id) === String(patientId));
+            if (updatedP) {
+                window.activePatient = updatedP;
+            }
+        }
+
+        // Live refresh all financial and operational views
+        try {
+            if (typeof renderDashboard === 'function') await renderDashboard();
+            if (typeof renderDailyClosingView === 'function') await renderDailyClosingView();
+            if (typeof renderCashFlow === 'function') await renderCashFlow();
+            if (typeof renderReceivables === 'function') await renderReceivables();
+            if (typeof renderBudgetListView === 'function') await renderBudgetListView(true);
+            if (typeof renderEHRView === 'function') {
+                const actEhrTab = document.querySelector('.tab-view#view-ehr');
+                if (actEhrTab && !actEhrTab.classList.contains('hidden') && (actEhrTab.style.display !== 'none')) {
+                    await renderEHRView();
+                }
+            }
+            if (typeof renderPatientsTable === 'function') await renderPatientsTable();
+        } catch(refreshErr) {
+            console.warn('Post direct-sale view refresh notice:', refreshErr);
+        }
+
         Swal.close();
 
         // Show Success Overlay inside modal
@@ -7485,38 +7549,54 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
             payTbody.innerHTML = '';
             
             const allPaymentsList = [];
+            const processedEhrPayKeys = new Set();
 
-            // Presupuestos Aprobados (descarta borradores o no aprobados)
-            approvedBudgets.forEach(b => {
-                allPaymentsList.push({
-                    date: b.invoiceDate || '2026-01-01',
-                    concept: `Presupuesto ${b.id} (${b.paymentTerms || 'Contado'})`,
-                    method: b.paymentMethod || 'transferencia',
-                    bank: b.bank || 'Caja Principal',
-                    reference: b.reference || b.id,
-                    totalUSD: parseFloat(b.totalRef || 0),
-                    paidUSD: b.status === 'Aprobado' ? parseFloat(b.totalRef || 0) : 0,
-                    balanceUSD: b.status === 'Aprobado' ? 0 : parseFloat(b.totalRef || 0),
-                    status: b.status === 'Aprobado' ? 'Pagado' : 'Pendiente'
-                });
-            });
-
-            // Pagos manuales o de sesiones
+            // 1. Pagos asentados directamente al paciente (incluye ventas rápidas, abonos y sesiones)
             if (activePatient.payments && activePatient.payments.length > 0) {
                 activePatient.payments.forEach(p => {
+                    const payKey = p.id || p.reference || p.docId || `${p.date}_${p.paidUSD}`;
+                    processedEhrPayKeys.add(payKey);
+                    if (p.id) processedEhrPayKeys.add(p.id);
+                    if (p.reference) processedEhrPayKeys.add(p.reference);
+                    if (p.docId) processedEhrPayKeys.add(p.docId);
+
                     allPaymentsList.push({
                         date: p.date || new Date().toISOString().split('T')[0],
                         concept: p.concept || 'Abono Registrado',
                         method: p.method || 'cash',
                         bank: p.bank || (p.method === 'cash' ? 'Efectivo en Mano' : 'No especificado'),
-                        reference: p.reference || 'N/A',
+                        reference: p.reference || p.id || 'N/A',
                         totalUSD: parseFloat(p.totalUSD || 0),
                         paidUSD: parseFloat(p.paidUSD || 0),
                         balanceUSD: parseFloat(p.balanceUSD || 0),
-                        status: p.status || 'Pagado'
+                        status: p.status || (parseFloat(p.balanceUSD || 0) <= 0 ? 'Pagado' : 'Abono Parcial')
                     });
                 });
             }
+
+            // 2. Presupuestos Aprobados o Facturas no duplicadas
+            approvedBudgets.forEach(b => {
+                if (!processedEhrPayKeys.has(b.id)) {
+                    processedEhrPayKeys.add(b.id);
+                    const totRef = parseFloat(b.totalRef || 0);
+                    const isPaidFull = b.status === 'Pagado' || b.status === 'Pagada' || String(b.id).startsWith('FAC-');
+                    const paidAmt = b.paidRef !== undefined ? parseFloat(b.paidRef) : (isPaidFull ? totRef : (b.status === 'Aprobado' ? totRef : 0));
+                    const balAmt = b.balanceRef !== undefined ? parseFloat(b.balanceRef) : Math.max(0, totRef - paidAmt);
+                    const statusLabel = balAmt <= 0 ? 'Pagado' : (paidAmt > 0 ? 'Abono Parcial' : 'Pendiente');
+
+                    allPaymentsList.push({
+                        date: b.invoiceDate || '2026-01-01',
+                        concept: String(b.id).startsWith('FAC-') ? `Factura ${b.id} (${b.paymentTerms || 'Contado'})` : `Presupuesto ${b.id} (${b.paymentTerms || 'Contado'})`,
+                        method: b.paymentMethod || 'transferencia',
+                        bank: b.bank || 'Caja Principal',
+                        reference: b.reference || b.id,
+                        totalUSD: totRef,
+                        paidUSD: paidAmt,
+                        balanceUSD: balAmt,
+                        status: statusLabel
+                    });
+                }
+            });
 
             if (allPaymentsList.length > 0) {
                 let totalQuoted = 0;
@@ -8713,6 +8793,35 @@ async function renderDashboard() {
             }
             if (hasSessionToday || hasNoteToday) {
                 attendedCount++;
+            }
+        });
+
+        // 3b. Sumar facturas / ventas rápidas directas no computadas en pagos de pacientes
+        const countedPayIds = new Set();
+        allPatients.forEach(p => {
+            (p.payments || []).forEach(pay => {
+                if (pay.id) countedPayIds.add(pay.id);
+                if (pay.docId) countedPayIds.add(pay.docId);
+                if (pay.reference) countedPayIds.add(pay.reference);
+            });
+        });
+
+        (allInvoices || []).forEach(inv => {
+            if (!countedPayIds.has(inv.id)) {
+                const invDate = (inv.invoiceDate || '').split('T')[0];
+                const paid = parseFloat(inv.paidRef !== undefined ? inv.paidRef : (inv.metadata?.paidUSD !== undefined ? inv.metadata.paidUSD : (inv.status === 'Pagado' ? (inv.totalRef || 0) : 0)));
+                const debt = parseFloat(inv.balanceRef !== undefined ? inv.balanceRef : (inv.metadata?.balanceUSD !== undefined ? inv.metadata.balanceUSD : 0));
+
+                if (invDate === todayStr && paid > 0) {
+                    todayIncome += paid;
+                }
+                if (invDate.startsWith(monthStr) && paid > 0) {
+                    monthIncome += paid;
+                }
+                if (debt > 0) {
+                    totalReceivables += debt;
+                    if (inv.patientId) debtorPatientsSet.add(inv.patientId);
+                }
             }
         });
 
@@ -15222,6 +15331,10 @@ async function closeModal(id, force = false) {
             const dsModal = document.getElementById('modal-direct-sale');
             if (dsModal) dsModal.classList.remove('hidden');
         }
+    } else if (id === 'modal-direct-sale') {
+        if (window.lastProcessedDirectSaleDoc && typeof window.resetDirectSaleForm === 'function') {
+            window.resetDirectSaleForm();
+        }
     }
     return true;
 }
@@ -19941,14 +20054,18 @@ window.renderDailyClosingView = async function() {
         return { timeStr: '10:00 AM', shift: 'morning' };
     };
 
-    // A. Parse from Patient Ledgers (payments on target date)
+    // A. Parse from Patient Payments (payments on target date)
     patients.forEach(p => {
-        (p.ledger || []).forEach(pay => {
+        (p.payments || []).forEach(pay => {
             const payDate = (pay.date || '').split('T')[0];
-            if (payDate === targetDate && parseFloat(pay.paidUSD || 0) > 0) {
-                const key = `${p.id}_${pay.id || pay.concept}_${pay.paidUSD}`;
-                if (!processedKeys.has(key)) {
+            const payAmt = parseFloat(pay.paidUSD || 0);
+            if (payDate === targetDate && payAmt > 0) {
+                const key = `${p.id}_${pay.id || pay.docId || pay.reference || pay.concept}_${payAmt}`;
+                if (!processedKeys.has(key) && !processedKeys.has(pay.id) && !processedKeys.has(pay.docId)) {
                     processedKeys.add(key);
+                    if (pay.id) processedKeys.add(pay.id);
+                    if (pay.docId) processedKeys.add(pay.docId);
+                    if (pay.reference) processedKeys.add(pay.reference);
 
                     const timeInfo = parseTimeAndShift(pay.date || pay.timestamp || pay.createdAt);
                     
@@ -19958,7 +20075,7 @@ window.renderDailyClosingView = async function() {
                     let matchedAssistant = pay.assistant || '';
                     let matchedConcept = pay.concept || 'Atención en Consulta';
 
-                    const matchInv = invoices.find(inv => String(inv.id) === String(pay.id) || String(inv.id) === String(pay.docId));
+                    const matchInv = invoices.find(inv => String(inv.id) === String(pay.id) || String(inv.id) === String(pay.docId) || String(inv.id) === String(pay.reference));
                     if (matchInv) {
                         matchedArea = matchedArea || matchInv.specialty || matchInv.category || '';
                         matchedDoctor = matchedDoctor || matchInv.doctor || '';
@@ -19981,7 +20098,7 @@ window.renderDailyClosingView = async function() {
                     const cleanMethod = (pay.method || 'cash').toLowerCase();
 
                     dailyTransactions.push({
-                        id: pay.id || `REC-${Date.now().toString().slice(-4)}`,
+                        id: pay.id || pay.docId || `REC-${Date.now().toString().slice(-4)}`,
                         date: targetDate,
                         time: timeInfo.timeStr,
                         shift: timeInfo.shift,
@@ -19993,9 +20110,10 @@ window.renderDailyClosingView = async function() {
                         concept: matchedConcept,
                         method: pay.method ? getPaymentMethodLabel(pay.method) : 'Efectivo USD',
                         rawMethod: cleanMethod,
-                        amountUSD: parseFloat(pay.paidUSD || 0),
-                        amountBs: parseFloat(pay.paidUSD || 0) * rate,
-                        splitDetails: pay.splitDetails || null
+                        amountUSD: payAmt,
+                        amountBs: payAmt * rate,
+                        splitDetails: pay.splitDetails || null,
+                        is_cashea: !!(pay.isCashea || (cleanMethod && cleanMethod.includes('cashea')))
                     });
                 }
             }
@@ -20005,7 +20123,8 @@ window.renderDailyClosingView = async function() {
     // B. Parse from Invoices (direct sales, invoices on target date not already processed)
     invoices.forEach(inv => {
         const invDate = (inv.invoiceDate || '').split('T')[0];
-        if (invDate === targetDate && parseFloat(inv.paidRef || inv.totalUSD || 0) > 0) {
+        const invPaid = parseFloat(inv.paidRef !== undefined ? inv.paidRef : (inv.metadata?.paidUSD !== undefined ? inv.metadata.paidUSD : (inv.totalRef || inv.totalUSD || 0)));
+        if (invDate === targetDate && invPaid > 0) {
             if (!processedKeys.has(inv.id)) {
                 processedKeys.add(inv.id);
 
@@ -20018,8 +20137,6 @@ window.renderDailyClosingView = async function() {
                     const itmAsst = inv.items.find(i => i.assistant);
                     if (itmAsst) asst = itmAsst.assistant;
                 }
-
-                const invPaid = parseFloat(inv.paidRef || inv.totalUSD || 0);
 
                 dailyTransactions.push({
                     id: inv.id,
