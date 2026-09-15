@@ -189,20 +189,32 @@ class SupabaseDataService {
                 let baremoList = null;
                 const { data, error } = await supabaseClient.from('baremo_services').select('*');
                 if (!error && data && data.length > 0) {
-                    baremoList = data.map(d => ({
-                        code: d.code,
-                        area: d.area || (typeof detectClinicalArea === 'function' ? detectClinicalArea(d.category, d.name) : 'Odontología'),
-                        category: d.category,
-                        name: d.name,
-                        priceUSD: parseFloat(d.price_usd || 0),
-                        chairTimeMin: d.chair_time_min,
-                        materials: d.materials || [],
-                        hygienistBonus: parseFloat(d.hygienist_bonus || 0)
-                    }));
+                    baremoList = data.map(d => {
+                        const p = parseFloat(d.price_usd !== undefined && d.price_usd !== null ? d.price_usd : (d.priceUSD !== undefined && d.priceUSD !== null ? d.priceUSD : (d.price || 0)));
+                        return {
+                            code: d.code,
+                            area: d.area || (typeof detectClinicalArea === 'function' ? detectClinicalArea(d.category, d.name) : 'Odontología'),
+                            category: d.category,
+                            name: d.name,
+                            price: p,
+                            priceUSD: p,
+                            chairTimeMin: d.chair_time_min,
+                            materials: d.materials || [],
+                            hygienistBonus: parseFloat(d.hygienist_bonus !== undefined && d.hygienist_bonus !== null ? d.hygienist_bonus : (d.hygienistBonus || 0))
+                        };
+                    });
                 } else {
                     const { data: pData } = await supabaseClient.from('patients').select('*').eq('id', 'SYS-BAREMO-CONFIG');
                     if (pData && pData.length > 0 && pData[0].odontogram_data && pData[0].odontogram_data._is_baremo_config) {
-                        baremoList = pData[0].odontogram_data._baremo || [];
+                        baremoList = (pData[0].odontogram_data._baremo || []).map(d => {
+                            const p = parseFloat(d.price_usd !== undefined && d.price_usd !== null ? d.price_usd : (d.priceUSD !== undefined && d.priceUSD !== null ? d.priceUSD : (d.price || 0)));
+                            return {
+                                ...d,
+                                price: p,
+                                priceUSD: p,
+                                hygienistBonus: parseFloat(d.hygienist_bonus !== undefined && d.hygienist_bonus !== null ? d.hygienist_bonus : (d.hygienistBonus || 0))
+                            };
+                        });
                     }
                 }
                 if (baremoList !== null) {
@@ -210,7 +222,15 @@ class SupabaseDataService {
                     this._baremoCacheTime = Date.now();
                     return baremoList;
                 }
-                return local;
+                return local.map(d => {
+                    const p = parseFloat(d.price_usd !== undefined && d.price_usd !== null ? d.price_usd : (d.priceUSD !== undefined && d.priceUSD !== null ? d.priceUSD : (d.price || 0)));
+                    return {
+                        ...d,
+                        price: p,
+                        priceUSD: p,
+                        hygienistBonus: parseFloat(d.hygienist_bonus !== undefined && d.hygienist_bonus !== null ? d.hygienist_bonus : (d.hygienistBonus || 0))
+                    };
+                });
             } catch (err) {
                 console.error('Supabase getBaremo Error:', err);
                 return local;
@@ -224,6 +244,11 @@ class SupabaseDataService {
     }
 
     static async saveBaremoService(srvObj) {
+        const finalPrice = parseFloat(srvObj.priceUSD !== undefined && srvObj.priceUSD !== null ? srvObj.priceUSD : (srvObj.price || 0));
+        srvObj.price = finalPrice;
+        srvObj.priceUSD = finalPrice;
+        srvObj.hygienistBonus = parseFloat(srvObj.hygienistBonus || srvObj.hygienist_bonus || 0);
+
         let localBaremo = JSON.parse(localStorage.getItem('dental_baremo')) || [];
         const idx = localBaremo.findIndex(s => s.code === srvObj.code);
         if (idx >= 0) localBaremo[idx] = srvObj;
@@ -238,7 +263,7 @@ class SupabaseDataService {
                     area: srvObj.area,
                     category: srvObj.category,
                     name: srvObj.name,
-                    price_usd: srvObj.priceUSD,
+                    price_usd: finalPrice,
                     chair_time_min: srvObj.chairTimeMin,
                     materials: srvObj.materials || [],
                     hygienist_bonus: srvObj.hygienistBonus || 0
@@ -250,7 +275,7 @@ class SupabaseDataService {
                         code: srvObj.code,
                         category: srvObj.category,
                         name: srvObj.name,
-                        price_usd: srvObj.priceUSD,
+                        price_usd: finalPrice,
                         chair_time_min: srvObj.chairTimeMin,
                         materials: srvObj.materials || []
                     });

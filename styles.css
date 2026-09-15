@@ -6838,6 +6838,46 @@ select, .form-select, select.form-control {
     background: #f0fdfa;
 }
 
+/* ==========================================
+   MOBILE BUDGET CLINICAL AREA ACCORDION
+   ========================================== */
+.mobile-area-accordion-wrapper {
+    display: none;
+    width: 100%;
+}
+
+.desktop-area-filters {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+@media (max-width: 768px) {
+    .desktop-area-filters {
+        display: none !important;
+    }
+    .mobile-area-accordion-wrapper {
+        display: block !important;
+    }
+    .mobile-area-item {
+        transition: background 0.15s ease;
+    }
+    .mobile-area-item:hover, .mobile-area-item:active {
+        background: #f0fdfa !important;
+    }
+}
+
+@media (min-width: 769px) {
+    .desktop-area-filters {
+        display: flex !important;
+    }
+    .mobile-area-accordion-wrapper {
+        display: none !important;
+    }
+}
+
+
 
 
 

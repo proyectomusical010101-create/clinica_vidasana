@@ -38,16 +38,16 @@ const INITIAL_USERS = [
 ];
 
 const INITIAL_BAREMO = [
-    { code: "OD-01", category: "Diagnóstico", name: "Consulta y Diagnóstico Clínico + Rx Periapical", priceUSD: 25.00, chairTimeMin: 20, materials: [{ code: "INS-03", qty: 1 }] },
-    { code: "OD-02", category: "Diagnóstico", name: "Limpieza Ultrasonica + Profilaxis Fluorada", priceUSD: 40.00, chairTimeMin: 30, materials: [{ code: "INS-04", qty: 1 }, { code: "INS-05", qty: 1 }] },
-    { code: "OP-01", category: "Operatoria", name: "Restauración Fotocurada (Resina Clase I / V)", priceUSD: 45.00, chairTimeMin: 45, materials: [{ code: "INS-01", qty: 1 }, { code: "INS-02", qty: 1 }, { code: "INS-06", qty: 1 }] },
-    { code: "OP-02", category: "Operatoria", name: "Restauración Fotocurada Compleja (Clase II / Estética)", priceUSD: 60.00, chairTimeMin: 60, materials: [{ code: "INS-01", qty: 2 }, { code: "INS-02", qty: 1 }] },
-    { code: "EN-01", category: "Endodoncia", name: "Tratamiento de Conducto Unirradicular", priceUSD: 120.00, chairTimeMin: 60, materials: [{ code: "INS-02", qty: 2 }, { code: "INS-07", qty: 1 }] },
-    { code: "EN-02", category: "Endodoncia", name: "Tratamiento de Conducto Multirradicular (Molar)", priceUSD: 180.00, chairTimeMin: 90, materials: [{ code: "INS-02", qty: 3 }, { code: "INS-07", qty: 2 }] },
-    { code: "CI-01", category: "Cirugía", name: "Exodoncia Simple de Pieza Permanente", priceUSD: 50.00, chairTimeMin: 30, materials: [{ code: "INS-02", qty: 2 }] },
-    { code: "CI-02", category: "Cirugía", name: "Cirugía de Tercer Molar / Cordales Impactadas", priceUSD: 150.00, chairTimeMin: 60, materials: [{ code: "INS-02", qty: 3 }] },
-    { code: "PR-01", category: "Prótesis", name: "Corona Metal-Cerámica / Zirconio", priceUSD: 250.00, chairTimeMin: 45, materials: [] },
-    { code: "ES-01", category: "Estética", name: "Blanqueamiento Dental LED en Consultorio", priceUSD: 160.00, chairTimeMin: 60, materials: [] }
+    { code: "OD-01", category: "Diagnóstico", name: "Consulta y Diagnóstico Clínico + Rx Periapical", price: 25.00, priceUSD: 25.00, chairTimeMin: 20, materials: [{ code: "INS-03", qty: 1 }], hygienistBonus: 0.00 },
+    { code: "OD-02", category: "Diagnóstico", name: "Limpieza Ultrasonica + Profilaxis Fluorada", price: 40.00, priceUSD: 40.00, chairTimeMin: 30, materials: [{ code: "INS-04", qty: 1 }, { code: "INS-05", qty: 1 }], hygienistBonus: 5.00 },
+    { code: "OP-01", category: "Operatoria", name: "Restauración Fotocurada (Resina Clase I / V)", price: 45.00, priceUSD: 45.00, chairTimeMin: 45, materials: [{ code: "INS-01", qty: 1 }, { code: "INS-02", qty: 1 }, { code: "INS-06", qty: 1 }], hygienistBonus: 0.00 },
+    { code: "OP-02", category: "Operatoria", name: "Restauración Fotocurada Compleja (Clase II / Estética)", price: 60.00, priceUSD: 60.00, chairTimeMin: 60, materials: [{ code: "INS-01", qty: 2 }, { code: "INS-02", qty: 1 }], hygienistBonus: 0.00 },
+    { code: "EN-01", category: "Endodoncia", name: "Tratamiento de Conducto Unirradicular", price: 120.00, priceUSD: 120.00, chairTimeMin: 60, materials: [{ code: "INS-02", qty: 2 }, { code: "INS-07", qty: 1 }], hygienistBonus: 0.00 },
+    { code: "EN-02", category: "Endodoncia", name: "Tratamiento de Conducto Multirradicular (Molar)", price: 180.00, priceUSD: 180.00, chairTimeMin: 90, materials: [{ code: "INS-02", qty: 3 }, { code: "INS-07", qty: 2 }], hygienistBonus: 0.00 },
+    { code: "CI-01", category: "Cirugía", name: "Exodoncia Simple de Pieza Permanente", price: 50.00, priceUSD: 50.00, chairTimeMin: 30, materials: [{ code: "INS-02", qty: 2 }], hygienistBonus: 0.00 },
+    { code: "CI-02", category: "Cirugía", name: "Cirugía de Tercer Molar / Cordales Impactadas", price: 150.00, priceUSD: 150.00, chairTimeMin: 60, materials: [{ code: "INS-02", qty: 3 }], hygienistBonus: 0.00 },
+    { code: "PR-01", category: "Prótesis", name: "Corona Metal-Cerámica / Zirconio", price: 250.00, priceUSD: 250.00, chairTimeMin: 45, materials: [], hygienistBonus: 0.00 },
+    { code: "ES-01", category: "Estética", name: "Blanqueamiento Dental LED en Consultorio", price: 160.00, priceUSD: 160.00, chairTimeMin: 60, materials: [], hygienistBonus: 0.00 }
 ];
 
 const INITIAL_INVENTORY = [];

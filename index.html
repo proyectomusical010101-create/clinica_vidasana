@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=307">
+    <link rel="stylesheet" href="styles.css?v=308">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -725,14 +725,56 @@
                         </div>
 
                         <!-- Filtros Rápidos por Área / Especialidad -->
-                        <div class="card mb-15" style="padding: 10px 16px; border: 1px solid var(--border-color); border-radius: 12px; background: rgba(0,0,0,0.02); display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
-                            <strong style="font-size: 0.84rem; color: #64748b; margin-right: 4px;"><i class="fa-solid fa-filter text-cyan"></i> Área Clínica:</strong>
-                            <button type="button" class="filter-btn active" id="filter-cat-all" onclick="window.filterBudgetCategory('all', this)" style="font-weight: 600; padding: 6px 14px; border-radius: 8px;">Todos (<span id="count-cat-all">0</span>)</button>
-                            <button type="button" class="filter-btn" id="filter-cat-dental" onclick="window.filterBudgetCategory('Odontología', this)" style="font-weight: 600; padding: 6px 14px; border-radius: 8px;"><i class="fa-solid fa-tooth text-green"></i> Odontología (<span id="count-cat-dental">0</span>)</button>
-                            <button type="button" class="filter-btn" id="filter-cat-med" onclick="window.filterBudgetCategory('Consultas Médicas', this)" style="font-weight: 600; padding: 6px 14px; border-radius: 8px;"><i class="fa-solid fa-stethoscope text-blue"></i> Consultas Médicas (<span id="count-cat-med">0</span>)</button>
-                            <button type="button" class="filter-btn" id="filter-cat-xray" onclick="window.filterBudgetCategory('Rayos X & Imagenología', this)" style="font-weight: 600; padding: 6px 14px; border-radius: 8px;"><i class="fa-solid fa-x-ray text-purple"></i> Rayos X & Imagen (<span id="count-cat-xray">0</span>)</button>
-                            <button type="button" class="filter-btn" id="filter-cat-lab" onclick="window.filterBudgetCategory('Laboratorio Clínico', this)" style="font-weight: 600; padding: 6px 14px; border-radius: 8px;"><i class="fa-solid fa-flask text-amber"></i> Laboratorio (<span id="count-cat-lab">0</span>)</button>
-                            <button type="button" class="filter-btn" id="filter-cat-proc" onclick="window.filterBudgetCategory('Procedimientos Ambulatorios', this)" style="font-weight: 600; padding: 6px 14px; border-radius: 8px;"><i class="fa-solid fa-syringe text-red"></i> Procedimientos (<span id="count-cat-proc">0</span>)</button>
+                        <div class="card mb-15 budget-area-filter-card" style="padding: 10px 16px; border: 1px solid var(--border-color); border-radius: 12px; background: rgba(0,0,0,0.02);">
+                            <!-- Vista Desktop: Botones individuales -->
+                            <div class="desktop-area-filters">
+                                <strong style="font-size: 0.84rem; color: #64748b; margin-right: 4px;"><i class="fa-solid fa-filter text-cyan"></i> Área Clínica:</strong>
+                                <button type="button" class="filter-btn active" id="filter-cat-all" onclick="window.filterBudgetCategory('all', this)" style="font-weight: 600; padding: 6px 14px; border-radius: 8px;">Todos (<span id="count-cat-all">0</span>)</button>
+                                <button type="button" class="filter-btn" id="filter-cat-dental" onclick="window.filterBudgetCategory('Odontología', this)" style="font-weight: 600; padding: 6px 14px; border-radius: 8px;"><i class="fa-solid fa-tooth text-green"></i> Odontología (<span id="count-cat-dental">0</span>)</button>
+                                <button type="button" class="filter-btn" id="filter-cat-med" onclick="window.filterBudgetCategory('Consultas Médicas', this)" style="font-weight: 600; padding: 6px 14px; border-radius: 8px;"><i class="fa-solid fa-stethoscope text-blue"></i> Consultas Médicas (<span id="count-cat-med">0</span>)</button>
+                                <button type="button" class="filter-btn" id="filter-cat-xray" onclick="window.filterBudgetCategory('Rayos X & Imagenología', this)" style="font-weight: 600; padding: 6px 14px; border-radius: 8px;"><i class="fa-solid fa-x-ray text-purple"></i> Rayos X & Imagen (<span id="count-cat-xray">0</span>)</button>
+                                <button type="button" class="filter-btn" id="filter-cat-lab" onclick="window.filterBudgetCategory('Laboratorio Clínico', this)" style="font-weight: 600; padding: 6px 14px; border-radius: 8px;"><i class="fa-solid fa-flask text-amber"></i> Laboratorio (<span id="count-cat-lab">0</span>)</button>
+                                <button type="button" class="filter-btn" id="filter-cat-proc" onclick="window.filterBudgetCategory('Procedimientos Ambulatorios', this)" style="font-weight: 600; padding: 6px 14px; border-radius: 8px;"><i class="fa-solid fa-syringe text-red"></i> Procedimientos (<span id="count-cat-proc">0</span>)</button>
+                            </div>
+
+                            <!-- Vista Mobile: Acordeón / Selector Único -->
+                            <div class="mobile-area-accordion-wrapper">
+                                <div style="position: relative; width: 100%;">
+                                    <button type="button" id="budget-area-accordion-btn" onclick="window.toggleBudgetAreaAccordion(event)" style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 11px 16px; background: #ffffff; border: 1.5px solid #0891b2; border-radius: 10px; font-weight: 600; font-size: 0.92rem; color: #0f172a; box-shadow: 0 1px 3px rgba(0,0,0,0.06); cursor: pointer; text-align: left;">
+                                        <span style="display: flex; align-items: center; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                            <i class="fa-solid fa-filter text-cyan"></i>
+                                            <span id="budget-area-accordion-label">Selecciona área clínica</span>
+                                        </span>
+                                        <i class="fa-solid fa-chevron-down" id="budget-area-accordion-chevron" style="color: #0891b2; font-size: 0.85rem; transition: transform 0.2s;"></i>
+                                    </button>
+                                    <div id="budget-area-accordion-menu" style="display: none; position: absolute; top: calc(100% + 6px); left: 0; right: 0; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); z-index: 1050; padding: 6px; overflow: hidden;">
+                                        <div class="mobile-area-item" onclick="window.selectBudgetAreaFromMobile('all', 'Todos los presupuestos')" style="padding: 10px 12px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; font-size: 0.88rem; font-weight: 600; color: #0f172a; border-bottom: 1px solid #f1f5f9;">
+                                            <span><i class="fa-solid fa-layer-group text-cyan" style="width: 22px;"></i> Todos los presupuestos</span>
+                                            <span class="badge-tag gray" id="mobile-count-cat-all">0</span>
+                                        </div>
+                                        <div class="mobile-area-item" onclick="window.selectBudgetAreaFromMobile('Odontología', 'Odontología')" style="padding: 10px 12px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; font-size: 0.88rem; font-weight: 600; color: #0f172a; border-bottom: 1px solid #f1f5f9;">
+                                            <span><i class="fa-solid fa-tooth text-green" style="width: 22px;"></i> Odontología</span>
+                                            <span class="badge-tag green" id="mobile-count-cat-dental">0</span>
+                                        </div>
+                                        <div class="mobile-area-item" onclick="window.selectBudgetAreaFromMobile('Consultas Médicas', 'Consultas Médicas')" style="padding: 10px 12px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; font-size: 0.88rem; font-weight: 600; color: #0f172a; border-bottom: 1px solid #f1f5f9;">
+                                            <span><i class="fa-solid fa-stethoscope text-blue" style="width: 22px;"></i> Consultas Médicas</span>
+                                            <span class="badge-tag blue" id="mobile-count-cat-med">0</span>
+                                        </div>
+                                        <div class="mobile-area-item" onclick="window.selectBudgetAreaFromMobile('Rayos X & Imagenología', 'Rayos X & Imagen')" style="padding: 10px 12px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; font-size: 0.88rem; font-weight: 600; color: #0f172a; border-bottom: 1px solid #f1f5f9;">
+                                            <span><i class="fa-solid fa-x-ray text-purple" style="width: 22px;"></i> Rayos X & Imagen</span>
+                                            <span class="badge-tag purple" id="mobile-count-cat-xray">0</span>
+                                        </div>
+                                        <div class="mobile-area-item" onclick="window.selectBudgetAreaFromMobile('Laboratorio Clínico', 'Laboratorio Clínico')" style="padding: 10px 12px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; font-size: 0.88rem; font-weight: 600; color: #0f172a; border-bottom: 1px solid #f1f5f9;">
+                                            <span><i class="fa-solid fa-flask text-amber" style="width: 22px;"></i> Laboratorio Clínico</span>
+                                            <span class="badge-tag amber" id="mobile-count-cat-lab">0</span>
+                                        </div>
+                                        <div class="mobile-area-item" onclick="window.selectBudgetAreaFromMobile('Procedimientos Ambulatorios', 'Procedimientos Ambulatorios')" style="padding: 10px 12px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; font-size: 0.88rem; font-weight: 600; color: #0f172a;">
+                                            <span><i class="fa-solid fa-syringe text-red" style="width: 22px;"></i> Procedimientos</span>
+                                            <span class="badge-tag red" id="mobile-count-cat-proc">0</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Filtros del Listado -->
@@ -7567,14 +7609,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=307"></script>
-    <script src="supabaseClient.js?v=307"></script>
-    <script src="odontogram.js?v=307"></script>
-    <script src="signature.js?v=307"></script>
-    <script src="whatsapp.js?v=307"></script>
-    <script src="kardex.js?v=307"></script>
-    <script src="app.js?v=307"></script>
-    <script src="clinicalERP.js?v=307"></script>
-    <script src="tutorial.js?v=307"></script>
+    <script src="seededData.js?v=308"></script>
+    <script src="supabaseClient.js?v=308"></script>
+    <script src="odontogram.js?v=308"></script>
+    <script src="signature.js?v=308"></script>
+    <script src="whatsapp.js?v=308"></script>
+    <script src="kardex.js?v=308"></script>
+    <script src="app.js?v=308"></script>
+    <script src="clinicalERP.js?v=308"></script>
+    <script src="tutorial.js?v=308"></script>
 </body>
 </html>

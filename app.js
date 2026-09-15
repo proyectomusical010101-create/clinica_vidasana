@@ -2146,6 +2146,53 @@ window.selectPatientAndLoadApprovedBudget = async function(patientId) {
 
 window.activeBudgetCategoryFilter = window.activeBudgetCategoryFilter || 'all';
 
+window.toggleBudgetAreaAccordion = function(e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    const menu = document.getElementById('budget-area-accordion-menu');
+    const chevron = document.getElementById('budget-area-accordion-chevron');
+    if (!menu) return;
+    const isClosed = menu.style.display === 'none' || !menu.style.display;
+    menu.style.display = isClosed ? 'block' : 'none';
+    if (chevron) {
+        chevron.style.transform = isClosed ? 'rotate(180deg)' : 'rotate(0deg)';
+    }
+};
+
+window.selectBudgetAreaFromMobile = function(cat, label) {
+    window.activeBudgetCategoryFilter = cat;
+    const labelEl = document.getElementById('budget-area-accordion-label');
+    if (labelEl) {
+        labelEl.innerText = (cat === 'all') ? 'Selecciona área clínica' : `Área: ${label}`;
+    }
+    const menu = document.getElementById('budget-area-accordion-menu');
+    const chevron = document.getElementById('budget-area-accordion-chevron');
+    if (menu) menu.style.display = 'none';
+    if (chevron) chevron.style.transform = 'rotate(0deg)';
+
+    // Synchronize desktop filter buttons state
+    const container = document.getElementById('odontogram-list-container');
+    if (container) {
+        container.querySelectorAll('.filter-btn').forEach(b => {
+            if (b.id && b.id.startsWith('filter-cat-')) b.classList.remove('active');
+        });
+        const targetBtn = container.querySelector(`.filter-btn[onclick*="'${cat}'"]`);
+        if (targetBtn) targetBtn.classList.add('active');
+    }
+
+    renderBudgetListView();
+};
+
+// Close mobile accordion when tapping outside
+document.addEventListener('click', (e) => {
+    const btn = document.getElementById('budget-area-accordion-btn');
+    const menu = document.getElementById('budget-area-accordion-menu');
+    const chevron = document.getElementById('budget-area-accordion-chevron');
+    if (menu && menu.style.display === 'block' && btn && !btn.contains(e.target) && !menu.contains(e.target)) {
+        menu.style.display = 'none';
+        if (chevron) chevron.style.transform = 'rotate(0deg)';
+    }
+});
+
 window.filterBudgetCategory = function(cat, btn) {
     window.activeBudgetCategoryFilter = cat;
     const container = document.getElementById('odontogram-list-container');
@@ -2155,6 +2202,13 @@ window.filterBudgetCategory = function(cat, btn) {
         });
     }
     if (btn) btn.classList.add('active');
+
+    // Sync mobile label
+    const labelEl = document.getElementById('budget-area-accordion-label');
+    if (labelEl) {
+        labelEl.innerText = (cat === 'all') ? 'Selecciona área clínica' : `Área: ${cat}`;
+    }
+
     renderBudgetListView();
 };
 
@@ -2200,6 +2254,14 @@ async function renderBudgetListView(forceRefresh = false) {
     const elXray = document.getElementById('count-cat-xray'); if (elXray) elXray.innerText = countXray;
     const elLab = document.getElementById('count-cat-lab'); if (elLab) elLab.innerText = countLab;
     const elProc = document.getElementById('count-cat-proc'); if (elProc) elProc.innerText = countProc;
+
+    // Sincronizar contadores en versión mobile
+    const mAll = document.getElementById('mobile-count-cat-all'); if (mAll) mAll.innerText = countAll;
+    const mDental = document.getElementById('mobile-count-cat-dental'); if (mDental) mDental.innerText = countDental;
+    const mMed = document.getElementById('mobile-count-cat-med'); if (mMed) mMed.innerText = countMed;
+    const mXray = document.getElementById('mobile-count-cat-xray'); if (mXray) mXray.innerText = countXray;
+    const mLab = document.getElementById('mobile-count-cat-lab'); if (mLab) mLab.innerText = countLab;
+    const mProc = document.getElementById('mobile-count-cat-proc'); if (mProc) mProc.innerText = countProc;
 
     // Ordenar por orden de llegada: El último creado SIEMPRE de primero
     budgets.sort((a, b) => {
@@ -3052,7 +3114,7 @@ window.setupMedicalBaremoSearch = function() {
             // Top 30 matches
             const displayList = filtered.slice(0, 30);
             resultsContainer.innerHTML = displayList.map(item => {
-                const pUSD = parseFloat(item.price || 0);
+                const pUSD = parseFloat(item.priceUSD !== undefined && item.priceUSD !== null ? item.priceUSD : (item.price !== undefined ? item.price : 0));
                 const pBs = pUSD * rate;
                 const safeName = (item.name || '').replace(/"/g, '&quot;').replace(/'/g, "\\'");
                 const safeCode = (item.code || item.id || '').replace(/"/g, '&quot;').replace(/'/g, "\\'");
@@ -19941,13 +20003,36 @@ async function renderBillingView() {
         document.body.removeChild(printClone);
     };
 
-    document.getElementById('btn-pdf-invoice-final').onclick = () => {
-        const previewEl = document.getElementById('invoice-paper-preview');
+    document.getElementById('btn-pdf-invoice-final').onclick = async () => {
+        let previewEl = document.getElementById('invoice-paper-preview');
+        if (!previewEl || !previewEl.innerHTML.trim() || previewEl.innerHTML.includes('Cargando')) {
+            await refreshBillingLivePreview();
+            previewEl = document.getElementById('invoice-paper-preview');
+        }
         if (!previewEl) return;
 
-        const printClone = previewEl.cloneNode(true);
+        const container = document.createElement('div');
+        container.className = 'invoice-pdf-export-container';
+        container.style.width = '794px';
+        container.style.minWidth = '794px';
+        container.style.maxWidth = '794px';
+        container.style.background = '#ffffff';
+        container.style.color = '#0f172a';
+        container.style.margin = '0';
+        container.style.padding = '0';
+        container.style.boxSizing = 'border-box';
+        container.innerHTML = previewEl.innerHTML;
+
+        container.querySelectorAll('*').forEach(el => {
+            if (el.style) {
+                if (el.style.maxHeight) el.style.maxHeight = 'none';
+                if (el.style.overflow && el.style.overflow !== 'visible') el.style.overflow = 'visible';
+                if (el.style.overflowY && el.style.overflowY !== 'visible') el.style.overflowY = 'visible';
+            }
+        });
+
         const filename = `Factura_${(activeBillingInvoice && activeBillingInvoice.id) || 'Digital'}.pdf`;
-        generatePDFFromElement(printClone, filename);
+        await generatePDFFromElement(container, filename);
     };
 }
 
@@ -22479,11 +22564,15 @@ function getPaymentMethodLabel(method) {
 }
 
 async function generatePDFFromElement(element, filename) {
-    element.style.position = 'fixed';
+    element.style.position = 'absolute';
     element.style.top = '0';
     element.style.left = '0';
     element.style.width = '794px';
+    element.style.minWidth = '794px';
     element.style.maxWidth = '794px';
+    element.style.maxHeight = 'none';
+    element.style.height = 'auto';
+    element.style.overflow = 'visible';
     element.style.margin = '0';
     element.style.backgroundColor = '#ffffff';
     element.style.color = '#1e293b';
@@ -22493,6 +22582,15 @@ async function generatePDFFromElement(element, filename) {
     element.style.boxSizing = 'border-box';
     element.style.zIndex = '99999';
 
+    // Remove any height/scroll limits on all descendant elements
+    element.querySelectorAll('*').forEach(child => {
+        if (child.style) {
+            if (child.style.maxHeight) child.style.maxHeight = 'none';
+            if (child.style.overflow && child.style.overflow !== 'visible') child.style.overflow = 'visible';
+            if (child.style.overflowY && child.style.overflowY !== 'visible') child.style.overflowY = 'visible';
+        }
+    });
+
     const innerDoc = element.querySelector('.medical-doc-container');
     if (innerDoc) {
         innerDoc.style.maxWidth = '100%';
@@ -22501,6 +22599,9 @@ async function generatePDFFromElement(element, filename) {
         innerDoc.style.margin = '0';
         innerDoc.style.boxShadow = 'none';
         innerDoc.style.background = '#ffffff';
+        innerDoc.style.maxHeight = 'none';
+        innerDoc.style.height = 'auto';
+        innerDoc.style.overflow = 'visible';
     }
 
     if (!document.body.contains(element)) {
@@ -22532,22 +22633,32 @@ async function generatePDFFromElement(element, filename) {
         Swal.fire({
             title: 'Generando Documento PDF...',
             html: `
-                <div style="margin-bottom: 10px; font-weight: bold; color: #0284c7;">
-                    <i class="fa-solid fa-circle-notch fa-spin"></i> Compilando documento en alta resolución...
+                <div style="margin-bottom: 12px; font-weight: 700; color: #0284c7; font-size: 1rem;">
+                    <i class="fa-solid fa-circle-notch fa-spin text-cyan"></i> Compilando documento en alta resolución...
                 </div>
-                <div style="font-size: 0.82rem; color: #64748b;">
-                    Por favor espere mientras se descarga el archivo.<br>
-                    <span style="font-size: 0.76rem; color: #94a3b8;">Haga clic afuera, presione <b>Escape</b> o pulse <b>Cancelar</b> para detener.</span>
+                <div style="font-size: 0.84rem; color: #64748b; line-height: 1.4;">
+                    Por favor espere unos segundos mientras se procesa la descarga.<br>
+                    <span style="font-size: 0.78rem; color: #94a3b8; margin-top: 4px; display: inline-block;">Pulse <b>Cancelar</b> o presione <b>Escape</b> para detener.</span>
                 </div>
             `,
             showConfirmButton: false,
             showCancelButton: true,
-            cancelButtonText: 'Cancelar',
-            cancelButtonColor: '#64748b',
+            cancelButtonText: '<i class="fa-solid fa-xmark"></i> Cancelar',
+            cancelButtonColor: '#ef4444',
             allowOutsideClick: true,
             allowEscapeKey: true,
             didOpen: () => {
-                Swal.showLoading();
+                const cancelBtn = Swal.getCancelButton();
+                if (cancelBtn) {
+                    cancelBtn.disabled = false;
+                    cancelBtn.style.cursor = 'pointer';
+                    cancelBtn.onclick = () => {
+                        isCancelled = true;
+                        cleanupElement();
+                        Swal.close();
+                        resolve(false);
+                    };
+                }
 
                 setTimeout(async () => {
                     if (isCancelled) {
@@ -22569,6 +22680,7 @@ async function generatePDFFromElement(element, filename) {
                                     backgroundColor: '#ffffff', 
                                     logging: false, 
                                     width: 794,
+                                    windowWidth: 1200,
                                     scrollY: 0,
                                     scrollX: 0
                                 },
@@ -22596,6 +22708,7 @@ async function generatePDFFromElement(element, filename) {
                                 useCORS: true, 
                                 backgroundColor: '#ffffff', 
                                 width: 794,
+                                windowWidth: 1200,
                                 scrollY: 0,
                                 scrollX: 0
                             });
@@ -22644,6 +22757,10 @@ async function generatePDFFromElement(element, filename) {
                         resolve(true);
                     }
                 }, 350);
+            },
+            didClose: () => {
+                isCancelled = true;
+                cleanupElement();
             }
         }).then((result) => {
             if (result.dismiss === Swal.DismissReason.cancel || result.dismiss === Swal.DismissReason.backdrop || result.dismiss === Swal.DismissReason.esc) {

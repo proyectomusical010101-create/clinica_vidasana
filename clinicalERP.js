@@ -1471,7 +1471,10 @@
                     this._cachedBaremo = baremo || [];
                     if (baremo && baremo.length > 0) {
                         srvSelect.innerHTML = '<option value="">-- Seleccionar Servicio del Baremo --</option>' +
-                            baremo.map(b => `<option value="${b.code || b.id}" data-price="${b.price || 0}" data-hygienist="${b.hygienistBonus || 0}">${b.name} ($${parseFloat(b.price || 0).toFixed(2)})</option>`).join('');
+                            baremo.map(b => {
+                                const p = parseFloat(b.priceUSD !== undefined ? b.priceUSD : (b.price || 0));
+                                return `<option value="${b.code || b.id}" data-price="${p}" data-hygienist="${b.hygienistBonus || 0}">${b.name} ($${p.toFixed(2)})</option>`;
+                            }).join('');
                     } else {
                         srvSelect.innerHTML = '<option value="SRV-CUSTOM" data-price="0">Servicio Personalizado / Consulta</option>';
                     }
@@ -1589,7 +1592,7 @@
             const itemsHtml = matches.map(b => {
                 const safeCode = String(b.code || b.id || '').replace(/'/g, "\\'");
                 const safeName = (b.name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
-                const price = parseFloat(b.price || 0).toFixed(2);
+                const price = parseFloat(b.priceUSD !== undefined ? b.priceUSD : (b.price || 0)).toFixed(2);
                 const areaBadge = b.area ? `<span style="font-size: 0.72rem; padding: 1px 6px; border-radius: 4px; background: #f1f5f9; color: #475569; font-weight: 600;">${b.area}</span>` : '';
 
                 return `
@@ -1625,7 +1628,8 @@
             }
 
             if (searchInput && srv) {
-                searchInput.value = `${srv.name} ($${parseFloat(srv.price || 0).toFixed(2)})`;
+                const srvPrice = parseFloat(srv.priceUSD !== undefined ? srv.priceUSD : (srv.price || 0)).toFixed(2);
+                searchInput.value = `${srv.name} ($${srvPrice})`;
                 if (clearBtn) clearBtn.style.display = 'block';
                 if (badge) badge.style.display = 'inline-flex';
             }
