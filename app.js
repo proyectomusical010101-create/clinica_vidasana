@@ -15,6 +15,113 @@ window.onerror = function (msg, url, lineNo, columnNo, error) {
     return false;
 };
 
+// ==========================================================================
+// MOTOR UNIVERSAL DE IMPRESIÓN Y APERTURA SEGURA (ANTI-BLOQUEO DE POPUPS)
+// Soluciona definitivamente los bloqueos de "Ventana bloqueada" en cualquier navegador
+// ==========================================================================
+
+window.safeOpenExternalUrl = function(url) {
+    if (!url) return;
+    try {
+        const a = document.createElement('a');
+        a.href = url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+            try { a.remove(); } catch(e) {}
+        }, 150);
+    } catch(err) {
+        console.warn('safeOpenExternalUrl fallback:', err);
+        window.open(url, '_blank');
+    }
+};
+
+window.universalPrintHTML = function(htmlContent, title = 'Documento Clínico') {
+    if (!htmlContent) return;
+
+    try {
+        // Eliminar iframe previo si existiera
+        const oldIframe = document.getElementById('vidasana-universal-print-iframe');
+        if (oldIframe) {
+            try { oldIframe.remove(); } catch(e) {}
+        }
+
+        const iframe = document.createElement('iframe');
+        iframe.id = 'vidasana-universal-print-iframe';
+        iframe.style.position = 'fixed';
+        iframe.style.right = '0';
+        iframe.style.bottom = '0';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = '0';
+        iframe.style.opacity = '0';
+        iframe.style.pointerEvents = 'none';
+        iframe.style.zIndex = '-9999';
+        iframe.setAttribute('aria-hidden', 'true');
+        document.body.appendChild(iframe);
+
+        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+
+        let finalDoc = '';
+        if (htmlContent.trim().toLowerCase().startsWith('<!doctype') || htmlContent.trim().toLowerCase().startsWith('<html')) {
+            finalDoc = htmlContent;
+        } else {
+            finalDoc = `
+                <!DOCTYPE html>
+                <html lang="es">
+                <head>
+                    <meta charset="UTF-8">
+                    <title>${title}</title>
+                    <link rel="stylesheet" href="styles.css?v=306">
+                    <style>
+                        @page { size: auto; margin: 10mm; }
+                        body {
+                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+                            margin: 0;
+                            padding: 20px;
+                            background: #ffffff !important;
+                            color: #0f172a !important;
+                            -webkit-print-color-adjust: exact !important;
+                            print-color-adjust: exact !important;
+                        }
+                    </style>
+                </head>
+                <body>
+                    ${htmlContent}
+                </body>
+                </html>
+            `;
+        }
+
+        iframeDoc.open();
+        iframeDoc.write(finalDoc);
+        iframeDoc.close();
+
+        // Esperar a que los estilos e imágenes se rendericen en el iframe interno
+        setTimeout(() => {
+            try {
+                iframe.contentWindow.focus();
+                iframe.contentWindow.print();
+            } catch (err) {
+                console.warn('Iframe print error, usando fallback in-page:', err);
+                const fallbackDiv = document.createElement('div');
+                fallbackDiv.className = 'print-section';
+                fallbackDiv.innerHTML = htmlContent;
+                document.body.appendChild(fallbackDiv);
+                window.print();
+                setTimeout(() => {
+                    try { fallbackDiv.remove(); } catch(e) {}
+                }, 1000);
+            }
+        }, 450);
+    } catch (e) {
+        console.error('Error en universalPrintHTML:', e);
+        window.print();
+    }
+};
+
 document.addEventListener('DOMContentLoaded', async () => {
     // 1. Instant local storage seed & initial render setup
     initStorage();
@@ -2213,8 +2320,10 @@ async function renderBudgetListView(forceRefresh = false) {
                 actionButtons = `
                     <button class="btn btn-xs btn-outline" onclick="loadBudgetIntoEditor('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer;" title="Abrir y Editar Presupuesto"><i class="fa-solid fa-folder-open"></i> Abrir</button>
                     ${b.category && b.category !== 'Odontología' 
-                        ? `<button class="btn btn-xs btn-outline" onclick="window.printMedicalBudgetPDF('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; color: #0284c7; border-color: #bae6fd;" title="Imprimir Presupuesto PDF"><i class="fa-solid fa-file-pdf"></i> PDF</button>`
-                        : ''
+                        ? `<button class="btn btn-xs btn-outline" onclick="window.printMedicalBudget('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer;" title="Imprimir Presupuesto"><i class="fa-solid fa-print"></i> Imprimir</button>
+                           <button class="btn btn-xs btn-outline" onclick="window.printMedicalBudgetPDF('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; color: #0284c7; border-color: #bae6fd;" title="Descargar Presupuesto PDF"><i class="fa-solid fa-file-pdf"></i> PDF</button>`
+                        : `<button class="btn btn-xs btn-outline" onclick="window.printOdontologyBudget('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer;" title="Imprimir Presupuesto"><i class="fa-solid fa-print"></i> Imprimir</button>
+                           <button class="btn btn-xs btn-outline" onclick="window.downloadOdontologyBudgetPDF('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; color: #0284c7; border-color: #bae6fd;" title="Descargar Presupuesto PDF"><i class="fa-solid fa-file-pdf"></i> PDF</button>`
                     }
                     <button class="btn btn-xs btn-success" onclick="${b.category && b.category !== 'Odontología' ? `window.sendMedicalBudgetWhatsApp('${b.id}')` : `window.sendBudgetWhatsApp('${b.id}')`}" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; background:#25D366; border:none; color:#fff;" title="Enviar Presupuesto por WhatsApp"><i class="fa-brands fa-whatsapp"></i> WhatsApp</button>
                     ${isApproved ? `<button class="btn btn-xs btn-success" onclick="window.finalizeBudgetDirect('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; background:#10b981; border:none; color:#fff;" title="Finalizar Tratamiento / Presupuesto"><i class="fa-solid fa-circle-check"></i> Finalizar</button>` : ''}
@@ -2331,22 +2440,26 @@ window.sendBudgetWhatsApp = async function(budgetId) {
             return;
         }
 
-        // VALIDAR QUE EL PRESUPUESTO ESTÉ APROBADO ANTES DE ENVIARLO POR WHATSAPP
-        const status = String(budget.status || '').toLowerCase();
-        const isApproved = status === 'aprobado' || status === 'approved' || status === 'facturado' || status === 'completada' || status === 'finalizado';
-        if (!isApproved) {
-            Swal.fire({
-                icon: 'warning',
-                title: 'Presupuesto no Aprobado',
-                text: 'No se puede enviar el presupuesto al paciente por WhatsApp porque aún está en estado Borrador. Debe Aprobar el presupuesto antes de enviarlo.'
+        const patients = await SupabaseDataService.getPatients();
+        const patient = patients.find(p => String(p.id) === String(budget.patientId)) || { fullname: 'Paciente', phone: '' };
+        
+        let targetPhone = patient.phone ? patient.phone.replace(/[^0-9]/g, '') : '';
+        if (!targetPhone) {
+            const { value: typedPhone } = await Swal.fire({
+                title: '<i class="fa-brands fa-whatsapp text-green"></i> Enviar Presupuesto por WhatsApp',
+                input: 'text',
+                inputLabel: 'Número de WhatsApp del Paciente',
+                placeholder: '04141234567 o +584141234567',
+                showCancelButton: true,
+                confirmButtonText: 'Continuar y Enviar',
+                cancelButtonText: 'Cancelar'
             });
-            return;
+            if (!typedPhone) return;
+            targetPhone = typedPhone.replace(/[^0-9]/g, '');
         }
 
-        const patients = await SupabaseDataService.getPatients();
-        const patient = patients.find(p => String(p.id) === String(budget.patientId));
-        if (!patient || !patient.phone) {
-            Swal.fire({ icon: 'warning', title: 'Sin Teléfono', text: 'El paciente asociado a este presupuesto no tiene un número de teléfono / WhatsApp registrado.' });
+        if (!targetPhone) {
+            Swal.fire({ icon: 'warning', title: 'Sin Teléfono', text: 'Debe ingresar un número telefónico válido.' });
             return;
         }
 
@@ -2357,7 +2470,7 @@ window.sendBudgetWhatsApp = async function(budgetId) {
         const paymentMode = budget.paymentTerms || 'Contado';
 
         const msg = WhatsAppService.generateBudgetMessage(patient, items, totalUSD, paymentMode, '', subtotalUSD, discountPct, paymentMode, budget.id);
-        WhatsAppService.sendToPatient(patient.phone, msg);
+        WhatsAppService.sendToPatient(targetPhone, msg);
     } catch(err) {
         console.error("Error sending budget via WhatsApp:", err);
         Swal.fire({ icon: 'error', title: 'Error', text: err.message || err });
@@ -3348,6 +3461,91 @@ window.printMedicalBudgetPDF = async function(budgetId = null) {
     } catch(err) {
         console.error('Error printing medical budget PDF:', err);
         Swal.fire({ icon: 'error', title: 'Error al Generar PDF', text: err.message || err });
+    }
+};
+
+window.printMedicalBudget = async function(budgetId = null) {
+    let budget = null;
+    if (budgetId) {
+        const invoices = await SupabaseDataService.getInvoices(true);
+        budget = invoices.find(inv => String(inv.id) === String(budgetId));
+    } else if (window.activeEditingMedicalBudgetId) {
+        const invoices = await SupabaseDataService.getInvoices();
+        budget = invoices.find(inv => String(inv.id) === String(window.activeEditingMedicalBudgetId));
+    }
+
+    if (!budget) {
+        const patId = document.getElementById('med-budget-patient-select')?.value;
+        if (patId && window.currentMedicalBudgetItems && window.currentMedicalBudgetItems.length > 0) {
+            const saved = await window.saveMedicalBudget('Presupuesto', true);
+            if (saved) budget = saved;
+        }
+    }
+
+    if (!budget) {
+        Swal.fire({ icon: 'warning', title: 'Presupuesto Incompleto', text: 'Seleccione un paciente y agregue al menos un procedimiento antes de imprimir.' });
+        return;
+    }
+
+    try {
+        const patients = await SupabaseDataService.getPatients();
+        const patient = patients.find(p => String(p.id) === String(budget.patientId)) || {
+            fullname: budget.patientName || 'Paciente Clínico',
+            id: budget.patientId || 'N/A',
+            phone: ''
+        };
+        const rate = getExchangeRate();
+
+        const stationery = await SupabaseDataService.getStationeryConfig();
+        const busData = getClinicBusData(stationery);
+        const logoBase64 = await toDataURL(busData.logoUrl || stationery.logoUrl);
+
+        const items = (budget.items || []).map(it => ({
+            name: it.name || 'Procedimiento Médico',
+            description: it.code ? `Cód: ${it.code}` : 'Servicio Clínico Especializado',
+            qty: it.qty || 1,
+            price: parseFloat(it.price || 0),
+            discount: parseFloat(it.discount || 0),
+            total: parseFloat(it.totalUSD || (it.price * (it.qty || 1)))
+        }));
+
+        const totalRef = parseFloat(budget.totalRef || 0);
+        const totalBcv = parseFloat(budget.totalBcv || (totalRef * rate));
+
+        const docHtml = buildMedicalDocumentHTML({
+            docType: 'presupuesto',
+            docTitle: `Presupuesto: ${budget.category || 'Consultas Médicas'}`,
+            emissionDate: budget.invoiceDate || new Date().toISOString().split('T')[0],
+            controlNumber: budget.id,
+            paymentMethod: budget.paymentMethod ? getPaymentMethodLabel(budget.paymentMethod) : 'Tasa Oficial BCV',
+            clinicName: busData.name,
+            clinicPhone: busData.phone,
+            clinicAddress: busData.address,
+            logoUrl: logoBase64,
+            doctorName: budget.doctor || busData.doctor || 'Médico Especialista',
+            doctorSpecialty: budget.category || 'Medicina General & Especialidades',
+            doctorPhone: busData.phone,
+            patientName: patient.fullname || budget.patientName || 'Paciente',
+            patientId: patient.cedula || patient.id || 'N/A',
+            patientPhone: patient.phone || 'N/A',
+            items: items,
+            subtotalUSD: totalRef,
+            discountPct: 0,
+            discountUSD: 0,
+            totalUSD: totalRef,
+            totalVES: `Bs. ${totalBcv.toFixed(2)}`,
+            approvedAmountUSD: totalRef,
+            paymentTerms: `Validez: ${budget.validUntil || 30} días continuos. Tasa oficial BCV aplicada: ${rate.toFixed(2)} Bs./USD.`,
+            bankingDetails: busData.bankInfo,
+            observations: budget.notes || 'El presente presupuesto no incluye medicamentos no especificados. Válido bajo la tasa oficial del BCV del día de cancelación.',
+            consentText: 'Declaro haber sido informado sobre los procedimientos clínicos descritos en este presupuesto y autorizo la ejecución de los tratamientos bajo la tasa oficial BCV de la clínica.',
+            footerNote: busData.footer
+        });
+
+        window.universalPrintHTML(docHtml, `Presupuesto - ${budget.id}`);
+    } catch(err) {
+        console.error('Error printing medical budget:', err);
+        Swal.fire({ icon: 'error', title: 'Error al Imprimir', text: err.message || err });
     }
 };
 
@@ -5415,7 +5613,7 @@ window.sendBirthdayWhatsApp = async function(patientId, customText) {
     const msg = customText || window.mergeBirthdayMessage(p, details ? details.turningAge : '');
 
     const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
-    window.open(waUrl, '_blank');
+    window.safeOpenExternalUrl(waUrl);
 
     // Confirm congratulation status persistence to cloud
     const result = await Swal.fire({
@@ -5500,7 +5698,7 @@ window.sendSelectedBirthdaysWhatsApp = async function() {
 
         const msg = window.mergeBirthdayMessage({ fullname: patName }, age);
         const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
-        window.open(waUrl, '_blank');
+        window.safeOpenExternalUrl(waUrl);
 
         // Automatically set status to congratulated
         await SupabaseDataService.updatePatientBirthdayCongratulated(patId, new Date().getFullYear(), 'congratulated');
@@ -7043,58 +7241,36 @@ window.printDirectSaleReceipt = async function(docId = null) {
     const paidVal = doc.paidRef !== undefined ? doc.paidRef : (doc.metadata?.paidUSD || doc.totalRef || 0);
     const balanceVal = doc.balanceRef !== undefined ? doc.balanceRef : (doc.metadata?.balanceUSD || 0);
 
-    const printWin = window.open('', '_blank');
-    if (!printWin) {
-        Swal.fire({ icon: 'warning', title: 'Ventana bloqueada', text: 'Por favor permita ventanas emergentes para imprimir.' });
-        return;
-    }
-
-    printWin.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>${docTitle} - ${doc.id}</title>
-            <style>
-                body { font-family: 'Segoe UI', Arial, sans-serif; margin: 30px; color: #1e293b; line-height: 1.4; }
-                .header-table { width: 100%; border-bottom: 2px solid #0d9488; padding-bottom: 12px; margin-bottom: 20px; }
-                .doc-badge { background: #0d9488; color: white; padding: 4px 10px; border-radius: 6px; font-weight: bold; font-size: 13pt; }
-                .box { border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; margin-bottom: 16px; font-size: 10.5pt; }
-                table.data { width: 100%; border-collapse: collapse; margin-top: 10px; }
-                table.data th { background: #f8fafc; border-bottom: 2px solid #cbd5e1; padding: 8px 6px; text-align: left; font-size: 10pt; text-transform: uppercase; }
-                .totals-box { margin-top: 20px; float: right; width: 280px; font-size: 11pt; }
-                .totals-box div { display: flex; justify-content: space-between; padding: 4px 0; }
-                .footer { clear: both; margin-top: 50px; text-align: center; font-size: 9.5pt; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 12px; }
-            </style>
-        </head>
-        <body>
-            <table class="header-table">
+    const receiptHtml = `
+        <div style="font-family: 'Segoe UI', Arial, sans-serif; padding: 20px; color: #1e293b; line-height: 1.4; background: #fff;">
+            <table style="width: 100%; border-bottom: 2px solid #0d9488; padding-bottom: 12px; margin-bottom: 20px;">
                 <tr>
                     <td>
                         <h2 style="margin: 0; color: #0d9488; font-size: 18pt;">${clinicName}</h2>
                         <div style="font-size: 9pt; color: #64748b; margin-top: 2px;">Centro Médico y Odontológico Integral</div>
                     </td>
                     <td style="text-align: right;">
-                        <span class="doc-badge">${docTitle}</span>
+                        <span style="background: #0d9488; color: white; padding: 4px 10px; border-radius: 6px; font-weight: bold; font-size: 13pt;">${docTitle}</span>
                         <div style="font-weight: bold; font-size: 12pt; margin-top: 4px; color: #0f172a;">N° ${doc.id}</div>
                         <div style="font-size: 9.5pt; color: #64748b;">Fecha: ${doc.invoiceDate || new Date().toISOString().split('T')[0]}</div>
                     </td>
                 </tr>
             </table>
 
-            <div class="box">
+            <div style="border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; margin-bottom: 16px; font-size: 10.5pt; background: #f8fafc;">
                 <strong>Datos del Paciente:</strong><br>
                 Nombre Completo: <strong>${p ? p.fullname : (doc.patientName || doc.patientId)}</strong><br>
                 Cédula / ID: <strong>${doc.patientId}</strong> • Teléfono: <strong>${p ? p.phone : 'N/A'}</strong><br>
                 Médico / Especialista: <strong>${doc.doctor || 'Dr. Médico Tratante'}</strong>
             </div>
 
-            <table class="data">
+            <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
                 <thead>
-                    <tr>
-                        <th>Descripción del Servicio</th>
-                        <th style="text-align: center;">Cant</th>
-                        <th style="text-align: right;">Precio Unit. ($)</th>
-                        <th style="text-align: right;">Total ($)</th>
+                    <tr style="background: #f1f5f9; border-bottom: 2px solid #cbd5e1;">
+                        <th style="padding: 8px 6px; text-align: left; font-size: 10pt; text-transform: uppercase;">Descripción del Servicio</th>
+                        <th style="padding: 8px 6px; text-align: center; font-size: 10pt; text-transform: uppercase;">Cant</th>
+                        <th style="padding: 8px 6px; text-align: right; font-size: 10pt; text-transform: uppercase;">Precio Unit. ($)</th>
+                        <th style="padding: 8px 6px; text-align: right; font-size: 10pt; text-transform: uppercase;">Total ($)</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -7102,10 +7278,10 @@ window.printDirectSaleReceipt = async function(docId = null) {
                 </tbody>
             </table>
 
-            <div class="totals-box">
-                <div><span>Total Servicios:</span> <strong>$${parseFloat(doc.totalRef || 0).toFixed(2)} USD</strong></div>
-                <div><span>Tasa BCV Oficial:</span> <span>Bs. ${rate.toFixed(2)}</span></div>
-                <div><span>Equivalente en Bs:</span> <span style="color:#0284c7; font-weight:bold;">Bs. ${(parseFloat(doc.totalRef || 0) * rate).toFixed(2)}</span></div>
+            <div style="margin-top: 20px; float: right; width: 280px; font-size: 11pt;">
+                <div style="display: flex; justify-content: space-between; padding: 3px 0;"><span>Total Servicios:</span> <strong>$${parseFloat(doc.totalRef || 0).toFixed(2)} USD</strong></div>
+                <div style="display: flex; justify-content: space-between; padding: 3px 0;"><span>Tasa BCV Oficial:</span> <span>Bs. ${rate.toFixed(2)}</span></div>
+                <div style="display: flex; justify-content: space-between; padding: 3px 0;"><span>Equivalente en Bs:</span> <span style="color:#0284c7; font-weight:bold;">Bs. ${(parseFloat(doc.totalRef || 0) * rate).toFixed(2)}</span></div>
                 <hr style="border: none; border-top: 1px solid #cbd5e1; margin: 6px 0;">
                 ${(doc.is_cashea || doc.casheaDetails) ? `
                     <div style="color: #0369a1; font-weight: bold;"><span>Plan de Pago:</span> <span>Financiamiento Cashea</span></div>
@@ -7119,21 +7295,117 @@ window.printDirectSaleReceipt = async function(docId = null) {
                 `}
             </div>
 
-            <div class="footer">
+            <div style="clear: both; margin-top: 50px; text-align: center; font-size: 9.5pt; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 12px;">
                 ${doc.footerText ? `<p style="margin-bottom: 8px;"><em>${doc.footerText}</em></p>` : ''}
                 ¡Gracias por su confianza! Comprobante emitido válidamente por el sistema clínico.
             </div>
-            <script>
-                window.onload = function() { window.print(); };
-            </script>
-        </body>
-        </html>
-    `);
-    printWin.document.close();
+        </div>
+    `;
+
+    window.universalPrintHTML(receiptHtml, `${docTitle} - ${doc.id}`);
 };
 
 window.downloadDirectSaleReceiptPDF = async function(docId = null) {
-    window.printDirectSaleReceipt(docId);
+    let doc = window.lastProcessedDirectSaleDoc;
+    if (docId) {
+        const invoices = await SupabaseDataService.getInvoices();
+        doc = invoices.find(i => String(i.id) === String(docId));
+    }
+
+    if (!doc) {
+        Swal.fire({ icon: 'warning', title: 'Comprobante no encontrado', text: 'No se encontraron datos para descargar el PDF.' });
+        return;
+    }
+
+    const patients = await SupabaseDataService.getPatients();
+    const p = patients.find(pat => String(pat.id) === String(doc.patientId));
+    const clinicName = (typeof SupabaseDataService !== 'undefined' && SupabaseDataService._clinicConfig?.clinic_name) || 'Clínica VidaSana';
+    const rate = getExchangeRate();
+
+    const isFull = doc.status === 'Pagado' || doc.id.startsWith('FAC-');
+    const docTitle = isFull ? 'FACTURA OFICIAL' : 'RECIBO DE ABONO';
+
+    const itemsHtml = (doc.items || []).map((it, idx) => `
+        <tr style="border-bottom: 1px solid #e2e8f0; font-size: 11pt;">
+            <td style="padding: 8px 6px;">${it.name || it.description}</td>
+            <td style="padding: 8px 6px; text-align: center;">${it.qty || 1}</td>
+            <td style="padding: 8px 6px; text-align: right;">$${parseFloat(it.price || 0).toFixed(2)}</td>
+            <td style="padding: 8px 6px; text-align: right; font-weight: bold;">$${parseFloat(it.totalUSD || (it.price * (it.qty || 1))).toFixed(2)}</td>
+        </tr>
+    `).join('');
+
+    const paidVal = doc.paidRef !== undefined ? doc.paidRef : (doc.metadata?.paidUSD || doc.totalRef || 0);
+    const balanceVal = doc.balanceRef !== undefined ? doc.balanceRef : (doc.metadata?.balanceUSD || 0);
+
+    const stationery = await SupabaseDataService.getStationeryConfig();
+    const busData = getClinicBusData(stationery);
+    const logoBase64 = await toDataURL(busData.logoUrl || stationery.logoUrl);
+
+    const container = document.createElement('div');
+    container.innerHTML = `
+        <div style="font-family: 'Segoe UI', Arial, sans-serif; padding: 25px; color: #1e293b; line-height: 1.4; background: #fff;">
+            <table style="width: 100%; border-bottom: 2px solid #0d9488; padding-bottom: 12px; margin-bottom: 20px;">
+                <tr>
+                    <td>
+                        ${logoBase64 ? `<img src="${logoBase64}" style="max-height: 55px; margin-bottom: 6px; display: block;">` : ''}
+                        <h2 style="margin: 0; color: #0d9488; font-size: 18pt;">${clinicName}</h2>
+                        <div style="font-size: 9pt; color: #64748b; margin-top: 2px;">Centro Médico y Odontológico Integral</div>
+                    </td>
+                    <td style="text-align: right;">
+                        <span style="background: #0d9488; color: white; padding: 4px 10px; border-radius: 6px; font-weight: bold; font-size: 13pt;">${docTitle}</span>
+                        <div style="font-weight: bold; font-size: 12pt; margin-top: 4px; color: #0f172a;">N° ${doc.id}</div>
+                        <div style="font-size: 9.5pt; color: #64748b;">Fecha: ${doc.invoiceDate || new Date().toISOString().split('T')[0]}</div>
+                    </td>
+                </tr>
+            </table>
+
+            <div style="border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; margin-bottom: 16px; font-size: 10.5pt; background: #f8fafc;">
+                <strong>Datos del Paciente:</strong><br>
+                Nombre Completo: <strong>${p ? p.fullname : (doc.patientName || doc.patientId)}</strong><br>
+                Cédula / ID: <strong>${doc.patientId}</strong> • Teléfono: <strong>${p ? p.phone : 'N/A'}</strong><br>
+                Médico / Especialista: <strong>${doc.doctor || 'Dr. Médico Tratante'}</strong>
+            </div>
+
+            <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                <thead>
+                    <tr style="background: #f1f5f9; border-bottom: 2px solid #cbd5e1;">
+                        <th style="padding: 8px 6px; text-align: left; font-size: 10pt; text-transform: uppercase;">Descripción del Servicio</th>
+                        <th style="padding: 8px 6px; text-align: center; font-size: 10pt; text-transform: uppercase;">Cant</th>
+                        <th style="padding: 8px 6px; text-align: right; font-size: 10pt; text-transform: uppercase;">Precio Unit. ($)</th>
+                        <th style="padding: 8px 6px; text-align: right; font-size: 10pt; text-transform: uppercase;">Total ($)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${itemsHtml}
+                </tbody>
+            </table>
+
+            <div style="margin-top: 20px; float: right; width: 280px; font-size: 11pt;">
+                <div style="display: flex; justify-content: space-between; padding: 3px 0;"><span>Total Servicios:</span> <strong>$${parseFloat(doc.totalRef || 0).toFixed(2)} USD</strong></div>
+                <div style="display: flex; justify-content: space-between; padding: 3px 0;"><span>Tasa BCV Oficial:</span> <span>Bs. ${rate.toFixed(2)}</span></div>
+                <div style="display: flex; justify-content: space-between; padding: 3px 0;"><span>Equivalente en Bs:</span> <span style="color:#0284c7; font-weight:bold;">Bs. ${(parseFloat(doc.totalRef || 0) * rate).toFixed(2)}</span></div>
+                <hr style="border: none; border-top: 1px solid #cbd5e1; margin: 6px 0;">
+                ${(doc.is_cashea || doc.casheaDetails) ? `
+                    <div style="color: #0369a1; font-weight: bold;"><span>Plan de Pago:</span> <span>Financiamiento Cashea</span></div>
+                    ${doc.casheaDetails?.surchargeAmountUSD > 0 ? `<div style="font-size: 10pt; color: #0284c7;"><span>Recargo Cashea (${doc.casheaDetails.surchargePct}%):</span> <span>+$${doc.casheaDetails.surchargeAmountUSD.toFixed(2)} USD</span></div>` : ''}
+                    <div style="font-size: 11pt; color: #059669;"><span>Inicial Pagada en Recepción:</span> <strong>$${parseFloat(doc.casheaDetails?.initialPaidUSD || paidVal).toFixed(2)} USD</strong></div>
+                    <div style="font-size: 11.5pt; color: #0284c7;"><span>Financiado por Cashea:</span> <strong>$${parseFloat(doc.casheaDetails?.financedUSD || (doc.totalRef - paidVal)).toFixed(2)} USD</strong></div>
+                    <div style="font-size: 8.5pt; color: #64748b; font-style: italic; margin-top: 4px;">* Las cuotas quincenales son abonadas por el paciente directamente en la App Cashea.</div>
+                ` : `
+                    <div style="font-size: 12pt; color: #059669;"><span>Monto Cobrado / Pagado:</span> <strong>$${parseFloat(paidVal).toFixed(2)} USD</strong></div>
+                    ${balanceVal > 0 ? `<div style="display: flex; justify-content: space-between; padding: 3px 0; font-size: 11pt; color: #e11d48;"><span>Saldo Restante Pendiente:</span> <strong>$${parseFloat(balanceVal).toFixed(2)} USD</strong></div>` : ''}
+                `}
+            </div>
+
+            <div style="clear: both; margin-top: 50px; text-align: center; font-size: 9.5pt; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 12px;">
+                ${doc.footerText ? `<p style="margin-bottom: 8px;"><em>${doc.footerText}</em></p>` : ''}
+                ¡Gracias por su confianza! Comprobante emitido válidamente por el sistema clínico.
+            </div>
+        </div>
+    `;
+
+    const filename = `Comprobante_${doc.id}_${(p ? p.fullname : 'Paciente').replace(/\s+/g, '_')}.pdf`;
+    await generatePDFFromElement(container, filename);
 };
 
 window.sendDirectSaleReceiptWhatsApp = async function(docId = null) {
@@ -7189,7 +7461,7 @@ window.sendDirectSaleReceiptWhatsApp = async function(docId = null) {
     msg += `\n¡Agradecemos su preferencia y quedamos a su entera orden para su próximo control!`;
 
     const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
-    window.open(waUrl, '_blank');
+    window.safeOpenExternalUrl(waUrl);
 };
 
 // ============================================================================
@@ -9818,7 +10090,7 @@ window.addApptToGoogleCalendarDirect = async function(apptId) {
     const appt = appointments.find(a => a.id === apptId);
     if (!appt) return;
     const url = window.getGoogleCalendarLinkForAppt(appt);
-    window.open(url, '_blank');
+    window.safeOpenExternalUrl(url);
 };
 
 window.sendWhatsAppReminderForAppt = async function(apptId) {
@@ -15009,26 +15281,28 @@ function initGlobalEvents() {
             const notes = document.getElementById('budget-notes').value;
             const consentText = document.getElementById('consent-text').value;
 
-            // VALIDAR QUE EL PRESUPUESTO ESTÉ APROBADO ANTES DE ENVIARLO
-            let isApproved = false;
-            if (activeEditingBudgetId) {
-                const invoices = await SupabaseDataService.getInvoices();
-                const inv = invoices.find(i => String(i.id) === String(activeEditingBudgetId));
-                const st = String(inv?.status || '').toLowerCase();
-                isApproved = st === 'aprobado' || st === 'approved' || st === 'facturado' || st === 'completada' || st === 'finalizado';
+            let targetPhone = patient.phone ? patient.phone.replace(/[^0-9]/g, '') : '';
+            if (!targetPhone) {
+                const { value: typedPhone } = await Swal.fire({
+                    title: '<i class="fa-brands fa-whatsapp text-green"></i> Enviar Presupuesto por WhatsApp',
+                    input: 'text',
+                    inputLabel: 'Número de WhatsApp del Paciente',
+                    placeholder: '04141234567 o +584141234567',
+                    showCancelButton: true,
+                    confirmButtonText: 'Continuar y Enviar',
+                    cancelButtonText: 'Cancelar'
+                });
+                if (!typedPhone) return;
+                targetPhone = typedPhone.replace(/[^0-9]/g, '');
             }
 
-            if (!isApproved) {
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Presupuesto no Aprobado',
-                    text: 'No se puede enviar el presupuesto al paciente por WhatsApp porque aún no ha sido Aprobado. Debe hacer clic en "Aprobar Presupuesto" antes de enviarlo.'
-                });
+            if (!targetPhone) {
+                Swal.fire({ icon: 'warning', title: 'Sin Teléfono', text: 'Debe ingresar un número de teléfono válido.' });
                 return;
             }
 
             const msg = WhatsAppService.generateBudgetMessage(patient, currentBudgetItems, totalUSD, paymentModeText, notes, subtotalUSD, discountPct, paymentMethodLabel, activeEditingBudgetId);
-            WhatsAppService.sendToPatient(patient.phone, msg);
+            WhatsAppService.sendToPatient(targetPhone, msg);
         };
     }
 
@@ -15068,11 +15342,7 @@ function initGlobalEvents() {
                 return;
             }
             
-            document.body.appendChild(printContainer);
-            printContainer.classList.add('print-section');
-            window.print();
-            printContainer.classList.remove('print-section');
-            document.body.removeChild(printContainer);
+            window.universalPrintHTML(printContainer.innerHTML, 'Presupuesto Odontológico');
         };
     }
 
@@ -18497,61 +18767,108 @@ function buildRecipeDocumentHTML(opts) {
     `;
 }
 
-async function generateBudgetHTMLContainer() {
-    const activeId = getActivePatientId();
-    if (!activeId) return null;
-    const patients = await SupabaseDataService.getPatients();
-    const patient = patients.find(p => p.id === activeId);
-    if (!patient) return null;
-
+async function generateBudgetHTMLContainer(budgetId = null) {
+    let budget = null;
+    let patient = null;
+    let items = [];
     let subtotalUSD = 0;
-    currentBudgetItems.forEach(item => {
-        subtotalUSD += item.price || 0;
-    });
+    let discountPct = 0;
+    let totalUSD = 0;
+    let paymentModeText = 'Contado';
+    let budgetPaymentMethodText = 'Transferencia / Pago Móvil';
+    let notes = '';
+    let consentText = '';
+    let docSig = '';
+    let patSig = '';
+    let budgetCtrlId = '';
 
-    const discountPct = parseFloat(document.getElementById('budget-discount-input').value) || 0;
-    const discountAmountUSD = subtotalUSD * (discountPct / 100);
-    const totalUSD = subtotalUSD - discountAmountUSD;
+    if (budgetId) {
+        const invoices = await SupabaseDataService.getInvoices(true);
+        budget = invoices.find(i => String(i.id) === String(budgetId));
+        if (budget) {
+            const patients = await SupabaseDataService.getPatients();
+            patient = patients.find(p => String(p.id) === String(budget.patientId)) || {
+                fullname: budget.patientName || 'Paciente',
+                id: budget.patientId || 'N/A',
+                phone: ''
+            };
+            budgetCtrlId = budget.id;
+            items = (budget.items || []).map(item => ({
+                name: `${item.name} (${item.tooth && item.tooth !== 'General' ? 'Pieza ' + item.tooth : 'General'} - ${item.face || 'Gnl'})`,
+                description: item.specialist ? `Especialista: ${item.specialist}` : 'Tratamiento odontológico especializado',
+                qty: item.qty || 1,
+                price: parseFloat(item.price || 0),
+                total: parseFloat(item.price || 0) * (item.qty || 1)
+            }));
+            subtotalUSD = items.reduce((acc, it) => acc + it.total, 0);
+            discountPct = (budget.metadata && budget.metadata.discountPct) || 0;
+            totalUSD = budget.totalRef !== undefined ? parseFloat(budget.totalRef) : (subtotalUSD * (1 - discountPct / 100));
+            paymentModeText = budget.paymentTerms || 'Contado';
+            budgetPaymentMethodText = budget.paymentMethod || 'Pago Móvil';
+            notes = budget.observations || (budget.metadata && budget.metadata.observations) || '';
+            consentText = (budget.metadata && budget.metadata.consentText) || '';
+            docSig = budget.doctorSignature || '';
+            patSig = budget.patientSignature || '';
+        }
+    }
 
-    const paymentModeSelect = document.getElementById('payment-mode-select');
-    const paymentModeText = paymentModeSelect ? paymentModeSelect.options[paymentModeSelect.selectedIndex].text : 'Contado';
-    const budgetPaymentMethod = document.getElementById('budget-payment-method');
-    const budgetPaymentMethodText = budgetPaymentMethod ? budgetPaymentMethod.options[budgetPaymentMethod.selectedIndex].text : 'Transferencia / Pago Móvil';
-    const notes = document.getElementById('budget-notes') ? document.getElementById('budget-notes').value : '';
-    const consentText = document.getElementById('consent-text') ? document.getElementById('consent-text').value : '';
+    if (!budget) {
+        const activeId = getActivePatientId();
+        if (!activeId) return null;
+        const patients = await SupabaseDataService.getPatients();
+        patient = patients.find(p => p.id === activeId);
+        if (!patient) return null;
+
+        budgetCtrlId = activeEditingBudgetId || `PR-2026-${Date.now().toString().slice(-5)}`;
+        currentBudgetItems.forEach(item => {
+            subtotalUSD += item.price || 0;
+        });
+
+        discountPct = parseFloat(document.getElementById('budget-discount-input')?.value) || 0;
+        const discountAmountUSD = subtotalUSD * (discountPct / 100);
+        totalUSD = subtotalUSD - discountAmountUSD;
+
+        const paymentModeSelect = document.getElementById('payment-mode-select');
+        paymentModeText = paymentModeSelect ? paymentModeSelect.options[paymentModeSelect.selectedIndex].text : 'Contado';
+        const budgetPaymentMethod = document.getElementById('budget-payment-method');
+        budgetPaymentMethodText = budgetPaymentMethod ? budgetPaymentMethod.options[budgetPaymentMethod.selectedIndex].text : 'Transferencia / Pago Móvil';
+        notes = document.getElementById('budget-notes') ? document.getElementById('budget-notes').value : '';
+        consentText = document.getElementById('consent-text') ? document.getElementById('consent-text').value : '';
+
+        items = currentBudgetItems.map(item => ({
+            name: `${item.name} (${item.tooth !== 'General' ? 'Pieza ' + item.tooth : 'General'} - ${item.face || 'Gnl'})`,
+            description: item.specialist ? `Especialista: ${item.specialist}` : 'Tratamiento odontológico especializado',
+            qty: 1,
+            price: item.price || 0,
+            total: item.price || 0
+        }));
+
+        if (window.doctorSigPad && !window.doctorSigPad.isEmpty()) {
+            docSig = window.doctorSigPad.toDataURL();
+        } else {
+            const u = getCurrentUser();
+            if (u) docSig = (u.doctorProfile && u.doctorProfile.signature) || (u.doctor_profile && u.doctor_profile.signature) || '';
+        }
+
+        if (window.patientSigPad && !window.patientSigPad.isEmpty()) {
+            patSig = window.patientSigPad.toDataURL();
+        } else if (patient && patient.metadata && patient.metadata.patientSignature) {
+            patSig = patient.metadata.patientSignature;
+        }
+    }
 
     const rate = getExchangeRate();
     const totalVES = `Bs. ${(totalUSD * rate).toFixed(2)}`;
-
-    const items = currentBudgetItems.map(item => ({
-        name: `${item.name} (${item.tooth !== 'General' ? 'Pieza ' + item.tooth : 'General'} - ${item.face || 'Gnl'})`,
-        description: item.specialist ? `Especialista: ${item.specialist}` : 'Tratamiento odontológico especializado',
-        qty: 1,
-        price: item.price || 0,
-        total: item.price || 0
-    }));
 
     const stationery = await SupabaseDataService.getStationeryConfig();
     const busData = getClinicBusData(stationery);
     const logoBase64 = await toDataURL(busData.logoUrl || stationery.logoUrl);
 
-    let docSig = (window.doctorSigPad && !window.doctorSigPad.isEmpty()) ? window.doctorSigPad.toDataURL() : '';
-    if (!docSig) {
-        const u = getCurrentUser();
-        if (u) {
-            docSig = (u.doctorProfile && u.doctorProfile.signature) || (u.doctor_profile && u.doctor_profile.signature) || '';
-        }
-    }
-    let patSig = (window.patientSigPad && !window.patientSigPad.isEmpty()) ? window.patientSigPad.toDataURL() : '';
-    if (!patSig && patient && patient.metadata && patient.metadata.patientSignature) {
-        patSig = patient.metadata.patientSignature;
-    }
-
     const docHtml = buildMedicalDocumentHTML({
         docType: 'presupuesto',
         docTitle: 'Presupuesto Odontológico',
-        emissionDate: new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' }),
-        controlNumber: `PR-2026-${activeEditingBudgetId ? activeEditingBudgetId.replace(/[^0-9]/g,'') : '00101'}`,
+        emissionDate: (budget && budget.invoiceDate) || new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' }),
+        controlNumber: budgetCtrlId,
         paymentMethod: `${paymentModeText} / ${budgetPaymentMethodText}`,
         
         clinicName: busData.name,
@@ -18559,25 +18876,25 @@ async function generateBudgetHTMLContainer() {
         clinicAddress: busData.address,
         logoUrl: logoBase64,
         
-        doctorName: (getCurrentUser() && getCurrentUser().fullname) || busData.doctor || 'Dr. Rodrigo Navas',
+        doctorName: (budget && budget.doctor) || (getCurrentUser() && getCurrentUser().fullname) || busData.doctor || 'Dr. Rodrigo Navas',
         doctorSpecialty: 'Odontología General / Especializada',
         doctorPhone: (getCurrentUser() && getCurrentUser().phone) || busData.phone,
         doctorSig: docSig,
         
         patientName: patient.fullname,
-        patientId: patient.id,
+        patientId: patient.cedula || patient.id,
         patientPhone: patient.phone,
         patientSig: patSig,
         
         items: items,
         subtotalUSD: subtotalUSD,
         discountPct: discountPct,
-        discountUSD: discountAmountUSD,
+        discountUSD: subtotalUSD * (discountPct / 100),
         totalUSD: totalUSD,
         totalVES: totalVES,
         approvedAmountUSD: totalUSD,
         
-        paymentTerms: `Validez de la cotización: 15 días continuos a partir de su emisión. Modalidad: ${paymentModeText}.`,
+        paymentTerms: `Validez de la cotización: 15 días continuos a partir de su emisión. Modalidad: ${paymentModeText}. Tasa oficial BCV: Bs. ${rate.toFixed(2)}.`,
         bankingDetails: busData.bankInfo,
         observations: notes || 'El paciente presenta evolución favorable. Se recomienda iniciar el plan de tratamiento odontológico según el esquema pautado.',
         consentText: consentText || 'Por medio de la presente, el paciente declara haber recibido explicación clara y detallada acerca de los procedimientos diagnosticados y propuestos en este presupuesto, aceptando voluntariamente el inicio del tratamiento.',
@@ -18589,21 +18906,27 @@ async function generateBudgetHTMLContainer() {
     return container;
 }
 
-async function downloadBudgetPDF() {
-    const activeId = getActivePatientId();
-    if (!activeId) {
-        Swal.fire({ icon: 'info', title: 'Seleccione un paciente', text: 'Por favor active un paciente para exportar su Presupuesto en PDF.' });
+window.downloadOdontologyBudgetPDF = async function(budgetId = null) {
+    const container = await generateBudgetHTMLContainer(budgetId);
+    if (!container) {
+        Swal.fire({ icon: 'warning', title: 'Presupuesto no encontrado', text: 'No se pudo cargar la información del presupuesto odontológico.' });
         return;
     }
-    const patients = await SupabaseDataService.getPatients();
-    const patient = patients.find(p => p.id === activeId);
-    if (!patient) return;
+    const filename = `Presupuesto_Odontologia_${budgetId || 'Digital'}.pdf`;
+    await generatePDFFromElement(container, filename);
+};
 
-    const container = await generateBudgetHTMLContainer();
-    if (!container) return;
+window.printOdontologyBudget = async function(budgetId = null) {
+    const container = await generateBudgetHTMLContainer(budgetId);
+    if (!container) {
+        Swal.fire({ icon: 'warning', title: 'Presupuesto no encontrado', text: 'No se pudo cargar la información del presupuesto odontológico.' });
+        return;
+    }
+    window.universalPrintHTML(container.innerHTML, `Presupuesto Odontológico ${budgetId || ''}`);
+};
 
-    const filename = `Presupuesto_${patient.id}_${patient.fullname.replace(/\s+/g, '_')}.pdf`;
-    generatePDFFromElement(container, filename);
+async function downloadBudgetPDF() {
+    await window.downloadOdontologyBudgetPDF();
 }
 
 // --- FACTURACIÓN ---
@@ -21199,36 +21522,12 @@ window.printDailyClosingDept = function() {
     const totalUSD = filtered.reduce((acc, t) => acc + t.amountUSD, 0);
     const totalBs = totalUSD * rate;
 
-    const printWin = window.open('', '_blank', 'width=900,height=700');
-    if (!printWin) return;
-
-    printWin.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Cierre de Caja - ${areaName} (${shiftLabel})</title>
-            <style>
-                body { font-family: Arial, sans-serif; margin: 25px; color: #1e293b; font-size: 12px; }
-                h1 { margin: 0; font-size: 18px; color: #0f172a; }
-                .subtitle { color: #64748b; font-size: 12px; margin-top: 4px; }
-                .header-box { border-bottom: 2px solid #0284c7; padding-bottom: 12px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
-                .kpi-box { display: flex; gap: 15px; margin-bottom: 16px; }
-                .kpi-card { border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 12px; flex: 1; background: #f8fafc; }
-                .kpi-card span { font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: bold; }
-                .kpi-card div { font-size: 16px; font-weight: bold; color: #0f172a; margin-top: 2px; }
-                table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px; }
-                th { background: #f1f5f9; padding: 8px; text-align: left; border-bottom: 1.5px solid #cbd5e1; text-transform: uppercase; font-size: 10px; }
-                td { padding: 7px 8px; border-bottom: 1px solid #e2e8f0; }
-                .text-right { text-align: right; }
-                .footer { margin-top: 30px; display: flex; justify-content: space-between; border-top: 1px solid #cbd5e1; padding-top: 12px; }
-                .signature-line { width: 200px; border-top: 1px solid #0f172a; text-align: center; font-size: 10px; padding-top: 4px; margin-top: 30px; }
-            </style>
-        </head>
-        <body>
-            <div class="header-box">
+    const closingHtml = `
+        <div style="font-family: Arial, sans-serif; padding: 20px; color: #1e293b; font-size: 12px; background: #fff;">
+            <div style="border-bottom: 2px solid #0284c7; padding-bottom: 12px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
                 <div>
-                    <h1>CENTRO MÉDICO Y ODONTOLÓGICO VIDA SANA</h1>
-                    <div class="subtitle">COMPROBANTE OFICIAL DE CIERRE DE CAJA DIARIO</div>
+                    <h1 style="margin: 0; font-size: 18px; color: #0f172a;">CENTRO MÉDICO Y ODONTOLÓGICO VIDA SANA</h1>
+                    <div style="color: #64748b; font-size: 12px; margin-top: 4px;">COMPROBANTE OFICIAL DE CIERRE DE CAJA DIARIO</div>
                 </div>
                 <div style="text-align: right;">
                     <strong>Departamento:</strong> ${areaName}<br>
@@ -21237,62 +21536,59 @@ window.printDailyClosingDept = function() {
                 </div>
             </div>
 
-            <div class="kpi-box">
-                <div class="kpi-card">
-                    <span>Total Recaudado</span>
-                    <div style="color: #059669;">$${totalUSD.toFixed(2)} USD</div>
+            <div style="display: flex; gap: 15px; margin-bottom: 16px;">
+                <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 12px; flex: 1; background: #f8fafc;">
+                    <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: bold;">Total Recaudado</span>
+                    <div style="font-size: 16px; font-weight: bold; color: #059669; margin-top: 2px;">$${totalUSD.toFixed(2)} USD</div>
                     <small style="color: #0284c7; font-weight: bold;">Bs. ${totalBs.toFixed(2)}</small>
                 </div>
-                <div class="kpi-card">
-                    <span>Servicios Realizados</span>
-                    <div>${filtered.length} Procedimientos</div>
+                <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 12px; flex: 1; background: #f8fafc;">
+                    <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: bold;">Servicios Realizados</span>
+                    <div style="font-size: 16px; font-weight: bold; color: #0f172a; margin-top: 2px;">${filtered.length} Procedimientos</div>
                 </div>
-                <div class="kpi-card">
-                    <span>Tasa BCV</span>
-                    <div>Bs. ${rate.toFixed(2)} / USD</div>
+                <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 12px; flex: 1; background: #f8fafc;">
+                    <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: bold;">Tasa BCV</span>
+                    <div style="font-size: 16px; font-weight: bold; color: #0f172a; margin-top: 2px;">Bs. ${rate.toFixed(2)} / USD</div>
                 </div>
             </div>
 
-            <table>
+            <table style="width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px;">
                 <thead>
-                    <tr>
-                        <th>Hora</th>
-                        <th>Recibo</th>
-                        <th>Paciente</th>
-                        <th>Procedimiento</th>
-                        <th>Médico Tratante</th>
-                        <th>Asistente</th>
-                        <th>Método</th>
-                        <th class="text-right">Monto ($)</th>
+                    <tr style="background: #f1f5f9;">
+                        <th style="padding: 8px; text-align: left; border-bottom: 1.5px solid #cbd5e1; text-transform: uppercase; font-size: 10px;">Hora</th>
+                        <th style="padding: 8px; text-align: left; border-bottom: 1.5px solid #cbd5e1; text-transform: uppercase; font-size: 10px;">Recibo</th>
+                        <th style="padding: 8px; text-align: left; border-bottom: 1.5px solid #cbd5e1; text-transform: uppercase; font-size: 10px;">Paciente</th>
+                        <th style="padding: 8px; text-align: left; border-bottom: 1.5px solid #cbd5e1; text-transform: uppercase; font-size: 10px;">Procedimiento</th>
+                        <th style="padding: 8px; text-align: left; border-bottom: 1.5px solid #cbd5e1; text-transform: uppercase; font-size: 10px;">Médico Tratante</th>
+                        <th style="padding: 8px; text-align: left; border-bottom: 1.5px solid #cbd5e1; text-transform: uppercase; font-size: 10px;">Asistente</th>
+                        <th style="padding: 8px; text-align: left; border-bottom: 1.5px solid #cbd5e1; text-transform: uppercase; font-size: 10px;">Método</th>
+                        <th style="padding: 8px; text-align: right; border-bottom: 1.5px solid #cbd5e1; text-transform: uppercase; font-size: 10px;">Monto ($)</th>
                     </tr>
                 </thead>
                 <tbody>
                     ${filtered.map(t => `
                         <tr>
-                            <td>${t.time}</td>
-                            <td>${t.id}</td>
-                            <td>${t.patientName} (${t.patientId})</td>
-                            <td>${t.concept}</td>
-                            <td>${t.doctor}</td>
-                            <td>${t.assistant || '--'}</td>
-                            <td>${t.method}</td>
-                            <td class="text-right"><strong>$${t.amountUSD.toFixed(2)}</strong></td>
+                            <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0;">${t.time}</td>
+                            <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0;">${t.id}</td>
+                            <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0;">${t.patientName} (${t.patientId})</td>
+                            <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0;">${t.concept}</td>
+                            <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0;">${t.doctor}</td>
+                            <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0;">${t.assistant || '--'}</td>
+                            <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0;">${t.method}</td>
+                            <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0; text-align: right;"><strong>$${t.amountUSD.toFixed(2)}</strong></td>
                         </tr>
                     `).join('')}
                 </tbody>
             </table>
 
-            <div class="footer">
-                <div class="signature-line">Firma Cajero / Recepción</div>
-                <div class="signature-line">Firma Administración / Auditoría</div>
+            <div style="margin-top: 30px; display: flex; justify-content: space-between; border-top: 1px solid #cbd5e1; padding-top: 12px;">
+                <div style="width: 200px; border-top: 1px solid #0f172a; text-align: center; font-size: 10px; padding-top: 4px; margin-top: 30px;">Firma Cajero / Recepción</div>
+                <div style="width: 200px; border-top: 1px solid #0f172a; text-align: center; font-size: 10px; padding-top: 4px; margin-top: 30px;">Firma Administración / Auditoría</div>
             </div>
-            <script>
-                window.onload = function() { window.print(); };
-            </script>
-        </body>
-        </html>
-    `);
-    printWin.document.close();
+        </div>
+    `;
+
+    window.universalPrintHTML(closingHtml, `Cierre de Caja - ${areaName} (${shiftLabel})`);
 };
 
 window.deleteAccountTransfer = async function(transferId) {
@@ -21903,45 +22199,9 @@ async function generatePDFFromElement(element, filename) {
                         }
                         Swal.close();
 
-                        // Fallback to Native Print/Save Window
-                        Swal.fire({
-                            icon: 'info',
-                            title: 'Ventana de Impresión / Guardar PDF',
-                            text: `Abriendo vista previa para guardar como PDF...`,
-                            showCancelButton: true,
-                            cancelButtonText: 'Cerrar',
-                            confirmButtonText: 'Abrir'
-                        }).then((r) => {
-                            if (r.isConfirmed) {
-                                const printWindow = window.open('', '_blank');
-                                if (printWindow) {
-                                    printWindow.document.write(`
-                                        <html>
-                                            <head>
-                                                <title>${filename}</title>
-                                                <style>
-                                                    @page { size: A4 portrait; margin: 10mm; }
-                                                    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #ffffff; color: #1e293b; margin: 0; padding: 0; }
-                                                    .medical-doc-container { width: 100% !important; max-width: 100% !important; box-shadow: none !important; border: none !important; }
-                                                </style>
-                                            </head>
-                                            <body>
-                                                ${element.innerHTML}
-                                                <script>
-                                                    window.onload = function() {
-                                                        setTimeout(function() {
-                                                            window.print();
-                                                        }, 500);
-                                                    };
-                                                <\/script>
-                                            </body>
-                                        </html>
-                                    `);
-                                    printWindow.document.close();
-                                }
-                            }
-                        });
-                        resolve(false);
+                        // Fallback seguro in-page sin popups ni ventanas emergentes
+                        window.universalPrintHTML(element.innerHTML, filename);
+                        resolve(true);
                     }
                 }, 350);
             }
@@ -22044,30 +22304,7 @@ window.printSessionReceipt = async (patient, sessionObj) => {
     }
 
     const htmlContent = window.generateSessionReceiptHTML(patient, sessionObj, busData);
-
-    const printWin = window.open('', '_blank');
-    if (printWin) {
-        printWin.document.write(`
-            <html>
-            <head>
-                <title>Comprobante de Sesión - ${patient.fullname}</title>
-                <style>
-                    body { margin: 0; padding: 0; background: #fff; }
-                </style>
-            </head>
-            <body onload="window.print(); window.close();">
-                ${htmlContent}
-            </body>
-            </html>
-        `);
-        printWin.document.close();
-    } else {
-        Swal.fire({
-            icon: 'error',
-            title: 'Bloqueador de Ventanas Activo',
-            text: 'Por favor permite las ventanas emergentes en este sitio para imprimir.'
-        });
-    }
+    window.universalPrintHTML(htmlContent, `Comprobante de Sesión - ${patient.fullname}`);
 };
 
 window.downloadSessionReceiptPDF = async (patient, sessionObj) => {

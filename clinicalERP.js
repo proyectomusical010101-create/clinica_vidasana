@@ -1875,11 +1875,11 @@
                     </div>
                 </div>
             `;
-            const win = window.open('', '_blank');
-            win.document.write('<html><head><title>Recibo Liquidación - ' + item.service_name + '</title></head><body>' + printContent + '</body></html>');
-            win.document.close();
-            win.focus();
-            setTimeout(() => win.print(), 500);
+            if (typeof window.universalPrintHTML === 'function') {
+                window.universalPrintHTML(printContent, 'Recibo Liquidación - ' + item.service_name);
+            } else {
+                window.print();
+            }
         },
 
         // =========================================================
@@ -2169,11 +2169,11 @@
                     </div>
                 </div>
             `;
-            const win = window.open('', '_blank');
-            win.document.write('<html><head><title>Recibo de Nómina - ' + p.staff_name + '</title></head><body>' + printContent + '</body></html>');
-            win.document.close();
-            win.focus();
-            setTimeout(() => win.print(), 500);
+            if (typeof window.universalPrintHTML === 'function') {
+                window.universalPrintHTML(printContent, 'Recibo de Nómina - ' + p.staff_name);
+            } else {
+                window.print();
+            }
         },
 
         // =========================================================

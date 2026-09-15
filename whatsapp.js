@@ -182,7 +182,19 @@ class WhatsAppService {
         if (!phone) return;
         const cleanPhone = phone.replace(/[^0-9]/g, '');
         const url = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(message)}`;
-        window.open(url, '_blank');
+        if (typeof window.safeOpenExternalUrl === 'function') {
+            window.safeOpenExternalUrl(url);
+        } else {
+            const a = document.createElement('a');
+            a.href = url;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+                try { a.remove(); } catch(e) {}
+            }, 100);
+        }
     }
 }
 
