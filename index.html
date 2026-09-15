@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=298">
+    <link rel="stylesheet" href="styles.css?v=302">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -3866,154 +3866,200 @@
 
     <!-- MODAL: CREAR/EDITAR PERSONAL MÉDICO Y ASISTENCIAL -->
     <div class="modal-overlay hidden" id="modal-user">
-        <div class="modal-dialog" style="max-width: 680px; width: 95vw;">
+        <div class="modal-dialog" style="max-width: 980px; width: 96vw; max-height: 92vh; display: flex; flex-direction: column;">
             <div class="modal-header">
                 <h3 id="modal-user-title"><i class="fa-solid fa-user-doctor text-cyan"></i> Registrar Personal Médico / Asistencial</h3>
                 <button class="modal-close" data-close="modal-user">&times;</button>
             </div>
-            <div class="modal-body">
-                <form id="form-user" class="grid-form">
+            <div class="modal-body" style="padding: 20px 24px; overflow-y: auto; flex: 1;">
+                <form id="form-user" class="grid-form" style="grid-template-columns: 1fr 1fr; gap: 14px;">
                     <input type="hidden" id="u-user-id" value="">
-                    <div class="form-group span-2">
-                        <label>Nombre y Apellido *</label>
-                        <input type="text" id="u-fullname" required placeholder="Dra. Sofía Mendoza">
-                    </div>
-                    <div class="form-group">
-                        <label>Correo Electrónico *</label>
-                        <input type="email" id="u-email" required placeholder="sofia.mendoza@dentalcare.com">
-                    </div>
-                    <div class="form-group">
-                        <label id="lbl-u-password">Contraseña de Acceso *</label>
-                        <input type="password" id="u-password" required placeholder="••••••••">
-                        <small class="text-muted hidden" id="u-password-hint" style="font-size: 0.78rem; display: block; margin-top: 4px;">Dejar en blanco para mantener la contraseña actual.</small>
-                    </div>
-                    <div class="form-group span-2">
-                        <label>Rol / Especialidad Clínica *</label>
-                        <select id="u-role" required>
-                            <option value="Odontólogo Principal">Odontólogo Principal (Médico / Dental)</option>
-                            <option value="Odontólogo General">Odontólogo General (Médico / Dental)</option>
-                            <option value="Especialista en Ortodoncia">Especialista en Ortodoncia</option>
-                            <option value="Especialista en Endodoncia">Especialista en Endodoncia</option>
-                            <option value="Cirujano Maxilofacial">Cirujano Maxilofacial</option>
-                            <option value="Médico General">Médico General</option>
-                            <option value="Médico Especialista">Médico Especialista (Cardiología, Pediatría, etc.)</option>
-                            <option value="Asistente Dental">Asistente Dental / Auxiliar Clínico</option>
-                            <option value="Enfermero(a)">Enfermero(a) Asistencial</option>
-                        </select>
-                        <!-- Live scope helper / indicator for the chosen role -->
-                        <div id="u-role-scope-hint" style="margin-top: 10px; padding: 12px 14px; border-radius: 8px; font-size: 0.84rem; line-height: 1.45; background: rgba(8, 145, 178, 0.06); border: 1px solid rgba(8, 145, 178, 0.2); border-left: 4px solid var(--primary-cyan);">
+
+                    <!-- Bloque 1: Datos Básicos y Acceso -->
+                    <div class="form-group span-2" style="background: rgba(248, 250, 252, 0.8); border: 1px solid var(--border-color); border-radius: 10px; padding: 14px;">
+                        <h4 style="margin: 0 0 12px 0; font-size: 0.92rem; color: #0f172a; display: flex; align-items: center; gap: 8px;">
+                            <i class="fa-solid fa-id-card text-cyan"></i> 1. Información Personal y Cuenta
+                        </h4>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
+                            <div class="form-group" style="margin: 0;">
+                                <label style="font-size: 0.78rem; font-weight: 700; margin-bottom: 4px;">Nombre y Apellido *</label>
+                                <input type="text" id="u-fullname" class="form-control" required placeholder="Dra. Sofía Mendoza" style="height: 38px;">
+                            </div>
+                            <div class="form-group" style="margin: 0;">
+                                <label style="font-size: 0.78rem; font-weight: 700; margin-bottom: 4px;">Correo Electrónico *</label>
+                                <input type="email" id="u-email" class="form-control" required placeholder="sofia.mendoza@dentalcare.com" style="height: 38px;">
+                            </div>
+                            <div class="form-group" style="margin: 0;">
+                                <label id="lbl-u-password" style="font-size: 0.78rem; font-weight: 700; margin-bottom: 4px;">Contraseña de Acceso *</label>
+                                <input type="password" id="u-password" class="form-control" required placeholder="••••••••" style="height: 38px;">
+                                <small class="text-muted hidden" id="u-password-hint" style="font-size: 0.74rem; display: block; margin-top: 3px;">Dejar en blanco para mantener la contraseña actual.</small>
+                            </div>
+                            <div class="form-group" style="margin: 0;">
+                                <label style="font-size: 0.78rem; font-weight: 700; margin-bottom: 4px;">Rol Clínico *</label>
+                                <select id="u-role" class="form-control" required style="height: 38px;">
+                                    <option value="Odontólogo Principal">Odontólogo Principal (Médico / Dental)</option>
+                                    <option value="Odontólogo General">Odontólogo General (Médico / Dental)</option>
+                                    <option value="Especialista en Ortodoncia">Especialista en Ortodoncia</option>
+                                    <option value="Especialista en Endodoncia">Especialista en Endodoncia</option>
+                                    <option value="Cirujano Maxilofacial">Cirujano Maxilofacial</option>
+                                    <option value="Médico General">Médico General</option>
+                                    <option value="Médico Especialista">Médico Especialista (Cardiología, Pediatría, etc.)</option>
+                                    <option value="Asistente Dental">Asistente Dental / Auxiliar Clínico</option>
+                                    <option value="Enfermero(a)">Enfermero(a) Asistencial</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="u-role-scope-hint" style="margin-top: 10px; padding: 10px 12px; border-radius: 8px; font-size: 0.82rem; line-height: 1.45; background: rgba(8, 145, 178, 0.06); border: 1px solid rgba(8, 145, 178, 0.2); border-left: 4px solid var(--primary-cyan);">
                             <!-- Populated dynamically -->
                         </div>
+                        <div class="form-group" id="u-license-group" style="margin-top: 10px; margin-bottom: 0;">
+                            <label style="font-size: 0.78rem; font-weight: 700; margin-bottom: 4px;">Nº Colegiado / Matrícula Sanitaria (MPPS / Colegio)</label>
+                            <input type="text" id="u-license" class="form-control" placeholder="MPPS-98402 / C.O.V-20104" style="height: 38px;">
+                        </div>
                     </div>
-                    <div class="form-group span-2" id="u-license-group">
-                        <label>Nº Colegiado / Matrícula Sanitaria (MPPS / Colegio)</label>
-                        <input type="text" id="u-license" placeholder="MPPS-98402 / C.O.V-20104">
-                    </div>
-                    <div id="doctor-profile-fields" class="span-2" style="border: 1px solid var(--border-color); padding: 14px; border-radius: 8px; background-color: rgba(0,0,0,0.02); margin-top: 10px;">
-                        <h4 style="margin-top: 0; margin-bottom: 10px; color: var(--primary-cyan); font-size: 0.95rem;"><i class="fa-solid fa-user-md"></i> Perfil Clínico / Asignación Médica</h4>
-                        <div class="grid-form" style="grid-template-columns: 1fr 1fr; gap: 10px;">
-                            <!-- Especialidad Principal y Botón Rápido Nueva Especialidad -->
-                            <div class="form-group">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                                    <label style="margin-bottom: 0;"><i class="fa-solid fa-stethoscope text-cyan"></i> Especialidad Principal *</label>
-                                    <button type="button" class="btn btn-xs btn-outline" id="btn-quick-add-specialty" onclick="window.quickAddNewSpecialty()" style="font-size: 0.72rem; padding: 2px 8px; color: var(--primary-cyan); border-color: var(--primary-cyan); display: inline-flex; align-items: center; gap: 4px;" title="Registrar una nueva especialidad médica u odontológica">
-                                        <i class="fa-solid fa-plus"></i> Nueva Especialidad
+
+                    <!-- Bloque 2: Perfil Clínico / Asignación Médica -->
+                    <div id="doctor-profile-fields" class="span-2" style="border: 1px solid var(--border-color); padding: 16px; border-radius: 10px; background-color: var(--bg-card);">
+                        <h4 style="margin: 0 0 14px 0; color: var(--primary-cyan); font-size: 0.95rem; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                            <i class="fa-solid fa-stethoscope"></i> 2. Perfil Clínico, Especialidades y Asignación de Servicios
+                        </h4>
+                        
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 14px;">
+                            <!-- Especialidad Principal -->
+                            <div class="form-group" style="margin: 0;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                    <label style="margin: 0; font-size: 0.78rem; font-weight: 700;"><i class="fa-solid fa-stethoscope text-cyan"></i> Especialidad Principal *</label>
+                                    <button type="button" class="btn btn-xs btn-outline" id="btn-quick-add-specialty" onclick="window.quickAddNewSpecialty()" style="font-size: 0.7rem; padding: 1px 6px; color: var(--primary-cyan); border-color: var(--primary-cyan);" title="Registrar nueva especialidad">
+                                        <i class="fa-solid fa-plus"></i> Nueva
                                     </button>
                                 </div>
-                                <select id="u-specialty" class="form-control">
+                                <select id="u-specialty" class="form-control" style="height: 38px;">
                                     <!-- Dynamic specialties -->
                                 </select>
                             </div>
-                            <div class="form-group">
-                                <label><i class="fa-solid fa-clock text-cyan"></i> Turno de Consulta *</label>
-                                <select id="u-shift" class="form-control">
+
+                            <!-- Turno General -->
+                            <div class="form-group" style="margin: 0;">
+                                <label style="font-size: 0.78rem; font-weight: 700; margin-bottom: 4px;"><i class="fa-solid fa-clock text-cyan"></i> Turno Preferente *</label>
+                                <select id="u-shift" class="form-control" style="height: 38px;">
                                     <option value="morning">Turno Mañana 🌅 (08:00 - 13:00)</option>
                                     <option value="afternoon">Turno Tarde 🌇 (14:00 - 19:00)</option>
                                     <option value="both">Ambos Turnos / Completo</option>
                                 </select>
                             </div>
 
-                            <!-- Especialidades Adicionales / Múltiples -->
-                            <div class="form-group span-2" id="u-additional-specialties-group">
-                                <label style="font-size: 0.82rem; font-weight: 600; color: var(--text-heading); display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
-                                    <i class="fa-solid fa-tags text-cyan"></i> Especialidades Adicionales que atiende (Opcional / Múltiples)
-                                    <span class="badge-tag blue" style="font-size: 0.68rem; padding: 1px 6px;">Múltiples</span>
-                                </label>
-                                <div id="u-additional-specialties-container" style="display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-card); min-height: 42px; align-items: center;">
-                                    <!-- Dynamic specialty chips populated by populateUserModalSelects -->
-                                </div>
-                                <small class="text-muted" style="font-size: 0.74rem; display: block; margin-top: 4px;">
-                                    <i class="fa-solid fa-circle-info"></i> Haga clic sobre las especialidades adicionales que cubre este profesional para seleccionarlas.
-                                </small>
-                            </div>
-
-                            <!-- Asistente y Consultorio Predeterminado -->
-                            <div class="form-group">
-                                <label><i class="fa-solid fa-user-nurse text-cyan"></i> Asistente Asignado(a)</label>
-                                <select id="u-assistant" class="form-control">
-                                    <!-- Dynamic assistants -->
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label><i class="fa-solid fa-door-open text-cyan"></i> Consultorio Asignado</label>
-                                <select id="u-room" class="form-control">
+                            <!-- Consultorio Asignado -->
+                            <div class="form-group" style="margin: 0;">
+                                <label style="font-size: 0.78rem; font-weight: 700; margin-bottom: 4px;"><i class="fa-solid fa-door-open text-cyan"></i> Consultorio Asignado</label>
+                                <select id="u-room" class="form-control" style="height: 38px;">
                                     <!-- Dynamic rooms -->
                                 </select>
                             </div>
 
-                            <div class="form-group span-2" id="u-services-picker-group">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                                    <label style="margin-bottom: 0; font-weight: 700; color: var(--text-heading);"><i class="fa-solid fa-list-check text-cyan"></i> Asignación de Servicios del Baremo *</label>
-                                    <span id="u-services-counter" class="badge-tag blue" style="font-size: 0.75rem; font-weight: 700;">0 servicios asignados</span>
-                                </div>
-
-                                <!-- Toolbar: Search & Action Buttons -->
-                                <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 8px;">
-                                    <div style="flex: 1; min-width: 180px; position: relative;">
-                                        <input type="text" id="u-services-search" class="form-control" placeholder="🔍 Buscar servicio o código..." oninput="window.filterDoctorServicesList()" style="height: 34px; font-size: 0.82rem; border-radius: 6px; padding: 4px 10px;">
-                                    </div>
-                                    <div style="display: flex; gap: 5px;">
-                                        <button type="button" class="btn btn-xs btn-outline" onclick="window.toggleAllDoctorServices(true)" style="font-size: 0.72rem; padding: 4px 8px; font-weight: 600;" title="Marcar todos los servicios visibles">
-                                            <i class="fa-solid fa-check-double text-cyan"></i> Marcar Visibles
-                                        </button>
-                                        <button type="button" class="btn btn-xs btn-outline" onclick="window.toggleAllDoctorServices(false)" style="font-size: 0.72rem; padding: 4px 8px; font-weight: 600; color: #ef4444;" title="Deseleccionar todos">
-                                            <i class="fa-solid fa-xmark"></i> Desmarcar Todo
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <!-- Category Filter Pills -->
-                                <div id="u-services-category-pills" style="display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 8px;">
-                                    <button type="button" class="btn btn-xs btn-outline active-category-pill" data-category="all" onclick="window.setDoctorServiceCategoryFilter('all', this)" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px;">Todos</button>
-                                    <button type="button" class="btn btn-xs btn-outline" data-category="odontologia" onclick="window.setDoctorServiceCategoryFilter('odontologia', this)" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px;"><i class="fa-solid fa-tooth text-cyan"></i> Odontología</button>
-                                    <button type="button" class="btn btn-xs btn-outline" data-category="medicina" onclick="window.setDoctorServiceCategoryFilter('medicina', this)" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px;"><i class="fa-solid fa-stethoscope text-emerald"></i> Medicina</button>
-                                    <button type="button" class="btn btn-xs btn-outline" data-category="laboratorio" onclick="window.setDoctorServiceCategoryFilter('laboratorio', this)" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px;"><i class="fa-solid fa-vials text-purple"></i> Laboratorio</button>
-                                    <button type="button" class="btn btn-xs btn-outline" data-category="selected" onclick="window.setDoctorServiceCategoryFilter('selected', this)" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; border-color: #0284c7; color: #0284c7;"><i class="fa-solid fa-star text-amber"></i> Solo Asignados</button>
-                                </div>
-
-                                <!-- Visual Interactive Services List -->
-                                <div id="u-services-list-container" style="max-height: 220px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-card); padding: 4px; display: flex; flex-direction: column; gap: 4px;">
-                                    <!-- Dynamic service rows -->
-                                </div>
-
-                                <!-- Hidden native select to preserve 100% backward compatibility -->
-                                <select id="u-services" multiple style="display: none !important;"></select>
-
-                                <small class="text-muted" style="font-size: 0.74rem; display: block; margin-top: 5px;">
-                                    <i class="fa-solid fa-hand-pointer text-cyan"></i> Haga clic o toque en cualquier servicio para asignarlo o removerlo fácilmente.
-                                </small>
+                            <!-- Asistente Asignada -->
+                            <div class="form-group" style="margin: 0;">
+                                <label style="font-size: 0.78rem; font-weight: 700; margin-bottom: 4px;"><i class="fa-solid fa-user-nurse text-cyan"></i> Asistente de Apoyo</label>
+                                <select id="u-assistant" class="form-control" style="height: 38px;">
+                                    <!-- Dynamic assistants -->
+                                </select>
                             </div>
-                            <div class="form-group">
-                                <label>Horario Detallado *</label>
-                                <input type="text" id="u-schedule" placeholder="ej: Lunes a Viernes 8:00 AM - 1:00 PM">
+                        </div>
+
+                        <!-- BUSCADOR DE ESPECIALIDADES CON ETIQUETAS (Reemplaza al acordeón) -->
+                        <div class="form-group" id="u-additional-specialties-group" style="margin-bottom: 14px; background: rgba(248, 250, 252, 0.7); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px;">
+                            <label style="font-size: 0.8rem; font-weight: 700; color: #0f172a; display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                                <span><i class="fa-solid fa-tags text-cyan"></i> Especialidades que atiende (Buscador y Etiquetas)</span>
+                                <span style="font-size: 0.72rem; color: #64748b;">Selecciona todas las que apliquen</span>
+                            </label>
+                            <div style="position: relative; margin-bottom: 8px;">
+                                <input type="text" id="u-specialties-search-input" class="form-control" placeholder="🔍 Escribe para buscar y añadir especialidad (ej: Odontopediatría, Ortodoncia, Cirugía)..." autocomplete="off" style="height: 38px; border-radius: 6px; font-size: 0.84rem; padding-left: 12px; width: 100%; box-sizing: border-box;">
+                                <!-- Dropdown flotante de resultados -->
+                                <div id="u-specialties-search-results" style="position: absolute; top: 42px; left: 0; right: 0; background: #ffffff; border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.18); z-index: 10900; max-height: 220px; overflow-y: auto; display: none;"></div>
                             </div>
-                            <div class="form-group">
-                                <label>Porcentaje de Comisión (%) *</label>
-                                <input type="number" id="u-commission" min="0" max="100" placeholder="ej: 30" step="0.5">
+
+                            <!-- Contenedor de Etiquetas / Badges seleccionadas -->
+                            <div id="u-selected-specialties-container" style="display: flex; flex-wrap: wrap; gap: 6px; min-height: 36px; padding: 6px 8px; background: #ffffff; border: 1px dashed #cbd5e1; border-radius: 6px; align-items: center;">
+                                <em class="text-muted" style="font-size: 0.75rem; color: #94a3b8;">No hay especialidades adicionales agregadas. Usa el buscador arriba para sumar.</em>
                             </div>
-                            <div class="form-group span-2">
-                                <label>Disponibilidad por Servicio / Observaciones:</label>
-                                <input type="text" id="u-availability" placeholder="ej: Consultas los Miércoles por la tarde">
+                        </div>
+
+                        <!-- ASIGNACIÓN DE SERVICIOS DEL BAREMO -->
+                        <div class="form-group" id="u-services-picker-group" style="margin-bottom: 14px; background: rgba(248, 250, 252, 0.7); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <label style="margin: 0; font-weight: 700; color: #0f172a; font-size: 0.82rem;"><i class="fa-solid fa-list-check text-cyan"></i> Asignación de Servicios del Baremo *</label>
+                                <span id="u-services-counter" class="badge-tag blue" style="font-size: 0.75rem; font-weight: 700;">0 servicios asignados</span>
+                            </div>
+
+                            <!-- Barra de Categorías / Píldoras -->
+                            <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                                <div id="u-services-category-pills" style="display: flex; gap: 5px; flex-wrap: wrap;">
+                                    <button type="button" class="btn btn-xs btn-outline active-category-pill" data-category="all" onclick="window.setDoctorServiceCategoryFilter('all', this)" style="font-size: 0.72rem; padding: 3px 9px; border-radius: 12px;">Todos</button>
+                                    <button type="button" class="btn btn-xs btn-outline" data-category="odontologia" onclick="window.setDoctorServiceCategoryFilter('odontologia', this)" style="font-size: 0.72rem; padding: 3px 9px; border-radius: 12px;"><i class="fa-solid fa-tooth text-cyan"></i> Odontología</button>
+                                    <button type="button" class="btn btn-xs btn-outline" data-category="medicina" onclick="window.setDoctorServiceCategoryFilter('medicina', this)" style="font-size: 0.72rem; padding: 3px 9px; border-radius: 12px;"><i class="fa-solid fa-stethoscope text-emerald"></i> Medicina</button>
+                                    <button type="button" class="btn btn-xs btn-outline" data-category="laboratorio" onclick="window.setDoctorServiceCategoryFilter('laboratorio', this)" style="font-size: 0.72rem; padding: 3px 9px; border-radius: 12px;"><i class="fa-solid fa-vials text-purple"></i> Laboratorio</button>
+                                    <button type="button" class="btn btn-xs btn-outline" data-category="selected" onclick="window.setDoctorServiceCategoryFilter('selected', this)" style="font-size: 0.72rem; padding: 3px 9px; border-radius: 12px; border-color: #0284c7; color: #0284c7;"><i class="fa-solid fa-star text-amber"></i> Solo Asignados</button>
+                                </div>
+                                <div style="display: flex; gap: 5px;">
+                                    <button type="button" class="btn btn-xs btn-outline" onclick="window.toggleAllDoctorServices(true)" style="font-size: 0.72rem; padding: 3px 8px; font-weight: 600;" title="Marcar todos los servicios visibles">
+                                        <i class="fa-solid fa-check-double text-cyan"></i> Marcar Visibles
+                                    </button>
+                                    <button type="button" class="btn btn-xs btn-outline" onclick="window.toggleAllDoctorServices(false)" style="font-size: 0.72rem; padding: 3px 8px; font-weight: 600; color: #ef4444;" title="Deseleccionar todos los visibles">
+                                        <i class="fa-solid fa-xmark"></i> Desmarcar Todo
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div style="margin-bottom: 8px;">
+                                <input type="text" id="u-services-search" class="form-control" placeholder="🔍 Filtrar servicio por nombre o código en esta categoría..." oninput="window.filterDoctorServicesList()" style="height: 34px; font-size: 0.82rem; border-radius: 6px; padding: 4px 10px;">
+                            </div>
+
+                            <!-- Lista visual de servicios -->
+                            <div id="u-services-list-container" style="max-height: 220px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; background: #ffffff; padding: 4px; display: flex; flex-direction: column; gap: 4px;">
+                                <!-- Dynamic service rows -->
+                            </div>
+                            <select id="u-services" multiple style="display: none !important;"></select>
+                            <small class="text-muted" style="font-size: 0.72rem; display: block; margin-top: 5px;">
+                                <i class="fa-solid fa-circle-info text-cyan"></i> Al cambiar de categoría, los servicios se listan automáticamente. Puedes hacer clic en cualquiera para activarlo o desactivarlo.
+                            </small>
+                        </div>
+
+                        <!-- PLANIFICADOR SEMANAL DE CONSULTAS -->
+                        <div class="form-group" style="margin-bottom: 14px; background: rgba(248, 250, 252, 0.7); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px;">
+                            <label style="font-size: 0.8rem; font-weight: 700; color: #0f172a; display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                                <span><i class="fa-solid fa-calendar-week text-cyan"></i> Planificador Semanal de Consultas *</span>
+                                <span style="font-size: 0.72rem; color: #64748b;">Selecciona los días y turnos de atención</span>
+                            </label>
+
+                            <!-- Presets Rápidos -->
+                            <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px;">
+                                <button type="button" class="btn btn-xs btn-outline" onclick="window.applyDoctorSchedulePreset('l-v-am')" style="font-size: 0.72rem; border-radius: 6px; padding: 3px 8px;">🌅 Lun a Vie (Mañana)</button>
+                                <button type="button" class="btn btn-xs btn-outline" onclick="window.applyDoctorSchedulePreset('l-v-pm')" style="font-size: 0.72rem; border-radius: 6px; padding: 3px 8px;">🌇 Lun a Vie (Tarde)</button>
+                                <button type="button" class="btn btn-xs btn-outline" onclick="window.applyDoctorSchedulePreset('l-v-full')" style="font-size: 0.72rem; border-radius: 6px; padding: 3px 8px;">☀️ Lun a Vie (Completo)</button>
+                                <button type="button" class="btn btn-xs btn-outline" onclick="window.applyDoctorSchedulePreset('previa-cita')" style="font-size: 0.72rem; border-radius: 6px; padding: 3px 8px;">📅 Previa Cita</button>
+                                <button type="button" class="btn btn-xs btn-outline" onclick="window.applyDoctorSchedulePreset('clear')" style="font-size: 0.72rem; border-radius: 6px; padding: 3px 8px; color: #ef4444;">Limpiar</button>
+                            </div>
+
+                            <!-- Cuadrícula interactiva de días -->
+                            <div id="u-schedule-days-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-bottom: 10px;">
+                                <!-- Populated dynamically by window.renderDoctorSchedulePlanner() -->
+                            </div>
+
+                            <!-- Input sincronizado del horario generado -->
+                            <div>
+                                <label style="font-size: 0.72rem; font-weight: 600; color: #64748b; margin-bottom: 3px; display: block;">Horario Resultante (Generado automáticamente / Editable):</label>
+                                <input type="text" id="u-schedule" class="form-control" placeholder="ej: Lunes a Viernes 8:00 AM - 1:00 PM" required style="height: 36px; font-size: 0.82rem; font-weight: 600; background: #ffffff;">
+                            </div>
+                        </div>
+
+                        <!-- Comisión y Observaciones -->
+                        <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 12px;">
+                            <div class="form-group" style="margin: 0;">
+                                <label style="font-size: 0.78rem; font-weight: 700; margin-bottom: 4px;">Comisión Médica (%) *</label>
+                                <input type="number" id="u-commission" class="form-control" min="0" max="100" placeholder="ej: 60" step="0.5" style="height: 38px;">
+                            </div>
+                            <div class="form-group" style="margin: 0;">
+                                <label style="font-size: 0.78rem; font-weight: 700; margin-bottom: 4px;">Observaciones / Disponibilidad Especial:</label>
+                                <input type="text" id="u-availability" class="form-control" placeholder="ej: Consultas especiales los sábados" style="height: 38px;">
                             </div>
                         </div>
                     </div>
@@ -7462,14 +7508,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=301"></script>
-    <script src="supabaseClient.js?v=301"></script>
-    <script src="odontogram.js?v=301"></script>
-    <script src="signature.js?v=301"></script>
-    <script src="whatsapp.js?v=301"></script>
-    <script src="kardex.js?v=301"></script>
-    <script src="app.js?v=301"></script>
-    <script src="clinicalERP.js?v=301"></script>
-    <script src="tutorial.js?v=301"></script>
+    <script src="seededData.js?v=302"></script>
+    <script src="supabaseClient.js?v=302"></script>
+    <script src="odontogram.js?v=302"></script>
+    <script src="signature.js?v=302"></script>
+    <script src="whatsapp.js?v=302"></script>
+    <script src="kardex.js?v=302"></script>
+    <script src="app.js?v=302"></script>
+    <script src="clinicalERP.js?v=302"></script>
+    <script src="tutorial.js?v=302"></script>
 </body>
 </html>

@@ -10718,51 +10718,34 @@ window.populateUserModalSelects = async function(docProf = {}) {
         }
     }
 
-    // Render Additional Specialty Chips
-    if (addContainer) {
-        const renderChips = () => {
-            const currentPrimary = specSel ? specSel.value : '';
-            const activeAdditional = new Set(
-                (Array.isArray(docProf.additionalSpecialties) ? docProf.additionalSpecialties : (Array.isArray(docProf.specialties) ? docProf.specialties.filter(s => s !== currentPrimary) : []))
-            );
+    // Set up available specialties & initial selected tags
+    window._doctorAvailableSpecialties = allSpecs;
+    const currentPrimary = specSel ? specSel.value : '';
+    const initialAdditionals = (Array.isArray(docProf.additionalSpecialties) ? docProf.additionalSpecialties : (Array.isArray(docProf.specialties) ? docProf.specialties.filter(s => s !== currentPrimary) : []));
+    window._doctorSelectedSpecialties = new Set(initialAdditionals.filter(s => s && s !== currentPrimary));
 
-            // Preserve any currently clicked active chips before re-rendering
-            const existingChips = addContainer.querySelectorAll('.spec-chip.active');
-            existingChips.forEach(c => {
-                if (c.dataset.specialty && c.dataset.specialty !== currentPrimary) {
-                    activeAdditional.add(c.dataset.specialty);
+    if (typeof window.renderDoctorSpecialtiesTags === 'function') {
+        window.renderDoctorSpecialtiesTags();
+    }
+    if (typeof window.initDoctorSpecialtiesSearch === 'function') {
+        window.initDoctorSpecialtiesSearch();
+    }
+
+    // Initialize weekly schedule planner
+    if (typeof window.initDoctorSchedulePlanner === 'function') {
+        window.initDoctorSchedulePlanner(docProf.schedule || '');
+    }
+
+    if (specSel) {
+        specSel.onchange = () => {
+            const newPrimary = specSel.value;
+            if (window._doctorSelectedSpecialties && window._doctorSelectedSpecialties.has(newPrimary)) {
+                window._doctorSelectedSpecialties.delete(newPrimary);
+                if (typeof window.renderDoctorSpecialtiesTags === 'function') {
+                    window.renderDoctorSpecialtiesTags();
                 }
-            });
-
-            addContainer.innerHTML = '';
-            allSpecs.forEach(spec => {
-                if (spec === currentPrimary) return; // Primary specialty is already handled
-                const isActive = activeAdditional.has(spec);
-                const chip = document.createElement('button');
-                chip.type = 'button';
-                chip.className = `spec-chip ${isActive ? 'active' : ''}`;
-                chip.dataset.specialty = spec;
-                chip.innerHTML = `<i class="fa-solid ${isActive ? 'fa-check' : 'fa-plus'}" style="font-size: 0.7rem;"></i> <span>${spec}</span>`;
-                chip.onclick = (e) => {
-                    e.preventDefault();
-                    chip.classList.toggle('active');
-                    const nowActive = chip.classList.contains('active');
-                    const icon = chip.querySelector('i');
-                    if (icon) {
-                        icon.className = `fa-solid ${nowActive ? 'fa-check' : 'fa-plus'}`;
-                    }
-                };
-                addContainer.appendChild(chip);
-            });
+            }
         };
-
-        renderChips();
-
-        if (specSel) {
-            specSel.onchange = () => {
-                renderChips();
-            };
-        }
     }
 
     // 2. Turno (u-shift)
@@ -10874,7 +10857,7 @@ window.quickAddNewSpecialty = async function() {
     }
 
     // Preserve currently selected additional specialties
-    const currentActiveAdditional = Array.from(document.querySelectorAll('#u-additional-specialties-container .spec-chip.active')).map(c => c.dataset.specialty);
+    const currentActiveAdditional = window._doctorSelectedSpecialties ? Array.from(window._doctorSelectedSpecialties) : [];
 
     // Re-populate selects and set newly created as primary specialty
     await window.populateUserModalSelects({
@@ -11048,6 +11031,403 @@ window.deleteUser = async function(userId) {
     });
 };
 
+// ==========================================
+// DOCTOR PROFILE: SPECIALTIES AUTOCOMPLETE & TAGS
+// ==========================================
+window.renderDoctorSpecialtiesTags = function() {
+    const container = document.getElementById('u-selected-specialties-container');
+    if (!container) return;
+
+    container.innerHTML = '';
+    const selected = window._doctorSelectedSpecialties ? Array.from(window._doctorSelectedSpecialties) : [];
+
+    if (selected.length === 0) {
+        container.innerHTML = '<em class="text-muted" style="font-size: 0.75rem; color: #94a3b8;">No hay especialidades adicionales agregadas. Usa el buscador arriba para sumar.</em>';
+        return;
+    }
+
+    selected.forEach(spec => {
+        const tag = document.createElement('span');
+        tag.className = 'u-spec-tag-item';
+        tag.innerHTML = `
+            <i class="fa-solid fa-tag" style="font-size: 0.7rem;"></i>
+            <span>${spec}</span>
+            <button type="button" class="u-spec-tag-remove" title="Quitar especialidad">&times;</button>
+        `;
+        const removeBtn = tag.querySelector('.u-spec-tag-remove');
+        if (removeBtn) {
+            removeBtn.onclick = (e) => {
+                e.stopPropagation();
+                window.removeDoctorSpecialty(spec);
+            };
+        }
+        container.appendChild(tag);
+    });
+};
+
+window.selectDoctorSpecialty = function(specName) {
+    if (!specName) return;
+    if (!window._doctorSelectedSpecialties) {
+        window._doctorSelectedSpecialties = new Set();
+    }
+    window._doctorSelectedSpecialties.add(specName);
+
+    const resultsEl = document.getElementById('u-specialties-search-results');
+    if (resultsEl) resultsEl.style.display = 'none';
+
+    const inputEl = document.getElementById('u-specialties-search-input');
+    if (inputEl) inputEl.value = '';
+
+    window.renderDoctorSpecialtiesTags();
+};
+
+window.removeDoctorSpecialty = function(specName) {
+    if (window._doctorSelectedSpecialties) {
+        window._doctorSelectedSpecialties.delete(specName);
+    }
+    window.renderDoctorSpecialtiesTags();
+};
+
+window.addAndSelectCustomSpecialty = function(name) {
+    if (!name || !name.trim()) return;
+    const cleanName = name.trim();
+    if (!window._doctorAvailableSpecialties) window._doctorAvailableSpecialties = [];
+    if (!window._doctorAvailableSpecialties.includes(cleanName)) {
+        window._doctorAvailableSpecialties.push(cleanName);
+    }
+    window.selectDoctorSpecialty(cleanName);
+};
+
+window.renderDoctorSpecialtiesSearchResults = function(query = '') {
+    const resultsEl = document.getElementById('u-specialties-search-results');
+    if (!resultsEl) return;
+
+    const q = (query || '').toLowerCase().trim();
+    const primarySpec = document.getElementById('u-specialty')?.value || '';
+    const selectedSet = window._doctorSelectedSpecialties || new Set();
+    const available = (window._doctorAvailableSpecialties || []).filter(s => s && s !== primarySpec && !selectedSet.has(s));
+
+    const matches = available.filter(s => !q || s.toLowerCase().includes(q));
+
+    resultsEl.innerHTML = '';
+
+    if (matches.length === 0 && !q) {
+        resultsEl.innerHTML = '<div style="padding: 10px 14px; font-size: 0.8rem; color: #94a3b8; text-align: center;">No hay más especialidades disponibles</div>';
+        resultsEl.style.display = 'block';
+        return;
+    }
+
+    if (matches.length === 0 && q) {
+        const item = document.createElement('div');
+        item.className = 'u-spec-search-item';
+        item.style.color = 'var(--primary-cyan)';
+        item.style.fontWeight = '600';
+        item.innerHTML = `<i class="fa-solid fa-plus-circle"></i> Agregar "${query.trim()}" como nueva especialidad`;
+        item.onclick = () => window.addAndSelectCustomSpecialty(query.trim());
+        resultsEl.appendChild(item);
+        resultsEl.style.display = 'block';
+        return;
+    }
+
+    matches.slice(0, 15).forEach(s => {
+        const item = document.createElement('div');
+        item.className = 'u-spec-search-item';
+        item.innerHTML = `
+            <span><i class="fa-solid fa-stethoscope text-cyan" style="font-size: 0.75rem; margin-right: 6px;"></i> ${s}</span>
+            <span style="font-size: 0.72rem; color: #0891b2; font-weight: 600;"><i class="fa-solid fa-plus"></i> Añadir</span>
+        `;
+        item.onclick = () => window.selectDoctorSpecialty(s);
+        resultsEl.appendChild(item);
+    });
+
+    if (q && !available.some(s => s.toLowerCase() === q)) {
+        const customItem = document.createElement('div');
+        customItem.className = 'u-spec-search-item';
+        customItem.style.borderTop = '1px dashed #cbd5e1';
+        customItem.style.color = 'var(--primary-cyan)';
+        customItem.style.fontWeight = '600';
+        customItem.innerHTML = `<i class="fa-solid fa-plus-circle"></i> Agregar "${query.trim()}" como nueva especialidad`;
+        customItem.onclick = () => window.addAndSelectCustomSpecialty(query.trim());
+        resultsEl.appendChild(customItem);
+    }
+
+    resultsEl.style.display = 'block';
+};
+
+window.initDoctorSpecialtiesSearch = function() {
+    const input = document.getElementById('u-specialties-search-input');
+    const results = document.getElementById('u-specialties-search-results');
+    if (!input || !results) return;
+
+    input.oninput = () => {
+        window.renderDoctorSpecialtiesSearchResults(input.value);
+    };
+
+    input.onfocus = () => {
+        window.renderDoctorSpecialtiesSearchResults(input.value);
+    };
+
+    if (!window._hasBoundDocSpecClickOutside) {
+        window._hasBoundDocSpecClickOutside = true;
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('#u-additional-specialties-group')) {
+                const res = document.getElementById('u-specialties-search-results');
+                if (res) res.style.display = 'none';
+            }
+        });
+    }
+};
+
+// ==========================================
+// DOCTOR PROFILE: WEEKLY SCHEDULE PLANNER
+// ==========================================
+window._doctorScheduleState = {};
+
+window.initDoctorSchedulePlanner = function(existingScheduleStr = '') {
+    const daysOrder = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+    const str = (existingScheduleStr || '').trim();
+
+    window._doctorScheduleState = {};
+
+    if (str.toLowerCase().includes('previa cita')) {
+        daysOrder.forEach(d => {
+            window._doctorScheduleState[d] = { active: false, shift: 'morning' };
+        });
+        const schInput = document.getElementById('u-schedule');
+        if (schInput) schInput.value = 'Previa Cita';
+    } else if (!str) {
+        daysOrder.forEach(d => {
+            const isWeekDay = (d !== 'Sábado' && d !== 'Domingo');
+            window._doctorScheduleState[d] = { active: isWeekDay, shift: 'morning' };
+        });
+        window.syncDoctorScheduleInput();
+    } else {
+        const lower = str.toLowerCase();
+        let defaultShift = 'morning';
+        if (lower.includes('14:00') || lower.includes('tarde') || lower.includes('pm')) {
+            if (lower.includes('mañana') || lower.includes('08:00') || lower.includes('completo')) {
+                defaultShift = 'full';
+            } else {
+                defaultShift = 'afternoon';
+            }
+        }
+
+        daysOrder.forEach(d => {
+            const dayNorm = d.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+            let isActive = false;
+            if (lower.includes('lunes a viernes') || lower.includes('lun a vie')) {
+                isActive = (d !== 'Sábado' && d !== 'Domingo');
+            } else if (lower.includes('lunes a sabado') || lower.includes('lun a sab')) {
+                isActive = (d !== 'Domingo');
+            } else {
+                isActive = lower.includes(dayNorm);
+            }
+            window._doctorScheduleState[d] = { active: isActive, shift: defaultShift };
+        });
+
+        const schInput = document.getElementById('u-schedule');
+        if (schInput) schInput.value = str;
+    }
+
+    window.renderDoctorSchedulePlanner();
+};
+
+window.renderDoctorSchedulePlanner = function() {
+    const grid = document.getElementById('u-schedule-days-grid');
+    if (!grid) return;
+
+    const daysOrder = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+    grid.innerHTML = '';
+
+    daysOrder.forEach(day => {
+        const dayState = window._doctorScheduleState[day] || { active: false, shift: 'morning' };
+        const card = document.createElement('div');
+        card.className = `u-schedule-day-card ${dayState.active ? 'active' : ''}`;
+        card.id = `u-day-card-${day}`;
+
+        card.innerHTML = `
+            <div class="u-schedule-day-header">
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; margin: 0;">
+                    <input type="checkbox" class="u-schedule-day-checkbox" ${dayState.active ? 'checked' : ''}>
+                    <span class="u-schedule-day-title">${day}</span>
+                </label>
+            </div>
+            <select class="u-schedule-shift-select" ${!dayState.active ? 'disabled style="opacity: 0.5;"' : ''}>
+                <option value="morning" ${dayState.shift === 'morning' ? 'selected' : ''}>Mañana (08:00 - 13:00)</option>
+                <option value="afternoon" ${dayState.shift === 'afternoon' ? 'selected' : ''}>Tarde (14:00 - 19:00)</option>
+                <option value="full" ${dayState.shift === 'full' ? 'selected' : ''}>Completo (08:00 - 18:00)</option>
+            </select>
+        `;
+
+        const chk = card.querySelector('.u-schedule-day-checkbox');
+        if (chk) {
+            chk.onchange = () => {
+                window.toggleDoctorScheduleDay(day, chk.checked);
+            };
+        }
+
+        const sel = card.querySelector('.u-schedule-shift-select');
+        if (sel) {
+            sel.onchange = () => {
+                window.setDoctorScheduleDayShift(day, sel.value);
+            };
+        }
+
+        grid.appendChild(card);
+    });
+};
+
+window.toggleDoctorScheduleDay = function(day, isActive) {
+    if (!window._doctorScheduleState[day]) {
+        window._doctorScheduleState[day] = { active: false, shift: 'morning' };
+    }
+    window._doctorScheduleState[day].active = Boolean(isActive);
+    window.renderDoctorSchedulePlanner();
+    window.syncDoctorScheduleInput();
+};
+
+window.setDoctorScheduleDayShift = function(day, shift) {
+    if (!window._doctorScheduleState[day]) {
+        window._doctorScheduleState[day] = { active: true, shift: 'morning' };
+    }
+    window._doctorScheduleState[day].shift = shift;
+    window.syncDoctorScheduleInput();
+};
+
+window.applyDoctorSchedulePreset = function(preset) {
+    const daysOrder = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+    const schInput = document.getElementById('u-schedule');
+
+    if (preset === 'previa-cita') {
+        daysOrder.forEach(d => {
+            window._doctorScheduleState[d] = { active: false, shift: 'morning' };
+        });
+        if (schInput) schInput.value = 'Previa Cita';
+        window.renderDoctorSchedulePlanner();
+        return;
+    }
+
+    if (preset === 'clear') {
+        daysOrder.forEach(d => {
+            window._doctorScheduleState[d] = { active: false, shift: 'morning' };
+        });
+        if (schInput) schInput.value = '';
+        window.renderDoctorSchedulePlanner();
+        return;
+    }
+
+    let targetShift = 'morning';
+    if (preset === 'l-v-pm') targetShift = 'afternoon';
+    if (preset === 'l-v-full') targetShift = 'full';
+
+    daysOrder.forEach(d => {
+        const isWeekDay = (d !== 'Sábado' && d !== 'Domingo');
+        window._doctorScheduleState[d] = { active: isWeekDay, shift: targetShift };
+    });
+
+    window.renderDoctorSchedulePlanner();
+    window.syncDoctorScheduleInput();
+};
+
+window.generateDoctorScheduleString = function() {
+    const state = window._doctorScheduleState || {};
+    const daysOrder = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+    const activeDays = daysOrder.filter(d => state[d] && state[d].active);
+    if (activeDays.length === 0) return 'Previa Cita';
+
+    const shiftLabels = {
+        'morning': '08:00 - 13:00',
+        'afternoon': '14:00 - 19:00',
+        'full': '08:00 - 18:00'
+    };
+
+    let groups = [];
+    let curGroup = null;
+
+    activeDays.forEach(day => {
+        const shift = state[day].shift || 'morning';
+        const dayIdx = daysOrder.indexOf(day);
+        if (!curGroup) {
+            curGroup = { days: [day], indices: [dayIdx], shift: shift };
+        } else if (curGroup.shift === shift && dayIdx === curGroup.indices[curGroup.indices.length - 1] + 1) {
+            curGroup.days.push(day);
+            curGroup.indices.push(dayIdx);
+        } else {
+            groups.push(curGroup);
+            curGroup = { days: [day], indices: [dayIdx], shift: shift };
+        }
+    });
+    if (curGroup) groups.push(curGroup);
+
+    return groups.map(g => {
+        let dayRange = g.days.length === 1 ? g.days[0] : (g.days.length === 2 ? `${g.days[0]} y ${g.days[1]}` : `${g.days[0]} a ${g.days[g.days.length - 1]}`);
+        return `${dayRange} (${shiftLabels[g.shift] || g.shift})`;
+    }).join(', ');
+};
+
+window.syncDoctorScheduleInput = function() {
+    const schInput = document.getElementById('u-schedule');
+    if (schInput) {
+        schInput.value = window.generateDoctorScheduleString();
+    }
+};
+
+// ==========================================
+// DOCTOR PROFILE: BAREMO SERVICES ASSIGNMENT
+// ==========================================
+window.isServiceInCategory = function(proc, category) {
+    if (!proc) return false;
+    if (!category || category === 'all' || category === 'selected') return true;
+
+    const cat = String(proc.category || proc.department || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+    const name = String(proc.name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+    const code = String(proc.code || '').toUpperCase().trim();
+
+    if (category === 'laboratorio') {
+        if (cat.includes('LABORATORIO') || cat.includes('ANALISIS') || code.startsWith('LAB')) return true;
+        const labKeywords = ['HEMOGRAMA', 'UROANALISIS', 'COPROLOGICO', 'GLUCOSA', 'COLESTEROL', 'TRIGLICERIDOS', 'HEMOGLOBINA', 'CULTIVO', 'BIOPSIA', 'SEROLOGIA', 'ORINA', 'HECES', 'SANGRE', 'QUIMICA SANGUINEA', 'HORMONA', 'PERFIL 20', 'PCR'];
+        return labKeywords.some(kw => name.includes(kw));
+    }
+
+    if (category === 'odontologia') {
+        if (cat.includes('LABORATORIO') || code.startsWith('LAB')) return false;
+
+        const odontoCats = [
+            'ODONTOLOGIA', 'ODONTOPEDIATRIA', 'ORTODONCIA', 'ENDODONCIA', 'PROTESIS',
+            'EXODONCIAS', 'ADITAMENTOS', 'OPERATORIA', 'CIRUGIA', 'ESTETICA', 'PERIODONCIA', 'IMPLANTOLOGIA'
+        ];
+        if (odontoCats.some(c => cat.includes(c))) return true;
+
+        const odontoKeywords = [
+            'ODONT', 'DENT', 'ORTOD', 'ENDOD', 'PERIOD', 'MAXILO', 'PROTES', 'EXODON',
+            'ADITAMENTO', 'BLANQUEA', 'CORONA', 'RESINA', 'CARILLA', 'LIMPIEZA DENTAL', 'PROFILAX',
+            'SELLANTE', 'FLUOR', 'IMPLANT', 'MOLAR', 'DIENTE', 'GINGIV', 'TARTRECTOMIA', 'CURACION DENTAL',
+            'EXTRACCION', 'PULPOTOMIA', 'PULPECTOMIA', 'BRAQUET', 'BRACKET', 'FERULA'
+        ];
+        return odontoKeywords.some(kw => cat.includes(kw) || name.includes(kw));
+    }
+
+    if (category === 'medicina') {
+        if (cat.includes('LABORATORIO') || code.startsWith('LAB')) return false;
+        if (cat.includes('ODONT') || cat.includes('ORTOD') || cat.includes('ENDOD') || cat.includes('PROTESIS') || cat.includes('ADITAMENTOS') || cat.includes('EXODONCIAS')) return false;
+
+        const medCats = [
+            'MEDICINA', 'ESPECIALIDADES', 'ECOS', 'PROCEDIMIENTO QUIRURGICO', 'PROCEDIMIENTO UROLOGICO',
+            'RAYOS X', 'GENERAL', 'CONSULTA Y DIAGNOSTICO', 'PEDIATRIA', 'GINECOLOGIA', 'CARDIOLOGIA',
+            'TRAUMATOLOGIA', 'DERMATOLOGIA', 'OFTALMOLOGIA', 'NUTRICION', 'PSICOLOGIA'
+        ];
+        if (medCats.some(c => cat.includes(c))) return true;
+
+        const medKeywords = [
+            'MEDIC', 'CONSULTA', 'CURACION', 'SUTURA', 'INYECCION', 'NEBULIZACION',
+            'ELECTROCARDIOGRAMA', 'ECOGRAFIA', 'ECO ', 'RAYOS X', 'RADIOGRAFIA', 'UROLOG', 'PEDIATR', 'GINECO'
+        ];
+        return medKeywords.some(kw => cat.includes(kw) || name.includes(kw));
+    }
+
+    return true;
+};
+
 window._allDoctorBaremoServices = [];
 window._doctorServicesCategoryFilter = 'all';
 
@@ -11108,20 +11488,12 @@ window.renderDoctorServicesVisualList = function() {
     const filtered = services.filter(proc => {
         const code = String(proc.code || '').toLowerCase();
         const name = String(proc.name || '').toLowerCase();
-        const dept = String(proc.category || proc.department || '').toLowerCase();
 
         // Category filter
         if (categoryFilter === 'selected') {
             if (!selectedSet.has(proc.code)) return false;
-        } else if (categoryFilter === 'odontologia') {
-            const isOdonto = dept.includes('odont') || dept.includes('dent') || name.includes('dient') || name.includes('molar') || name.includes('resina') || name.includes('limpieza') || name.includes('extrac') || name.includes('ortod') || name.includes('endod') || name.includes('profilax');
-            if (!isOdonto) return false;
-        } else if (categoryFilter === 'medicina') {
-            const isMed = dept.includes('medic') || dept.includes('general') || dept.includes('pediatr') || dept.includes('gineco') || dept.includes('cardio') || name.includes('consulta') || name.includes('médic') || name.includes('curacion') || name.includes('sutura');
-            if (!isMed) return false;
-        } else if (categoryFilter === 'laboratorio') {
-            const isLab = dept.includes('lab') || dept.includes('analis') || name.includes('sangre') || name.includes('perfil') || name.includes('hemograma') || name.includes('uro');
-            if (!isLab) return false;
+        } else if (categoryFilter !== 'all') {
+            if (!window.isServiceInCategory(proc, categoryFilter)) return false;
         }
 
         // Search text filter
@@ -11182,6 +11554,27 @@ window.setDoctorServiceCategoryFilter = function(category, btnEl) {
     window._doctorServicesCategoryFilter = category;
     document.querySelectorAll('#u-services-category-pills button').forEach(b => b.classList.remove('active-category-pill'));
     if (btnEl) btnEl.classList.add('active-category-pill');
+
+    const srvSearch = document.getElementById('u-services-search');
+    if (srvSearch) srvSearch.value = '';
+
+    const select = document.getElementById('u-services');
+    const services = window._allDoctorBaremoServices || [];
+
+    // Auto-select all services in category for odontologia, medicina, or laboratorio
+    if (category === 'odontologia' || category === 'medicina' || category === 'laboratorio') {
+        if (select) {
+            services.forEach(proc => {
+                if (window.isServiceInCategory(proc, category)) {
+                    const opt = select.querySelector(`option[value="${proc.code}"]`);
+                    if (opt) {
+                        opt.selected = true;
+                    }
+                }
+            });
+        }
+    }
+
     window.renderDoctorServicesVisualList();
 };
 
@@ -13384,9 +13777,8 @@ function initGlobalEvents() {
                 const roomId = roomSel?.value || '';
                 const roomName = roomSel && roomSel.selectedIndex >= 0 && roomSel.value ? roomSel.options[roomSel.selectedIndex].text : '';
 
-                // Collect additional specialties from active chips
-                const additionalChips = document.querySelectorAll('#u-additional-specialties-container .spec-chip.active');
-                const additionalSpecialties = Array.from(additionalChips).map(c => c.dataset.specialty).filter(Boolean);
+                // Collect additional specialties from selected tags set
+                const additionalSpecialties = window._doctorSelectedSpecialties ? Array.from(window._doctorSelectedSpecialties).filter(Boolean) : [];
                 const allSpecialties = Array.from(new Set([specialty, ...additionalSpecialties].filter(Boolean)));
 
                 doctorProfile = {
