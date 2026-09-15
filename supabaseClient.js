@@ -2750,6 +2750,10 @@ class SupabaseDataService {
         return await this.saveServiceLiquidation(record);
     }
 
+    static async recordServiceForLiquidation(params) {
+        return await this.recordServiceCompletionForLiquidation(params);
+    }
+
     // --- CASHEA TRACKING & SETTLEMENT ---
     static async getCasheaInvoices(forceRefresh = false) {
         const invoices = await this.getInvoices(forceRefresh);

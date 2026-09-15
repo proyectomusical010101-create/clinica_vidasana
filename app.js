@@ -21855,25 +21855,34 @@ window.settleDoctorFeeFromDailyClosing = async function(txId, doctorName, patien
         );
 
         if (!match && window.SupabaseDataService) {
-            match = await window.SupabaseDataService.recordServiceForLiquidation({
-                serviceCode: 'SRV-REC',
-                serviceName: concept || 'Servicio Clínico',
-                servicePrice: amountUSD,
-                patientId: patientId || '',
-                patientName: patientName || 'Paciente Particular',
-                doctorName: doctorName || 'Médico Tratante',
-                assistantName: assistantName || '',
-                hasAssistant: !!assistantName,
-                sourceType: 'daily_closing',
-                date: date || new Date().toISOString().split('T')[0],
-                notes: `Liquidación desde Cierre de Caja Diario (Tx: ${txId})`
-            });
+            const recordFn = window.SupabaseDataService.recordServiceCompletionForLiquidation || window.SupabaseDataService.recordServiceForLiquidation;
+            if (typeof recordFn === 'function') {
+                match = await recordFn.call(window.SupabaseDataService, {
+                    serviceCode: 'SRV-REC',
+                    serviceName: concept || 'Servicio Clínico',
+                    servicePrice: amountUSD,
+                    patientId: patientId || '',
+                    patientName: patientName || 'Paciente Particular',
+                    doctorName: doctorName || 'Médico Tratante',
+                    assistantName: assistantName || '',
+                    hasAssistant: !!assistantName,
+                    sourceType: 'daily_closing',
+                    date: date || new Date().toISOString().split('T')[0],
+                    notes: `Liquidación desde Cierre de Caja Diario (Tx: ${txId})`
+                });
+            }
         }
 
         if (window.ClinicalERP) {
             await window.ClinicalERP.loadAll();
-            if (match && typeof window.ClinicalERP.openSettleModal === 'function') {
-                window.ClinicalERP.openSettleModal(match.id, 'doctor');
+            if (match) {
+                if (!window.ClinicalERP.serviceLiquidations) window.ClinicalERP.serviceLiquidations = [];
+                if (!window.ClinicalERP.serviceLiquidations.find(x => x.id === match.id)) {
+                    window.ClinicalERP.serviceLiquidations.unshift(match);
+                }
+                if (typeof window.ClinicalERP.openSettleModal === 'function') {
+                    window.ClinicalERP.openSettleModal(match.id, 'doctor');
+                }
             }
         }
     } catch (err) {
