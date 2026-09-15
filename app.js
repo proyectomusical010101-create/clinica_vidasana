@@ -9515,6 +9515,353 @@ async function renderDashboard() {
     window.checkGlobalStockAlerts();
 }
 
+// ==========================================================
+// AGENDA: GESTIÓN SEMANAL, CANCELACIÓN Y PLANIFICADOR CRONOLÓGICO
+// ==========================================================
+window._agendaWeeklyRefDate = new Date();
+window._agendaViewMode = 'planner';
+window.currentAgendaFilter = 'pending';
+
+function getWeekDaysRange(refDate = new Date()) {
+    const d = new Date(refDate);
+    const day = d.getDay(); // 0 is Sunday, 1 is Monday...
+    const diffToMonday = d.getDate() - (day === 0 ? 6 : day - 1);
+    const monday = new Date(d.setDate(diffToMonday));
+    monday.setHours(0, 0, 0, 0);
+
+    const weekDays = [];
+    const dayNames = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+    const todayISO = new Date().toLocaleDateString('en-CA');
+
+    for (let i = 0; i < 7; i++) {
+        const current = new Date(monday);
+        current.setDate(monday.getDate() + i);
+        const isoDate = current.toLocaleDateString('en-CA');
+        const dayNum = current.getDate();
+        const monthShort = current.toLocaleDateString('es-ES', { month: 'short' });
+        weekDays.push({
+            name: dayNames[i],
+            date: current,
+            isoDate: isoDate,
+            dayNum: dayNum,
+            monthShort: monthShort,
+            isToday: isoDate === todayISO
+        });
+    }
+
+    const sunday = weekDays[6].date;
+    const rangeLabel = `Semana del ${monday.getDate()} de ${monday.toLocaleDateString('es-ES', { month: 'short' })} al ${sunday.getDate()} de ${sunday.toLocaleDateString('es-ES', { month: 'long' })}, ${sunday.getFullYear()}`;
+
+    return { monday, sunday, weekDays, rangeLabel };
+}
+
+function getNormalizedAppointmentDate(app) {
+    if (!app) return '';
+    const todayStr = new Date().toLocaleDateString('en-CA');
+    const tomorrowObj = new Date();
+    tomorrowObj.setDate(tomorrowObj.getDate() + 1);
+    const tomorrowStr = tomorrowObj.toLocaleDateString('en-CA');
+
+    if (app.date === 'today' || app.date === 'today-appt' || (!app.date && app.isTomorrow === false)) {
+        return todayStr;
+    }
+    if (app.date === 'tomorrow' || app.isTomorrow === true) {
+        return tomorrowStr;
+    }
+    if (typeof app.date === 'string' && app.date.match(/^\d{4}-\d{2}-\d{2}/)) {
+        return app.date.substring(0, 10);
+    }
+    return app.date || '';
+}
+
+function parseTimeToMinutes(timeStr) {
+    if (!timeStr) return 9999;
+    const match = (timeStr || '').match(/(\d+):?(\d*)\s*(AM|PM)?/i);
+    if (!match) return 9999;
+    let h = parseInt(match[1], 10);
+    const m = match[2] ? parseInt(match[2], 10) : 0;
+    const ampm = match[3] ? match[3].toUpperCase() : '';
+    if (ampm === 'PM' && h < 12) h += 12;
+    if (ampm === 'AM' && h === 12) h = 0;
+    return h * 60 + m;
+}
+
+window.navigateAgendaWeek = async function(direction) {
+    if (!window._agendaWeeklyRefDate) window._agendaWeeklyRefDate = new Date();
+    if (direction === 0) {
+        window._agendaWeeklyRefDate = new Date();
+    } else if (direction === -1) {
+        window._agendaWeeklyRefDate.setDate(window._agendaWeeklyRefDate.getDate() - 7);
+    } else if (direction === 1) {
+        window._agendaWeeklyRefDate.setDate(window._agendaWeeklyRefDate.getDate() + 7);
+    }
+    const searchVal = document.getElementById('agenda-table-search')?.value || '';
+    await renderAgendaView('week', searchVal);
+};
+
+window.setAgendaViewMode = async function(mode) {
+    window._agendaViewMode = mode;
+    document.getElementById('btn-toggle-view-planner')?.classList.toggle('active', mode === 'planner');
+    document.getElementById('btn-toggle-view-list')?.classList.toggle('active', mode === 'list');
+    const searchVal = document.getElementById('agenda-table-search')?.value || '';
+    await renderAgendaView('week', searchVal);
+};
+
+window.cancelAppointment = async function(apptId) {
+    try {
+        const appts = await SupabaseDataService.getAppointments();
+        const appt = appts.find(a => String(a.id) === String(apptId));
+        if (!appt) {
+            Swal.fire({ icon: 'error', title: 'Error', text: 'No se encontró la información de la cita.' });
+            return;
+        }
+
+        const { value: reason, isConfirmed } = await Swal.fire({
+            title: '¿Cancelar Cita Médica?',
+            html: `¿Está seguro de marcar como cancelada la cita de <strong>${appt.patientName}</strong> programada para el <strong>${appt.date || ''} a las ${appt.time || ''}</strong>?`,
+            icon: 'warning',
+            input: 'text',
+            inputLabel: 'Motivo de Cancelación (Opcional):',
+            inputPlaceholder: 'Ej: Paciente solicitó reprogramación, inasistencia, etc.',
+            showCancelButton: true,
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: 'Sí, cancelar cita',
+            cancelButtonText: 'Volver'
+        });
+
+        if (!isConfirmed) return;
+
+        const updatePayload = {
+            status: 'Cancelada',
+            cancelReason: reason || 'Cancelada desde Agenda',
+            cancelledAt: new Date().toISOString()
+        };
+
+        await SupabaseDataService.updateAppointment(apptId, updatePayload);
+
+        if (window.logUserAction) {
+            await window.logUserAction('Canceló Cita', 'Agenda / Citas', `Cita de ${appt.patientName} (${appt.date || ''} ${appt.time || ''}) cancelada. Motivo: ${reason || 'Sin motivo'}`);
+        }
+
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: 'info',
+            title: `Cita de ${appt.patientName} marcada como Cancelada`,
+            showConfirmButton: false,
+            timer: 2500
+        });
+
+        const activeFilterBtn = document.querySelector('#view-agenda .filter-card .filter-btn.active');
+        const filter = activeFilterBtn ? activeFilterBtn.dataset.filter : (window.currentAgendaFilter || 'week');
+        const searchVal = document.getElementById('agenda-table-search')?.value || '';
+        await renderAgendaView(filter, searchVal);
+    } catch(err) {
+        console.error("Error cancelling appointment:", err);
+        Swal.fire({ icon: 'error', title: 'Error al Cancelar', text: err.message || err });
+    }
+};
+
+window.reactivateAppointment = async function(apptId) {
+    try {
+        const appts = await SupabaseDataService.getAppointments();
+        const appt = appts.find(a => String(a.id) === String(apptId));
+        if (!appt) return;
+
+        await SupabaseDataService.updateAppointment(apptId, {
+            status: 'Programada',
+            cancelReason: null,
+            cancelledAt: null
+        });
+
+        if (window.logUserAction) {
+            await window.logUserAction('Reactivó Cita', 'Agenda / Citas', `Cita de ${appt.patientName} reactivada a Programada.`);
+        }
+
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: 'success',
+            title: `Cita de ${appt.patientName} reactivada ✓`,
+            showConfirmButton: false,
+            timer: 2200
+        });
+
+        const activeFilterBtn = document.querySelector('#view-agenda .filter-card .filter-btn.active');
+        const filter = activeFilterBtn ? activeFilterBtn.dataset.filter : (window.currentAgendaFilter || 'week');
+        const searchVal = document.getElementById('agenda-table-search')?.value || '';
+        await renderAgendaView(filter, searchVal);
+    } catch(err) {
+        console.error("Error reactivating appointment:", err);
+    }
+};
+
+function renderWeeklySchedulePlanner(container, appointments, weekInfo, searchQuery, isAssistant) {
+    container.innerHTML = '';
+
+    const totalWeek = appointments.length;
+    const confirmedCount = appointments.filter(a => a.status === 'Confirmada').length;
+    const attendedCount = appointments.filter(a => a.status === 'Completada' || a.status === 'Atendida').length;
+    const cancelledCount = appointments.filter(a => a.status === 'Cancelada').length;
+    const pendingCount = appointments.filter(a => a.status !== 'Completada' && a.status !== 'Atendida' && a.status !== 'Cancelada').length;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'weekly-planner-wrapper';
+
+    wrapper.innerHTML = `
+        <div class="weekly-planner-nav">
+            <div class="weekly-nav-btn-group">
+                <button type="button" class="btn btn-sm btn-outline" onclick="window.navigateAgendaWeek(-1)" title="Semana Anterior">
+                    <i class="fa-solid fa-chevron-left"></i> Anterior
+                </button>
+                <button type="button" class="btn btn-sm btn-primary" onclick="window.navigateAgendaWeek(0)" style="background:#0d9488 !important; border:none !important;" title="Ir a la Semana Actual">
+                    <i class="fa-solid fa-calendar-day"></i> Hoy / Esta Semana
+                </button>
+                <button type="button" class="btn btn-sm btn-outline" onclick="window.navigateAgendaWeek(1)" title="Semana Siguiente">
+                    Siguiente <i class="fa-solid fa-chevron-right"></i>
+                </button>
+            </div>
+
+            <div class="weekly-nav-title-box">
+                <div class="weekly-nav-title">
+                    <i class="fa-solid fa-calendar-week" style="color:#0d9488;"></i> ${weekInfo.rangeLabel}
+                </div>
+                <div class="weekly-nav-subtitle">
+                    Total: <strong>${totalWeek}</strong> citas • Pendientes: <strong style="color:#0284c7;">${pendingCount}</strong> • Confirmadas: <strong style="color:#059669;">${confirmedCount}</strong> • Atendidas: <strong style="color:#0d9488;">${attendedCount}</strong> ${cancelledCount > 0 ? `• Canceladas: <strong style="color:#e11d48;">${cancelledCount}</strong>` : ''}
+                </div>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:8px;">
+                <button type="button" class="btn btn-sm btn-success" onclick="window.openNewAppointmentModal()" style="background:#10b981 !important; border:none !important; font-weight:700;">
+                    <i class="fa-solid fa-plus"></i> + Nueva Cita
+                </button>
+            </div>
+        </div>
+
+        <div class="weekly-planner-grid" id="weekly-planner-grid">
+            <!-- Day columns -->
+        </div>
+    `;
+
+    const grid = wrapper.querySelector('#weekly-planner-grid');
+
+    weekInfo.weekDays.forEach(day => {
+        const dayCol = document.createElement('div');
+        dayCol.className = `weekly-day-col ${day.isToday ? 'is-today' : ''}`;
+
+        const dayAppts = appointments.filter(app => getNormalizedAppointmentDate(app) === day.isoDate);
+        dayAppts.sort((a, b) => parseTimeToMinutes(a.time) - parseTimeToMinutes(b.time));
+
+        let apptsHtml = '';
+        if (dayAppts.length === 0) {
+            apptsHtml = `
+                <div style="text-align:center; padding:35px 10px; color:#94a3b8; font-size:0.8rem; display:flex; flex-direction:column; align-items:center; gap:6px;">
+                    <i class="fa-regular fa-calendar-check" style="font-size:1.6rem; color:#cbd5e1;"></i>
+                    <span>Sin citas para este día</span>
+                </div>
+            `;
+        } else {
+            apptsHtml = dayAppts.map(app => {
+                const isAttended = (app.status === 'Completada' || app.status === 'Atendida');
+                const isCancelled = (app.status === 'Cancelada');
+                const isConfirmed = (app.status === 'Confirmada');
+
+                let cardStatusClass = '';
+                let statusTagHtml = '';
+
+                if (isCancelled) {
+                    cardStatusClass = 'status-cancelada';
+                    statusTagHtml = `<span class="weekly-appt-status-tag" style="background:#fee2e2; color:#b91c1c;"><i class="fa-solid fa-ban"></i> Cancelada</span>`;
+                } else if (isAttended) {
+                    cardStatusClass = 'status-atendida';
+                    statusTagHtml = `<span class="weekly-appt-status-tag" style="background:#ccfbf1; color:#0f766e;"><i class="fa-solid fa-circle-check"></i> Atendida</span>`;
+                } else if (isConfirmed) {
+                    cardStatusClass = 'status-confirmada';
+                    statusTagHtml = `<span class="weekly-appt-status-tag" style="background:#dcfce7; color:#15803d; cursor:pointer;" onclick="window.toggleApptConfirmation('${app.id}')" title="Clic para alternar confirmación"><i class="fa-solid fa-check-double"></i> Confirmada</span>`;
+                } else {
+                    statusTagHtml = `<span class="weekly-appt-status-tag" style="background:#e0f2fe; color:#0369a1; cursor:pointer;" onclick="window.toggleApptConfirmation('${app.id}')" title="Clic para marcar Confirmada"><i class="fa-regular fa-clock"></i> ${app.status || 'Programada'}</span>`;
+                }
+
+                let actionsHtml = '';
+                if (isCancelled) {
+                    actionsHtml += `<button type="button" class="weekly-act-btn btn-act-reactivate" onclick="window.reactivateAppointment('${app.id}')" title="Reactivar Cita (Volver a Programar)"><i class="fa-solid fa-rotate-left"></i></button>`;
+                } else {
+                    actionsHtml += `<button type="button" class="weekly-act-btn btn-act-cancel" onclick="window.cancelAppointment('${app.id}')" title="Cancelar Cita"><i class="fa-solid fa-ban"></i></button>`;
+                }
+
+                if (!isAssistant) {
+                    actionsHtml += `<button type="button" class="weekly-act-btn btn-act-delete" onclick="deleteAppointment('${app.id}')" title="Mover a la Papelera"><i class="fa-solid fa-trash-can"></i></button>`;
+                }
+
+                actionsHtml += `<button type="button" class="weekly-act-btn btn-act-edit" onclick="window.editAppointment('${app.id}')" title="Reagendar / Editar Cita"><i class="fa-solid fa-pen-to-square"></i></button>`;
+
+                if (!isCancelled) {
+                    if (isAttended) {
+                        actionsHtml += `<button type="button" class="weekly-act-btn" style="color:#059669; border-color:#a7f3d0;" onclick="window.viewAttendedSessionForPatient('${app.patientId}')" title="Ver Evolución Clínica"><i class="fa-solid fa-file-medical"></i></button>`;
+                    } else if (!isAssistant) {
+                        actionsHtml += `<button type="button" class="weekly-act-btn btn-act-attend" onclick="window.atenderAppointmentFromAgenda('${app.id}')" title="Atender esta cita ahora"><i class="fa-solid fa-user-doctor"></i></button>`;
+                    }
+                }
+
+                if (!isAttended && !isCancelled) {
+                    actionsHtml += `<button type="button" class="weekly-act-btn btn-act-wa" onclick="sendWhatsAppReminderForAppt('${app.id}')" title="Enviar recordatorio WhatsApp"><i class="fa-brands fa-whatsapp"></i></button>`;
+                }
+
+                return `
+                    <div class="weekly-appt-card ${cardStatusClass}">
+                        <div class="weekly-appt-top">
+                            <span class="weekly-appt-time"><i class="fa-solid fa-clock text-cyan"></i> ${app.time}</span>
+                            ${statusTagHtml}
+                        </div>
+                        <div class="weekly-appt-patient">${app.patientName}</div>
+                        <div class="weekly-appt-id">C.I: ${app.patientId || 'N/A'}</div>
+                        <div class="weekly-appt-treatment"><i class="fa-solid fa-notes-medical" style="color:#0d9488; margin-right:4px;"></i>${app.treatment || 'Consulta Médica'}</div>
+                        <div class="weekly-appt-meta">
+                            ${app.doctorName ? `<span class="weekly-meta-badge blue"><i class="fa-solid fa-user-doctor"></i> ${app.doctorName}</span>` : ''}
+                            ${app.specialty ? `<span class="weekly-meta-badge purple"><i class="fa-solid fa-stethoscope"></i> ${app.specialty}</span>` : ''}
+                            ${app.shift ? `<span class="weekly-meta-badge amber"><i class="fa-regular fa-sun"></i> ${app.shift === 'morning' ? 'Mañana' : (app.shift === 'afternoon' ? 'Tarde' : 'Completo')}</span>` : ''}
+                            ${app.roomName ? `<span class="weekly-meta-badge cyan"><i class="fa-solid fa-door-open"></i> ${app.roomName}</span>` : ''}
+                        </div>
+                        ${isCancelled && app.cancelReason ? `<div style="font-size:0.72rem; color:#dc2626; font-style:italic; margin-top:2px;"><i class="fa-solid fa-circle-info"></i> ${app.cancelReason}</div>` : ''}
+                        <div class="weekly-appt-actions">
+                            ${actionsHtml}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        dayCol.innerHTML = `
+            <div class="weekly-day-header">
+                <div class="weekly-day-title-group">
+                    <div class="weekly-day-name">
+                        ${day.name}
+                        ${day.isToday ? '<span class="badge-tag green" style="font-size:0.65rem; padding:1px 5px; font-weight:800; border-radius:4px;">HOY</span>' : ''}
+                    </div>
+                    <div class="weekly-day-date">${day.dayNum} de ${day.monthShort}</div>
+                </div>
+                <div class="weekly-day-actions">
+                    <span class="weekly-day-badge-count" title="${dayAppts.length} citas">${dayAppts.length}</span>
+                    <button type="button" class="weekly-day-add-btn" onclick="window.openNewAppointmentModal({ prefillDate: '${day.isoDate}' })" title="Asignar Cita el ${day.name} ${day.dayNum}">
+                        <i class="fa-solid fa-plus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="weekly-day-body">
+                ${apptsHtml}
+                <button type="button" class="weekly-add-slot-btn" onclick="window.openNewAppointmentModal({ prefillDate: '${day.isoDate}' })">
+                    <i class="fa-solid fa-plus"></i> Asignar en este día
+                </button>
+            </div>
+        `;
+
+        grid.appendChild(dayCol);
+    });
+
+    container.appendChild(wrapper);
+}
+
 window.deleteAppointment = async function(apptId) {
     const user = getCurrentUser();
     if (user && user.role.toLowerCase().includes('asistente')) {
@@ -9546,7 +9893,7 @@ window.deleteAppointment = async function(apptId) {
             }
             await SupabaseDataService.deleteAppointment(apptId);
             await renderDashboard();
-            await renderAgendaView();
+            await renderAgendaView(window.currentAgendaFilter || 'pending');
             Swal.fire({ icon: 'success', title: 'Cita movida a la papelera', text: 'Se ha registrado la acción en el historial de auditoría.', timer: 2000, showConfirmButton: false });
         }
     });
@@ -9555,6 +9902,36 @@ window.deleteAppointment = async function(apptId) {
 async function renderAgendaView(filter = 'pending', searchQuery = '') {
     const agendaListMain = document.getElementById('agenda-list-main');
     if (!agendaListMain) return;
+
+    window.currentAgendaFilter = filter;
+
+    // Toggle weekly views buttons
+    const toggleEl = document.getElementById('agenda-weekly-view-toggle');
+    if (toggleEl) {
+        if (filter === 'week') {
+            toggleEl.classList.remove('hidden');
+            document.getElementById('btn-toggle-view-planner')?.classList.toggle('active', window._agendaViewMode === 'planner');
+            document.getElementById('btn-toggle-view-list')?.classList.toggle('active', window._agendaViewMode === 'list');
+        } else {
+            toggleEl.classList.add('hidden');
+        }
+    }
+
+    // Dynamic Card Title
+    const cardTitleEl = document.getElementById('agenda-card-title');
+    if (cardTitleEl) {
+        if (filter === 'week') {
+            cardTitleEl.innerHTML = `<i class="fa-solid fa-calendar-week text-cyan"></i> Planificador Semanal de Consultas`;
+        } else if (filter === 'pending') {
+            cardTitleEl.innerHTML = `<i class="fa-solid fa-clock text-cyan"></i> Citas Pendientes por Atender`;
+        } else if (filter === 'attended') {
+            cardTitleEl.innerHTML = `<i class="fa-solid fa-circle-check text-green"></i> Pacientes Atendidos Hoy`;
+        } else if (filter === 'today') {
+            cardTitleEl.innerHTML = `<i class="fa-solid fa-calendar-day text-cyan"></i> Citas Programadas para Hoy`;
+        } else {
+            cardTitleEl.innerHTML = `<i class="fa-solid fa-calendar-days text-cyan"></i> Todas las Citas Programadas`;
+        }
+    }
 
     // Ensure Agenda buttons are immediately bound before any early returns
     const addAppointmentBtn = document.getElementById('btn-add-appointment-agenda');
@@ -9590,22 +9967,23 @@ async function renderAgendaView(filter = 'pending', searchQuery = '') {
     // Apply Filter (Excluding unapproved budget session appointments until budget is approved)
     let appointments = allAppointments.filter(a => a.status !== 'Pendiente Aprobación' && a.status !== 'Pendiente Aprobación Presupuesto');
     const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
+    let weekInfo = null;
 
     if (filter === 'pending') {
         appointments = appointments.filter(app => app.status !== 'Completada' && app.status !== 'Atendida' && app.status !== 'Cancelada');
     } else if (filter === 'attended' || filter === 'Completada') {
         appointments = appointments.filter(app => app.status === 'Completada' || app.status === 'Atendida');
     } else if (filter === 'today') {
-        appointments = appointments.filter(app => app.date === todayStr || app.date === 'today' || app.date === 'today-appt' || app.isTomorrow === false);
-    } else if (filter === 'week') {
-        const today = new Date();
-        const nextWeek = new Date();
-        nextWeek.setDate(today.getDate() + 7);
-        const todayTime = today.getTime();
-        const nextWeekTime = nextWeek.getTime();
         appointments = appointments.filter(app => {
-            const appDate = new Date(app.date);
-            return appDate.getTime() >= todayTime && appDate.getTime() <= nextWeekTime;
+            const nDate = getNormalizedAppointmentDate(app);
+            return nDate === todayStr || app.date === 'today' || app.date === 'today-appt' || app.isTomorrow === false;
+        });
+    } else if (filter === 'week') {
+        weekInfo = getWeekDaysRange(window._agendaWeeklyRefDate || new Date());
+        const weekIsoSet = new Set(weekInfo.weekDays.map(d => d.isoDate));
+        appointments = appointments.filter(app => {
+            const nDate = getNormalizedAppointmentDate(app);
+            return weekIsoSet.has(nDate);
         });
     } else if (filter !== 'all') {
         appointments = appointments.filter(app => app.status === filter);
@@ -9677,6 +10055,21 @@ async function renderAgendaView(filter = 'pending', searchQuery = '') {
         );
     }
 
+    // If weekly planner mode is active, render dedicated weekly planner grid
+    if (filter === 'week' && window._agendaViewMode === 'planner') {
+        if (!weekInfo) weekInfo = getWeekDaysRange(window._agendaWeeklyRefDate || new Date());
+        renderWeeklySchedulePlanner(agendaListMain, appointments, weekInfo, searchQuery, isAssistant);
+        return;
+    }
+
+    // Sort chronologically for list view
+    appointments.sort((a, b) => {
+        const dateA = getNormalizedAppointmentDate(a);
+        const dateB = getNormalizedAppointmentDate(b);
+        if (dateA !== dateB) return dateA.localeCompare(dateB);
+        return parseTimeToMinutes(a.time) - parseTimeToMinutes(b.time);
+    });
+
     if (appointments.length === 0) {
         const emptyMsg = filter === 'pending' 
             ? '¡Excelente! No hay citas pendientes por atender en este momento.'
@@ -9688,10 +10081,11 @@ async function renderAgendaView(filter = 'pending', searchQuery = '') {
 
     appointments.forEach(app => {
         const isAttended = (app.status === 'Completada' || app.status === 'Atendida');
+        const isCancelled = (app.status === 'Cancelada');
         const isTomorrowAppt = app.isTomorrow === true || app.date === 'tomorrow';
         
         let whatsappBtnHtml = '';
-        if (!isAttended) {
+        if (!isAttended && !isCancelled) {
             whatsappBtnHtml = `
                 <button class="btn btn-xs btn-success btn-appt-reminder" style="background-color: #22c55e !important; color: white !important; border: none !important; padding: 4px 8px; border-radius: 6px;" onclick="sendWhatsAppReminderForAppt('${app.id}')" title="Notificar por WhatsApp">
                     <i class="fa-brands fa-whatsapp" style="font-size: 0.95rem;"></i>
@@ -9699,15 +10093,22 @@ async function renderAgendaView(filter = 'pending', searchQuery = '') {
             `;
         }
 
-        const abonoBtn = isAttended ? '' : `
+        const abonoBtn = (isAttended || isCancelled) ? '' : `
             <button class="btn btn-xs btn-outline" style="border-color: #10b981; color: #059669; font-weight: 600;" onclick="window.openPaymentModalForAppointment('${app.patientId}', '${app.patientName}', '${app.treatment}')" title="Registrar Abono Anticipado">
                 <i class="fa-solid fa-hand-holding-dollar"></i> <span class="btn-text-full">Abonar</span>
             </button>
         `;
 
+        let cancelApptBtn = '';
+        if (isCancelled) {
+            cancelApptBtn = `<button class="btn btn-xs btn-outline" style="border-color: #10b981; color: #059669;" onclick="window.reactivateAppointment('${app.id}')" title="Reactivar Cita"><i class="fa-solid fa-rotate-left"></i> <span class="btn-text-full">Reactivar</span></button>`;
+        } else if (!isAttended) {
+            cancelApptBtn = `<button class="btn btn-xs btn-outline text-red" style="border-color: #f87171; color: #ef4444;" onclick="window.cancelAppointment('${app.id}')" title="Cancelar Cita"><i class="fa-solid fa-ban"></i> <span class="btn-text-full">Cancelar</span></button>`;
+        }
+
         const deleteApptBtn = isAssistant ? '' : `<button class="btn btn-xs btn-outline text-red" onclick="deleteAppointment('${app.id}')" title="Eliminar Cita"><i class="fa-solid fa-trash"></i></button>`;
 
-        const gCalBtn = isAttended ? '' : `
+        const gCalBtn = (isAttended || isCancelled) ? '' : `
             <button class="btn btn-xs btn-outline btn-appt-gcal" style="border-color: #2563eb; color: #2563eb;" onclick="addApptToGoogleCalendarDirect('${app.id}')" title="Añadir a Google Calendar">
                 <i class="fa-solid fa-calendar-plus"></i> <span class="btn-text-full">Calendar</span>
             </button>
@@ -9719,7 +10120,10 @@ async function renderAgendaView(filter = 'pending', searchQuery = '') {
         let actionAttendOrViewHtml = '';
         let statusBadgeHtml = `<span class="badge-tag blue">${app.status || 'Programada'}</span>`;
 
-        if (isAttended) {
+        if (isCancelled) {
+            itemClass = 'timeline-item';
+            statusBadgeHtml = `<span class="badge-tag red" style="background: rgba(239, 68, 68, 0.15); color: #dc2626; font-weight: 700;"><i class="fa-solid fa-ban"></i> Cancelada</span>`;
+        } else if (isAttended) {
             itemClass = 'timeline-item timeline-item-attended';
             statusBadgeHtml = `<span class="badge-tag green" style="background: rgba(16, 185, 129, 0.15); color: #059669; font-weight: 700;"><i class="fa-solid fa-circle-check"></i> Atendida</span>`;
             actionAttendOrViewHtml = `<button class="btn btn-xs btn-outline" style="border-color: #10b981; color: #059669; font-weight: 600;" onclick="window.viewAttendedSessionForPatient('${app.patientId}')" title="Ver Evolución Clínica"><i class="fa-solid fa-file-medical"></i> <span class="btn-text-full">Ver Evolución</span></button>`;
@@ -9738,6 +10142,10 @@ async function renderAgendaView(filter = 'pending', searchQuery = '') {
         const div = document.createElement('div');
         div.className = itemClass;
         div.style.marginBottom = '12px';
+        if (isCancelled) {
+            div.style.background = '#fff1f2';
+            div.style.opacity = '0.75';
+        }
         div.innerHTML = `
             <div class="timeline-meta">
                 <div class="timeline-time-status" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
@@ -9753,15 +10161,17 @@ async function renderAgendaView(filter = 'pending', searchQuery = '') {
                 <div class="timeline-actions">
                     ${whatsappBtnHtml}
                     ${abonoBtn}
+                    ${cancelApptBtn}
                     ${gCalBtn}
                     ${editApptBtn}
                     ${actionAttendOrViewHtml}
                     ${deleteApptBtn}
                 </div>
             </div>
-            <div class="timeline-patient-name"><strong>${app.patientName}</strong></div>
+            <div class="timeline-patient-name" style="${isCancelled ? 'text-decoration: line-through; color: #64748b;' : ''}"><strong>${app.patientName}</strong></div>
             <div class="timeline-patient-id"><small class="text-muted">C.I: ${app.patientId}</small></div>
             <div class="timeline-treatment"><small class="text-muted">Procedimiento: ${app.treatment}</small></div>
+            ${isCancelled && app.cancelReason ? `<div style="font-size:0.75rem; color:#dc2626; font-style:italic; margin-top:2px;">Motivo cancelación: ${app.cancelReason}</div>` : ''}
         `;
         agendaListMain.appendChild(div);
     });
@@ -13674,10 +14084,10 @@ function initGlobalEvents() {
     };
 
     // Modal Cita Helpers: New & Edit
-    window.openNewAppointmentModal = async function() {
+    window.openNewAppointmentModal = async function({ prefillDate = null, prefillTime = null, prefillPatientId = null, prefillDoctorId = null } = {}) {
         try {
             await populateAppointmentPatientSelect();
-            await window.populateAppointmentDropdowns({});
+            await window.populateAppointmentDropdowns({ doctorId: prefillDoctorId });
         } catch(err) {
             console.error("Error populating appointment patients/dropdowns:", err);
         }
@@ -13692,7 +14102,7 @@ function initGlobalEvents() {
         if (appIdInput) appIdInput.value = '';
 
         const timeInput = document.getElementById('app-time');
-        if (timeInput) timeInput.value = '';
+        if (timeInput) timeInput.value = prefillTime || '';
 
         const treatmentInput = document.getElementById('app-treatment');
         if (treatmentInput) treatmentInput.value = '';
@@ -13703,10 +14113,40 @@ function initGlobalEvents() {
         const daySel = document.getElementById('app-day-target');
         const customGrp = document.getElementById('app-custom-date-group');
         const customDateInput = document.getElementById('app-custom-date');
-        if (daySel) daySel.value = 'today';
-        if (customGrp) customGrp.classList.add('hidden');
-        if (customDateInput) {
-            customDateInput.value = new Date().toISOString().split('T')[0];
+
+        if (prefillDate) {
+            const todayStr = new Date().toLocaleDateString('en-CA');
+            const tomorrowObj = new Date();
+            tomorrowObj.setDate(tomorrowObj.getDate() + 1);
+            const tomorrowStr = tomorrowObj.toLocaleDateString('en-CA');
+
+            if (daySel) {
+                if (prefillDate === todayStr) {
+                    daySel.value = 'today';
+                    if (customGrp) customGrp.classList.add('hidden');
+                } else if (prefillDate === tomorrowStr) {
+                    daySel.value = 'tomorrow';
+                    if (customGrp) customGrp.classList.add('hidden');
+                } else {
+                    daySel.value = 'custom';
+                    if (customGrp) customGrp.classList.remove('hidden');
+                    if (customDateInput) customDateInput.value = prefillDate;
+                }
+            }
+        } else {
+            if (daySel) daySel.value = 'today';
+            if (customGrp) customGrp.classList.add('hidden');
+            if (customDateInput) {
+                customDateInput.value = new Date().toISOString().split('T')[0];
+            }
+        }
+
+        if (prefillPatientId) {
+            const pSel = document.getElementById('app-patient-select');
+            if (pSel) {
+                pSel.value = prefillPatientId;
+                pSel.dispatchEvent(new Event('change'));
+            }
         }
 
         openModal('modal-appointment');

@@ -6409,6 +6409,436 @@ select, .form-select, select.form-control {
     box-shadow: 0 2px 5px rgba(5, 150, 105, 0.35);
 }
 
+/* ==========================================================
+   PLANIFICADOR SEMANAL DE CONSULTAS (WEEKLY SCHEDULE PLANNER)
+   ========================================================== */
+.weekly-planner-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: 100%;
+}
+
+.weekly-planner-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    background: #ffffff;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 12px 18px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+}
+
+.weekly-nav-btn-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.weekly-nav-title-box {
+    text-align: center;
+}
+
+.weekly-nav-title {
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: center;
+}
+
+.weekly-nav-subtitle {
+    font-size: 0.8rem;
+    color: #64748b;
+    font-weight: 500;
+    margin-top: 2px;
+}
+
+.weekly-view-toggle {
+    display: inline-flex;
+    background: #f1f5f9;
+    padding: 3px;
+    border-radius: 8px;
+    gap: 2px;
+}
+
+.weekly-view-toggle-btn {
+    border: none;
+    background: transparent;
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #64748b;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.weekly-view-toggle-btn.active {
+    background: #ffffff;
+    color: #0f172a;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.weekly-planner-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(215px, 1fr));
+    gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 12px;
+    scrollbar-width: thin;
+}
+
+.weekly-day-col {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    min-height: 480px;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.02);
+}
+
+.weekly-day-col.is-today {
+    border: 2px solid #0d9488;
+    background: #f0fdfa;
+    box-shadow: 0 3px 10px rgba(13, 148, 136, 0.12);
+}
+
+.weekly-day-header {
+    padding: 10px 12px;
+    background: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+    border-radius: 11px 11px 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.weekly-day-col.is-today .weekly-day-header {
+    background: #ccfbf1;
+    border-bottom: 1px solid #99f6e4;
+}
+
+.weekly-day-title-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.weekly-day-name {
+    font-size: 0.82rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #334155;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.weekly-day-col.is-today .weekly-day-name {
+    color: #0f766e;
+}
+
+.weekly-day-date {
+    font-size: 0.78rem;
+    color: #64748b;
+    font-weight: 600;
+    margin-top: 1px;
+}
+
+.weekly-day-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.weekly-day-badge-count {
+    background: #e2e8f0;
+    color: #334155;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 10px;
+}
+
+.weekly-day-col.is-today .weekly-day-badge-count {
+    background: #0d9488;
+    color: #ffffff;
+}
+
+.weekly-day-add-btn {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #0f766e;
+    font-size: 0.85rem;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    padding: 0;
+}
+
+.weekly-day-add-btn:hover {
+    background: #0d9488;
+    color: #ffffff;
+    border-color: #0d9488;
+}
+
+.weekly-day-body {
+    padding: 10px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    flex: 1;
+    overflow-y: auto;
+    max-height: 720px;
+}
+
+.weekly-appt-card {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-left: 4px solid #3b82f6;
+    border-radius: 8px;
+    padding: 10px 11px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    transition: all 0.18s ease;
+    position: relative;
+}
+
+.weekly-appt-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+}
+
+.weekly-appt-card.status-confirmada {
+    border-left-color: #10b981;
+}
+
+.weekly-appt-card.status-atendida {
+    border-left-color: #0d9488;
+    background: #f0fdfa;
+}
+
+.weekly-appt-card.status-cancelada {
+    border-left-color: #ef4444;
+    background: #fff1f2;
+    opacity: 0.72;
+}
+
+.weekly-appt-card.status-cancelada:hover {
+    opacity: 1;
+}
+
+.weekly-appt-card.status-cancelada .weekly-appt-patient {
+    text-decoration: line-through;
+    color: #64748b;
+}
+
+.weekly-appt-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+}
+
+.weekly-appt-time {
+    font-size: 0.84rem;
+    font-weight: 800;
+    color: #0f172a;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.weekly-appt-status-tag {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 6px;
+    text-transform: capitalize;
+}
+
+.weekly-appt-patient {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.3;
+}
+
+.weekly-appt-id {
+    font-size: 0.74rem;
+    color: #64748b;
+}
+
+.weekly-appt-treatment {
+    font-size: 0.78rem;
+    color: #334155;
+    background: rgba(0, 0, 0, 0.02);
+    border-radius: 4px;
+    padding: 3px 6px;
+    line-height: 1.3;
+}
+
+.weekly-appt-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 2px;
+}
+
+.weekly-meta-badge {
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.weekly-meta-badge.blue {
+    background: rgba(37, 99, 235, 0.08);
+    color: #1d4ed8;
+}
+
+.weekly-meta-badge.purple {
+    background: rgba(147, 51, 234, 0.08);
+    color: #7e22ce;
+}
+
+.weekly-meta-badge.amber {
+    background: rgba(245, 158, 11, 0.1);
+    color: #b45309;
+}
+
+.weekly-meta-badge.cyan {
+    background: rgba(6, 182, 212, 0.1);
+    color: #0e7490;
+}
+
+.weekly-appt-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    margin-top: 4px;
+    padding-top: 6px;
+    border-top: 1px solid #f1f5f9;
+}
+
+.weekly-act-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    font-size: 0.74rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    padding: 0;
+}
+
+.weekly-act-btn:hover {
+    transform: scale(1.08);
+}
+
+.weekly-act-btn.btn-act-cancel {
+    color: #dc2626;
+    border-color: #fecaca;
+}
+.weekly-act-btn.btn-act-cancel:hover {
+    background: #fee2e2;
+}
+
+.weekly-act-btn.btn-act-reactivate {
+    color: #059669;
+    border-color: #a7f3d0;
+}
+.weekly-act-btn.btn-act-reactivate:hover {
+    background: #d1fae5;
+}
+
+.weekly-act-btn.btn-act-delete {
+    color: #ef4444;
+    border-color: #fca5a5;
+}
+.weekly-act-btn.btn-act-delete:hover {
+    background: #fee2e2;
+}
+
+.weekly-act-btn.btn-act-edit {
+    color: #0284c7;
+    border-color: #bae6fd;
+}
+.weekly-act-btn.btn-act-edit:hover {
+    background: #e0f2fe;
+}
+
+.weekly-act-btn.btn-act-attend {
+    color: #0f766e;
+    border-color: #99f6e4;
+    background: #f0fdfa;
+}
+.weekly-act-btn.btn-act-attend:hover {
+    background: #0d9488;
+    color: #ffffff;
+}
+
+.weekly-act-btn.btn-act-wa {
+    color: #16a34a;
+    border-color: #bbf7d0;
+}
+.weekly-act-btn.btn-act-wa:hover {
+    background: #22c55e;
+    color: #ffffff;
+}
+
+.weekly-add-slot-btn {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1.5px dashed #cbd5e1;
+    border-radius: 8px;
+    background: transparent;
+    color: #64748b;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: all 0.15s ease;
+    margin-top: auto;
+}
+
+.weekly-add-slot-btn:hover {
+    border-color: #0d9488;
+    color: #0d9488;
+    background: #f0fdfa;
+}
+
+
 
 
 
