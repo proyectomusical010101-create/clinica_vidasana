@@ -10789,89 +10789,21 @@ window.populateUserModalSelects = async function(docProf = {}) {
     }
 };
 
-window.quickAddNewSpecialty = async function() {
-    const { value: newSpec } = await Swal.fire({
-        title: '<i class="fa-solid fa-stethoscope text-cyan"></i> Nueva Especialidad',
-        text: 'Ingrese el nombre de la nueva especialidad médica u odontológica:',
-        input: 'text',
-        inputPlaceholder: 'ej: Periodoncia, Dermatología, Nutrición...',
-        showCancelButton: true,
-        confirmButtonText: '<i class="fa-solid fa-check"></i> Guardar y Seleccionar',
-        cancelButtonText: 'Cancelar',
-        confirmButtonColor: '#0891b2',
-        inputValidator: (val) => {
-            if (!val || !val.trim()) {
-                return 'El nombre de la especialidad no puede estar vacío';
-            }
+window.quickAddNewSpecialty = function() {
+    window._specialtyModalOpenedFromDoctorModal = true;
+    if (window.ClinicalERP && typeof window.ClinicalERP.openAddSpecialty === 'function') {
+        window.ClinicalERP.openAddSpecialty();
+    } else {
+        const modal = document.getElementById('modal-specialty');
+        if (modal) {
+            document.getElementById('form-specialty')?.reset();
+            const idInput = document.getElementById('specialty-id');
+            if (idInput) idInput.value = '';
+            const titleEl = document.getElementById('modal-specialty-title');
+            if (titleEl) titleEl.innerHTML = '<i class="fa-solid fa-stethoscope text-teal"></i> Nueva Especialidad Médica';
+            modal.classList.remove('hidden');
         }
-    });
-
-    if (!newSpec || !newSpec.trim()) return;
-    const specName = newSpec.trim();
-
-    // Categorize
-    const lower = specName.toLowerCase();
-    let dept = 'Medicina General';
-    let icon = 'fa-stethoscope';
-    let color = '#0d9488';
-    if (lower.includes('odont') || lower.includes('dent') || lower.includes('ortod') || lower.includes('endod') || lower.includes('periodon') || lower.includes('maxilo') || lower.includes('bucal') || lower.includes('protes') || lower.includes('implant')) {
-        dept = 'Odontología';
-        icon = 'fa-tooth';
-    } else if (lower.includes('lab') || lower.includes('analis') || lower.includes('sangre')) {
-        dept = 'Laboratorio';
-        icon = 'fa-vials';
-        color = '#0284c7';
-    } else if (lower.includes('rayos') || lower.includes('rx') || lower.includes('eco') || lower.includes('imagen')) {
-        dept = 'Rayos X e Imagen';
-        icon = 'fa-x-ray';
-        color = '#8b5cf6';
     }
-
-    const specObj = {
-        id: 'esp-' + Date.now(),
-        name: specName,
-        department: dept,
-        doctor_commission_pct: 60,
-        clinic_commission_pct: 40,
-        description: `Especialidad clínica de ${specName}`,
-        status: 'Activo',
-        icon: icon,
-        color: color
-    };
-
-    try {
-        if (window.SupabaseDataService && window.SupabaseDataService.saveSpecialty) {
-            await window.SupabaseDataService.saveSpecialty(specObj);
-        }
-        if (window.ClinicalERP) {
-            if (!window.ClinicalERP.specialties) window.ClinicalERP.specialties = [];
-            if (!window.ClinicalERP.specialties.some(s => (s.name || s.nombre).toLowerCase() === specName.toLowerCase())) {
-                window.ClinicalERP.specialties.push(specObj);
-            }
-            if (typeof window.ClinicalERP.renderSpecialties === 'function') {
-                window.ClinicalERP.renderSpecialties();
-            }
-        }
-    } catch(e) {
-        console.error('Error guardando nueva especialidad:', e);
-    }
-
-    // Preserve currently selected additional specialties
-    const currentActiveAdditional = window._doctorSelectedSpecialties ? Array.from(window._doctorSelectedSpecialties) : [];
-
-    // Re-populate selects and set newly created as primary specialty
-    await window.populateUserModalSelects({
-        specialty: specName,
-        additionalSpecialties: currentActiveAdditional
-    });
-
-    Swal.fire({
-        icon: 'success',
-        title: '¡Especialidad Registrada!',
-        text: `La especialidad "${specName}" se ha creado y seleccionado exitosamente.`,
-        timer: 1800,
-        showConfirmButton: false
-    });
 };
 
 window.openCreateUserModal = async function() {
@@ -11032,6 +10964,68 @@ window.deleteUser = async function(userId) {
 };
 
 // ==========================================
+// UNIFIED SPECIALTY SELECTS POPULATOR
+// ==========================================
+window.populateAllSpecialtySelects = function(selectedNameToSet = null) {
+    let dynamicSpecs = [];
+    if (window.ClinicalERP && window.ClinicalERP.specialties && window.ClinicalERP.specialties.length > 0) {
+        dynamicSpecs = window.ClinicalERP.specialties;
+    } else {
+        try { dynamicSpecs = JSON.parse(localStorage.getItem('vidasana_specialties')) || []; } catch(e) {}
+    }
+
+    const allSpecs = Array.from(new Set([
+        'Odontología General', 'Ortodoncia', 'Endodoncia', 'Periodoncia', 'Cirugía Maxilofacial', 'Odontopediatría', 'Prótesis Dental', 'Implantología', 'Odontología Estética',
+        'Medicina General', 'Pediatría', 'Ginecología y Obstetricia', 'Cardiología', 'Traumatología y Ortopedia', 'Dermatología', 'Oftalmología', 'Nutrición y Dietética', 'Psicología Clínica',
+        'Laboratorio Clínico', 'Rayos X e Imagenología',
+        ...dynamicSpecs.map(s => s.name || s.nombre).filter(Boolean)
+    ])).sort((a, b) => a.localeCompare(b));
+
+    // Update _doctorAvailableSpecialties
+    window._doctorAvailableSpecialties = allSpecs;
+
+    // 1. Doctor Modal (#u-specialty)
+    const uSpec = document.getElementById('u-specialty');
+    if (uSpec) {
+        const currentVal = selectedNameToSet || uSpec.value;
+        uSpec.innerHTML = allSpecs.map(s => `<option value="${s}">${s}</option>`).join('');
+        if (currentVal && allSpecs.includes(currentVal)) {
+            uSpec.value = currentVal;
+        } else if (allSpecs.length > 0 && !uSpec.value) {
+            uSpec.value = allSpecs[0];
+        }
+    }
+
+    // 2. Agenda Filter (#agenda-filter-specialty)
+    const agendaFilter = document.getElementById('agenda-filter-specialty');
+    if (agendaFilter) {
+        const currentVal = agendaFilter.value || 'all';
+        agendaFilter.innerHTML = '<option value="all">🏥 Todas las Especialidades</option>' + 
+            allSpecs.map(s => `<option value="${s}">${s}</option>`).join('');
+        if (currentVal) agendaFilter.value = currentVal;
+    }
+
+    // 3. Appointment Modal (#app-specialty-select)
+    const appSpec = document.getElementById('app-specialty-select');
+    if (appSpec) {
+        const currentVal = appSpec.value;
+        appSpec.innerHTML = allSpecs.map(s => `<option value="${s}">${s}</option>`).join('');
+        if (currentVal && allSpecs.includes(currentVal)) {
+            appSpec.value = currentVal;
+        }
+    }
+
+    // 4. Direct Sale (#ds-specialty-select)
+    const dsSpec = document.getElementById('ds-specialty-select');
+    if (dsSpec) {
+        const currentVal = dsSpec.value;
+        dsSpec.innerHTML = '<option value="all">-- Todas las Especialidades --</option>' +
+            allSpecs.map(s => `<option value="${s}">${s}</option>`).join('');
+        if (currentVal) dsSpec.value = currentVal;
+    }
+};
+
+// ==========================================
 // DOCTOR PROFILE: SPECIALTIES AUTOCOMPLETE & TAGS
 // ==========================================
 window.renderDoctorSpecialtiesTags = function() {
@@ -11091,11 +11085,16 @@ window.removeDoctorSpecialty = function(specName) {
 window.addAndSelectCustomSpecialty = function(name) {
     if (!name || !name.trim()) return;
     const cleanName = name.trim();
-    if (!window._doctorAvailableSpecialties) window._doctorAvailableSpecialties = [];
-    if (!window._doctorAvailableSpecialties.includes(cleanName)) {
-        window._doctorAvailableSpecialties.push(cleanName);
+    window._specialtyModalOpenedFromDoctorModal = true;
+    if (window.ClinicalERP && typeof window.ClinicalERP.openAddSpecialty === 'function') {
+        window.ClinicalERP.openAddSpecialty();
+        const nameInput = document.getElementById('specialty-name');
+        if (nameInput) nameInput.value = cleanName;
+    } else {
+        window.quickAddNewSpecialty();
+        const nameInput = document.getElementById('specialty-name');
+        if (nameInput) nameInput.value = cleanName;
     }
-    window.selectDoctorSpecialty(cleanName);
 };
 
 window.renderDoctorSpecialtiesSearchResults = function(query = '') {

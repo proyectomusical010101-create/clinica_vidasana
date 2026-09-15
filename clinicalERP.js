@@ -351,7 +351,55 @@
                     window.renderDailyClosingView();
                 }
                 if (typeof window.populateAllSpecialtySelects === 'function') {
-                    window.populateAllSpecialtySelects();
+                    window.populateAllSpecialtySelects(data.name);
+                }
+
+                // If opened from or user modal is active, synchronize doctor modal
+                const userModal = document.getElementById('modal-user');
+                const isUserModalActive = userModal && !userModal.classList.contains('hidden');
+                if (window._specialtyModalOpenedFromDoctorModal || isUserModalActive) {
+                    window._specialtyModalOpenedFromDoctorModal = false;
+                    const uSpecSel = document.getElementById('u-specialty');
+                    if (uSpecSel) {
+                        let exists = false;
+                        for (let i = 0; i < uSpecSel.options.length; i++) {
+                            if (uSpecSel.options[i].value.toLowerCase() === data.name.toLowerCase()) {
+                                uSpecSel.selectedIndex = i;
+                                exists = true;
+                                break;
+                            }
+                        }
+                        if (!exists) {
+                            const opt = document.createElement('option');
+                            opt.value = data.name;
+                            opt.textContent = data.name;
+                            uSpecSel.appendChild(opt);
+                            uSpecSel.value = data.name;
+                        }
+                        uSpecSel.dispatchEvent(new Event('change'));
+                    }
+
+                    if (!window._doctorAvailableSpecialties) window._doctorAvailableSpecialties = [];
+                    if (!window._doctorAvailableSpecialties.includes(data.name)) {
+                        window._doctorAvailableSpecialties.push(data.name);
+                        window._doctorAvailableSpecialties.sort((a, b) => a.localeCompare(b));
+                    }
+
+                    const commInput = document.getElementById('u-commission');
+                    if (commInput && (!commInput.value || commInput.value === '0')) {
+                        commInput.value = data.doctor_commission_pct || 60;
+                    }
+
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '¡Especialidad Creada!',
+                            text: `"${data.name}" se guardó en la base de datos y se seleccionó para este médico.`,
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                    }
+                    return;
                 }
 
                 if (typeof Swal !== 'undefined') {
@@ -384,6 +432,9 @@
                 }
                 await this.loadAll();
                 this.renderSpecialties();
+                if (typeof window.populateAllSpecialtySelects === 'function') {
+                    window.populateAllSpecialtySelects();
+                }
             } catch (err) {
                 console.error(err);
             }
