@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=303">
+    <link rel="stylesheet" href="styles.css?v=304">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -5949,7 +5949,7 @@
     </div>
 
     <!-- MODAL: LIQUIDAR SERVICIO (MÉDICO / ASISTENTE / AMBOS) -->
-    <div class="modal-overlay hidden" id="modal-settle-service">
+    <div class="modal-overlay hidden" id="modal-settle-service" style="z-index: 10600;">
         <div class="modal-dialog" style="max-width: 580px; width: 95vw;">
             <div class="modal-header">
                 <h3 id="modal-settle-service-title"><i class="fa-solid fa-hand-holding-dollar text-cyan"></i> Liquidar Honorarios por Servicio</h3>
@@ -7315,7 +7315,7 @@
 
     <!-- MODAL: CIERRE DE CAJA DIARIO POR DEPARTAMENTO Y TURNO -->
     <div id="modal-daily-closing-dept" class="modal-overlay hidden" style="z-index: 10580;">
-        <div class="modal-dialog" style="max-width: 980px; width: 95%; max-height: 90vh; display: flex; flex-direction: column; background: var(--bg-card); border-radius: 14px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+        <div class="modal-dialog" style="max-width: 1280px; width: 96vw; max-height: 92vh; display: flex; flex-direction: column; background: var(--bg-card); border-radius: 14px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
             <!-- Header -->
             <div class="modal-header" style="padding: 16px 24px; border-bottom: 1px solid var(--border-color); background: linear-gradient(135deg, rgba(2, 132, 199, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%); display: flex; justify-content: space-between; align-items: center;">
                 <div style="display: flex; align-items: center; gap: 12px;">
@@ -7418,10 +7418,11 @@
                                     <th>Asistente / Higienista</th>
                                     <th>Método Pago</th>
                                     <th class="text-right" style="width: 110px;">Monto ($ REF)</th>
+                                    <th class="text-center" style="width: 120px;">Liquidación</th>
                                 </tr>
                             </thead>
                             <tbody id="dc-shift-transactions-tbody">
-                                <tr><td colspan="8" class="text-center text-muted" style="padding: 20px;">No hay servicios registrados en este turno.</td></tr>
+                                <tr><td colspan="9" class="text-center text-muted" style="padding: 20px;">No hay servicios registrados en este turno.</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -7508,14 +7509,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=303"></script>
-    <script src="supabaseClient.js?v=303"></script>
-    <script src="odontogram.js?v=303"></script>
-    <script src="signature.js?v=303"></script>
-    <script src="whatsapp.js?v=303"></script>
-    <script src="kardex.js?v=303"></script>
-    <script src="app.js?v=303"></script>
-    <script src="clinicalERP.js?v=303"></script>
-    <script src="tutorial.js?v=303"></script>
+    <script src="seededData.js?v=304"></script>
+    <script src="supabaseClient.js?v=304"></script>
+    <script src="odontogram.js?v=304"></script>
+    <script src="signature.js?v=304"></script>
+    <script src="whatsapp.js?v=304"></script>
+    <script src="kardex.js?v=304"></script>
+    <script src="app.js?v=304"></script>
+    <script src="clinicalERP.js?v=304"></script>
+    <script src="tutorial.js?v=304"></script>
 </body>
 </html>

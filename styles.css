@@ -6385,5 +6385,30 @@ select, .form-select, select.form-control {
     padding: 2px 4px;
 }
 
+/* ==========================================================
+   THREE COLUMNS RESPONSIVE GRID (DESKTOP SAME ROW)
+   ========================================================== */
+.grid-3-col {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 16px !important;
+}
+
+@media (max-width: 900px) {
+    .grid-3-col {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+/* Daily Closing Department Liquidation Cell */
+.dc-liq-btn {
+    transition: all 0.18s ease;
+}
+.dc-liq-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 5px rgba(5, 150, 105, 0.35);
+}
+
+
 
 

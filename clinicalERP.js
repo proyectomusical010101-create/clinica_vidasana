@@ -1313,6 +1313,12 @@
                 this.renderServiceLiquidations();
                 const modal = document.getElementById('modal-settle-service');
                 if (modal) modal.classList.add('hidden');
+                if (typeof window.renderDailyClosingDeptShiftView === 'function') {
+                    try { window.renderDailyClosingDeptShiftView(); } catch(e) {}
+                }
+                if (typeof window.renderDailyClosingView === 'function') {
+                    try { window.renderDailyClosingView(); } catch(e) {}
+                }
                 if (typeof Swal !== 'undefined') {
                     Swal.fire({
                         icon: 'success',

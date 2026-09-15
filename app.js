@@ -20842,7 +20842,15 @@ window.openDailyClosingDept = function(areaName, shift = 'all') {
     if (activeBtn) activeBtn.classList.add('active');
 
     openModal('modal-daily-closing-dept');
-    window.renderDailyClosingDeptShiftView();
+
+    // Ensure ClinicalERP liquidations are refreshed
+    if (window.ClinicalERP && (!window.ClinicalERP.serviceLiquidations || window.ClinicalERP.serviceLiquidations.length === 0)) {
+        window.ClinicalERP.loadAll().then(() => {
+            window.renderDailyClosingDeptShiftView();
+        });
+    } else {
+        window.renderDailyClosingDeptShiftView();
+    }
 };
 
 window.setDailyClosingShift = function(shift, btn) {
@@ -20852,6 +20860,52 @@ window.setDailyClosingShift = function(shift, btn) {
         btn.classList.add('active');
     }
     window.renderDailyClosingDeptShiftView();
+};
+
+window.settleDoctorFeeFromDailyClosing = async function(txId, doctorName, patientName, concept, amountUSD, date, assistantName, patientId) {
+    try {
+        let allLiquidations = [];
+        if (window.SupabaseDataService) {
+            allLiquidations = await window.SupabaseDataService.getServiceLiquidations(true);
+        } else if (window.ClinicalERP && window.ClinicalERP.serviceLiquidations) {
+            allLiquidations = window.ClinicalERP.serviceLiquidations;
+        } else {
+            allLiquidations = JSON.parse(localStorage.getItem('vidasana_service_liquidations')) || [];
+        }
+
+        let match = allLiquidations.find(l => 
+            l.id === txId || l.source_id === txId ||
+            (l.patient_name && patientName && l.patient_name.toLowerCase().trim() === patientName.toLowerCase().trim() && l.date === date && (l.service_name === concept || Math.abs((parseFloat(l.service_price) || 0) - amountUSD) < 0.01))
+        );
+
+        if (!match && window.SupabaseDataService) {
+            match = await window.SupabaseDataService.recordServiceForLiquidation({
+                serviceCode: 'SRV-REC',
+                serviceName: concept || 'Servicio Clínico',
+                servicePrice: amountUSD,
+                patientId: patientId || '',
+                patientName: patientName || 'Paciente Particular',
+                doctorName: doctorName || 'Médico Tratante',
+                assistantName: assistantName || '',
+                hasAssistant: !!assistantName,
+                sourceType: 'daily_closing',
+                date: date || new Date().toISOString().split('T')[0],
+                notes: `Liquidación desde Cierre de Caja Diario (Tx: ${txId})`
+            });
+        }
+
+        if (window.ClinicalERP) {
+            await window.ClinicalERP.loadAll();
+            if (match && typeof window.ClinicalERP.openSettleModal === 'function') {
+                window.ClinicalERP.openSettleModal(match.id, 'doctor');
+            }
+        }
+    } catch (err) {
+        console.error('[settleDoctorFeeFromDailyClosing] Error:', err);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({ icon: 'error', title: 'Error al preparar liquidación', text: err.message });
+        }
+    }
 };
 
 window.renderDailyClosingDeptShiftView = function() {
@@ -20941,11 +20995,42 @@ window.renderDailyClosingDeptShiftView = function() {
     const tbody = document.getElementById('dc-shift-transactions-tbody');
     if (tbody) {
         if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted" style="padding: 24px;">No hay servicios registrados en este turno y departamento.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted" style="padding: 24px;">No hay servicios registrados en este turno y departamento.</td></tr>';
         } else {
+            const allLiquidations = (window.ClinicalERP && window.ClinicalERP.serviceLiquidations && window.ClinicalERP.serviceLiquidations.length > 0)
+                ? window.ClinicalERP.serviceLiquidations
+                : (JSON.parse(localStorage.getItem('vidasana_service_liquidations')) || []);
+
             tbody.innerHTML = filtered.map(t => {
                 const shiftIcon = t.shift === 'morning' ? '<i class="fa-solid fa-sun text-amber" title="Turno Mañana"></i>' : '<i class="fa-solid fa-moon text-indigo" title="Turno Tarde"></i>';
                 const asstBadge = t.assistant ? `<span class="badge-tag green" style="font-size: 0.72rem;"><i class="fa-solid fa-user-nurse"></i> ${t.assistant}</span>` : '<span style="color: #94a3b8;">--</span>';
+
+                // Matching liquidation
+                const matchingLiq = allLiquidations.find(l => 
+                    l.id === t.id || l.source_id === t.id ||
+                    (l.patient_name && t.patientName && l.patient_name.toLowerCase().trim() === t.patientName.toLowerCase().trim() && l.date === t.date && (l.service_name === t.concept || Math.abs((parseFloat(l.service_price) || 0) - t.amountUSD) < 0.01))
+                );
+
+                const isLiquidated = matchingLiq && ((matchingLiq.doctor && matchingLiq.doctor.status === 'Liquidado') || matchingLiq.overall_status === 'Liquidado Total');
+
+                let liqCell = '';
+                if (isLiquidated) {
+                    liqCell = `<span class="badge-tag green" style="font-size: 0.72rem; font-weight: 700; white-space: nowrap;"><i class="fa-solid fa-check-double"></i> Liquidado</span>`;
+                } else {
+                    const docEsc = (t.doctor || '').replace(/'/g, "\\'");
+                    const patEsc = (t.patientName || '').replace(/'/g, "\\'");
+                    const cptEsc = (t.concept || '').replace(/'/g, "\\'");
+                    const astEsc = (t.assistant || '').replace(/'/g, "\\'");
+                    const pidEsc = (t.patientId || '').replace(/'/g, "\\'");
+                    liqCell = `
+                        <div style="display: flex; flex-direction: column; gap: 4px; align-items: center;">
+                            <span class="badge-tag amber" style="font-size: 0.70rem; font-weight: 700;">Pendiente</span>
+                            <button type="button" class="btn btn-xs btn-primary dc-liq-btn" style="padding: 3px 8px; font-size: 0.72rem; display: inline-flex; align-items: center; gap: 4px; border-radius: 6px; white-space: nowrap;" onclick="window.settleDoctorFeeFromDailyClosing('${t.id}', '${docEsc}', '${patEsc}', '${cptEsc}', ${t.amountUSD}, '${t.date}', '${astEsc}', '${pidEsc}')" title="Liquidar honorarios del médico tratante">
+                                <i class="fa-solid fa-hand-holding-dollar"></i> Liquidar
+                            </button>
+                        </div>
+                    `;
+                }
 
                 return `
                     <tr style="font-size: 0.82rem; border-bottom: 1px solid var(--border-color);">
@@ -20962,6 +21047,9 @@ window.renderDailyClosingDeptShiftView = function() {
                         <td class="text-right" style="font-weight: 800; color: #059669; white-space: nowrap;">
                             $${t.amountUSD.toFixed(2)}<br>
                             <small style="color: #0284c7; font-weight: normal;">Bs. ${t.amountBs.toFixed(2)}</small>
+                        </td>
+                        <td class="text-center" style="vertical-align: middle;">
+                            ${liqCell}
                         </td>
                     </tr>
                 `;
