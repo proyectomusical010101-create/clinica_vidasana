@@ -5580,6 +5580,14 @@ window.openDirectSaleModal = async function(preselectedPatientId = null) {
                     srvRes.style.display = 'none';
                 }
             }
+
+            const docInput = document.getElementById('ds-doctor-search-input');
+            const docRes = document.getElementById('ds-doctor-search-results');
+            if (docRes && docInput) {
+                if (!docInput.contains(e.target) && !docRes.contains(e.target)) {
+                    docRes.style.display = 'none';
+                }
+            }
         });
     }
 
@@ -5601,14 +5609,55 @@ window.openDirectSaleModal = async function(preselectedPatientId = null) {
         if (infoBox) infoBox.innerHTML = '<em>Escribe en el buscador el nombre o cédula del paciente para seleccionarlo.</em>';
     }
 
-    // 2. Populate Doctors & Assistants
+    // 2. Populate Doctors & Setup Doctor Search Autocomplete
     const doctorSelect = document.getElementById('ds-doctor-select');
     const assistantSelect = document.getElementById('ds-assistant-select');
+    const docSearchInput = document.getElementById('ds-doctor-search-input');
+    const docClearBtn = document.getElementById('ds-doctor-clear-btn');
     const users = await SupabaseDataService.getUsers();
     
+    const doctors = users.filter(u => !u.role.toLowerCase().includes('asistente'));
+    window._cachedDirectSaleDoctors = doctors;
+
     if (doctorSelect) {
-        const doctors = users.filter(u => !u.role.toLowerCase().includes('asistente'));
         doctorSelect.innerHTML = doctors.map(d => `<option value="${d.fullname}">${d.fullname} (${d.role})</option>`).join('');
+    }
+
+    // Set initial doctor in search input
+    const initialDoctor = (doctorSelect && doctorSelect.value) ? doctorSelect.value : (doctors[0] ? doctors[0].fullname : '');
+    if (docSearchInput) {
+        const foundDoc = doctors.find(d => d.fullname === initialDoctor) || doctors[0];
+        if (foundDoc) {
+            docSearchInput.value = `${foundDoc.fullname} (${foundDoc.role})`;
+            if (doctorSelect) doctorSelect.value = foundDoc.fullname;
+            if (docClearBtn) docClearBtn.style.display = 'block';
+        } else {
+            docSearchInput.value = '';
+            if (docClearBtn) docClearBtn.style.display = 'none';
+        }
+    }
+
+    // Attach doctor search input events once
+    if (docSearchInput && !docSearchInput.dataset.initialized) {
+        docSearchInput.dataset.initialized = 'true';
+        docSearchInput.addEventListener('input', (e) => {
+            window.renderDirectSaleDoctorSearchResults(e.target.value);
+        });
+        docSearchInput.addEventListener('focus', (e) => {
+            window.renderDirectSaleDoctorSearchResults(e.target.value);
+        });
+        docSearchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const res = document.getElementById('ds-doctor-search-results');
+                if (res) res.style.display = 'none';
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                const firstItem = document.querySelector('#ds-doctor-search-results .ds-doctor-search-item');
+                if (firstItem) {
+                    firstItem.click();
+                }
+            }
+        });
     }
 
     if (assistantSelect) {
@@ -6090,6 +6139,122 @@ window.clearDirectSaleServiceSearch = function(shouldFocus = true) {
     }
     if (resultsContainer) {
         resultsContainer.style.display = 'none';
+    }
+};
+
+window.renderDirectSaleDoctorSearchResults = function(query) {
+    const resultsContainer = document.getElementById('ds-doctor-search-results');
+    const clearBtn = document.getElementById('ds-doctor-clear-btn');
+    if (!resultsContainer) return;
+
+    const normalizeStr = (s) => (s || '').toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const term = normalizeStr(query).trim();
+    if (clearBtn) {
+        clearBtn.style.display = term.length > 0 ? 'block' : 'none';
+    }
+
+    const doctors = window._cachedDirectSaleDoctors || [];
+    let matches = [];
+    if (!term) {
+        matches = doctors;
+    } else {
+        matches = doctors.filter(d => {
+            const name = normalizeStr(d.fullname);
+            const role = normalizeStr(d.role);
+            const spec = normalizeStr(d.doctor_profile?.specialty || d.doctorProfile?.specialty || '');
+            const license = normalizeStr(d.license || '');
+            return name.includes(term) || role.includes(term) || spec.includes(term) || license.includes(term);
+        });
+    }
+
+    if (matches.length === 0) {
+        const safeTerm = term.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        resultsContainer.innerHTML = `
+            <div style="padding: 12px; text-align: center; color: #64748b; font-size: 0.82rem;">
+                <div><i class="fa-solid fa-user-slash" style="font-size: 1.1rem; color: #94a3b8; margin-bottom: 4px;"></i></div>
+                <div>No se encontraron doctores para "<strong>${safeTerm}</strong>"</div>
+            </div>
+        `;
+        resultsContainer.style.display = 'block';
+        return;
+    }
+
+    const header = !term
+        ? `<div style="padding: 6px 12px; background: #f8fafc; font-size: 0.72rem; font-weight: 700; color: #64748b; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between;">
+            <span>Especialistas Disponibles (${doctors.length})</span>
+            <span style="color: #94a3b8;">Selecciona uno</span>
+           </div>`
+        : `<div style="padding: 6px 12px; background: #f0fdfa; font-size: 0.72rem; font-weight: 700; color: #0f766e; border-bottom: 1px solid #ccfbf1; display: flex; justify-content: space-between;">
+            <span>Doctores encontrados (${matches.length})</span>
+            <span style="font-weight: 500;">Enter para seleccionar</span>
+           </div>`;
+
+    const itemsHtml = matches.map(d => {
+        const safeName = (d.fullname || '').replace(/'/g, "\\'");
+        const displayName = (d.fullname || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const role = (d.role || 'Médico').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const specialty = (d.doctor_profile?.specialty || d.doctorProfile?.specialty || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const roomName = (d.doctor_profile?.roomName || d.doctorProfile?.roomName || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+        return `
+            <div class="ds-doctor-search-item" onclick="window.selectDirectSaleDoctor('${safeName}')">
+                <div style="font-weight: 700; color: #0f172a; font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center;">
+                    <span><i class="fa-solid fa-user-md text-cyan" style="margin-right: 6px;"></i>${displayName}</span>
+                    <span style="font-size: 0.72rem; font-weight: 600; padding: 2px 7px; border-radius: 4px; background: #e0f2fe; color: #0369a1;">${specialty || role}</span>
+                </div>
+                ${roomName ? `<div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;"><i class="fa-solid fa-door-open" style="margin-right: 4px;"></i>${roomName}</div>` : ''}
+            </div>
+        `;
+    }).join('');
+
+    resultsContainer.innerHTML = header + itemsHtml;
+    resultsContainer.style.display = 'block';
+};
+
+window.selectDirectSaleDoctor = function(doctorFullname) {
+    const docSearchInput = document.getElementById('ds-doctor-search-input');
+    const docSelect = document.getElementById('ds-doctor-select');
+    const resultsContainer = document.getElementById('ds-doctor-search-results');
+    const clearBtn = document.getElementById('ds-doctor-clear-btn');
+
+    const doctors = window._cachedDirectSaleDoctors || [];
+    const found = doctors.find(d => d.fullname === doctorFullname);
+
+    if (docSelect) {
+        let opt = Array.from(docSelect.options).find(o => o.value === doctorFullname);
+        if (!opt && found) {
+            opt = new Option(`${found.fullname} (${found.role})`, doctorFullname);
+            docSelect.add(opt);
+        }
+        docSelect.value = doctorFullname;
+    }
+
+    if (docSearchInput) {
+        if (found) {
+            docSearchInput.value = `${found.fullname} (${found.role})`;
+        } else {
+            docSearchInput.value = doctorFullname;
+        }
+    }
+
+    if (clearBtn) clearBtn.style.display = 'block';
+    if (resultsContainer) resultsContainer.style.display = 'none';
+};
+
+window.clearDirectSaleDoctorSearch = function() {
+    const docSearchInput = document.getElementById('ds-doctor-search-input');
+    const docSelect = document.getElementById('ds-doctor-select');
+    const resultsContainer = document.getElementById('ds-doctor-search-results');
+    const clearBtn = document.getElementById('ds-doctor-clear-btn');
+
+    if (docSearchInput) {
+        docSearchInput.value = '';
+        docSearchInput.focus();
+    }
+    if (docSelect) docSelect.value = '';
+    if (clearBtn) clearBtn.style.display = 'none';
+    if (resultsContainer) {
+        window.renderDirectSaleDoctorSearchResults('');
     }
 };
 

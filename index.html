@@ -6640,9 +6640,21 @@
 
                             <!-- Professional & Assistant Selectors (generous width in left column) -->
                             <div class="ds-staff-row" style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed #cbd5e1;">
-                                <div>
-                                    <label style="font-size: 0.78rem; font-weight: 700; color: #475569; display: block; margin-bottom: 4px;">Doctor / Especialista *</label>
-                                    <select id="ds-doctor-select" class="form-control" style="height: 38px; border-radius: 8px; font-size: 0.85rem;">
+                                <div style="position: relative;">
+                                    <label style="font-size: 0.78rem; font-weight: 700; color: #475569; display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                                        <span><i class="fa-solid fa-user-doctor text-cyan"></i> Doctor / Especialista *</span>
+                                        <span id="ds-doctor-count-badge" style="font-size: 0.7rem; color: #64748b; font-weight: 500;"></span>
+                                    </label>
+                                    <div style="position: relative;">
+                                        <input type="text" id="ds-doctor-search-input" class="form-control" placeholder="🔍 Buscar doctor o especialista..." autocomplete="off" style="height: 38px; border-radius: 8px; font-size: 0.85rem; padding-right: 32px; width: 100%; box-sizing: border-box; font-weight: 600;">
+                                        <button type="button" id="ds-doctor-clear-btn" onclick="window.clearDirectSaleDoctorSearch()" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #94a3b8; cursor: pointer; display: none; padding: 4px;" title="Limpiar doctor">
+                                            <i class="fa-solid fa-xmark"></i>
+                                        </button>
+                                    </div>
+                                    <!-- Floating Autocomplete Results Container -->
+                                    <div id="ds-doctor-search-results" style="position: absolute; top: 62px; left: 0; right: 0; background: #ffffff; border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.18), 0 8px 10px -6px rgba(0,0,0,0.1); z-index: 10850; max-height: 220px; overflow-y: auto; display: none;"></div>
+                                    <!-- Hidden select to preserve 100% backward compatibility with internal scripts -->
+                                    <select id="ds-doctor-select" class="form-control" style="display: none !important;">
                                         <!-- Doctors loaded dynamically -->
                                     </select>
                                 </div>
@@ -7450,14 +7462,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=300"></script>
-    <script src="supabaseClient.js?v=300"></script>
-    <script src="odontogram.js?v=300"></script>
-    <script src="signature.js?v=300"></script>
-    <script src="whatsapp.js?v=300"></script>
-    <script src="kardex.js?v=300"></script>
-    <script src="app.js?v=300"></script>
-    <script src="clinicalERP.js?v=300"></script>
-    <script src="tutorial.js?v=300"></script>
+    <script src="seededData.js?v=301"></script>
+    <script src="supabaseClient.js?v=301"></script>
+    <script src="odontogram.js?v=301"></script>
+    <script src="signature.js?v=301"></script>
+    <script src="whatsapp.js?v=301"></script>
+    <script src="kardex.js?v=301"></script>
+    <script src="app.js?v=301"></script>
+    <script src="clinicalERP.js?v=301"></script>
+    <script src="tutorial.js?v=301"></script>
 </body>
 </html>
