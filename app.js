@@ -4870,6 +4870,24 @@ window.editTagModal = async function(tagId) {
     if (btnCancel) btnCancel.style.display = 'inline-block';
 
     window.onTagRuleTypeChange();
+
+    // Scroll automático hacia arriba a la tarjeta de edición
+    const modalBody = document.querySelector('#modal-manage-tags .modal-body');
+    if (modalBody) {
+        modalBody.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    const formCard = document.getElementById('tag-form-card') || document.getElementById('tag-form-title');
+    if (formCard) {
+        formCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        formCard.classList.remove('tag-card-highlight');
+        void formCard.offsetWidth; // Force reflow to replay CSS pulse animation
+        formCard.classList.add('tag-card-highlight');
+    }
+
+    setTimeout(() => {
+        const nameInput = document.getElementById('tag-form-name');
+        if (nameInput) nameInput.focus();
+    }, 250);
 };
 
 window.deleteTag = async function(tagId) {
