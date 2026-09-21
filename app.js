@@ -51,13 +51,12 @@ window.universalPrintHTML = function(htmlContent, title = 'Documento Clínico') 
         const iframe = document.createElement('iframe');
         iframe.id = 'vidasana-universal-print-iframe';
         iframe.style.position = 'fixed';
-        iframe.style.right = '0';
-        iframe.style.bottom = '0';
-        iframe.style.width = '0';
-        iframe.style.height = '0';
-        iframe.style.border = '0';
-        iframe.style.opacity = '0';
-        iframe.style.pointerEvents = 'none';
+        iframe.style.top = '0';
+        iframe.style.left = '-99999px';
+        iframe.style.width = '1024px';
+        iframe.style.height = '100vh';
+        iframe.style.border = 'none';
+        iframe.style.visibility = 'visible';
         iframe.style.zIndex = '-9999';
         iframe.setAttribute('aria-hidden', 'true');
         document.body.appendChild(iframe);
@@ -74,13 +73,15 @@ window.universalPrintHTML = function(htmlContent, title = 'Documento Clínico') 
                 <head>
                     <meta charset="UTF-8">
                     <title>${title}</title>
-                    <link rel="stylesheet" href="styles.css?v=325">
+                    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+                    <link rel="stylesheet" href="styles.css?v=326">
                     <style>
-                        @page { size: A4 portrait; margin: 5mm 8mm 5mm 8mm; }
+                        @page { size: A4 portrait; margin: 8mm 10mm 8mm 10mm; }
+                        * { box-sizing: border-box; }
                         html, body {
                             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
                             margin: 0 !important;
-                            padding: 2px 4px !important;
+                            padding: 4px 8px !important;
                             background: #ffffff !important;
                             color: #0f172a !important;
                             -webkit-print-color-adjust: exact !important;
@@ -94,6 +95,7 @@ window.universalPrintHTML = function(htmlContent, title = 'Documento Clínico') 
                             box-shadow: none !important;
                             border: none !important;
                         }
+                        table { border-collapse: collapse; width: 100%; }
                     </style>
                 </head>
                 <body>
@@ -107,23 +109,49 @@ window.universalPrintHTML = function(htmlContent, title = 'Documento Clínico') 
         iframeDoc.write(finalDoc);
         iframeDoc.close();
 
-        // Esperar a que los estilos e imágenes se rendericen en el iframe interno
-        setTimeout(() => {
+        // Esperar a que las imágenes y fuentes del iframe interno se rendericen completamente
+        const triggerPrint = () => {
             try {
-                iframe.contentWindow.focus();
-                iframe.contentWindow.print();
+                const imgs = Array.from(iframeDoc.images || []);
+                const imgPromises = imgs.map(img => {
+                    if (img.complete && img.naturalHeight > 0) return Promise.resolve();
+                    return new Promise(res => {
+                        img.onload = () => res();
+                        img.onerror = () => res();
+                        setTimeout(res, 600);
+                    });
+                });
+
+                Promise.all(imgPromises).then(() => {
+                    setTimeout(() => {
+                        try {
+                            iframe.contentWindow.focus();
+                            iframe.contentWindow.print();
+                        } catch (err) {
+                            console.warn('Iframe print error, usando fallback in-page:', err);
+                            const fallbackDiv = document.createElement('div');
+                            fallbackDiv.className = 'print-section';
+                            fallbackDiv.innerHTML = htmlContent;
+                            document.body.appendChild(fallbackDiv);
+                            window.print();
+                            setTimeout(() => {
+                                try { fallbackDiv.remove(); } catch(e) {}
+                            }, 1000);
+                        }
+                    }, 350);
+                });
             } catch (err) {
-                console.warn('Iframe print error, usando fallback in-page:', err);
-                const fallbackDiv = document.createElement('div');
-                fallbackDiv.className = 'print-section';
-                fallbackDiv.innerHTML = htmlContent;
-                document.body.appendChild(fallbackDiv);
-                window.print();
-                setTimeout(() => {
-                    try { fallbackDiv.remove(); } catch(e) {}
-                }, 1000);
+                console.error('Error triggering iframe print:', err);
+                iframe.contentWindow.print();
             }
-        }, 450);
+        };
+
+        if (iframeDoc.readyState === 'complete') {
+            triggerPrint();
+        } else {
+            iframe.contentWindow.onload = triggerPrint;
+            setTimeout(triggerPrint, 500);
+        }
     } catch (e) {
         console.error('Error en universalPrintHTML:', e);
         window.print();
@@ -7489,6 +7517,10 @@ window.processDirectSale = async function() {
 
 window.printDirectSaleReceipt = async function(docId = null) {
     let doc = window.lastProcessedDirectSaleDoc;
+    if (!doc && !docId) {
+        const overlayDocId = document.getElementById('ds-success-doc-id')?.innerText;
+        if (overlayDocId && overlayDocId !== 'FAC-000000') docId = overlayDocId;
+    }
     if (docId) {
         const invoices = await SupabaseDataService.getInvoices();
         doc = invoices.find(i => String(i.id) === String(docId));
@@ -7507,6 +7539,10 @@ window.printDirectSaleReceipt = async function(docId = null) {
     const isFull = doc.status === 'Pagado' || doc.id.startsWith('FAC-');
     const docTitle = isFull ? 'FACTURA OFICIAL' : 'RECIBO DE ABONO';
 
+    const stationery = await SupabaseDataService.getStationeryConfig();
+    const busData = getClinicBusData(stationery);
+    const logoBase64 = await toDataURL(busData.logoUrl || stationery.logoUrl);
+
     const itemsHtml = (doc.items || []).map((it, idx) => `
         <tr style="border-bottom: 1px solid #e2e8f0; font-size: 11pt;">
             <td style="padding: 8px 6px;">${it.name || it.description}</td>
@@ -7524,6 +7560,7 @@ window.printDirectSaleReceipt = async function(docId = null) {
             <table style="width: 100%; border-bottom: 2px solid #0d9488; padding-bottom: 12px; margin-bottom: 20px;">
                 <tr>
                     <td>
+                        ${logoBase64 ? `<img src="${logoBase64}" style="max-height: 55px; margin-bottom: 6px; display: block;">` : ''}
                         <h2 style="margin: 0; color: #0d9488; font-size: 18pt;">${clinicName}</h2>
                         <div style="font-size: 9pt; color: #64748b; margin-top: 2px;">Centro Médico y Odontológico Integral</div>
                     </td>
@@ -7569,7 +7606,7 @@ window.printDirectSaleReceipt = async function(docId = null) {
                     <div style="font-size: 8.5pt; color: #64748b; font-style: italic; margin-top: 4px;">* Las cuotas quincenales son abonadas por el paciente directamente en la App Cashea.</div>
                 ` : `
                     <div style="font-size: 12pt; color: #059669;"><span>Monto Cobrado / Pagado:</span> <strong>$${parseFloat(paidVal).toFixed(2)} USD</strong></div>
-                    ${balanceVal > 0 ? `<div style="font-size: 11pt; color: #e11d48;"><span>Saldo Restante Pendiente:</span> <strong>$${parseFloat(balanceVal).toFixed(2)} USD</strong></div>` : ''}
+                    ${balanceVal > 0 ? `<div style="display: flex; justify-content: space-between; padding: 3px 0; font-size: 11pt; color: #e11d48;"><span>Saldo Restante Pendiente:</span> <strong>$${parseFloat(balanceVal).toFixed(2)} USD</strong></div>` : ''}
                 `}
             </div>
 
@@ -7585,6 +7622,10 @@ window.printDirectSaleReceipt = async function(docId = null) {
 
 window.downloadDirectSaleReceiptPDF = async function(docId = null) {
     let doc = window.lastProcessedDirectSaleDoc;
+    if (!doc && !docId) {
+        const overlayDocId = document.getElementById('ds-success-doc-id')?.innerText;
+        if (overlayDocId && overlayDocId !== 'FAC-000000') docId = overlayDocId;
+    }
     if (docId) {
         const invoices = await SupabaseDataService.getInvoices();
         doc = invoices.find(i => String(i.id) === String(docId));
@@ -7688,6 +7729,10 @@ window.downloadDirectSaleReceiptPDF = async function(docId = null) {
 
 window.sendDirectSaleReceiptWhatsApp = async function(docId = null) {
     let doc = window.lastProcessedDirectSaleDoc;
+    if (!doc && !docId) {
+        const overlayDocId = document.getElementById('ds-success-doc-id')?.innerText;
+        if (overlayDocId && overlayDocId !== 'FAC-000000') docId = overlayDocId;
+    }
     if (docId) {
         const invoices = await SupabaseDataService.getInvoices();
         doc = invoices.find(i => String(i.id) === String(docId));
@@ -23461,18 +23506,19 @@ async function generatePDFFromElement(element, filename) {
         innerDoc.style.overflow = 'visible';
     }
 
-    // Mount inside a fixed staging wrapper at top:0 left:0 so getBoundingClientRect() top is always 0
-    // and hidden behind SweetAlert2 / modals (z-index: 5 vs modal z-index: 100000)
+    // Mount inside an absolute staging wrapper placed at the current scroll position so coordinates are accurate
     const stagingWrapper = document.createElement('div');
     stagingWrapper.id = 'vidasana-pdf-staging-' + Date.now();
-    stagingWrapper.style.position = 'fixed';
-    stagingWrapper.style.top = '0';
+    stagingWrapper.style.position = 'absolute';
+    stagingWrapper.style.top = (window.scrollY || 0) + 'px';
     stagingWrapper.style.left = '0';
     stagingWrapper.style.width = '794px';
-    stagingWrapper.style.zIndex = '5';
+    stagingWrapper.style.zIndex = '999999';
     stagingWrapper.style.pointerEvents = 'none';
     stagingWrapper.style.overflow = 'visible';
     stagingWrapper.style.backgroundColor = '#ffffff';
+    stagingWrapper.style.visibility = 'visible';
+    stagingWrapper.style.opacity = '1';
     stagingWrapper.appendChild(element);
     document.body.appendChild(stagingWrapper);
 
@@ -23487,7 +23533,13 @@ async function generatePDFFromElement(element, filename) {
     // Pre-load all images inside element before capturing
     const imgs = Array.from(element.querySelectorAll('img'));
     await Promise.all(imgs.map(img => {
-        try { img.crossOrigin = 'anonymous'; } catch(e) {}
+        try {
+            if (!img.src || img.src.startsWith('data:')) {
+                // data URL, no crossOrigin needed
+            } else {
+                img.crossOrigin = 'anonymous';
+            }
+        } catch(e) {}
         if (img.complete && img.naturalHeight > 0) return Promise.resolve();
         return new Promise(res => {
             img.onload = () => res();
@@ -23553,41 +23605,32 @@ async function generatePDFFromElement(element, filename) {
                     }
 
                     try {
+                        const opt = {
+                            margin: [6, 8, 6, 8],
+                            filename: filename,
+                            image: { type: 'jpeg', quality: 0.98 },
+                            html2canvas: { 
+                                scale: 2, 
+                                useCORS: true, 
+                                allowTaint: true,
+                                letterRendering: true, 
+                                backgroundColor: '#ffffff', 
+                                logging: false, 
+                                scrollY: (window.scrollY || 0),
+                                scrollX: 0
+                            },
+                            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                            pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+                        };
+
+                        if (isCancelled) {
+                            handleCancel();
+                            return;
+                        }
+
                         if (typeof window.html2pdf === 'function') {
-                            const opt = {
-                                margin: [6, 8, 6, 8],
-                                filename: filename,
-                                image: { type: 'jpeg', quality: 0.98 },
-                                html2canvas: { 
-                                    scale: 2, 
-                                    useCORS: true, 
-                                    allowTaint: true,
-                                    letterRendering: true, 
-                                    backgroundColor: '#ffffff', 
-                                    logging: false, 
-                                    scrollY: 0,
-                                    scrollX: 0
-                                },
-                                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-                                pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-                            };
-
-                            if (isCancelled) {
-                                handleCancel();
-                                return;
-                            }
-
-                            const worker = window.html2pdf().set(opt).from(element);
-                            // Render PDF into internal worker instance first
-                            await worker.toPdf().get('pdf');
-
-                            if (isCancelled) {
-                                handleCancel();
-                                return;
-                            }
-
-                            // Save file to user's disk
-                            await worker.save();
+                            // Single-pass direct compilation and save
+                            await window.html2pdf().set(opt).from(element).save();
                         } else {
                             const jsPDFClass = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
                             if (!jsPDFClass || !window.html2canvas) {
@@ -23597,15 +23640,7 @@ async function generatePDFFromElement(element, filename) {
                                 handleCancel();
                                 return;
                             }
-                            const canvas = await window.html2canvas(element, { 
-                                scale: 2, 
-                                useCORS: true, 
-                                allowTaint: true,
-                                backgroundColor: '#ffffff', 
-                                logging: false,
-                                scrollY: 0,
-                                scrollX: 0
-                            });
+                            const canvas = await window.html2canvas(element, opt.html2canvas);
                             if (isCancelled) {
                                 handleCancel();
                                 return;
