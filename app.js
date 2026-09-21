@@ -14145,8 +14145,221 @@ function initGlobalEvents() {
         }
     };
 
+    // ==========================================
+    // PREDICTIVE PATIENT SEARCH IN APPOINTMENT MODAL
+    // ==========================================
+    function escapeApptText(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    window.getAppointmentPatientsCache = function() {
+        if (window.SupabaseDataService && window.SupabaseDataService._patientsCache && window.SupabaseDataService._patientsCache.length > 0) {
+            return window.SupabaseDataService._patientsCache;
+        }
+        try {
+            const cached = localStorage.getItem('dental_patients');
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+            }
+        } catch(e) {}
+        return [];
+    };
+
+    window.setAppointmentPatient = function(patientOrId, fallbackName = '') {
+        const selectedBox = document.getElementById('app-patient-selected-box');
+        const searchWrapper = document.getElementById('app-patient-search-wrapper');
+        const nameEl = document.getElementById('app-patient-selected-name');
+        const infoEl = document.getElementById('app-patient-selected-info');
+        const patientSelect = document.getElementById('app-patient-select');
+        const hiddenPatientId = document.getElementById('app-patient-id');
+        const searchResults = document.getElementById('app-patient-search-results');
+
+        let patientObj = null;
+        const allPatients = window.getAppointmentPatientsCache();
+
+        if (typeof patientOrId === 'object' && patientOrId !== null) {
+            patientObj = patientOrId;
+        } else if (patientOrId) {
+            patientObj = allPatients.find(p => p.id === patientOrId || p.cedula === patientOrId);
+            if (!patientObj && fallbackName) {
+                patientObj = { id: patientOrId, fullname: fallbackName, cedula: '', phone: '' };
+            }
+        }
+
+        if (!patientObj) {
+            window.clearAppointmentPatientSearch();
+            return;
+        }
+
+        if (hiddenPatientId) hiddenPatientId.value = patientObj.id || '';
+        if (patientSelect) {
+            let opt = Array.from(patientSelect.options).find(o => o.value === patientObj.id);
+            if (!opt) {
+                opt = document.createElement('option');
+                opt.value = patientObj.id;
+                opt.dataset.name = patientObj.fullname || '';
+                opt.innerText = `${patientObj.fullname || ''} (${patientObj.id})`;
+                patientSelect.appendChild(opt);
+            }
+            patientSelect.value = patientObj.id;
+        }
+
+        if (nameEl) nameEl.textContent = patientObj.fullname || 'Paciente sin nombre';
+        if (infoEl) {
+            const parts = [];
+            if (patientObj.cedula) parts.push(`Cédula: ${patientObj.cedula}`);
+            if (patientObj.phone) parts.push(`Tel: ${patientObj.phone}`);
+            if (parts.length === 0 && patientObj.id) parts.push(`ID: ${patientObj.id}`);
+            infoEl.textContent = parts.join(' | ') || 'Paciente Registrado';
+        }
+
+        if (selectedBox) selectedBox.style.display = 'flex';
+        if (searchWrapper) searchWrapper.style.display = 'none';
+        if (searchResults) searchResults.style.display = 'none';
+    };
+
+    window.clearAppointmentPatientSearch = function() {
+        const selectedBox = document.getElementById('app-patient-selected-box');
+        const searchWrapper = document.getElementById('app-patient-search-wrapper');
+        const searchInput = document.getElementById('app-patient-search-input');
+        const clearBtn = document.getElementById('app-patient-search-clear-btn');
+        const patientSelect = document.getElementById('app-patient-select');
+        const hiddenPatientId = document.getElementById('app-patient-id');
+
+        if (selectedBox) selectedBox.style.display = 'none';
+        if (searchWrapper) searchWrapper.style.display = 'block';
+        if (patientSelect) patientSelect.value = '';
+        if (hiddenPatientId) hiddenPatientId.value = '';
+        if (searchInput) {
+            searchInput.value = '';
+            setTimeout(() => {
+                try { searchInput.focus(); } catch(e) {}
+            }, 60);
+        }
+        if (clearBtn) clearBtn.style.display = 'none';
+        window.filterAppointmentPatients('');
+    };
+
+    window.clearAppointmentPatientInput = function() {
+        const searchInput = document.getElementById('app-patient-search-input');
+        const clearBtn = document.getElementById('app-patient-search-clear-btn');
+        if (searchInput) {
+            searchInput.value = '';
+            searchInput.focus();
+        }
+        if (clearBtn) clearBtn.style.display = 'none';
+        window.filterAppointmentPatients('');
+    };
+
+    window.filterAppointmentPatients = function(term) {
+        const resultsBox = document.getElementById('app-patient-search-results');
+        if (!resultsBox) return;
+
+        const allPatients = window.getAppointmentPatientsCache();
+        const query = (term || '').trim().toLowerCase();
+
+        let matched = allPatients;
+        if (query) {
+            matched = allPatients.filter(p => {
+                const name = (p.fullname || '').toLowerCase();
+                const id = (p.id || '').toLowerCase();
+                const ced = (p.cedula || '').toLowerCase();
+                const ph = (p.phone || '').toLowerCase();
+                return name.includes(query) || id.includes(query) || ced.includes(query) || ph.includes(query);
+            });
+        }
+
+        resultsBox.innerHTML = '';
+        if (matched.length === 0) {
+            resultsBox.innerHTML = `
+                <div style="padding: 14px; text-align: center; color: #64748b; font-size: 0.88rem; background: #ffffff;">
+                    <i class="fa-solid fa-user-slash" style="margin-bottom: 4px; font-size: 1.2rem; display: block; color: #94a3b8;"></i>
+                    No se encontraron pacientes para "<strong>${escapeApptText(query)}</strong>"
+                </div>
+            `;
+            resultsBox.style.display = 'block';
+            return;
+        }
+
+        const slice = matched.slice(0, 20);
+        const fragment = document.createDocumentFragment();
+
+        slice.forEach(p => {
+            const item = document.createElement('div');
+            item.className = 'patient-search-item';
+            item.style.cssText = 'padding: 10px 14px; border-bottom: 1px solid #f1f5f9; cursor: pointer; display: flex; align-items: center; justify-content: space-between; transition: background 0.15s; background: #ffffff;';
+            
+            const infoParts = [];
+            if (p.cedula) infoParts.push(`CI: ${p.cedula}`);
+            if (p.phone) infoParts.push(`Tel: ${p.phone}`);
+            if (infoParts.length === 0) infoParts.push(`ID: ${p.id}`);
+
+            item.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 10px; overflow: hidden; pointer-events: none;">
+                    <div style="width: 32px; height: 32px; border-radius: 50%; background: #e0f2fe; color: #0284c7; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; flex-shrink: 0; font-weight: 600;">
+                        ${(p.fullname || 'P').charAt(0).toUpperCase()}
+                    </div>
+                    <div style="overflow: hidden;">
+                        <div style="font-weight: 600; font-size: 0.9rem; color: #0f172a; white-space: nowrap; text-overflow: ellipsis; overflow: hidden;">${escapeApptText(p.fullname || 'Sin Nombre')}</div>
+                        <div style="font-size: 0.76rem; color: #64748b;">${escapeApptText(infoParts.join(' • '))}</div>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-xs btn-primary" style="pointer-events: none; padding: 4px 10px; font-size: 0.75rem; border-radius: 6px; flex-shrink: 0;">
+                    Seleccionar
+                </button>
+            `;
+
+            item.addEventListener('mouseenter', () => item.style.backgroundColor = '#f0fdfa');
+            item.addEventListener('mouseleave', () => item.style.backgroundColor = '#ffffff');
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
+                window.setAppointmentPatient(p);
+            });
+
+            fragment.appendChild(item);
+        });
+
+        resultsBox.appendChild(fragment);
+        resultsBox.style.display = 'block';
+    };
+
+    window.initAppointmentPatientSearch = function() {
+        const input = document.getElementById('app-patient-search-input');
+        const clearBtn = document.getElementById('app-patient-search-clear-btn');
+        const resultsBox = document.getElementById('app-patient-search-results');
+        const wrapper = document.getElementById('app-patient-search-wrapper');
+
+        if (!input || !wrapper) return;
+        if (input._searchInitialized) return;
+        input._searchInitialized = true;
+
+        input.addEventListener('input', (e) => {
+            const val = e.target.value;
+            if (clearBtn) clearBtn.style.display = val ? 'block' : 'none';
+            window.filterAppointmentPatients(val);
+        });
+
+        input.addEventListener('focus', () => {
+            window.filterAppointmentPatients(input.value);
+        });
+
+        document.addEventListener('click', (e) => {
+            if (wrapper && !wrapper.contains(e.target) && resultsBox) {
+                resultsBox.style.display = 'none';
+            }
+        });
+    };
+
     // Modal Cita Helpers: New & Edit
     window.openNewAppointmentModal = async function({ prefillDate = null, prefillTime = null, prefillPatientId = null, prefillDoctorId = null } = {}) {
+        window.initAppointmentPatientSearch();
         try {
             await populateAppointmentPatientSelect();
             await window.populateAppointmentDropdowns({ doctorId: prefillDoctorId });
@@ -14209,6 +14422,9 @@ function initGlobalEvents() {
                 pSel.value = prefillPatientId;
                 pSel.dispatchEvent(new Event('change'));
             }
+            window.setAppointmentPatient(prefillPatientId);
+        } else {
+            window.clearAppointmentPatientSearch();
         }
 
         openModal('modal-appointment');
@@ -14216,6 +14432,7 @@ function initGlobalEvents() {
 
     window.editAppointment = async function(apptId) {
         try {
+            window.initAppointmentPatientSearch();
             const appts = await SupabaseDataService.getAppointments();
             const app = appts.find(a => a.id === apptId);
             if (!app) {
@@ -14237,6 +14454,9 @@ function initGlobalEvents() {
 
             const pSelect = document.getElementById('app-patient-select');
             if (pSelect) pSelect.value = app.patientId;
+
+            // Pre-select patient by default in predictive search card
+            window.setAppointmentPatient(app.patientId || app.patientName, app.patientName);
 
             const timeInput = document.getElementById('app-time');
             if (timeInput) timeInput.value = app.time || '';
@@ -16013,6 +16233,9 @@ function initGlobalEvents() {
                 if (appPatientSelect) {
                     appPatientSelect.value = activeId;
                 }
+                if (typeof window.setAppointmentPatient === 'function') {
+                    window.setAppointmentPatient(activeId);
+                }
 
                 const treatmentNames = currentBudgetItems.map(item => item.name).join(' + ');
                 const appTreatmentInput = document.getElementById('app-treatment');
@@ -16704,34 +16927,50 @@ async function populateAppointmentPatientSelect() {
     const select = document.getElementById('app-patient-select');
     if (!select) return;
 
-    select.innerHTML = '<option value="">Cargando pacientes...</option>';
-    try {
-        const patients = await SupabaseDataService.getPatients();
-        select.innerHTML = '';
-        if (!patients || patients.length === 0) {
-            select.innerHTML = '<option value="">-- No hay pacientes registrados --</option>';
-            return;
-        }
+    // Fast synchronous cache retrieval to avoid delay/flicker
+    let patients = (window.SupabaseDataService && window.SupabaseDataService._patientsCache && window.SupabaseDataService._patientsCache.length > 0)
+        ? window.SupabaseDataService._patientsCache
+        : null;
 
-        const activePatientId = (typeof getActivePatientId === 'function') ? getActivePatientId() : null;
-
-        patients.forEach(p => {
-            const opt = document.createElement('option');
-            opt.value = p.id;
-            opt.dataset.name = p.fullname;
-            opt.innerText = `${p.fullname} (${p.id})`;
-            if (activePatientId && p.id === activePatientId) {
-                opt.selected = true;
+    if (!patients) {
+        try {
+            const cachedLocal = localStorage.getItem('dental_patients');
+            if (cachedLocal) {
+                const parsed = JSON.parse(cachedLocal);
+                if (Array.isArray(parsed) && parsed.length > 0) patients = parsed;
             }
-            select.appendChild(opt);
-        });
+        } catch(e) {}
+    }
 
-        if (activePatientId && Array.from(select.options).some(o => o.value === activePatientId)) {
-            select.value = activePatientId;
+    if (!patients || patients.length === 0) {
+        try {
+            patients = await SupabaseDataService.getPatients();
+        } catch(err) {
+            console.error("Error populating appointment patient select:", err);
         }
-    } catch(err) {
-        console.error("Error populating appointment patient select:", err);
-        select.innerHTML = '<option value="">Error al cargar pacientes</option>';
+    }
+
+    select.innerHTML = '';
+    if (!patients || patients.length === 0) {
+        select.innerHTML = '<option value="">-- No hay pacientes registrados --</option>';
+        return;
+    }
+
+    const activePatientId = (typeof getActivePatientId === 'function') ? getActivePatientId() : null;
+
+    patients.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.dataset.name = p.fullname;
+        opt.innerText = `${p.fullname} (${p.id})`;
+        if (activePatientId && p.id === activePatientId) {
+            opt.selected = true;
+        }
+        select.appendChild(opt);
+    });
+
+    if (activePatientId && Array.from(select.options).some(o => o.value === activePatientId)) {
+        select.value = activePatientId;
     }
 }
 
@@ -16742,6 +16981,9 @@ window.openAppointmentModalForNextSession = async (patientId, nextSessionNum) =>
     if (select) {
         select.value = patientId;
         select.dispatchEvent(new Event('change'));
+    }
+    if (typeof window.setAppointmentPatient === 'function') {
+        window.setAppointmentPatient(patientId);
     }
 
     const treatInput = document.getElementById('app-treatment');

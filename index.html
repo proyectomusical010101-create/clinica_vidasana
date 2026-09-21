@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=308">
+    <link rel="stylesheet" href="styles.css?v=309">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -3872,7 +3872,7 @@
 
     <!-- MODAL: AGREGAR / EDITAR CITA -->
     <div class="modal-overlay hidden" id="modal-appointment">
-        <div class="modal-dialog">
+        <div class="modal-dialog" style="max-width: 760px; width: 95vw;">
             <div class="modal-header">
                 <h3 id="modal-appointment-title"><i class="fa-solid fa-calendar-plus text-cyan"></i> Agendar Nueva Cita Médica</h3>
                 <button class="modal-close" data-close="modal-appointment">&times;</button>
@@ -3880,11 +3880,44 @@
             <div class="modal-body">
                 <form id="form-appointment" class="grid-form">
                     <input type="hidden" id="app-id" value="">
-                    <div class="form-group span-2">
-                        <label>Paciente *</label>
-                        <select id="app-patient-select" required>
-                            <!-- Dynamic patient options -->
-                        </select>
+                    
+                    <!-- Buscador Predictivo de Paciente -->
+                    <div class="form-group span-2" style="position: relative;">
+                        <label><i class="fa-solid fa-user-injured text-cyan"></i> Paciente *</label>
+                        
+                        <!-- Select y campos ocultos para 100% retrocompatibilidad -->
+                        <select id="app-patient-select" style="display: none;" required></select>
+                        <input type="hidden" id="app-patient-id" value="">
+
+                        <!-- Tarjeta del Paciente Seleccionado -->
+                        <div id="app-patient-selected-box" style="display: none; align-items: center; justify-content: space-between; padding: 10px 14px; background: #f0fdfa; border: 1.5px solid #0d9488; border-radius: 10px; margin-bottom: 2px;">
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <div style="width: 38px; height: 38px; border-radius: 50%; background: #0d9488; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0;">
+                                    <i class="fa-solid fa-user"></i>
+                                </div>
+                                <div>
+                                    <strong id="app-patient-selected-name" style="font-size: 0.96rem; color: #0f172a; display: block; line-height: 1.2;">Nombre Paciente</strong>
+                                    <span id="app-patient-selected-info" style="font-size: 0.78rem; color: #64748b;">Cédula / Teléfono</span>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-xs btn-outline" onclick="window.clearAppointmentPatientSearch()" style="padding: 5px 12px; border-radius: 6px; color: #0284c7; border-color: #bae6fd; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
+                                <i class="fa-solid fa-arrows-rotate"></i> Cambiar Paciente
+                            </button>
+                        </div>
+
+                        <!-- Buscador Activo -->
+                        <div id="app-patient-search-wrapper" style="position: relative;">
+                            <div style="position: relative;">
+                                <input type="text" id="app-patient-search-input" class="form-control" placeholder="🔍 Escribe nombre, apellido, cédula o teléfono del paciente..." autocomplete="off" style="padding-left: 38px; padding-right: 36px; height: 44px; border-radius: 8px; font-size: 0.9rem; width: 100%;">
+                                <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94a3b8; pointer-events: none;"></i>
+                                <button type="button" id="app-patient-search-clear-btn" onclick="window.clearAppointmentPatientInput()" style="display: none; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); border: none; background: transparent; color: #94a3b8; cursor: pointer; padding: 4px; font-size: 1rem;">
+                                    <i class="fa-solid fa-xmark"></i>
+                                </button>
+                            </div>
+                            <!-- Desplegable de Resultados -->
+                            <div id="app-patient-search-results" style="display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: #ffffff !important; border: 1px solid #cbd5e1; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.14); z-index: 1050; max-height: 240px; overflow-y: auto;">
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Especialidad y Médico Asignado -->
@@ -7609,14 +7642,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=308"></script>
-    <script src="supabaseClient.js?v=308"></script>
-    <script src="odontogram.js?v=308"></script>
-    <script src="signature.js?v=308"></script>
-    <script src="whatsapp.js?v=308"></script>
-    <script src="kardex.js?v=308"></script>
-    <script src="app.js?v=308"></script>
-    <script src="clinicalERP.js?v=308"></script>
-    <script src="tutorial.js?v=308"></script>
+    <script src="seededData.js?v=309"></script>
+    <script src="supabaseClient.js?v=309"></script>
+    <script src="odontogram.js?v=309"></script>
+    <script src="signature.js?v=309"></script>
+    <script src="whatsapp.js?v=309"></script>
+    <script src="kardex.js?v=309"></script>
+    <script src="app.js?v=309"></script>
+    <script src="clinicalERP.js?v=309"></script>
+    <script src="tutorial.js?v=309"></script>
 </body>
 </html>

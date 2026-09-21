@@ -6877,6 +6877,74 @@ select, .form-select, select.form-control {
     }
 }
 
+/* ==========================================
+   APPOINTMENT MODAL & PREDICTIVE SEARCH STYLES
+   ========================================== */
+#modal-appointment .modal-dialog {
+    width: 760px !important;
+    max-width: 95vw !important;
+}
+
+@media (max-width: 640px) {
+    #modal-appointment .form-row {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+    }
+}
+
+#app-patient-selected-box {
+    background: #f0fdfa !important;
+    border: 1.5px solid #0d9488 !important;
+    -webkit-tap-highlight-color: transparent !important;
+}
+
+#app-patient-search-results {
+    background-color: #ffffff !important;
+    background: #ffffff !important;
+    -webkit-tap-highlight-color: transparent !important;
+}
+
+.patient-search-item {
+    -webkit-tap-highlight-color: transparent !important;
+    background-color: #ffffff !important;
+}
+
+.patient-search-item:hover,
+.patient-search-item:active {
+    background-color: #f0fdfa !important;
+}
+
+/* ==========================================
+   ANTI-FLICKER FOR ACCORDIONS & DROPDOWNS
+   Eliminates black/dark flash on tap & open
+   ========================================== */
+#budget-area-accordion-btn,
+#budget-area-accordion-menu,
+.mobile-area-accordion-wrapper,
+.mobile-area-item,
+.bday-accordion-header,
+.settings-mobile-accordion-btn {
+    -webkit-tap-highlight-color: transparent !important;
+    -webkit-touch-callout: none;
+}
+
+#budget-area-accordion-menu {
+    background-color: #ffffff !important;
+    background: #ffffff !important;
+    transform: translateZ(0);
+    will-change: opacity, transform;
+}
+
+.mobile-area-item {
+    background-color: #ffffff !important;
+}
+
+.mobile-area-item:hover,
+.mobile-area-item:active {
+    background-color: #f0fdfa !important;
+}
+
+
 
 
 
