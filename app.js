@@ -74,7 +74,7 @@ window.universalPrintHTML = function(htmlContent, title = 'Documento Clínico') 
                 <head>
                     <meta charset="UTF-8">
                     <title>${title}</title>
-                    <link rel="stylesheet" href="styles.css?v=319">
+                    <link rel="stylesheet" href="styles.css?v=320">
                     <style>
                         @page { size: A4 portrait; margin: 5mm 8mm 5mm 8mm; }
                         html, body {

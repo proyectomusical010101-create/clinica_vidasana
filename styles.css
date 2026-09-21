@@ -7043,3 +7043,41 @@ select, .form-select, select.form-control {
     border-color: #0284c7 !important;
     color: #0369a1 !important;
 }
+
+/* ==========================================
+   MODAL RESPONSIVE SIZING & FORM OVERFLOW GUARDS
+   ========================================== */
+#modal-room .modal-dialog {
+    max-width: 820px !important;
+    width: 95vw !important;
+}
+
+#modal-specialty .modal-dialog {
+    max-width: 680px !important;
+    width: 95vw !important;
+}
+
+#modal-payroll .modal-dialog {
+    max-width: 740px !important;
+    width: 95vw !important;
+}
+
+#modal-room select,
+#modal-room input,
+#modal-specialty select,
+#modal-specialty input,
+#modal-payroll select,
+#modal-payroll input {
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+}
+
+@media (max-width: 640px) {
+    #modal-room .form-row,
+    #modal-specialty .form-row,
+    #modal-payroll .form-row {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+    }
+}
