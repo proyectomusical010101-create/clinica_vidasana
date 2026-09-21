@@ -153,7 +153,7 @@ class WhatsAppService {
         msg += `🦷 *Tratamiento Vinculado:* ${recipe.treatmentLinked || 'General'}\n\n`;
 
         if (recipe.doctorName) {
-            msg += `👨‍⚕️ *Médico / Odontólogo Tratante:* Dr(a). ${recipe.doctorName}${recipe.doctorLicense ? `\n   • *Colegiado / Licencia:* ${recipe.doctorLicense}` : ''}\n\n`;
+            msg += `👨‍⚕️ *Médico Tratante:* Dr(a). ${recipe.doctorName}${recipe.doctorLicense ? `\n   • *Colegiado / Licencia:* ${recipe.doctorLicense}` : ''}\n\n`;
         }
 
         if (recipe.medicines && recipe.medicines.length > 0) {

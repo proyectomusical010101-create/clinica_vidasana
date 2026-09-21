@@ -18,13 +18,13 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=313">
+    <link rel="stylesheet" href="styles.css?v=314">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
         (function() {
             var urlParams = new URLSearchParams(window.location.search);
-            var isPublic = (urlParams.get('view') === 'budget' || urlParams.get('view') === 'receipt') && urlParams.get('patientId');
+            var isPublic = (urlParams.get('view') === 'budget' || urlParams.get('view') === 'receipt' || urlParams.get('view') === 'recipe') && (urlParams.get('patientId') || urlParams.get('token') || urlParams.get('receta'));
             var session = sessionStorage.getItem('dental_current_user') || localStorage.getItem('dental_current_user');
             if (session || isPublic) {
                 document.documentElement.classList.add('has-auth-session');
@@ -5011,6 +5011,33 @@
             </div>
             <div class="modal-body" style="padding: 20px;">
                 
+                <!-- Selector de Paciente con Tarjeta y Botón 'X' para desvincular/cambiar -->
+                <div id="recipe-patient-selector-card" style="margin-bottom: 15px; background: #ffffff; border: 1px solid #0d9488; border-radius: 8px; padding: 12px 14px; box-shadow: 0 2px 6px rgba(13, 148, 136, 0.08);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+                        <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;">
+                            <div style="width: 38px; height: 38px; border-radius: 50%; background: rgba(13, 148, 136, 0.12); color: #0d9488; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0;">
+                                <i class="fa-solid fa-user-check"></i>
+                            </div>
+                            <div style="min-width: 0; flex: 1;">
+                                <div style="font-size: 0.72rem; font-weight: 700; color: #0d9488; text-transform: uppercase; letter-spacing: 0.04em;">Paciente Seleccionado</div>
+                                <div id="recipe-patient-name" style="font-size: 0.96rem; font-weight: 800; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Sin Paciente Seleccionado</div>
+                                <div id="recipe-patient-meta" style="font-size: 0.78rem; color: #64748b;">C.I.: -- | Tel: --</div>
+                            </div>
+                        </div>
+                        <button type="button" id="btn-recipe-clear-patient" onclick="window.clearRecipePatient()" class="btn btn-sm btn-outline" style="border: 1px solid #cbd5e1; color: #64748b; padding: 6px 12px; border-radius: 6px; font-weight: 700; display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; cursor: pointer;" title="Desvincular paciente y buscar otro">
+                            <i class="fa-solid fa-xmark text-red"></i> Cambiar Paciente
+                        </button>
+                    </div>
+
+                    <!-- Buscador desplegable cuando no hay paciente seleccionado -->
+                    <div id="recipe-patient-search-container" class="hidden" style="margin-top: 10px; border-top: 1px dashed #cbd5e1; padding-top: 10px;">
+                        <div style="position: relative; width: 100%;">
+                            <input type="text" id="recipe-patient-search-input" class="form-control" placeholder="🔍 Buscar paciente por Nombre o Cédula..." autocomplete="off" style="width: 100%; height: 38px; font-size: 0.88rem; padding: 6px 12px; border-radius: 6px; font-weight: 600;">
+                            <div id="recipe-patient-search-results" style="position: absolute; top: 42px; left: 0; right: 0; background: #ffffff; border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.18); z-index: 10800; max-height: 220px; overflow-y: auto; display: none;"></div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Selector de Tratamiento y Médico Tratante -->
                 <div class="grid-form mb-15" style="grid-template-columns: 1fr 1fr; gap: 15px; background: rgba(13, 148, 136, 0.04); border: 1px solid rgba(13, 148, 136, 0.2); padding: 12px 15px; border-radius: 8px;">
                     <div class="form-group" style="margin-bottom: 0;">
@@ -5023,7 +5050,7 @@
                     </div>
                     <div class="form-group" style="margin-bottom: 0;">
                         <label style="font-weight: 700; color: #0d9488; display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
-                            <i class="fa-solid fa-user-doctor"></i> Médico / Odontólogo Tratante *:
+                            <i class="fa-solid fa-user-doctor"></i> Médico Tratante *:
                         </label>
                         <select id="recipe-doctor-select" class="form-control" style="width: 100%; font-weight: 600; font-size: 0.88rem;">
                             <!-- Populated dynamically with doctors -->
@@ -5076,10 +5103,10 @@
             <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
                 <div style="display: flex; gap: 8px;">
                     <button type="button" class="btn btn-outline" id="btn-send-recipe-whatsapp-modal" style="border: 1px solid #22c55e !important; color: #15803d !important; font-weight: 700;">
-                        <i class="fa-brands fa-whatsapp"></i> Enviar por WhatsApp
+                        <i class="fa-brands fa-whatsapp"></i> Enviar
                     </button>
                     <button type="button" class="btn btn-outline" id="btn-print-recipe-pdf" style="border: 1px solid #0f172a !important; color: #0f172a !important; font-weight: 700;">
-                        <i class="fa-solid fa-file-pdf text-red"></i> Imprimir Récipe / PDF
+                        <i class="fa-solid fa-file-pdf text-red"></i> Imprimir/PDF
                     </button>
                 </div>
                 <button type="button" class="btn btn-success" id="btn-save-recipe-final" style="background: #10b981 !important; color: white !important; font-weight: 700; border: none;">
@@ -5502,8 +5529,8 @@
     <div id="public-session-screen" class="hidden" style="position: fixed; inset: 0; background: #f1f5f9; z-index: 999999; overflow-y: auto; padding: 20px;">
         <div style="max-width: 800px; margin: 0 auto 30px auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); overflow: hidden;">
             <div style="background: #ffffff; border-bottom: 1px solid #e2e8f0; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100;">
-                <div style="font-weight: 800; font-size: 1.1rem; color: #0891b2; display: flex; align-items: center; gap: 8px;">
-                    <i class="fa-solid fa-hospital text-cyan"></i> CLÍNICA VIDASANA - RECIBO DE ATENCIÓN
+                <div id="public-session-screen-title" style="font-weight: 800; font-size: 1.1rem; color: #0891b2; display: flex; align-items: center; gap: 8px;">
+                    <i class="fa-solid fa-hospital text-cyan"></i> CLÍNICA VIDASANA - ATENCIÓN CLÍNICA
                 </div>
                 <div style="display: flex; gap: 10px;">
                     <button class="btn btn-sm btn-primary" id="btn-public-session-download-pdf" style="background: #0891b2 !important; color: #ffffff !important; border: none !important; font-weight: 600; padding: 8px 16px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 6px;"><i class="fa-solid fa-download"></i> Descargar PDF</button>
@@ -7663,14 +7690,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=313"></script>
-    <script src="supabaseClient.js?v=313"></script>
-    <script src="odontogram.js?v=313"></script>
-    <script src="signature.js?v=313"></script>
-    <script src="whatsapp.js?v=313"></script>
-    <script src="kardex.js?v=313"></script>
-    <script src="app.js?v=313"></script>
-    <script src="clinicalERP.js?v=313"></script>
-    <script src="tutorial.js?v=313"></script>
+    <script src="seededData.js?v=314"></script>
+    <script src="supabaseClient.js?v=314"></script>
+    <script src="odontogram.js?v=314"></script>
+    <script src="signature.js?v=314"></script>
+    <script src="whatsapp.js?v=314"></script>
+    <script src="kardex.js?v=314"></script>
+    <script src="app.js?v=314"></script>
+    <script src="clinicalERP.js?v=314"></script>
+    <script src="tutorial.js?v=314"></script>
 </body>
 </html>

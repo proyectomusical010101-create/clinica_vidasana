@@ -921,7 +921,7 @@ function checkAuthSession() {
     const urlParams = new URLSearchParams(window.location.search);
     const isPublicBudget = urlParams.get('view') === 'budget' && urlParams.get('patientId');
     const isPublicReceipt = urlParams.get('view') === 'receipt' && urlParams.get('patientId');
-    const isPublicRecipe = urlParams.get('view') === 'recipe' && urlParams.get('patientId');
+    const isPublicRecipe = (urlParams.get('view') === 'recipe' && (urlParams.get('patientId') || urlParams.get('receta') || urlParams.get('token'))) || urlParams.has('receta');
     const loginOverlay = document.getElementById('login-screen');
 
     if (isPublicBudget) {
@@ -15029,18 +15029,16 @@ function initGlobalEvents() {
     const btnSendRecipeWaModal = document.getElementById('btn-send-recipe-whatsapp-modal');
     if (btnSendRecipeWaModal) {
         btnSendRecipeWaModal.onclick = () => {
-            const activeId = getActivePatientId();
-            if (activeId) window.sendRecipeWhatsApp(activeId);
+            const activeId = window._recipeSelectedPatientId || getActivePatientId();
+            window.sendRecipeWhatsApp(activeId);
         };
     }
 
     const btnPrintRecipePdf = document.getElementById('btn-print-recipe-pdf');
     if (btnPrintRecipePdf) {
         btnPrintRecipePdf.onclick = async () => {
-            const activeId = getActivePatientId();
-            const patients = await SupabaseDataService.getPatients();
-            const p = patients.find(pt => pt.id === activeId);
-            if (p) window.printSingleRecipePDF(p.id);
+            const activeId = window._recipeSelectedPatientId || getActivePatientId();
+            window.printSingleRecipePDF(activeId);
         };
     }
 
@@ -19765,9 +19763,9 @@ function buildRecipeDocumentHTML(opts) {
                     ${finalClinicAddress ? `<div style="color: #64748b; font-size: 0.70rem; line-height: 1.2; margin-top: 1px;">${finalClinicAddress}</div>` : ''}
                 </div>
 
-                <!-- Col 2: Odontólogo / Médico Tratante -->
+                <!-- Col 2: Médico Tratante -->
                 <div>
-                    <div style="font-size: 0.64rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">MÉDICO / ODONTÓLOGO TRATANTE</div>
+                    <div style="font-size: 0.64rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">MÉDICO TRATANTE</div>
                     <strong style="font-size: 0.80rem; color: #0f172a; display: block; margin-bottom: 2px;">${finalDoctorName.startsWith('Dr') ? finalDoctorName : `Dr(a). ${finalDoctorName}`}</strong>
                     <div style="color: #475569;">Especialidad: ${doctorSpecialty || 'Odontología General / Especializada'}</div>
                     ${doctorLicense ? `<div style="color: #0066f5; font-weight: 600;">Colegiado/Lic: ${doctorLicense}</div>` : ''}
@@ -23988,11 +23986,29 @@ async function renderPublicSessionReceiptView() {
 
 async function renderPublicRecipeView() {
     const urlParams = new URLSearchParams(window.location.search);
-    const patientId = urlParams.get('patientId');
-    const recipeId = urlParams.get('recipeId');
+    let patientId = urlParams.get('patientId');
+    let recipeId = urlParams.get('recipeId');
+
+    // Support encoded secure token ?receta=... or ?token=...
+    const encodedToken = urlParams.get('receta') || urlParams.get('token');
+    if (encodedToken) {
+        try {
+            const decoded = atob(decodeURIComponent(encodedToken));
+            const parsed = JSON.parse(decoded);
+            if (parsed.p) patientId = parsed.p;
+            if (parsed.r) recipeId = parsed.r;
+        } catch(e) {
+            console.warn("Could not decode recipe token:", e);
+        }
+    }
 
     const publicScreen = document.getElementById('public-session-screen');
     const publicContent = document.getElementById('public-session-content');
+    const screenTitle = document.getElementById('public-session-screen-title');
+
+    if (screenTitle) {
+        screenTitle.innerHTML = '<i class="fa-solid fa-prescription text-cyan"></i> CLÍNICA VIDASANA - RÉCIPE MÉDICO E INDICACIONES';
+    }
 
     if (!publicScreen || !publicContent) return;
 
@@ -24452,18 +24468,157 @@ window.addRecipeRow = function(med = '', dose = '', freq = '') {
     tbody.appendChild(tr);
 };
 
-window.openRecipeModal = async function(sessionNum = null, sessionTitle = '') {
-    const activeId = getActivePatientId();
-    if (!activeId) {
-        Swal.fire({ icon: 'warning', title: 'Seleccione Paciente', text: 'Por favor seleccione un paciente.' });
+// Helper functions for Recipe Modal Patient Selection
+window.clearRecipePatient = function() {
+    const nameEl = document.getElementById('recipe-patient-name');
+    const metaEl = document.getElementById('recipe-patient-meta');
+    const searchContainer = document.getElementById('recipe-patient-search-container');
+    const searchInput = document.getElementById('recipe-patient-search-input');
+    const resultsContainer = document.getElementById('recipe-patient-search-results');
+    const trtSelect = document.getElementById('recipe-treatment-select');
+    const tbody = document.getElementById('recipe-medicines-tbody');
+    const notesEl = document.getElementById('recipe-general-notes');
+    const indEl = document.getElementById('recipe-clinical-indications');
+
+    if (nameEl) nameEl.innerText = 'Sin Paciente Seleccionado';
+    if (metaEl) metaEl.innerText = 'Busque y seleccione un paciente a continuación';
+    if (searchContainer) searchContainer.classList.remove('hidden');
+    if (searchInput) {
+        searchInput.value = '';
+        setTimeout(() => searchInput.focus(), 100);
+    }
+    if (resultsContainer) resultsContainer.style.display = 'none';
+
+    if (trtSelect) trtSelect.innerHTML = '<option value="General">General / Consulta Externa</option>';
+    if (tbody) tbody.innerHTML = '';
+    if (notesEl) notesEl.value = '';
+    if (indEl) indEl.value = '';
+
+    window._recipeSelectedPatientId = null;
+};
+
+window.selectRecipePatient = async function(patientId) {
+    const patients = await SupabaseDataService.getPatients();
+    const p = patients.find(pat => String(pat.id) === String(patientId));
+    if (!p) return;
+
+    window._recipeSelectedPatientId = p.id;
+    if (typeof setActivePatientId === 'function') {
+        setActivePatientId(p.id);
+    }
+
+    const nameEl = document.getElementById('recipe-patient-name');
+    const metaEl = document.getElementById('recipe-patient-meta');
+    const searchContainer = document.getElementById('recipe-patient-search-container');
+    const resultsContainer = document.getElementById('recipe-patient-search-results');
+
+    if (nameEl) nameEl.innerText = p.fullname || 'Paciente';
+    if (metaEl) metaEl.innerText = `C.I.: ${p.id} | Tel: ${p.phone || 'S/N'}`;
+    if (searchContainer) searchContainer.classList.add('hidden');
+    if (resultsContainer) resultsContainer.style.display = 'none';
+
+    // Populate treatment dropdown with this patient's treatments/sessions
+    const select = document.getElementById('recipe-treatment-select');
+    if (select) {
+        select.innerHTML = '<option value="General">General / Consulta Externa</option>';
+        const meta = p.metadata || {};
+        const trts = meta.treatments || [];
+        trts.forEach((t, i) => {
+            const opt = document.createElement('option');
+            opt.value = `Sesión #${i + 1}: ${t.name || 'Procedimiento'} (${t.tooth || 'Gnl'})`;
+            opt.innerText = opt.value;
+            select.appendChild(opt);
+        });
+        if (p.sessions && p.sessions.length > 0) {
+            p.sessions.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = `Sesión Realizada #${s.sessionNum}: ${s.procedure}`;
+                opt.innerText = opt.value;
+                select.appendChild(opt);
+            });
+        }
+    }
+
+    // Add default rows if empty
+    const tbody = document.getElementById('recipe-medicines-tbody');
+    if (tbody && tbody.children.length === 0) {
+        window.addRecipeRow('Amoxicilina 500mg', '1 cápsula c/8h', 'Por 7 días');
+        window.addRecipeRow('Ibuprofeno 400mg', '1 tableta c/8h', 'Por 3 días (si hay dolor)');
+    }
+};
+
+window.renderRecipePatientSearchResults = async function(query) {
+    const resultsContainer = document.getElementById('recipe-patient-search-results');
+    if (!resultsContainer) return;
+
+    const normalizeStr = (s) => (s || '').toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const term = normalizeStr(query).trim();
+
+    const patients = await SupabaseDataService.getPatients();
+    let matches = [];
+    if (!term) {
+        matches = patients.slice(0, 15);
+    } else {
+        matches = patients.filter(p => {
+            const fn = normalizeStr(p.fullname);
+            const id = normalizeStr(p.id);
+            const ph = normalizeStr(p.phone);
+            return fn.includes(term) || id.includes(term) || ph.includes(term);
+        }).slice(0, 30);
+    }
+
+    if (matches.length === 0) {
+        resultsContainer.innerHTML = `<div style="padding: 12px; text-align: center; color: #64748b; font-size: 0.85rem;">No se encontraron pacientes con "${term}"</div>`;
+        resultsContainer.style.display = 'block';
         return;
+    }
+
+    resultsContainer.innerHTML = matches.map(p => {
+        const safeId = String(p.id || '').replace(/'/g, "\\'");
+        const safeName = (p.fullname || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return `
+            <div class="recipe-patient-search-item" onclick="window.selectRecipePatient('${safeId}')" style="padding: 8px 12px; border-bottom: 1px solid #f1f5f9; cursor: pointer; transition: background 0.15s ease;">
+                <div style="font-weight: 700; color: #0f172a; font-size: 0.88rem;"><i class="fa-solid fa-user text-cyan" style="margin-right: 6px;"></i> ${safeName}</div>
+                <div style="font-size: 0.75rem; color: #64748b; margin-top: 2px;">Cédula: <strong>${p.id}</strong> | Tel: ${p.phone || 'S/N'}</div>
+            </div>
+        `;
+    }).join('');
+    resultsContainer.style.display = 'block';
+};
+
+window.openRecipeModal = async function(sessionNum = null, sessionTitle = '') {
+    let activeId = window._recipeSelectedPatientId || getActivePatientId();
+
+    const patients = await SupabaseDataService.getPatients();
+    const p = activeId ? patients.find(pt => pt.id === activeId) : null;
+
+    const nameEl = document.getElementById('recipe-patient-name');
+    const metaEl = document.getElementById('recipe-patient-meta');
+    const searchContainer = document.getElementById('recipe-patient-search-container');
+    const searchInput = document.getElementById('recipe-patient-search-input');
+
+    if (p) {
+        window._recipeSelectedPatientId = p.id;
+        if (nameEl) nameEl.innerText = p.fullname || 'Paciente';
+        if (metaEl) metaEl.innerText = `C.I.: ${p.id} | Tel: ${p.phone || 'S/N'}`;
+        if (searchContainer) searchContainer.classList.add('hidden');
+    } else {
+        window.clearRecipePatient();
+    }
+
+    if (searchInput && !searchInput.dataset.bound) {
+        searchInput.dataset.bound = 'true';
+        searchInput.addEventListener('input', (e) => {
+            window.renderRecipePatientSearchResults(e.target.value);
+        });
+        searchInput.addEventListener('focus', () => {
+            window.renderRecipePatientSearchResults(searchInput.value);
+        });
     }
 
     const select = document.getElementById('recipe-treatment-select');
     if (select) {
         select.innerHTML = '<option value="General">General / Consulta Externa</option>';
-        const patients = await SupabaseDataService.getPatients();
-        const p = patients.find(pt => pt.id === activeId);
         if (p) {
             const meta = p.metadata || {};
             const trts = meta.treatments || [];
@@ -24505,9 +24660,9 @@ window.openRecipeModal = async function(sessionNum = null, sessionTitle = '') {
                 const opt = document.createElement('option');
                 opt.value = doc.id;
                 const lic = (doc.license && doc.license !== 'N/A') ? ` (${doc.license})` : '';
-                opt.innerText = `${doc.fullname} - ${doc.role || 'Odontólogo'}${lic}`;
+                opt.innerText = `${doc.fullname} - ${doc.role || 'Médico'}${lic}`;
                 opt.dataset.doctorName = doc.fullname;
-                opt.dataset.doctorRole = doc.role || 'Odontología General';
+                opt.dataset.doctorRole = doc.role || 'Médico Tratante';
                 opt.dataset.doctorLicense = (doc.license && doc.license !== 'N/A') ? doc.license : '';
                 const docSig = (doc.doctorProfile && doc.doctorProfile.signature) || (doc.doctor_profile && doc.doctor_profile.signature) || '';
                 opt.dataset.doctorSignature = docSig;
@@ -24523,15 +24678,17 @@ window.openRecipeModal = async function(sessionNum = null, sessionTitle = '') {
     }
 
     const tbody = document.getElementById('recipe-medicines-tbody');
-    if (tbody) tbody.innerHTML = '';
-    window.addRecipeRow('Amoxicilina 500mg', '1 cápsula c/8h', 'Por 7 días');
-    window.addRecipeRow('Ibuprofeno 400mg', '1 tableta c/8h', 'Por 3 días (si hay dolor)');
+    if (tbody && tbody.children.length === 0) {
+        tbody.innerHTML = '';
+        window.addRecipeRow('Amoxicilina 500mg', '1 cápsula c/8h', 'Por 7 días');
+        window.addRecipeRow('Ibuprofeno 400mg', '1 tableta c/8h', 'Por 3 días (si hay dolor)');
+    }
 
     const notesEl = document.getElementById('recipe-general-notes');
-    if (notesEl) notesEl.value = 'Tomar los medicamentos indicados strictly después de las comidas.';
+    if (notesEl && !notesEl.value) notesEl.value = 'Tomar los medicamentos indicados strictly después de las comidas.';
 
     const indEl = document.getElementById('recipe-clinical-indications');
-    if (indEl) indEl.value = '1. Reposo relativo durante las primeras 48 horas.\n2. Aplicar hielo local en la zona externa por lapsos de 15 minutos.\n3. Dieta blanda y fría. Evitar exponerse al sol o realizar esfuerzos físicos.';
+    if (indEl && !indEl.value) indEl.value = '1. Reposo relativo durante las primeras 48 horas.\n2. Aplicar hielo local en la zona externa por lapsos de 15 minutos.\n3. Dieta blanda y fría. Evitar exponerse al sol o realizar esfuerzos físicos.';
 
     window.switchRecipeModalTab('recipe');
     openModal('modal-recipe-and-indications');
@@ -24588,7 +24745,7 @@ window.saveInterconsultationFull = async function() {
 };
 
 window.saveRecipeAndIndicationsFinal = async function() {
-    const activeId = getActivePatientId();
+    const activeId = window._recipeSelectedPatientId || getActivePatientId();
     if (!activeId) {
         Swal.fire({ icon: 'warning', text: 'Seleccione un paciente' });
         return;
@@ -24723,16 +24880,27 @@ window.openRecipesModalForSession = async function(patientId, sessionNum, sessio
 };
 
 window.printSingleRecipePDF = async function(patientId, recipeId = null) {
+    const targetPatientId = patientId || window._recipeSelectedPatientId || getActivePatientId();
+    if (!targetPatientId) {
+        Swal.fire({ icon: 'warning', title: 'Seleccione Paciente', text: 'Por favor seleccione un paciente primero.' });
+        return;
+    }
+
     const patients = await SupabaseDataService.getPatients();
-    const p = patients.find(pt => pt.id === patientId);
-    if (!p) return;
+    const p = patients.find(pt => pt.id === targetPatientId);
+    if (!p) {
+        Swal.fire({ icon: 'warning', text: 'Paciente no encontrado.' });
+        return;
+    }
 
     const meta = p.metadata || {};
     const recipes = meta.recipes || [];
-    let recipe = recipeId ? recipes.find(r => r.id === recipeId) : recipes[0];
+    let recipe = recipeId ? recipes.find(r => r.id === recipeId) : null;
 
-    // If no saved recipe exists in history, build one from modal inputs if open
-    if (!recipe) {
+    const isModalOpen = !document.getElementById('modal-recipe-and-indications')?.classList.contains('hidden');
+
+    // If modal is open or no saved recipe exists in history, build from current modal inputs
+    if (!recipe || isModalOpen) {
         const treatmentLinked = document.getElementById('recipe-treatment-select') ? document.getElementById('recipe-treatment-select').value : 'General';
         const medicines = [];
         document.querySelectorAll('#recipe-medicines-tbody tr').forEach(tr => {
@@ -24749,25 +24917,28 @@ window.printSingleRecipePDF = async function(patientId, recipeId = null) {
         let selDocRole = '';
         let selDocLic = '';
         let selDocSig = '';
+        let selDocId = '';
         if (doctorSelect && doctorSelect.selectedIndex >= 0) {
             const opt = doctorSelect.options[doctorSelect.selectedIndex];
+            selDocId = opt.value;
             selDocName = opt.dataset.doctorName || opt.text.split(' - ')[0];
-            selDocRole = opt.dataset.doctorRole || 'Odontología General';
+            selDocRole = opt.dataset.doctorRole || 'Médico Tratante';
             selDocLic = opt.dataset.doctorLicense || '';
             selDocSig = opt.dataset.doctorSignature || '';
         }
 
         recipe = {
-            id: 'REC-' + Date.now().toString().slice(-6),
-            date: new Date().toISOString().split('T')[0],
+            id: recipeId || (recipe ? recipe.id : ('REC-' + Date.now().toString().slice(-6))),
+            date: (recipe && recipe.date) || new Date().toISOString().split('T')[0],
             treatmentLinked,
-            doctorName: selDocName,
-            doctorRole: selDocRole,
-            doctorLicense: selDocLic,
-            doctorSignature: selDocSig,
-            medicines,
-            notes,
-            indications
+            doctorId: selDocId,
+            doctorName: selDocName || (recipe?.doctorName) || '',
+            doctorRole: selDocRole || (recipe?.doctorRole) || 'Médico Tratante',
+            doctorLicense: selDocLic || (recipe?.doctorLicense) || '',
+            doctorSignature: selDocSig || (recipe?.doctorSignature) || '',
+            medicines: medicines.length > 0 ? medicines : (recipe?.medicines || []),
+            notes: notes || (recipe?.notes || ''),
+            indications: indications || (recipe?.indications || '')
         };
     }
 
@@ -24833,18 +25004,27 @@ window.printSingleRecipePDF = async function(patientId, recipeId = null) {
 };
 
 window.sendRecipeWhatsApp = async function(patientId, recipeId = null) {
+    const targetPatientId = patientId || window._recipeSelectedPatientId || getActivePatientId();
+    if (!targetPatientId) {
+        Swal.fire({ icon: 'warning', title: 'Seleccione Paciente', text: 'Por favor seleccione o vincule un paciente primero.' });
+        return;
+    }
+
     const patients = await SupabaseDataService.getPatients();
-    const patient = patients.find(pt => pt.id === patientId);
+    const patient = patients.find(pt => pt.id === targetPatientId);
     if (!patient || !patient.phone) {
-        Swal.fire({ icon: 'warning', title: 'Sin WhatsApp', text: 'El paciente no tiene un número de teléfono / WhatsApp registrado.' });
+        Swal.fire({ icon: 'warning', title: 'Sin WhatsApp', text: 'El paciente no tiene un número de teléfono o WhatsApp registrado.' });
         return;
     }
 
     const meta = patient.metadata || {};
     const recipes = meta.recipes || [];
-    let recipe = recipeId ? recipes.find(r => r.id === recipeId) : recipes[0];
+    let recipe = recipeId ? recipes.find(r => r.id === recipeId) : null;
 
-    if (!recipe) {
+    // Check if the recipe modal is currently open or if we need to capture current DOM values
+    const isModalOpen = !document.getElementById('modal-recipe-and-indications')?.classList.contains('hidden');
+
+    if (!recipe || isModalOpen) {
         const treatmentLinked = document.getElementById('recipe-treatment-select') ? document.getElementById('recipe-treatment-select').value : 'General';
         const medicines = [];
         document.querySelectorAll('#recipe-medicines-tbody tr').forEach(tr => {
@@ -24856,17 +25036,66 @@ window.sendRecipeWhatsApp = async function(patientId, recipeId = null) {
         const notes = document.getElementById('recipe-general-notes') ? document.getElementById('recipe-general-notes').value.trim() : '';
         const indications = document.getElementById('recipe-clinical-indications') ? document.getElementById('recipe-clinical-indications').value.trim() : '';
 
-        recipe = {
-            id: 'REC-' + Date.now().toString().slice(-6),
+        // Doctor info
+        const doctorSelect = document.getElementById('recipe-doctor-select');
+        let selDocId = '';
+        let selDocName = 'Dr. Odontólogo Especialista';
+        let selDocRole = 'Médico Tratante';
+        let selDocLic = '';
+        let selDocSig = '';
+        if (doctorSelect && doctorSelect.selectedIndex >= 0) {
+            const opt = doctorSelect.options[doctorSelect.selectedIndex];
+            selDocId = opt.value;
+            selDocName = opt.dataset.doctorName || opt.text.split(' - ')[0];
+            selDocRole = opt.dataset.doctorRole || 'Médico Tratante';
+            selDocLic = opt.dataset.doctorLicense || '';
+            selDocSig = opt.dataset.doctorSignature || '';
+        } else {
+            const currentUser = getCurrentUser();
+            if (currentUser) {
+                selDocId = currentUser.id;
+                selDocName = currentUser.fullname;
+                selDocRole = currentUser.role || 'Médico Tratante';
+                selDocLic = (currentUser.license && currentUser.license !== 'N/A') ? currentUser.license : '';
+                selDocSig = (currentUser.doctorProfile && currentUser.doctorProfile.signature) || (currentUser.doctor_profile && currentUser.doctor_profile.signature) || '';
+            }
+        }
+
+        const newRecipeRecord = {
+            id: recipeId || ('REC-' + Date.now().toString().slice(-6)),
             date: new Date().toISOString().split('T')[0],
             treatmentLinked,
-            medicines,
-            notes,
-            indications
+            doctorId: selDocId,
+            doctorName: selDocName,
+            doctorRole: selDocRole,
+            doctorLicense: selDocLic,
+            doctorSignature: selDocSig,
+            medicines: medicines.length > 0 ? medicines : (recipe?.medicines || []),
+            notes: notes || (recipe?.notes || ''),
+            indications: indications || (recipe?.indications || '')
         };
+
+        // AUTO-SAVE TO SUPABASE CLOUD
+        if (!patient.metadata) patient.metadata = {};
+        if (!patient.metadata.recipes) patient.metadata.recipes = [];
+
+        // Upsert recipe record
+        const existingIdx = patient.metadata.recipes.findIndex(r => r.id === newRecipeRecord.id);
+        if (existingIdx >= 0) {
+            patient.metadata.recipes[existingIdx] = newRecipeRecord;
+        } else {
+            patient.metadata.recipes.unshift(newRecipeRecord);
+        }
+
+        await SupabaseDataService.savePatient(patient);
+        recipe = newRecipeRecord;
     }
 
-    const recipeUrl = `${window.location.origin}/?patientId=${patient.id}&view=recipe&recipeId=${recipe.id}`;
+    // Secure encrypted URL token (?receta=btoa(...))
+    const payload = JSON.stringify({ p: patient.id, r: recipe.id, t: Date.now() });
+    const safeToken = encodeURIComponent(btoa(payload));
+    const recipeUrl = `${window.location.origin}/?view=recipe&receta=${safeToken}`;
+
     const msg = WhatsAppService.generateRecipeMessage(patient, recipe, recipeUrl);
     WhatsAppService.sendToPatient(patient.phone, msg);
 };
