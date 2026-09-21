@@ -74,7 +74,7 @@ window.universalPrintHTML = function(htmlContent, title = 'Documento Clínico') 
                     <meta charset="UTF-8">
                     <title>${title}</title>
                     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-                    <link rel="stylesheet" href="styles.css?v=326">
+                    <link rel="stylesheet" href="styles.css?v=327">
                     <style>
                         @page { size: A4 portrait; margin: 8mm 10mm 8mm 10mm; }
                         * { box-sizing: border-box; }
@@ -7476,6 +7476,7 @@ window.processDirectSale = async function() {
             if (typeof renderCashFlow === 'function') await renderCashFlow();
             if (typeof renderReceivables === 'function') await renderReceivables();
             if (typeof renderBudgetListView === 'function') await renderBudgetListView(true);
+            if (typeof renderBillingView === 'function') await renderBillingView();
             if (typeof renderEHRView === 'function') {
                 const actEhrTab = document.querySelector('.tab-view#view-ehr');
                 if (actEhrTab && !actEhrTab.classList.contains('hidden') && (actEhrTab.style.display !== 'none')) {
@@ -7483,6 +7484,8 @@ window.processDirectSale = async function() {
                 }
             }
             if (typeof renderPatientsTable === 'function') await renderPatientsTable();
+            if (typeof window.renderPatientReceiptsHubTable === 'function') await window.renderPatientReceiptsHubTable();
+            if (window.ClinicalERP && typeof window.ClinicalERP.renderSpecialties === 'function') window.ClinicalERP.renderSpecialties();
         } catch(refreshErr) {
             console.warn('Post direct-sale view refresh notice:', refreshErr);
         }

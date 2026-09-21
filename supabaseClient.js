@@ -407,9 +407,15 @@ class SupabaseDataService {
                         };
                     });
 
-                    localStorage.setItem('dental_patients', JSON.stringify(mapped));
+                    const mergedPatients = [...mapped];
+                    local.forEach(locP => {
+                        if (locP && locP.id && !mergedPatients.some(m => String(m.id) === String(locP.id))) {
+                            mergedPatients.push(locP);
+                        }
+                    });
+                    localStorage.setItem('dental_patients', JSON.stringify(mergedPatients));
                     this._patientsCacheTime = Date.now();
-                    return mapped;
+                    return mergedPatients;
                 }
                 return local;
             } catch (err) {
@@ -735,9 +741,15 @@ class SupabaseDataService {
                             roomName: ext.roomName || ''
                         };
                     });
-                    localStorage.setItem('dental_appointments', JSON.stringify(mapped));
+                    const mergedAppts = [...mapped];
+                    local.forEach(locA => {
+                        if (locA && locA.id && !mergedAppts.some(m => String(m.id) === String(locA.id))) {
+                            mergedAppts.push(locA);
+                        }
+                    });
+                    localStorage.setItem('dental_appointments', JSON.stringify(mergedAppts));
                     this._apptsCacheTime = Date.now();
-                    return mapped;
+                    return mergedAppts;
                 }
                 return local;
             } catch (err) {
@@ -1262,9 +1274,15 @@ class SupabaseDataService {
                 console.warn('Supabase getInvoices sync warn:', err);
             }
 
-            localStorage.setItem('dental_invoices', JSON.stringify(cloudInvoices));
+            const mergedInvoices = [...cloudInvoices];
+            local.forEach(locInv => {
+                if (locInv && locInv.id && !mergedInvoices.some(c => String(c.id) === String(locInv.id))) {
+                    mergedInvoices.push(locInv);
+                }
+            });
+            localStorage.setItem('dental_invoices', JSON.stringify(mergedInvoices));
             this._invoicesCacheTime = Date.now();
-            return cloudInvoices;
+            return mergedInvoices;
         })();
 
         if (forceRefresh) return await this._invoicesPromise;
@@ -1286,6 +1304,7 @@ class SupabaseDataService {
                 // 1. Guaranteed persistence in patients table with JSONB
                 const pdRef = parseFloat(invoiceObj.paidRef !== undefined ? invoiceObj.paidRef : (invoiceObj.metadata?.paidUSD !== undefined ? invoiceObj.metadata.paidUSD : (invoiceObj.status === 'Pagado' || String(invoiceObj.id).startsWith('FAC-') ? invoiceObj.totalRef : 0)));
                 const balRef = parseFloat(invoiceObj.balanceRef !== undefined ? invoiceObj.balanceRef : (invoiceObj.metadata?.balanceUSD !== undefined ? invoiceObj.metadata.balanceUSD : Math.max(0, (invoiceObj.totalRef || 0) - pdRef)));
+                const odData = invoiceObj.odontogramData || (invoiceObj.metadata && invoiceObj.metadata.odontogramData) || {};
 
                 const cloudPayload = {
                     id: invoiceObj.id,
