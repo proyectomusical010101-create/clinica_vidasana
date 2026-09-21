@@ -3472,7 +3472,7 @@ html, body {
 
 @page {
     size: A4 portrait;
-    margin: 6mm 8mm 6mm 8mm !important;
+    margin: 5mm 8mm 5mm 8mm !important;
 }
 
 @media print {
@@ -3513,10 +3513,16 @@ html, body {
     .medical-doc-container {
         width: 100% !important;
         max-width: 100% !important;
-        padding: 10px 15px !important;
-        margin: 0 !important;
+        padding: 4px 10px !important;
+        margin: 0 auto !important;
         box-shadow: none !important;
         border: none !important;
+        font-size: 0.72rem !important;
+        line-height: 1.2 !important;
+    }
+
+    .medical-doc-container img {
+        max-height: 55px !important;
     }
 }
 
