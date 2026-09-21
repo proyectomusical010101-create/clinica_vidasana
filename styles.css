@@ -7025,3 +7025,21 @@ select, .form-select, select.form-control {
     width: 100% !important;
     box-sizing: border-box !important;
 }
+
+/* ==========================================
+   PERSONAL MÉDICO: ROLES & SPECIALTIES ACCORDION
+   ========================================== */
+.doc-roles-accordion summary::-webkit-details-marker,
+.doc-roles-accordion summary::marker {
+    display: none !important;
+}
+
+.doc-roles-accordion[open] .doc-roles-arrow {
+    transform: rotate(180deg) !important;
+}
+
+.doc-roles-accordion summary:hover {
+    background: #e0f2fe !important;
+    border-color: #0284c7 !important;
+    color: #0369a1 !important;
+}

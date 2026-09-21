@@ -74,7 +74,7 @@ window.universalPrintHTML = function(htmlContent, title = 'Documento Clínico') 
                 <head>
                     <meta charset="UTF-8">
                     <title>${title}</title>
-                    <link rel="stylesheet" href="styles.css?v=317">
+                    <link rel="stylesheet" href="styles.css?v=318">
                     <style>
                         @page { size: A4 portrait; margin: 5mm 8mm 5mm 8mm; }
                         html, body {
@@ -11664,21 +11664,77 @@ async function renderUsersTable(filter = 'all', searchQuery = '') {
 
         const docProf = u.doctorProfile || u.doctor_profile || {};
         const extraSpecs = docProf.additionalSpecialties || [];
-        let extraSpecsHtml = '';
-        if (extraSpecs && extraSpecs.length > 0) {
-            extraSpecsHtml = `<div style="display:flex; flex-wrap:wrap; gap:3px; margin-top:4px;">` + 
-                extraSpecs.map(es => `<span class="badge-tag purple" style="font-size:0.68rem; padding:1px 5px;"><i class="fa-solid fa-tag"></i> ${es}</span>`).join('') +
-                `</div>`;
+
+        // Collect all distinct roles and specialties
+        const roleItems = [];
+        if (u.role && u.role.trim()) {
+            roleItems.push({ label: u.role.trim(), icon: 'fa-stethoscope', isPrimary: true });
+        }
+        if (docProf.specialty && docProf.specialty.trim()) {
+            const specTrim = docProf.specialty.trim();
+            if (!roleItems.some(r => r.label.toLowerCase() === specTrim.toLowerCase())) {
+                roleItems.push({ label: specTrim, icon: 'fa-user-doctor', isPrimary: false });
+            }
+        }
+        if (Array.isArray(extraSpecs)) {
+            extraSpecs.forEach(es => {
+                if (typeof es === 'string' && es.trim()) {
+                    const esTrim = es.trim();
+                    if (!roleItems.some(r => r.label.toLowerCase() === esTrim.toLowerCase())) {
+                        roleItems.push({ label: esTrim, icon: 'fa-tag', isPrimary: false });
+                    }
+                }
+            });
+        }
+
+        let roleContentHtml = '';
+        if (roleItems.length <= 1) {
+            const singleRole = roleItems[0] ? roleItems[0].label : (u.role || 'Médico');
+            roleContentHtml = `<span class="badge-tag blue" style="font-weight:600;"><i class="fa-solid fa-stethoscope"></i> ${singleRole}</span>`;
+        } else {
+            roleContentHtml = `
+                <details class="doc-roles-accordion" style="position: relative; display: inline-block;">
+                    <summary style="list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 6px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8; font-size: 0.76rem; font-weight: 700; user-select: none; transition: all 0.15s ease;" title="Haga clic para ver todos los roles y especialidades">
+                        <i class="fa-solid fa-layer-group" style="color: #2563eb; font-size: 0.74rem;"></i>
+                        <span>Rol / Cargo</span>
+                        <span style="background: #2563eb; color: #ffffff; border-radius: 10px; padding: 0 5px; font-size: 0.65rem; font-weight: 800; min-width: 16px; text-align: center;">${roleItems.length}</span>
+                        <i class="fa-solid fa-chevron-down doc-roles-arrow" style="font-size: 0.65rem; color: #2563eb; transition: transform 0.2s ease;"></i>
+                    </summary>
+                    <div class="doc-roles-list" style="margin-top: 5px; padding: 6px 8px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); display: flex; flex-direction: column; gap: 4px; min-width: 190px; max-width: 250px;">
+                        ${roleItems.map((item, idx) => {
+                            const isFirst = idx === 0;
+                            const bg = isFirst ? '#eff6ff' : '#faf5ff';
+                            const borderCol = isFirst ? '#2563eb' : '#9333ea';
+                            const textCol = isFirst ? '#1e40af' : '#6b21a8';
+                            const iconCol = isFirst ? '#3b82f6' : '#a855f7';
+                            return `
+                                <div style="display: flex; align-items: center; gap: 6px; font-size: 0.72rem; color: ${textCol}; padding: 3px 6px; border-radius: 5px; background: ${bg}; border-left: 3px solid ${borderCol}; line-height: 1.2;">
+                                    <i class="fa-solid ${item.icon}" style="color: ${iconCol}; font-size: 0.70rem; flex-shrink: 0;"></i>
+                                    <span style="font-weight: ${isFirst ? '700' : '600'};">${item.label}</span>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </details>
+            `;
+        }
+
+        // Email shortened to half with hover tooltip
+        const emailFull = u.email || '-';
+        let emailShort = emailFull;
+        if (emailFull !== '-' && emailFull.length > 12) {
+            const halfLen = Math.max(8, Math.floor(emailFull.length / 2));
+            emailShort = emailFull.substring(0, halfLen) + '...';
         }
 
         tr.innerHTML = `
             <td><strong>${u.fullname}</strong></td>
-            <td>${u.email}</td>
             <td>
-                <span class="badge-tag blue" style="font-weight:600;"><i class="fa-solid fa-stethoscope"></i> ${u.role}</span>
-                ${docProf.specialty && docProf.specialty !== u.role ? `<div style="font-size:0.75rem; color:#0284c7; font-weight:600; margin-top:2px;">${docProf.specialty}</div>` : ''}
-                ${extraSpecsHtml}
+                <span title="${emailFull}" style="cursor: help; color: #475569; font-size: 0.80rem; font-family: monospace; border-bottom: 1px dotted #94a3b8; display: inline-block; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle;">
+                    ${emailShort}
+                </span>
             </td>
+            <td>${roleContentHtml}</td>
             <td>${u.license && u.license !== 'N/A' ? `<span style="font-family:monospace; font-weight:700; color:#0369a1;">${u.license}</span>` : '<span class="text-muted">N/A</span>'}</td>
             <td>
                 <div style="display: flex; flex-direction: column; gap: 2px;">
@@ -11694,9 +11750,11 @@ async function renderUsersTable(filter = 'all', searchQuery = '') {
             </td>
             <td><span class="badge-tag green">${u.status || 'Activo'}</span></td>
             <td>${u.createdAt || '-'}</td>
-            <td>
-                <button class="btn btn-xs btn-outline text-cyan" onclick="editUser('${u.id}')" title="Editar Ficha Médica" style="margin-right: 4px;"><i class="fa-solid fa-user-pen"></i></button>
-                <button class="btn btn-xs btn-outline text-red" onclick="deleteUser('${u.id}')" title="Eliminar"><i class="fa-solid fa-user-xmark"></i></button>
+            <td style="white-space: nowrap; text-align: center; width: 80px;">
+                <div style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap;">
+                    <button class="btn btn-xs btn-outline text-cyan" onclick="editUser('${u.id}')" title="Editar Ficha Médica"><i class="fa-solid fa-user-pen"></i></button>
+                    <button class="btn btn-xs btn-outline text-red" onclick="deleteUser('${u.id}')" title="Eliminar"><i class="fa-solid fa-user-xmark"></i></button>
+                </div>
             </td>
         `;
         tbody.appendChild(tr);
