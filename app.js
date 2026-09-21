@@ -74,7 +74,7 @@ window.universalPrintHTML = function(htmlContent, title = 'Documento Clínico') 
                 <head>
                     <meta charset="UTF-8">
                     <title>${title}</title>
-                    <link rel="stylesheet" href="styles.css?v=322">
+                    <link rel="stylesheet" href="styles.css?v=323">
                     <style>
                         @page { size: A4 portrait; margin: 5mm 8mm 5mm 8mm; }
                         html, body {
@@ -1317,18 +1317,21 @@ window.toggleSidebarCollapse = function() {
 window.updateUserProfileUI = function(user) {
     if (!user) return;
     const name = user.fullname || user.name || 'Usuario';
-    const role = user.role || 'Personal Médico';
+    const role = user.role || 'Super Administrador';
     const email = user.email || '';
+
+    const rLower = (role || '').toLowerCase();
+    const isSuperAdmin = rLower.includes('super') || (rLower.includes('admin') && !rLower.includes('asist'));
+    const isDoctor = rLower.includes('medico') || rLower.includes('médico') || rLower.includes('odont') || rLower.includes('doctor') || rLower.includes('especialista');
 
     // 1. Sidebar trigger elements
     const roleEl = document.getElementById('dr-role-display');
     if (roleEl) {
-        roleEl.innerText = role;
+        roleEl.innerText = isSuperAdmin ? 'Super Administrador' : role;
         roleEl.className = 'role-badge-tag';
-        const r = role.toLowerCase();
-        if (r.includes('admin') || r.includes('super')) {
+        if (isSuperAdmin) {
             roleEl.classList.add('badge-admin');
-        } else if (r.includes('medico') || r.includes('odont') || r.includes('doctor')) {
+        } else if (isDoctor) {
             roleEl.classList.add('badge-doctor');
         } else {
             roleEl.classList.add('badge-assistant');
@@ -1337,15 +1340,29 @@ window.updateUserProfileUI = function(user) {
 
     const previewNameEl = document.getElementById('sidebar-user-name-preview');
     if (previewNameEl) {
-        previewNameEl.innerText = name;
+        if (isSuperAdmin) {
+            // El Super Administrador simplemente dice "Super Administrador", no se muestra nombre ni cargo de médico debajo
+            previewNameEl.innerText = '';
+            previewNameEl.style.display = 'none';
+        } else if (isDoctor) {
+            // Si es médico, se muestra el nombre del médico
+            let docName = name;
+            if (!docName.toLowerCase().startsWith('dr') && !docName.toLowerCase().startsWith('dra')) {
+                docName = 'Dr. ' + docName;
+            }
+            previewNameEl.innerText = docName;
+            previewNameEl.style.display = 'block';
+        } else {
+            previewNameEl.innerText = name;
+            previewNameEl.style.display = 'block';
+        }
     }
 
     const sidebarIcon = document.getElementById('sidebar-user-icon');
     const flyoutIcon = document.getElementById('flyout-user-icon');
     let iconClass = 'fa-user-doctor';
     let iconColor = 'var(--primary-cyan)';
-    const rLower = role.toLowerCase();
-    if (rLower.includes('super') || rLower.includes('admin')) {
+    if (isSuperAdmin) {
         iconClass = 'fa-user-shield';
         iconColor = '#ef4444';
     } else if (rLower.includes('gerente') || rLower.includes('direc')) {
@@ -1373,13 +1390,25 @@ window.updateUserProfileUI = function(user) {
 
     // 2. Flyout elements
     const flyoutRole = document.getElementById('flyout-user-role');
-    if (flyoutRole) flyoutRole.innerText = role;
+    if (flyoutRole) flyoutRole.innerText = isSuperAdmin ? 'Super Administrador' : role;
 
     const flyoutName = document.getElementById('dr-name-display');
-    if (flyoutName) flyoutName.innerText = name;
+    if (flyoutName) {
+        if (isSuperAdmin) {
+            flyoutName.innerText = 'Super Administrador';
+        } else if (isDoctor) {
+            let docName = name;
+            if (!docName.toLowerCase().startsWith('dr') && !docName.toLowerCase().startsWith('dra')) {
+                docName = 'Dr. ' + docName;
+            }
+            flyoutName.innerText = docName;
+        } else {
+            flyoutName.innerText = name;
+        }
+    }
 
     const flyoutEmail = document.getElementById('flyout-user-email');
-    if (flyoutEmail) flyoutEmail.innerText = email || 'usuario@vidasana.com';
+    if (flyoutEmail) flyoutEmail.innerText = email || (isSuperAdmin ? 'admin@vidasana.com' : 'usuario@vidasana.com');
 };
 
 window.toggleUserSecondaryMenu = function(e) {

@@ -436,15 +436,14 @@ body.sidebar-collapsed .main-content {
     margin-left: 72px;
 }
 
-body.sidebar-collapsed #sidebar-brand-logo-container {
-    width: 100% !important;
-    max-width: 100% !important;
+body.sidebar-collapsed .brand {
+    padding: 14px 0 !important;
     justify-content: center !important;
-    margin: 0 !important;
+    align-items: center !important;
 }
 
-body.sidebar-collapsed .btn-sidebar-collapse {
-    right: -13px;
+body.sidebar-collapsed #sidebar-brand-logo-container {
+    display: none !important;
 }
 
 body.sidebar-collapsed .clinic-logo-sidebar {
@@ -452,7 +451,23 @@ body.sidebar-collapsed .clinic-logo-sidebar {
 }
 
 body.sidebar-collapsed .clinic-logo-collapsed {
-    display: flex !important;
+    display: none !important;
+}
+
+body.sidebar-collapsed .btn-sidebar-collapse {
+    position: relative !important;
+    right: auto !important;
+    left: auto !important;
+    top: auto !important;
+    transform: none !important;
+    margin: 0 auto !important;
+    width: 32px;
+    height: 32px;
+    font-size: 0.85rem;
+}
+
+body.sidebar-collapsed .btn-sidebar-collapse:hover {
+    transform: scale(1.1) !important;
 }
 
 body.sidebar-collapsed .nav-item {
@@ -561,16 +576,16 @@ body.sidebar-collapsed .nav-item:hover::before {
 }
 
 .user-secondary-flyout {
-    position: absolute;
+    position: fixed !important;
     bottom: 74px;
-    left: 8px;
-    width: 275px;
+    left: 12px;
+    width: 285px;
     background: #ffffff;
     border-radius: 14px;
     border: 1px solid var(--border-color);
-    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.16), 0 4px 12px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.24), 0 6px 16px rgba(0, 0, 0, 0.12);
     padding: 14px;
-    z-index: 9999;
+    z-index: 999999 !important;
     animation: popoverFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -580,8 +595,8 @@ body.sidebar-collapsed .nav-item:hover::before {
 }
 
 body.sidebar-collapsed .user-secondary-flyout {
-    left: 76px;
-    bottom: 8px;
+    left: 80px !important;
+    bottom: 12px !important;
 }
 
 .user-secondary-flyout.hidden {
