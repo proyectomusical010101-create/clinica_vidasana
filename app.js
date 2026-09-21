@@ -22008,6 +22008,11 @@ window.renderCashFlowAreaDetailsView = function(areaName, period) {
     const doctorRankings = Object.values(doctorMap);
     doctorRankings.sort((a, b) => b.totalUSD - a.totalUSD);
 
+    window.currentCFAreaDoctorRankings = doctorRankings;
+    window.currentCFAreaTotalUSD = totalUSD;
+    window.currentCFAreaName = areaName;
+    window.currentCFAreaPeriodName = period;
+
     const topDoc = doctorRankings.length > 0 ? doctorRankings[0] : null;
     if (elTopDoc) elTopDoc.innerText = topDoc ? topDoc.name : 'Sin ventas';
     if (elTopDocAmt) elTopDocAmt.innerText = topDoc ? `$${topDoc.totalUSD.toFixed(2)} (${((topDoc.totalUSD / (totalUSD || 1)) * 100).toFixed(1)}% del área)` : '$0.00';
@@ -22095,6 +22100,117 @@ window.renderCashFlowAreaDetailsView = function(areaName, period) {
             }).join('');
         }
     }
+};
+
+window.openCFAreaDoctorsModal = function() {
+    const areaName = window.currentCFArea || window.currentCFAreaName || 'Área Clínica';
+    const period = window.currentCFAreaPeriod || window.currentCFAreaPeriodName || 'all';
+    const rankings = window.currentCFAreaDoctorRankings || [];
+    const totalAreaUSD = window.currentCFAreaTotalUSD || 0;
+    const rate = getExchangeRate();
+
+    const titleEl = document.getElementById('cf-area-doctors-modal-title');
+    const badgeEl = document.getElementById('cf-area-doctors-modal-period-badge');
+    const subtitleEl = document.getElementById('cf-area-doctors-modal-subtitle');
+    const sumCountEl = document.getElementById('cf-area-docsum-count');
+    const sumTotalUsdEl = document.getElementById('cf-area-docsum-total-usd');
+    const sumTotalBsEl = document.getElementById('cf-area-docsum-total-bs');
+    const sumAvgEl = document.getElementById('cf-area-docsum-average');
+    const listContainer = document.getElementById('cf-area-doctors-list-container');
+
+    const periodLabels = {
+        'today': 'Hoy',
+        'week': 'Esta Semana',
+        'month': 'Este Mes',
+        'all': 'Todo el Histórico'
+    };
+    const periodLabel = periodLabels[period] || period;
+
+    if (titleEl) titleEl.innerHTML = `<i class="fa-solid fa-user-doctor text-purple"></i> Médicos Productores: ${areaName}`;
+    if (badgeEl) badgeEl.innerText = periodLabel;
+    if (subtitleEl) subtitleEl.innerText = `Desglose detallado del 100% de médicos con producción en ${areaName} (${periodLabel}).`;
+
+    const docCount = rankings.length;
+    const avgUSD = docCount > 0 ? (totalAreaUSD / docCount) : 0;
+    const totalAreaBs = totalAreaUSD * rate;
+
+    if (sumCountEl) sumCountEl.innerText = docCount;
+    if (sumTotalUsdEl) sumTotalUsdEl.innerText = `$${totalAreaUSD.toFixed(2)}`;
+    if (sumTotalBsEl) sumTotalBsEl.innerText = `Bs. ${totalAreaBs.toFixed(2)}`;
+    if (sumAvgEl) sumAvgEl.innerText = `$${avgUSD.toFixed(2)}`;
+
+    if (listContainer) {
+        if (docCount === 0) {
+            listContainer.innerHTML = `
+                <div style="text-align: center; padding: 35px 20px; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 12px;">
+                    <div style="font-size: 2.2rem; color: #94a3b8; margin-bottom: 8px;"><i class="fa-solid fa-user-slash"></i></div>
+                    <h4 style="margin: 0 0 4px 0; color: #334155; font-size: 1rem; font-weight: 700;">Sin ventas médicas registradas</h4>
+                    <p style="margin: 0; font-size: 0.82rem; color: #64748b;">No hay registros de facturación de médicos en ${areaName} para el período ${periodLabel}.</p>
+                </div>
+            `;
+        } else {
+            listContainer.innerHTML = rankings.map((doc, idx) => {
+                const pct = totalAreaUSD > 0 ? ((doc.totalUSD / totalAreaUSD) * 100).toFixed(1) : '0.0';
+                const docBs = doc.totalUSD * rate;
+                
+                let rankBadge = '';
+                let borderStyle = 'border: 1px solid #e2e8f0;';
+                let headerBg = '#ffffff';
+
+                if (idx === 0) {
+                    rankBadge = `<span style="background: #fef08a; color: #854d0e; font-weight: 800; font-size: 0.78rem; padding: 4px 10px; border-radius: 9999px; display: inline-flex; align-items: center; gap: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">🥇 Líder #1 en Producción</span>`;
+                    borderStyle = 'border: 2px solid #eab308; box-shadow: 0 4px 12px rgba(234, 179, 8, 0.15);';
+                    headerBg = 'linear-gradient(135deg, #fffbeb 0%, #ffffff 100%)';
+                } else if (idx === 1) {
+                    rankBadge = `<span style="background: #e2e8f0; color: #334155; font-weight: 800; font-size: 0.76rem; padding: 3px 9px; border-radius: 9999px; display: inline-flex; align-items: center; gap: 4px;">🥈 #2</span>`;
+                    borderStyle = 'border: 1px solid #cbd5e1;';
+                } else if (idx === 2) {
+                    rankBadge = `<span style="background: #fed7aa; color: #9a3412; font-weight: 800; font-size: 0.76rem; padding: 3px 9px; border-radius: 9999px; display: inline-flex; align-items: center; gap: 4px;">🥉 #3</span>`;
+                    borderStyle = 'border: 1px solid #fdba74;';
+                } else {
+                    rankBadge = `<span style="background: #f1f5f9; color: #64748b; font-weight: 700; font-size: 0.75rem; padding: 2px 8px; border-radius: 9999px;">#${idx + 1}</span>`;
+                }
+
+                return `
+                    <div style="background: ${headerBg}; ${borderStyle} border-radius: 12px; padding: 14px 16px; transition: transform 0.15s ease;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 8px;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                ${rankBadge}
+                                <div>
+                                    <h4 style="margin: 0; font-size: 0.98rem; font-weight: 800; color: #0f172a;">
+                                        ${doc.name}
+                                    </h4>
+                                    <small style="color: #64748b; font-size: 0.76rem;">
+                                        <i class="fa-solid fa-users" style="color: #0284c7;"></i> ${doc.count} atenci${doc.count === 1 ? 'ón' : 'ones'} / paciente${doc.count === 1 ? '' : 's'}
+                                    </small>
+                                </div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-size: 1.15rem; font-weight: 800; color: #16a34a;">
+                                    $${doc.totalUSD.toFixed(2)}
+                                </div>
+                                <div style="font-size: 0.78rem; font-weight: 700; color: #0284c7;">
+                                    Bs. ${docBs.toFixed(2)}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Progress Bar & Percentage Pill -->
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="flex: 1; height: 10px; background: #e2e8f0; border-radius: 9999px; overflow: hidden; position: relative;">
+                                <div style="width: ${Math.min(parseFloat(pct), 100)}%; height: 100%; background: linear-gradient(90deg, #7c3aed 0%, #2563eb 100%); border-radius: 9999px; transition: width 0.4s ease;"></div>
+                            </div>
+                            <span style="min-width: 55px; text-align: right; font-weight: 800; font-size: 0.88rem; color: #7c3aed;">
+                                ${pct}%
+                            </span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+    }
+
+    openModal('modal-cf-area-doctors-list');
 };
 
 // ============================================================================
