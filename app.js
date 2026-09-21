@@ -74,7 +74,7 @@ window.universalPrintHTML = function(htmlContent, title = 'Documento Clínico') 
                     <meta charset="UTF-8">
                     <title>${title}</title>
                     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-                    <link rel="stylesheet" href="styles.css?v=327">
+                    <link rel="stylesheet" href="styles.css?v=328">
                     <style>
                         @page { size: A4 portrait; margin: 8mm 10mm 8mm 10mm; }
                         * { box-sizing: border-box; }
@@ -5214,18 +5214,37 @@ async function renderPatientsTable(filter = null, searchQuery = null, highlightP
             tagBadgeHtml = `<span class="badge-tag" style="background:${tagColor}15; color:${tagColor}; border:1px solid ${tagColor}40; font-size:0.72rem; font-weight:700; margin-top:2px; display:inline-block;"><i class="fa-solid fa-tag"></i> ${tagName}${ruleText}</span>`;
         }
 
-        let alertsHtml = '';
+        const allAlerts = [];
         if (p.allergies && p.allergies.length > 0) {
             p.allergies.forEach(a => {
-                alertsHtml += `<span class="badge-tag red"><i class="fa-solid fa-triangle-exclamation"></i> Alergia: ${a}</span> `;
+                allAlerts.push({ type: 'allergy', text: a, label: `Alergia: ${a}`, icon: 'fa-triangle-exclamation', colorClass: 'red' });
             });
         }
         if (p.systemic && p.systemic.length > 0) {
             p.systemic.forEach(s => {
-                alertsHtml += `<span class="badge-tag amber"><i class="fa-solid fa-heart-pulse"></i> ${s}</span> `;
+                allAlerts.push({ type: 'systemic', text: s, label: s, icon: 'fa-heart-pulse', colorClass: 'amber' });
             });
         }
-        if (!alertsHtml) alertsHtml = `<span class="text-muted" style="font-size:0.78rem;">Sin alertas</span>`;
+
+        let alertsHtml = '';
+        if (allAlerts.length === 0) {
+            alertsHtml = `<span class="text-muted" style="font-size:0.78rem;">Sin alertas</span>`;
+        } else if (allAlerts.length === 1) {
+            alertsHtml = `<span class="badge-tag ${allAlerts[0].colorClass}" style="white-space: nowrap; cursor: pointer;" onclick="window.showPatientAlertsModal('${p.id}')" title="Ver detalles de alerta"><i class="fa-solid ${allAlerts[0].icon}"></i> ${allAlerts[0].label}</span>`;
+        } else {
+            const firstAlert = allAlerts[0];
+            const remainingCount = allAlerts.length - 1;
+            alertsHtml = `
+                <div style="display: inline-flex; align-items: center; gap: 6px; flex-wrap: nowrap;">
+                    <span class="badge-tag ${firstAlert.colorClass}" style="white-space: nowrap; max-width: 130px; overflow: hidden; text-overflow: ellipsis; cursor: pointer;" onclick="window.showPatientAlertsModal('${p.id}')" title="${firstAlert.label} (Clic para ver todas)">
+                        <i class="fa-solid ${firstAlert.icon}"></i> ${firstAlert.label}
+                    </span>
+                    <button type="button" class="btn btn-xs" onclick="window.showPatientAlertsModal('${p.id}')" style="background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; border-radius: 12px; padding: 2px 7px; font-size: 0.72rem; font-weight: 700; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px;" title="Ver todas las ${allAlerts.length} alertas clínicas">
+                        <i class="fa-solid fa-layer-group"></i> +${remainingCount} más
+                    </button>
+                </div>
+            `;
+        }
 
         let statusClass = 'blue';
         if (p.status === 'Activo') statusClass = 'green';
@@ -5242,7 +5261,6 @@ async function renderPatientsTable(filter = null, searchQuery = null, highlightP
         tr.innerHTML = `
             <td><strong class="badge-tag blue">${p.id}</strong></td>
             <td>
-                <div class="patient-row-avatar">${initials}</div>
                 <div class="patient-info-cell">
                     <strong>${p.fullname}</strong>
                     ${tagBadgeHtml}
@@ -5289,6 +5307,72 @@ async function renderPatientsTable(filter = null, searchQuery = null, highlightP
         }
     }
 }
+
+window.showPatientAlertsModal = async function(patientId) {
+    try {
+        const patients = await SupabaseDataService.getPatients();
+        const p = patients.find(pat => String(pat.id) === String(patientId));
+        if (!p) return;
+
+        const allergies = p.allergies || [];
+        const systemic = p.systemic || [];
+
+        let allergiesHtml = allergies.length > 0 
+            ? allergies.map(a => `
+                <div style="display:flex; align-items:center; gap:10px; padding:10px 14px; background:#fff1f2; border:1px solid #fecdd3; border-radius:8px; margin-bottom:8px; color:#be123c; font-weight:600; font-size:0.9rem;">
+                    <i class="fa-solid fa-triangle-exclamation" style="font-size:1.1rem; color:#e11d48;"></i>
+                    <span>Alergia Registrada: <strong style="color:#9f1239;">${a}</strong></span>
+                </div>
+            `).join('')
+            : '<div style="color:#94a3b8; font-size:0.85rem; font-style:italic; padding:6px 0;">No registra alergias conocidas.</div>';
+
+        let systemicHtml = systemic.length > 0 
+            ? systemic.map(s => `
+                <div style="display:flex; align-items:center; gap:10px; padding:10px 14px; background:#fffbeb; border:1px solid #fef3c7; border-radius:8px; margin-bottom:8px; color:#b45309; font-weight:600; font-size:0.9rem;">
+                    <i class="fa-solid fa-heart-pulse" style="font-size:1.1rem; color:#d97706;"></i>
+                    <span>Condición Sistémica: <strong style="color:#92400e;">${s}</strong></span>
+                </div>
+            `).join('')
+            : '<div style="color:#94a3b8; font-size:0.85rem; font-style:italic; padding:6px 0;">No registra antecedentes sistémicos.</div>';
+
+        Swal.fire({
+            title: `<div style="font-size:1.15rem; font-weight:800; color:#0f172a; display:flex; align-items:center; justify-content:center; gap:8px;"><i class="fa-solid fa-shield-heart text-red"></i> Alertas Clínicas del Paciente</div>`,
+            html: `
+                <div style="text-align:left; font-family:'Segoe UI', sans-serif;">
+                    <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px 16px; margin-bottom:16px;">
+                        <div style="font-size:1rem; font-weight:800; color:#0f172a;">${p.fullname}</div>
+                        <div style="font-size:0.82rem; color:#64748b; margin-top:2px;">Cédula / ID: <strong>${p.id}</strong> • Teléfono: ${p.phone || 'N/A'}</div>
+                    </div>
+
+                    <div style="margin-bottom:14px;">
+                        <div style="font-size:0.82rem; font-weight:700; color:#be123c; text-transform:uppercase; margin-bottom:8px; display:flex; align-items:center; gap:6px;">
+                            <i class="fa-solid fa-triangle-exclamation"></i> Alergias Médicas (${allergies.length})
+                        </div>
+                        ${allergiesHtml}
+                    </div>
+
+                    <div>
+                        <div style="font-size:0.82rem; font-weight:700; color:#b45309; text-transform:uppercase; margin-bottom:8px; display:flex; align-items:center; gap:6px;">
+                            <i class="fa-solid fa-heart-pulse"></i> Antecedentes y Enfermedades Sistémicas (${systemic.length})
+                        </div>
+                        ${systemicHtml}
+                    </div>
+
+                    ${p.medication ? `
+                        <div style="margin-top:14px; padding:10px 14px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; font-size:0.85rem; color:#166534;">
+                            <strong><i class="fa-solid fa-pills"></i> Medicación Actual:</strong> ${p.medication}
+                        </div>
+                    ` : ''}
+                </div>
+            `,
+            confirmButtonText: '<i class="fa-solid fa-check"></i> Cerrar',
+            confirmButtonColor: '#0891b2',
+            width: 490
+        });
+    } catch(err) {
+        console.error('Error showing patient alerts modal:', err);
+    }
+};
 
 window.openPatientRowActionsMenu = function(patientId, btnEl, event, isAssistant) {
     if (event) {
