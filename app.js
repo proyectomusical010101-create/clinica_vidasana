@@ -24135,7 +24135,229 @@ window.selectInterconsultaStudy = function(studyKey, cardEl) {
     }
 };
 
-window.openInterconsultationModal = function() {
+window.renderInterconsultaStudiesList = async function() {
+    const listContainer = document.getElementById('interconsulta-studies-list');
+    if (!listContainer) return;
+
+    const studies = await SupabaseDataService.getInterconsultaStudies();
+    if (!studies || studies.length === 0) {
+        listContainer.innerHTML = '<div class="text-center text-muted" style="padding: 20px;">No hay estudios configurados en el catálogo.</div>';
+        return;
+    }
+
+    listContainer.innerHTML = studies.map((study, idx) => {
+        const safeName = (study.name || '').replace(/'/g, "\\'");
+        const iconClass = study.icon || 'fa-vial text-cyan';
+        const notePlaceholder = study.defaultNote || 'Indique especificaciones clínicas del estudio...';
+
+        return `
+            <div class="study-accordion-card" data-study-key="${study.name}" onclick="window.selectInterconsultaStudy('${safeName}', this)" style="border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; cursor: pointer; transition: all 0.2s ease;">
+                <div style="padding: 12px 15px; background: var(--bg-card); display: flex; align-items: center; justify-content: space-between; font-weight: 700;">
+                    <span style="display: flex; align-items: center; gap: 10px;">
+                        <i class="fa-solid fa-circle-dot study-radio-icon text-muted"></i>
+                        <i class="fa-solid ${iconClass}"></i> ${idx + 1}. ${study.name}
+                    </span>
+                    <span class="badge-tag gray study-badge">Haga clic para seleccionar</span>
+                </div>
+                <div class="study-details-pane hidden" style="padding: 12px 15px; border-top: 1px solid var(--border-color); background: #ffffff; width: 100%; box-sizing: border-box;">
+                    <label style="font-size:0.8rem; font-weight:600; display:block; margin-bottom:4px;">Especificaciones clínicas del estudio:</label>
+                    <input type="text" class="form-control study-note-input" placeholder="${notePlaceholder}" style="width: 100% !important; box-sizing: border-box !important; height: 38px; font-size: 0.85rem; border-radius: 6px; display: block;">
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    // Auto-select study if one was previously selected or first
+    const targetKey = window.selectedInterconsultaStudyKey || (studies[0] ? studies[0].name : null);
+    if (targetKey) {
+        const card = Array.from(listContainer.querySelectorAll('.study-accordion-card')).find(c => c.dataset.studyKey === targetKey) || listContainer.querySelector('.study-accordion-card');
+        if (card) {
+            window.selectInterconsultaStudy(card.dataset.studyKey, card);
+        }
+    }
+};
+
+window.openManageInterconsultasModal = async function() {
+    window.resetInterconsultaStudyForm();
+    await window.renderManageInterconsultasTable();
+    openModal('modal-manage-interconsultas');
+};
+
+window.closeManageInterconsultasModal = async function() {
+    closeModal('modal-manage-interconsultas');
+    await window.renderInterconsultaStudiesList();
+};
+
+window.resetInterconsultaStudyForm = function() {
+    const idInput = document.getElementById('interconsulta-form-id');
+    const nameInput = document.getElementById('interconsulta-form-name');
+    const iconInput = document.getElementById('interconsulta-form-icon');
+    const noteInput = document.getElementById('interconsulta-form-note');
+    const title = document.getElementById('interconsulta-form-title');
+    const btnCancel = document.getElementById('btn-cancel-interconsulta-edit');
+
+    if (idInput) idInput.value = '';
+    if (nameInput) nameInput.value = '';
+    if (iconInput) iconInput.value = 'fa-vial text-red';
+    if (noteInput) noteInput.value = '';
+    if (title) title.innerHTML = '<i class="fa-solid fa-plus-circle"></i> Nuevo Estudio / Interconsulta';
+    if (btnCancel) btnCancel.style.display = 'none';
+};
+
+window.renderManageInterconsultasTable = async function() {
+    const tbody = document.getElementById('interconsulta-studies-tbody');
+    const countEl = document.getElementById('interconsulta-count-total');
+    if (!tbody) return;
+
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding: 16px;">Cargando catálogo...</td></tr>';
+    const studies = await SupabaseDataService.getInterconsultaStudies();
+
+    if (countEl) countEl.innerText = studies.length;
+
+    if (!studies || studies.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding: 16px;">No hay estudios registrados. Agregue uno arriba.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = studies.map((s, idx) => {
+        const safeId = (s.id || '').replace(/'/g, "\\'");
+        const safeName = (s.name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const safeNote = (s.defaultNote || 'Sin notas').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const iconClass = s.icon || 'fa-vial text-cyan';
+
+        return `
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="text-align: center; font-weight: 700; color: #64748b;">${idx + 1}</td>
+                <td>
+                    <strong style="color: #0f172a;">${safeName}</strong>
+                </td>
+                <td>
+                    <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.82rem; background: #f8fafc; padding: 3px 8px; border-radius: 4px; border: 1px solid #e2e8f0;">
+                        <i class="fa-solid ${iconClass}"></i> ${iconClass}
+                    </span>
+                </td>
+                <td style="color: #64748b; font-size: 0.8rem;">
+                    ${safeNote}
+                </td>
+                <td style="text-align: center; white-space: nowrap;">
+                    <button type="button" class="btn btn-xs btn-outline" onclick="window.editInterconsultaStudy('${safeId}')" title="Editar estudio" style="margin-right: 4px; padding: 3px 7px;">
+                        <i class="fa-solid fa-pen-to-square text-cyan"></i>
+                    </button>
+                    <button type="button" class="btn btn-xs btn-outline text-red" onclick="window.deleteInterconsultaStudy('${safeId}')" title="Eliminar estudio" style="padding: 3px 7px;">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+};
+
+window.editInterconsultaStudy = async function(studyId) {
+    const studies = await SupabaseDataService.getInterconsultaStudies();
+    const study = studies.find(s => s.id === studyId);
+    if (!study) return;
+
+    const idInput = document.getElementById('interconsulta-form-id');
+    const nameInput = document.getElementById('interconsulta-form-name');
+    const iconInput = document.getElementById('interconsulta-form-icon');
+    const noteInput = document.getElementById('interconsulta-form-note');
+    const title = document.getElementById('interconsulta-form-title');
+    const btnCancel = document.getElementById('btn-cancel-interconsulta-edit');
+
+    if (idInput) idInput.value = study.id;
+    if (nameInput) nameInput.value = study.name;
+    if (iconInput) iconInput.value = study.icon || 'fa-vial text-red';
+    if (noteInput) noteInput.value = study.defaultNote || '';
+    if (title) title.innerHTML = `<i class="fa-solid fa-pen-to-square text-cyan"></i> Editar: ${study.name}`;
+    if (btnCancel) btnCancel.style.display = 'inline-block';
+
+    const modalBody = document.querySelector('#modal-manage-interconsultas .modal-body');
+    if (modalBody) {
+        modalBody.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    const formCard = document.getElementById('interconsulta-form-card');
+    if (formCard) {
+        formCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    if (nameInput) nameInput.focus();
+};
+
+window.saveInterconsultaStudyFromModal = async function() {
+    const id = document.getElementById('interconsulta-form-id')?.value.trim() || '';
+    const name = document.getElementById('interconsulta-form-name')?.value.trim() || '';
+    const icon = document.getElementById('interconsulta-form-icon')?.value || 'fa-vial text-red';
+    const defaultNote = document.getElementById('interconsulta-form-note')?.value.trim() || '';
+
+    if (!name) {
+        Swal.fire({ icon: 'warning', title: 'Nombre requerido', text: 'Ingrese el nombre del estudio o interconsulta.' });
+        return;
+    }
+
+    try {
+        const studyObj = {
+            id: id || ('STUDY-' + Date.now().toString()),
+            name,
+            icon,
+            defaultNote
+        };
+
+        await SupabaseDataService.saveInterconsultaStudy(studyObj);
+
+        Swal.fire({
+            icon: 'success',
+            title: 'Catálogo Actualizado',
+            text: `El estudio "${name}" fue guardado en Supabase Cloud.`,
+            timer: 1500,
+            showConfirmButton: false
+        });
+
+        window.resetInterconsultaStudyForm();
+        await window.renderManageInterconsultasTable();
+        await window.renderInterconsultaStudiesList();
+    } catch(err) {
+        console.error('Error saving study:', err);
+        Swal.fire({ icon: 'error', title: 'Error al Guardar', text: err.message || err });
+    }
+};
+
+window.deleteInterconsultaStudy = async function(studyId) {
+    const studies = await SupabaseDataService.getInterconsultaStudies();
+    const study = studies.find(s => s.id === studyId);
+    if (!study) return;
+
+    const result = await Swal.fire({
+        title: `¿Eliminar "${study.name}"?`,
+        text: 'Este estudio ya no aparecerá disponible en las opciones de interconsulta.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar'
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+        await SupabaseDataService.deleteInterconsultaStudy(studyId);
+        Swal.fire({
+            icon: 'success',
+            title: 'Estudio Eliminado',
+            text: `"${study.name}" fue retirado del catálogo.`,
+            timer: 1500,
+            showConfirmButton: false
+        });
+
+        window.resetInterconsultaStudyForm();
+        await window.renderManageInterconsultasTable();
+        await window.renderInterconsultaStudiesList();
+    } catch(err) {
+        console.error('Error deleting study:', err);
+        Swal.fire({ icon: 'error', title: 'Error al eliminar', text: err.message || err });
+    }
+};
+
+window.openInterconsultationModal = async function() {
     const activeId = getActivePatientId();
     if (!activeId) {
         Swal.fire({ icon: 'warning', title: 'Seleccione Paciente', text: 'Por favor seleccione un paciente de la lista para abrir la interconsulta.' });
@@ -24143,16 +24365,11 @@ window.openInterconsultationModal = function() {
     }
 
     window.selectedInterconsultaStudyKey = null;
-    document.querySelectorAll('.study-note-input').forEach(input => input.value = '');
     const notesEl = document.getElementById('interconsultation-notes');
     if (notesEl) notesEl.value = '';
 
-    // Auto-select first study by default
-    const firstCard = document.querySelector('.study-accordion-card');
-    if (firstCard) {
-        const studyKey = firstCard.dataset.studyKey;
-        window.selectInterconsultaStudy(studyKey, firstCard);
-    }
+    // Render studies dynamically from Supabase
+    await window.renderInterconsultaStudiesList();
 
     // Bind Create Recipe button from Interconsultation modal
     const btnCreateRecipe = document.getElementById('btn-interconsultation-create-recipe');
@@ -24187,8 +24404,12 @@ window.openInterconsultationModal = function() {
             const notesInput = document.getElementById('recipe-general-notes');
             const indInput = document.getElementById('recipe-clinical-indications');
 
+            // Find current study note input if entered
+            const selectedCard = document.querySelector(`.study-accordion-card[data-study-key="${window.selectedInterconsultaStudyKey}"]`);
+            const customNote = selectedCard ? selectedCard.querySelector('.study-note-input')?.value.trim() : '';
+
             if (notesInput) {
-                notesInput.value = `Orden de examen para laboratorio / laboratorio de imágenes: Realizar ${window.selectedInterconsultaStudyKey}.`;
+                notesInput.value = `Orden de examen para laboratorio / laboratorio de imágenes: Realizar ${window.selectedInterconsultaStudyKey}.${customNote ? ' (' + customNote + ')' : ''}`;
             }
             if (indInput) {
                 indInput.value = `1. Acudir en ayunas (mínimo 8 horas de ayuno) para la toma de muestra de ${window.selectedInterconsultaStudyKey}.\n2. Evitar consumo de medicamentos anticoagulantes o aspirinas 24 horas antes del examen salvo indicación médica opuesta.\n3. Presentar esta orden e indicaciones al momento de realizar la prueba.`;

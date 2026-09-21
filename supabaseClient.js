@@ -2994,6 +2994,149 @@ class SupabaseDataService {
     }
 
     // ==========================================
+    // 13B. INTERCONSULTA & SPECIAL STUDIES CATALOG
+    // ==========================================
+    static _interconsultaStudiesCache = null;
+    static _interconsultaStudiesCacheTime = 0;
+
+    static getDefaultInterconsultaStudies() {
+        return [
+            { id: 'STUDY-1', name: 'Hematología Completa', icon: 'fa-vial text-red', defaultNote: 'ej: Con conteo de plaquetas y fórmula blanca...' },
+            { id: 'STUDY-2', name: 'Tiempos de Coagulación (PT y PTT)', icon: 'fa-clock text-amber', defaultNote: 'ej: Evaluación hemostática previa a cirugía bucal...' },
+            { id: 'STUDY-3', name: 'VDRL / Serología Pre-Quirúrgica', icon: 'fa-microscope text-purple', defaultNote: 'ej: Descarte serológico de rutina...' },
+            { id: 'STUDY-4', name: 'Radiografía Panorámica Ortopantomografía', icon: 'fa-x-ray text-cyan', defaultNote: 'ej: Evaluación de terceros molares retenidos...' },
+            { id: 'STUDY-5', name: 'Radiografía Periapical (Localizada)', icon: 'fa-tooth text-green', defaultNote: 'ej: Indique la pieza dental (ej: Pieza 16 / 21)...' },
+            { id: 'STUDY-6', name: 'Tomografía Computarizada Cone Beam 3D', icon: 'fa-cube text-purple', defaultNote: 'ej: Evaluación de disponibilidad ósea para implante...' },
+            { id: 'STUDY-7', name: 'Perfil 20 / Química Sanguínea completa', icon: 'fa-flask text-amber', defaultNote: 'ej: Glucemia en ayunas, urea, creatinina...' }
+        ];
+    }
+
+    static async getInterconsultaStudies(forceRefresh = false) {
+        const local = JSON.parse(localStorage.getItem('vidasana_interconsulta_studies'));
+        const now = Date.now();
+        if (!forceRefresh && this._interconsultaStudiesCache && (now - this._interconsultaStudiesCacheTime < 10000)) {
+            return this._interconsultaStudiesCache;
+        }
+
+        if (this.isCloudConnected()) {
+            try {
+                const { data, error } = await supabaseClient
+                    .from('patients')
+                    .select('id, odontogram_data')
+                    .eq('id', 'SYS-INTERCONSULTA-STUDIES')
+                    .maybeSingle();
+
+                if (!error && data && data.odontogram_data && Array.isArray(data.odontogram_data.studies)) {
+                    this._interconsultaStudiesCache = data.odontogram_data.studies;
+                    this._interconsultaStudiesCacheTime = Date.now();
+                    localStorage.setItem('vidasana_interconsulta_studies', JSON.stringify(this._interconsultaStudiesCache));
+                    return this._interconsultaStudiesCache;
+                }
+            } catch (err) {
+                console.warn('Supabase getInterconsultaStudies fetch warn:', err);
+            }
+        }
+
+        if (local && Array.isArray(local) && local.length > 0) {
+            this._interconsultaStudiesCache = local;
+            return local;
+        }
+
+        const defaultStudies = this.getDefaultInterconsultaStudies();
+        this._interconsultaStudiesCache = defaultStudies;
+        localStorage.setItem('vidasana_interconsulta_studies', JSON.stringify(defaultStudies));
+
+        if (this.isCloudConnected()) {
+            try {
+                await supabaseClient.from('patients').upsert({
+                    id: 'SYS-INTERCONSULTA-STUDIES',
+                    fullname: 'Registro Cloud de Catálogo de Interconsultas y Estudios Especiales',
+                    birthdate: '2026-01-01',
+                    phone: '',
+                    status: 'Sistema',
+                    odontogram_data: {
+                        _is_system_config: true,
+                        studies: defaultStudies,
+                        updatedAt: new Date().toISOString()
+                    }
+                });
+            } catch(e){}
+        }
+
+        return defaultStudies;
+    }
+
+    static async saveInterconsultaStudy(studyObj) {
+        let studies = await this.getInterconsultaStudies(true);
+        if (!studyObj.id) {
+            studyObj.id = 'STUDY-' + Date.now().toString();
+        }
+
+        const idx = studies.findIndex(s => s.id === studyObj.id);
+        if (idx >= 0) studies[idx] = studyObj;
+        else studies.push(studyObj);
+
+        localStorage.setItem('vidasana_interconsulta_studies', JSON.stringify(studies));
+        this._interconsultaStudiesCache = studies;
+        this._interconsultaStudiesCacheTime = Date.now();
+
+        if (this.isCloudConnected()) {
+            try {
+                const payload = {
+                    id: 'SYS-INTERCONSULTA-STUDIES',
+                    fullname: 'Registro Cloud de Catálogo de Interconsultas y Estudios Especiales',
+                    birthdate: '2026-01-01',
+                    phone: '',
+                    status: 'Sistema',
+                    odontogram_data: {
+                        _is_system_config: true,
+                        studies: studies,
+                        updatedAt: new Date().toISOString()
+                    }
+                };
+                await supabaseClient.from('patients').upsert(payload);
+                this.notifyDataChanged('interconsulta_studies', studyObj.id);
+            } catch (err) {
+                console.error('Supabase saveInterconsultaStudy error:', err);
+                throw err;
+            }
+        }
+        return studyObj;
+    }
+
+    static async deleteInterconsultaStudy(studyId) {
+        let studies = await this.getInterconsultaStudies(true);
+        studies = studies.filter(s => s.id !== studyId);
+
+        localStorage.setItem('vidasana_interconsulta_studies', JSON.stringify(studies));
+        this._interconsultaStudiesCache = studies;
+        this._interconsultaStudiesCacheTime = Date.now();
+
+        if (this.isCloudConnected()) {
+            try {
+                const payload = {
+                    id: 'SYS-INTERCONSULTA-STUDIES',
+                    fullname: 'Registro Cloud de Catálogo de Interconsultas y Estudios Especiales',
+                    birthdate: '2026-01-01',
+                    phone: '',
+                    status: 'Sistema',
+                    odontogram_data: {
+                        _is_system_config: true,
+                        studies: studies,
+                        updatedAt: new Date().toISOString()
+                    }
+                };
+                await supabaseClient.from('patients').upsert(payload);
+                this.notifyDataChanged('interconsulta_studies', studyId);
+            } catch (err) {
+                console.error('Supabase deleteInterconsultaStudy error:', err);
+                throw err;
+            }
+        }
+        return true;
+    }
+
+    // ==========================================
     // 14. UNIVERSAL MULTI-DEVICE REALTIME ENGINE
     // ==========================================
     static _realtimeChannel = null;

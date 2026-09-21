@@ -7005,3 +7005,17 @@ select, .form-select, select.form-control {
     animation: tagCardPulse 0.8s ease-in-out !important;
     border-color: #8b5cf6 !important;
 }
+
+/* ==========================================
+   INTERCONSULTA & ESTUDIOS ESPECIALES
+   ========================================== */
+.study-note-input {
+    width: 100% !important;
+    box-sizing: border-box !important;
+    display: block !important;
+}
+
+.study-details-pane {
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
