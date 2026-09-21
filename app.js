@@ -74,7 +74,7 @@ window.universalPrintHTML = function(htmlContent, title = 'Documento Clínico') 
                 <head>
                     <meta charset="UTF-8">
                     <title>${title}</title>
-                    <link rel="stylesheet" href="styles.css?v=320">
+                    <link rel="stylesheet" href="styles.css?v=321">
                     <style>
                         @page { size: A4 portrait; margin: 5mm 8mm 5mm 8mm; }
                         html, body {
@@ -11555,7 +11555,7 @@ window.getClinicPerformanceSummary = async function(forceRefresh = false) {
     return _clinicPerfCache;
 };
 
-window.doctorRevenueSortDesc = false;
+window.doctorRevenueSortDesc = true;
 
 window.toggleDoctorRevenueSort = async function() {
     window.doctorRevenueSortDesc = !window.doctorRevenueSortDesc;
@@ -11571,7 +11571,7 @@ window.toggleDoctorRevenueSort = async function() {
             sortBtn.style.backgroundColor = '';
             sortBtn.style.borderColor = '#cbd5e1';
             sortBtn.style.color = '';
-            if (sortText) sortText.textContent = 'Mayor Ingreso';
+            if (sortText) sortText.textContent = 'Orden Registro';
         }
     }
     const activeFilterBtn = document.querySelector('#view-users .filter-card .filter-btn.active');
@@ -11643,12 +11643,23 @@ async function renderUsersTable(filter = 'all', searchQuery = '') {
         );
     }
 
-    // Apply Revenue Sort if active
+    // Compute doctor performance map
+    const docPerfMap = new Map();
+    users.forEach(u => {
+        const p = (perf.doctorStats && (perf.doctorStats[String(u.id)] || perf.findDoctor(u.fullname))) || { totalUSD: 0, attendedCount: 0 };
+        docPerfMap.set(String(u.id), p);
+    });
+
+    // Apply Revenue Sort if active (Default is descending so Top 1, 2, 3 appear at the top)
     if (window.doctorRevenueSortDesc) {
         users.sort((a, b) => {
-            const revA = (perf.doctorStats[String(a.id)] || perf.findDoctor(a.fullname))?.totalUSD || 0;
-            const revB = (perf.doctorStats[String(b.id)] || perf.findDoctor(b.fullname))?.totalUSD || 0;
-            return revB - revA;
+            const revA = docPerfMap.get(String(a.id))?.totalUSD || 0;
+            const revB = docPerfMap.get(String(b.id))?.totalUSD || 0;
+            if (revB !== revA) return revB - revA;
+            const attA = docPerfMap.get(String(a.id))?.attendedCount || 0;
+            const attB = docPerfMap.get(String(b.id))?.attendedCount || 0;
+            if (attB !== attA) return attB - attA;
+            return (a.fullname || '').localeCompare(b.fullname || '');
         });
     }
 
@@ -11657,10 +11668,41 @@ async function renderUsersTable(filter = 'all', searchQuery = '') {
         return;
     }
 
+    // Identify Global Top 1, Top 2, Top 3 among doctors with revenue > 0
+    const activeEarners = [...users]
+        .map(u => ({ id: String(u.id), fullname: u.fullname, rev: docPerfMap.get(String(u.id))?.totalUSD || 0 }))
+        .filter(d => d.rev > 0)
+        .sort((a, b) => b.rev - a.rev);
+
+    const top1Id = activeEarners[0]?.id;
+    const top2Id = activeEarners[1]?.id;
+    const top3Id = activeEarners[2]?.id;
+
     users.forEach(u => {
         const tr = document.createElement('tr');
-        const docPerf = (perf.doctorStats && (perf.doctorStats[String(u.id)] || perf.findDoctor(u.fullname))) || { totalUSD: 0, attendedCount: 0 };
-        const isTop = perf.topDoctor && (String(perf.topDoctor.id) === String(u.id) || perf.topDoctor.name === u.fullname) && docPerf.totalUSD > 0;
+        const docPerf = docPerfMap.get(String(u.id)) || { totalUSD: 0, attendedCount: 0 };
+        const uIdStr = String(u.id);
+
+        let rankBadgeHtml = '';
+        if (top1Id && (uIdStr === top1Id || u.fullname === activeEarners[0]?.fullname)) {
+            rankBadgeHtml = `
+                <span class="badge-tag" style="font-size: 0.68rem; padding: 2px 7px; font-weight: 800; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); color: #b45309; border: 1px solid #f59e0b; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; box-shadow: 0 1px 3px rgba(245, 158, 11, 0.25);" title="Top 1 en Facturación">
+                    <i class="fa-solid fa-crown text-amber"></i> #1 Top
+                </span>
+            `;
+        } else if (top2Id && (uIdStr === top2Id || u.fullname === activeEarners[1]?.fullname)) {
+            rankBadgeHtml = `
+                <span class="badge-tag" style="font-size: 0.68rem; padding: 2px 7px; font-weight: 800; background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); color: #334155; border: 1px solid #94a3b8; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; box-shadow: 0 1px 3px rgba(100, 116, 139, 0.15);" title="Top 2 en Facturación">
+                    <i class="fa-solid fa-medal" style="color: #64748b;"></i> #2 Top
+                </span>
+            `;
+        } else if (top3Id && (uIdStr === top3Id || u.fullname === activeEarners[2]?.fullname)) {
+            rankBadgeHtml = `
+                <span class="badge-tag" style="font-size: 0.68rem; padding: 2px 7px; font-weight: 800; background: linear-gradient(135deg, #ffedd5 0%, #fed7aa 100%); color: #9a3412; border: 1px solid #ea580c; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; box-shadow: 0 1px 3px rgba(234, 88, 12, 0.2);" title="Top 3 en Facturación">
+                    <i class="fa-solid fa-medal" style="color: #c2410c;"></i> #3 Top
+                </span>
+            `;
+        }
 
         const docProf = u.doctorProfile || u.doctor_profile || {};
         const extraSpecs = docProf.additionalSpecialties || [];
@@ -11728,7 +11770,12 @@ async function renderUsersTable(filter = 'all', searchQuery = '') {
         }
 
         tr.innerHTML = `
-            <td><strong>${u.fullname}</strong></td>
+            <td>
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    ${rankBadgeHtml}
+                    <strong style="color: #0f172a; font-size: 0.90rem;">${u.fullname}</strong>
+                </div>
+            </td>
             <td>
                 <span title="${emailFull}" style="cursor: help; color: #475569; font-size: 0.80rem; font-family: monospace; border-bottom: 1px dotted #94a3b8; display: inline-block; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle;">
                     ${emailShort}
@@ -11741,7 +11788,6 @@ async function renderUsersTable(filter = 'all', searchQuery = '') {
                     <div style="display: flex; align-items: center; gap: 6px;">
                         <strong style="font-size: 0.95rem; color: #0f172a;">$${docPerf.totalUSD.toFixed(2)}</strong>
                         <small style="color: #64748b; font-size: 0.72rem; font-weight: 600;">USD</small>
-                        ${isTop ? '<span class="badge-tag amber" style="font-size: 0.68rem; padding: 1px 6px; font-weight: 700; background: rgba(245, 158, 11, 0.15); color: #b45309;"><i class="fa-solid fa-crown"></i> #1 Top</span>' : ''}
                     </div>
                     <small style="color: #64748b; font-size: 0.78rem;">
                         <i class="fa-solid fa-clipboard-check text-green"></i> ${docPerf.attendedCount} ${docPerf.attendedCount === 1 ? 'atención' : 'atenciones'}
