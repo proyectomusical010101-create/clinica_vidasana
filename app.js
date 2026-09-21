@@ -74,7 +74,7 @@ window.universalPrintHTML = function(htmlContent, title = 'Documento Clínico') 
                 <head>
                     <meta charset="UTF-8">
                     <title>${title}</title>
-                    <link rel="stylesheet" href="styles.css?v=324">
+                    <link rel="stylesheet" href="styles.css?v=325">
                     <style>
                         @page { size: A4 portrait; margin: 5mm 8mm 5mm 8mm; }
                         html, body {
@@ -10009,12 +10009,6 @@ function renderWeeklySchedulePlanner(container, appointments, weekInfo, searchQu
                     Total: <strong>${totalWeek}</strong> citas • Pendientes: <strong style="color:#0284c7;">${pendingCount}</strong> • Confirmadas: <strong style="color:#059669;">${confirmedCount}</strong> • Atendidas: <strong style="color:#0d9488;">${attendedCount}</strong> ${cancelledCount > 0 ? `• Canceladas: <strong style="color:#e11d48;">${cancelledCount}</strong>` : ''}
                 </div>
             </div>
-
-            <div style="display:flex; align-items:center; gap:8px;">
-                <button type="button" class="btn btn-sm btn-success" onclick="window.openNewAppointmentModal()" style="background:#10b981 !important; border:none !important; font-weight:700;">
-                    <i class="fa-solid fa-plus"></i> + Nueva Cita
-                </button>
-            </div>
         </div>
 
         <div class="weekly-planner-grid" id="weekly-planner-grid">
@@ -10056,9 +10050,9 @@ function renderWeeklySchedulePlanner(container, appointments, weekInfo, searchQu
                     statusTagHtml = `<span class="weekly-appt-status-tag" style="background:#ccfbf1; color:#0f766e;"><i class="fa-solid fa-circle-check"></i> Atendida</span>`;
                 } else if (isConfirmed) {
                     cardStatusClass = 'status-confirmada';
-                    statusTagHtml = `<span class="weekly-appt-status-tag" style="background:#dcfce7; color:#15803d; cursor:pointer;" onclick="window.toggleApptConfirmation('${app.id}')" title="Clic para alternar confirmación"><i class="fa-solid fa-check-double"></i> Confirmada</span>`;
+                    statusTagHtml = `<span class="weekly-appt-status-tag" style="background:#dcfce7; color:#15803d; border:1px solid #86efac; cursor:pointer;" onclick="window.toggleApptConfirmation('${app.id}')" title="Cita Confirmada (Clic para desmarcar)"><i class="fa-solid fa-check-double text-green"></i> Confirmada</span>`;
                 } else {
-                    statusTagHtml = `<span class="weekly-appt-status-tag" style="background:#e0f2fe; color:#0369a1; cursor:pointer;" onclick="window.toggleApptConfirmation('${app.id}')" title="Clic para marcar Confirmada"><i class="fa-regular fa-clock"></i> ${app.status || 'Programada'}</span>`;
+                    statusTagHtml = `<span class="weekly-appt-status-tag" style="background:#f8fafc; color:#475569; border:1px solid #cbd5e1; cursor:pointer;" onclick="window.toggleApptConfirmation('${app.id}')" title="Cita Sin Confirmar (Clic para marcar como Confirmada)"><i class="fa-regular fa-circle" style="color:#94a3b8; font-size:0.75rem;"></i> ${app.status || 'Programada'}</span>`;
                 }
 
                 let actionsHtml = '';
@@ -10177,13 +10171,18 @@ window.deleteAppointment = async function(apptId) {
     });
 };
 
-async function renderAgendaView(filter = 'pending', searchQuery = '') {
+async function renderAgendaView(filter = (window.currentAgendaFilter || 'pending'), searchQuery = '') {
     const agendaListMain = document.getElementById('agenda-list-main');
     if (!agendaListMain) return;
 
     window.currentAgendaFilter = filter;
 
-    // Toggle weekly views buttons
+    // Sincronizar estado visual de los botones de filtro en la barra superior
+    document.querySelectorAll('#view-agenda .filter-card .filter-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.filter === filter);
+    });
+
+    // Toggle weekly views buttons (Permanece visible exclusivamente en 'week', permitiendo alternar libremente)
     const toggleEl = document.getElementById('agenda-weekly-view-toggle');
     if (toggleEl) {
         if (filter === 'week') {
@@ -10199,7 +10198,11 @@ async function renderAgendaView(filter = 'pending', searchQuery = '') {
     const cardTitleEl = document.getElementById('agenda-card-title');
     if (cardTitleEl) {
         if (filter === 'week') {
-            cardTitleEl.innerHTML = `<i class="fa-solid fa-calendar-week text-cyan"></i> Planificador Semanal de Consultas`;
+            if (window._agendaViewMode === 'planner') {
+                cardTitleEl.innerHTML = `<i class="fa-solid fa-calendar-week text-cyan"></i> Planificador Semanal de Consultas`;
+            } else {
+                cardTitleEl.innerHTML = `<i class="fa-solid fa-list-ul text-cyan"></i> Citas de Esta Semana (Formato Lista)`;
+            }
         } else if (filter === 'pending') {
             cardTitleEl.innerHTML = `<i class="fa-solid fa-clock text-cyan"></i> Citas Pendientes por Atender`;
         } else if (filter === 'attended') {
@@ -10406,12 +10409,12 @@ async function renderAgendaView(filter = 'pending', searchQuery = '') {
             statusBadgeHtml = `<span class="badge-tag green" style="background: rgba(16, 185, 129, 0.15); color: #059669; font-weight: 700;"><i class="fa-solid fa-circle-check"></i> Atendida</span>`;
             actionAttendOrViewHtml = `<button class="btn btn-xs btn-outline" style="border-color: #10b981; color: #059669; font-weight: 600;" onclick="window.viewAttendedSessionForPatient('${app.patientId}')" title="Ver Evolución Clínica"><i class="fa-solid fa-file-medical"></i> <span class="btn-text-full">Ver Evolución</span></button>`;
         } else if (app.status === 'Confirmada') {
-            statusBadgeHtml = `<button class="btn btn-xs btn-outline" style="border-color: #10b981; color: #059669; font-weight: 700; background: rgba(16, 185, 129, 0.12); border-radius: 12px; padding: 2px 8px; cursor: pointer;" onclick="window.toggleApptConfirmation('${app.id}')" title="Cita Confirmada (Clic para alternar)"><i class="fa-solid fa-check-double text-green"></i> Confirmada</button>`;
+            statusBadgeHtml = `<button class="btn btn-xs btn-outline" style="border-color: #86efac; color: #15803d; font-weight: 700; background: #dcfce7; border-radius: 12px; padding: 2px 10px; cursor: pointer;" onclick="window.toggleApptConfirmation('${app.id}')" title="Cita Confirmada (Clic para desmarcar)"><i class="fa-solid fa-check-double text-green"></i> Confirmada</button>`;
             if (!isAssistant) {
                 actionAttendOrViewHtml = `<button class="btn btn-xs btn-primary btn-appt-attend" style="background-color: var(--primary-cyan) !important; color: white !important; border: none !important;" onclick="window.atenderAppointmentFromAgenda('${app.id}')" title="Atender esta cita ahora"><i class="fa-solid fa-user-doctor"></i> Atender</button>`;
             }
         } else {
-            statusBadgeHtml = `<button class="btn btn-xs btn-outline" style="border-color: #cbd5e1; color: #475569; font-weight: 600; border-radius: 12px; padding: 2px 8px; cursor: pointer;" onclick="window.toggleApptConfirmation('${app.id}')" title="Marcar como Confirmada"><i class="fa-regular fa-circle-check text-cyan"></i> ${app.status || 'Programada'} <span style="font-size: 0.7rem; color: #0284c7;">(✓)</span></button>`;
+            statusBadgeHtml = `<button class="btn btn-xs btn-outline" style="border-color: #cbd5e1; color: #475569; font-weight: 600; background: #f8fafc; border-radius: 12px; padding: 2px 10px; cursor: pointer;" onclick="window.toggleApptConfirmation('${app.id}')" title="Cita Sin Confirmar (Clic para marcar como Confirmada)"><i class="fa-regular fa-circle" style="color: #94a3b8; font-size: 0.75rem;"></i> ${app.status || 'Programada'}</button>`;
             if (!isAssistant) {
                 actionAttendOrViewHtml = `<button class="btn btn-xs btn-primary btn-appt-attend" style="background-color: var(--primary-cyan) !important; color: white !important; border: none !important;" onclick="window.atenderAppointmentFromAgenda('${app.id}')" title="Atender esta cita ahora"><i class="fa-solid fa-user-doctor"></i> Atender</button>`;
             }
@@ -10466,7 +10469,7 @@ window.onAgendaFilterChange = function() {
 window.toggleApptConfirmation = async function(apptId) {
     try {
         const appts = await SupabaseDataService.getAppointments();
-        const appt = appts.find(a => a.id === apptId);
+        const appt = appts.find(a => String(a.id) === String(apptId));
         if (!appt) return;
 
         const newStatus = appt.status === 'Confirmada' ? 'Programada' : 'Confirmada';
@@ -10477,12 +10480,13 @@ window.toggleApptConfirmation = async function(apptId) {
             toast: true,
             position: 'top-end',
             icon: 'success',
-            title: newStatus === 'Confirmada' ? `Cita de ${appt.patientName} marcada como Confirmada ✓` : `Cita marcada como Programada`,
+            title: newStatus === 'Confirmada' ? `Cita de ${appt.patientName} marcada como Confirmada ✓` : `Cita marcada como Programada (Sin confirmar)`,
             showConfirmButton: false,
             timer: 2000
         });
 
-        await renderAgendaView();
+        const searchQuery = document.getElementById('agenda-table-search')?.value || '';
+        await renderAgendaView(window.currentAgendaFilter || 'pending', searchQuery);
     } catch(err) {
         console.error("Error toggling appointment confirmation:", err);
     }
@@ -15233,15 +15237,21 @@ function initGlobalEvents() {
         btn.onclick = async function() {
             document.querySelectorAll('#view-agenda .filter-btn').forEach(b => b.classList.remove('active'));
             this.classList.add('active');
+            const filter = this.dataset.filter;
+            window.currentAgendaFilter = filter;
+            if (filter === 'week') {
+                window._agendaViewMode = 'planner';
+            } else {
+                window._agendaViewMode = 'list';
+            }
             const searchVal = document.getElementById('agenda-table-search') ? document.getElementById('agenda-table-search').value : '';
-            await renderAgendaView(this.dataset.filter, searchVal);
+            await renderAgendaView(filter, searchVal);
         };
     });
     const agendaSearchInput = document.getElementById('agenda-table-search');
     if (agendaSearchInput) {
         agendaSearchInput.addEventListener('input', async (e) => {
-            const activeFilterBtn = document.querySelector('#view-agenda .filter-btn.active');
-            const activeFilter = activeFilterBtn ? activeFilterBtn.dataset.filter : 'all';
+            const activeFilter = window.currentAgendaFilter || 'pending';
             await renderAgendaView(activeFilter, e.target.value);
         });
     }

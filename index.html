@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=324">
+    <link rel="stylesheet" href="styles.css?v=325">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -651,12 +651,14 @@
 
                 <!-- VIEW: AGENDA -->
                 <section id="view-agenda" class="tab-view">
-                    <div class="view-header" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+                    <div class="view-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
                         <div>
                             <h1>Agenda de Citas del Consultorio</h1>
                             <p class="subtitle">Planificación diaria y recordatorios automatizados de citas por WhatsApp.</p>
                         </div>
-                        <button class="btn btn-primary" id="btn-add-appointment-agenda" onclick="window.openNewAppointmentModal()">+ Agregar Cita</button>
+                        <button class="btn btn-primary" id="btn-add-appointment-agenda" onclick="window.openNewAppointmentModal()" style="font-weight: 700; display: inline-flex; align-items: center; gap: 8px;">
+                            <i class="fa-solid fa-calendar-plus"></i> + Agregar Cita
+                        </button>
                     </div>
 
                     <!-- Filters bar -->
@@ -7760,14 +7762,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=324"></script>
-    <script src="supabaseClient.js?v=324"></script>
-    <script src="odontogram.js?v=324"></script>
-    <script src="signature.js?v=324"></script>
-    <script src="whatsapp.js?v=324"></script>
-    <script src="kardex.js?v=324"></script>
-    <script src="app.js?v=324"></script>
-    <script src="clinicalERP.js?v=324"></script>
-    <script src="tutorial.js?v=324"></script>
+    <script src="seededData.js?v=325"></script>
+    <script src="supabaseClient.js?v=325"></script>
+    <script src="odontogram.js?v=325"></script>
+    <script src="signature.js?v=325"></script>
+    <script src="whatsapp.js?v=325"></script>
+    <script src="kardex.js?v=325"></script>
+    <script src="app.js?v=325"></script>
+    <script src="clinicalERP.js?v=325"></script>
+    <script src="tutorial.js?v=325"></script>
 </body>
 </html>

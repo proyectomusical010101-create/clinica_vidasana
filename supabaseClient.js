@@ -814,6 +814,33 @@ class SupabaseDataService {
         this.notifyDataChanged('appointments', appointmentObj.id);
     }
 
+    static async updateAppointment(apptId, patch) {
+        let localAppts = JSON.parse(localStorage.getItem('dental_appointments')) || [];
+        const idx = localAppts.findIndex(a => String(a.id) === String(apptId));
+        if (idx >= 0) {
+            localAppts[idx] = { ...localAppts[idx], ...patch };
+            localStorage.setItem('dental_appointments', JSON.stringify(localAppts));
+        }
+
+        if (this.isCloudConnected()) {
+            try {
+                const mappedPatch = {};
+                if (patch.status !== undefined) mappedPatch.status = patch.status;
+                if (patch.time !== undefined) mappedPatch.appointment_time = patch.time;
+                if (patch.date !== undefined) mappedPatch.appointment_date = patch.date;
+                if (patch.treatment !== undefined) mappedPatch.treatment = patch.treatment;
+                if (Object.keys(mappedPatch).length > 0) {
+                    await supabaseClient.from('appointments').update(mappedPatch).eq('id', apptId);
+                }
+            } catch (err) {
+                console.warn('Supabase updateAppointment Cloud warn:', err);
+            }
+        }
+        this._apptsCacheTime = 0;
+        this._apptsPromise = null;
+        this.notifyDataChanged('appointments', apptId);
+    }
+
     static async deleteAppointment(apptId) {
         let localAppts = JSON.parse(localStorage.getItem('dental_appointments')) || [];
         localAppts = localAppts.filter(a => a.id !== apptId);
@@ -3179,7 +3206,7 @@ class SupabaseDataService {
             } else if (viewId === 'view-patients' && !isEditingPatient) {
                 if (typeof renderPatientsTable === 'function') await renderPatientsTable();
             } else if (viewId === 'view-agenda' && !isEditingAppt) {
-                if (typeof renderAgendaView === 'function') await renderAgendaView();
+                if (typeof renderAgendaView === 'function') await renderAgendaView(window.currentAgendaFilter || 'pending');
             } else if (viewId === 'view-odontogram') {
                 const subview = localStorage.getItem('dental_odontogram_subview') || 'list';
                 if (subview === 'list') {
