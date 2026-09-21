@@ -19728,7 +19728,7 @@ function buildRecipeDocumentHTML(opts) {
     }
 
     return `
-        <div class="medical-doc-container" style="background: #ffffff; color: #1e293b; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 0.76rem; line-height: 1.25; width: 100%; max-width: 780px; margin: 0 auto; padding: 12px 18px; box-sizing: border-box; page-break-inside: avoid !important; break-inside: avoid !important;">
+        <div class="medical-doc-container" style="background: #ffffff; color: #1e293b; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 0.76rem; line-height: 1.25; width: 100%; max-width: 780px; margin: 0 auto; padding: 12px 18px; box-sizing: border-box;">
             
             <!-- 1. Header (Logo left, Title & metadata right) -->
             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0; gap: 15px;">
@@ -23144,7 +23144,10 @@ function getPaymentMethodLabel(method) {
 }
 
 async function generatePDFFromElement(element, filename) {
-    element.style.position = 'absolute';
+    if (!element) return false;
+
+    // 1. Ensure element is styled in-flow with explicit width & white background
+    element.style.position = 'relative';
     element.style.top = '0';
     element.style.left = '0';
     element.style.width = '794px';
@@ -23153,16 +23156,15 @@ async function generatePDFFromElement(element, filename) {
     element.style.maxHeight = 'none';
     element.style.height = 'auto';
     element.style.overflow = 'visible';
-    element.style.margin = '0';
+    element.style.margin = '0 auto';
     element.style.backgroundColor = '#ffffff';
     element.style.color = '#1e293b';
     element.style.display = 'block';
     element.style.visibility = 'visible';
-    element.style.padding = '15px 20px';
+    element.style.padding = '16px 20px';
     element.style.boxSizing = 'border-box';
-    element.style.zIndex = '99999';
 
-    // Remove any height/scroll limits on all descendant elements
+    // Remove any overflow or max-height restrictions on children
     element.querySelectorAll('*').forEach(child => {
         if (child.style) {
             if (child.style.maxHeight) child.style.maxHeight = 'none';
@@ -23176,7 +23178,7 @@ async function generatePDFFromElement(element, filename) {
         innerDoc.style.maxWidth = '100%';
         innerDoc.style.width = '100%';
         innerDoc.style.padding = '0';
-        innerDoc.style.margin = '0';
+        innerDoc.style.margin = '0 auto';
         innerDoc.style.boxShadow = 'none';
         innerDoc.style.background = '#ffffff';
         innerDoc.style.maxHeight = 'none';
@@ -23184,14 +23186,25 @@ async function generatePDFFromElement(element, filename) {
         innerDoc.style.overflow = 'visible';
     }
 
-    if (!document.body.contains(element)) {
-        document.body.appendChild(element);
-    }
+    // Mount inside a fixed staging wrapper at top:0 left:0 so getBoundingClientRect() top is always 0
+    // and hidden behind SweetAlert2 / modals (z-index: 5 vs modal z-index: 100000)
+    const stagingWrapper = document.createElement('div');
+    stagingWrapper.id = 'vidasana-pdf-staging-' + Date.now();
+    stagingWrapper.style.position = 'fixed';
+    stagingWrapper.style.top = '0';
+    stagingWrapper.style.left = '0';
+    stagingWrapper.style.width = '794px';
+    stagingWrapper.style.zIndex = '5';
+    stagingWrapper.style.pointerEvents = 'none';
+    stagingWrapper.style.overflow = 'visible';
+    stagingWrapper.style.backgroundColor = '#ffffff';
+    stagingWrapper.appendChild(element);
+    document.body.appendChild(stagingWrapper);
 
     const cleanupElement = () => {
         try {
-            if (element && element.parentNode) {
-                element.parentNode.removeChild(element);
+            if (stagingWrapper && stagingWrapper.parentNode) {
+                stagingWrapper.parentNode.removeChild(stagingWrapper);
             }
         } catch (e) {}
     };
@@ -23199,17 +23212,36 @@ async function generatePDFFromElement(element, filename) {
     // Pre-load all images inside element before capturing
     const imgs = Array.from(element.querySelectorAll('img'));
     await Promise.all(imgs.map(img => {
+        try { img.crossOrigin = 'anonymous'; } catch(e) {}
         if (img.complete && img.naturalHeight > 0) return Promise.resolve();
         return new Promise(res => {
             img.onload = () => res();
             img.onerror = () => res();
-            setTimeout(res, 800);
+            setTimeout(res, 600);
         });
     }));
 
     let isCancelled = false;
+    let isCompleted = false;
+    let compileTimer = null;
 
     return new Promise((resolve) => {
+        const handleCancel = () => {
+            if (isCompleted || isCancelled) return;
+            isCancelled = true;
+            if (compileTimer) {
+                clearTimeout(compileTimer);
+                compileTimer = null;
+            }
+            cleanupElement();
+            try {
+                if (typeof Swal !== 'undefined' && Swal.isVisible()) {
+                    Swal.close();
+                }
+            } catch (e) {}
+            resolve(false);
+        };
+
         Swal.fire({
             title: 'Generando Documento PDF...',
             html: `
@@ -23232,18 +23264,16 @@ async function generatePDFFromElement(element, filename) {
                 if (cancelBtn) {
                     cancelBtn.disabled = false;
                     cancelBtn.style.cursor = 'pointer';
-                    cancelBtn.onclick = () => {
-                        isCancelled = true;
-                        cleanupElement();
-                        Swal.close();
-                        resolve(false);
-                    };
+                    cancelBtn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleCancel();
+                    });
                 }
 
-                setTimeout(async () => {
+                compileTimer = setTimeout(async () => {
                     if (isCancelled) {
-                        cleanupElement();
-                        resolve(false);
+                        handleCancel();
                         return;
                     }
 
@@ -23256,45 +23286,53 @@ async function generatePDFFromElement(element, filename) {
                                 html2canvas: { 
                                     scale: 2, 
                                     useCORS: true, 
+                                    allowTaint: true,
                                     letterRendering: true, 
                                     backgroundColor: '#ffffff', 
                                     logging: false, 
-                                    width: 794,
-                                    windowWidth: 1200,
                                     scrollY: 0,
                                     scrollX: 0
                                 },
                                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
                                 pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
                             };
+
                             if (isCancelled) {
-                                cleanupElement();
-                                resolve(false);
+                                handleCancel();
                                 return;
                             }
-                            await window.html2pdf().set(opt).from(element).save();
+
+                            const worker = window.html2pdf().set(opt).from(element);
+                            // Render PDF into internal worker instance first
+                            await worker.toPdf().get('pdf');
+
+                            if (isCancelled) {
+                                handleCancel();
+                                return;
+                            }
+
+                            // Save file to user's disk
+                            await worker.save();
                         } else {
                             const jsPDFClass = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
                             if (!jsPDFClass || !window.html2canvas) {
                                 throw new Error("Librerías de PDF no disponibles en el navegador");
                             }
                             if (isCancelled) {
-                                cleanupElement();
-                                resolve(false);
+                                handleCancel();
                                 return;
                             }
                             const canvas = await window.html2canvas(element, { 
                                 scale: 2, 
                                 useCORS: true, 
+                                allowTaint: true,
                                 backgroundColor: '#ffffff', 
-                                width: 794,
-                                windowWidth: 1200,
+                                logging: false,
                                 scrollY: 0,
                                 scrollX: 0
                             });
                             if (isCancelled) {
-                                cleanupElement();
-                                resolve(false);
+                                handleCancel();
                                 return;
                             }
                             const imgString = canvas.toDataURL('image/jpeg', 0.98);
@@ -23303,13 +23341,13 @@ async function generatePDFFromElement(element, filename) {
                             const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
                             pdf.addImage(imgString, 'JPEG', 0, 0, pdfWidth, pdfHeight);
                             if (isCancelled) {
-                                cleanupElement();
-                                resolve(false);
+                                handleCancel();
                                 return;
                             }
                             pdf.save(filename);
                         }
 
+                        isCompleted = true;
                         cleanupElement();
 
                         if (!isCancelled) {
@@ -23325,28 +23363,28 @@ async function generatePDFFromElement(element, filename) {
                             resolve(false);
                         }
                     } catch (err) {
+                        console.error('Error in generatePDFFromElement:', err);
                         cleanupElement();
                         if (isCancelled) {
-                            resolve(false);
+                            handleCancel();
                             return;
                         }
-                        Swal.close();
+                        try { Swal.close(); } catch(e) {}
 
                         // Fallback seguro in-page sin popups ni ventanas emergentes
                         window.universalPrintHTML(element.innerHTML, filename);
                         resolve(true);
                     }
-                }, 350);
+                }, 400);
             },
             didClose: () => {
-                isCancelled = true;
-                cleanupElement();
+                if (!isCompleted) {
+                    handleCancel();
+                }
             }
         }).then((result) => {
-            if (result.dismiss === Swal.DismissReason.cancel || result.dismiss === Swal.DismissReason.backdrop || result.dismiss === Swal.DismissReason.esc) {
-                isCancelled = true;
-                cleanupElement();
-                resolve(false);
+            if (result && (result.dismiss === Swal.DismissReason.cancel || result.dismiss === Swal.DismissReason.backdrop || result.dismiss === Swal.DismissReason.esc)) {
+                handleCancel();
             }
         });
     });
@@ -24999,7 +25037,8 @@ window.printSingleRecipePDF = async function(patientId, recipeId = null) {
 
     const container = document.createElement('div');
     container.innerHTML = docHtml;
-    const filename = `Recipe_${recipe ? recipe.id : 'Prescripcion'}_${p.fullname.replace(/\s+/g, '_')}.pdf`;
+    const safeName = (p.fullname || 'Paciente').replace(/[\s\\\/:\*\?"<>\|]+/g, '_');
+    const filename = `Recipe_${recipe ? recipe.id : 'Prescripcion'}_${safeName}.pdf`;
     await generatePDFFromElement(container, filename);
 };
 
