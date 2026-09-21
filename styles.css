@@ -6944,6 +6944,25 @@ select, .form-select, select.form-control {
     background-color: #f0fdfa !important;
 }
 
+/* ==========================================
+   DASHBOARD STOCK ALERTS INTERACTIVE CARDS
+   ========================================== */
+.dashboard-stock-item-card {
+    -webkit-tap-highlight-color: transparent !important;
+    transition: all 0.2s ease !important;
+}
+
+.dashboard-stock-item-card:hover {
+    background: rgba(239, 68, 68, 0.16) !important;
+    border-color: #ef4444 !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.16) !important;
+}
+
+.dashboard-stock-item-card:active {
+    transform: translateY(0);
+}
+
 
 
 

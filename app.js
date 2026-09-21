@@ -10782,26 +10782,160 @@ async function renderInventoryTable(filter = null, searchQuery = null, areaFilte
     window.checkGlobalStockAlerts();
 }
 
+window.escapeApptText = window.escapeApptText || function(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+};
+
 window.adjustStockPrompt = async function(code) {
-    Swal.fire({
-        title: 'Ajuste de Insumo',
-        text: 'Ingrese la cantidad a ajustar (+ para agregar, - para restar):',
-        input: 'number',
-        inputValue: 5,
+    if (!code) return;
+
+    let item = null;
+    if (window.kardex) {
+        item = window.kardex.getItem(code);
+    }
+    if (!item && window.SupabaseDataService) {
+        const items = await SupabaseDataService.getInventory();
+        item = items.find(i => i.code === code || i.id === code || (i.name && i.name.toLowerCase() === String(code).toLowerCase()));
+    }
+
+    const itemName = item ? item.name : code;
+    const itemCode = item ? (item.code || code) : code;
+    const currStock = item ? (item.currentStock !== undefined ? Number(item.currentStock) : 0) : 0;
+    const minStock = item ? (item.minStock || 5) : 5;
+    const unit = item ? (item.unit || 'U') : 'U';
+
+    const recommended = Math.max(5, (minStock * 2) - currStock);
+
+    const result = await Swal.fire({
+        title: `<i class="fa-solid fa-boxes-stacked text-amber"></i> Ajuste de Stock`,
+        html: `
+            <div style="text-align: left; padding: 4px; font-size: 0.92rem;">
+                <div style="padding: 12px 14px; background: #fef2f2; border: 1.5px solid #fca5a5; border-radius: 10px; margin-bottom: 16px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                        <strong style="font-size: 1.05rem; color: #991b1b;">${window.escapeApptText(itemName)}</strong>
+                        <span class="badge-tag red" style="font-size: 0.72rem; font-weight: 700;">Stock Crítico</span>
+                    </div>
+                    <div style="font-size: 0.82rem; color: #64748b; margin-bottom: 4px;">
+                        Código: <strong>${window.escapeApptText(itemCode)}</strong>
+                    </div>
+                    <div style="display: flex; gap: 16px; font-size: 0.88rem; margin-top: 6px; padding-top: 6px; border-top: 1px dashed #fca5a5;">
+                        <div>Stock actual: <strong style="color: #dc2626; font-size: 1.05rem;">${currStock}</strong> <span style="font-size: 0.8rem; color: #64748b;">${window.escapeApptText(unit)}</span></div>
+                        <div>Mínimo: <strong style="color: #475569;">${minStock}</strong> <span style="font-size: 0.8rem; color: #64748b;">${window.escapeApptText(unit)}</span></div>
+                    </div>
+                </div>
+
+                <label style="display: block; font-weight: 600; color: #0f172a; margin-bottom: 6px; font-size: 0.9rem;">
+                    <i class="fa-solid fa-plus-minus text-cyan"></i> Cantidad a Ingresar o Ajustar:
+                </label>
+                <input type="number" id="swal-adjust-qty" class="swal2-input" value="${recommended}" style="width: 100%; margin: 0 0 8px 0; font-size: 1.15rem; font-weight: 700; text-align: center;" placeholder="Ej: 10 para sumar, -2 para restar">
+                
+                <div style="display: flex; gap: 6px; justify-content: center; margin-bottom: 12px; flex-wrap: wrap;">
+                    <button type="button" class="btn btn-xs btn-outline" onclick="document.getElementById('swal-adjust-qty').value = 5" style="padding: 3px 8px; font-size: 0.75rem;">+5</button>
+                    <button type="button" class="btn btn-xs btn-outline" onclick="document.getElementById('swal-adjust-qty').value = 10" style="padding: 3px 8px; font-size: 0.75rem;">+10</button>
+                    <button type="button" class="btn btn-xs btn-outline" onclick="document.getElementById('swal-adjust-qty').value = 20" style="padding: 3px 8px; font-size: 0.75rem;">+20</button>
+                    <button type="button" class="btn btn-xs btn-outline" onclick="document.getElementById('swal-adjust-qty').value = 50" style="padding: 3px 8px; font-size: 0.75rem;">+50</button>
+                    <button type="button" class="btn btn-xs btn-outline text-red" onclick="document.getElementById('swal-adjust-qty').value = -1" style="padding: 3px 8px; font-size: 0.75rem;">-1 Merma</button>
+                </div>
+
+                <p style="font-size: 0.78rem; color: #64748b; line-height: 1.35; margin: 0;">
+                    <i class="fa-solid fa-circle-info text-cyan"></i> Ingrese un valor positivo (<strong>+</strong>) para registrar entrada de insumos, o negativo (<strong>-</strong>) si desea descontar unidades dañadas o consumidas.
+                </p>
+            </div>
+        `,
         showCancelButton: true,
-        confirmButtonText: 'Aplicar ajuste',
-        cancelButtonText: 'Cancelar'
-    }).then(async (result) => {
-        if (result.isConfirmed && result.value !== '') {
-            const qty = parseInt(result.value);
-            if (!isNaN(qty)) {
-                window.kardex.updateStock(code, qty);
-                await renderInventoryTable();
-                await renderDashboard();
-                Swal.fire({ icon: 'success', title: 'Stock actualizado', timer: 1500, showConfirmButton: false });
+        showDenyButton: true,
+        confirmButtonText: '<i class="fa-solid fa-check"></i> Aplicar Ajuste',
+        denyButtonText: '<i class="fa-solid fa-table-list"></i> Ver en Inventario',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#0d9488',
+        denyButtonColor: '#0284c7',
+        focusConfirm: false,
+        didOpen: () => {
+            const input = document.getElementById('swal-adjust-qty');
+            if (input) {
+                input.focus();
+                input.select();
             }
+        },
+        preConfirm: () => {
+            const val = document.getElementById('swal-adjust-qty').value;
+            const qty = parseInt(val, 10);
+            if (isNaN(qty) || qty === 0) {
+                Swal.showValidationMessage('Por favor ingrese una cantidad numérica válida distinta de 0.');
+                return false;
+            }
+            return { qty };
         }
     });
+
+    if (result.isDenied) {
+        const navItem = document.querySelector('.nav-item[data-tab="inventory"]');
+        if (navItem) navItem.click();
+        const searchInput = document.getElementById('inventory-table-search');
+        if (searchInput) searchInput.value = itemName;
+        if (typeof renderInventoryTable === 'function') {
+            await renderInventoryTable(null, null, itemName);
+        }
+        return;
+    }
+
+    if (result.isConfirmed && result.value && result.value.qty) {
+        const qty = result.value.qty;
+        const newStock = Math.max(0, currStock + qty);
+
+        // 1. Update Kardex memory & localStorage
+        if (window.kardex) {
+            window.kardex.updateStock(itemCode, qty);
+        }
+
+        // 2. Persist to Supabase and LocalStorage
+        if (item) {
+            item.currentStock = newStock;
+            if (window.SupabaseDataService && typeof window.SupabaseDataService.saveInventoryItem === 'function') {
+                await window.SupabaseDataService.saveInventoryItem(item);
+            }
+        } else {
+            if (window.SupabaseDataService && typeof window.SupabaseDataService.saveInventoryItem === 'function') {
+                await window.SupabaseDataService.saveInventoryItem({
+                    code: itemCode,
+                    name: itemName,
+                    currentStock: newStock,
+                    minStock: minStock,
+                    unit: unit
+                });
+            }
+        }
+
+        // 3. Log user action in audit trail
+        if (typeof window.logUserAction === 'function') {
+            await window.logUserAction('Ajustó Stock de Insumo', 'Inventario', `${itemName} (${itemCode}): ${currStock} -> ${newStock} ${unit} (${qty > 0 ? '+' + qty : qty})`);
+        }
+
+        // 4. Update UI
+        await window.checkGlobalStockAlerts();
+        if (typeof renderDashboard === 'function') await renderDashboard();
+        if (typeof renderInventoryTable === 'function') await renderInventoryTable();
+
+        Swal.fire({
+            icon: 'success',
+            title: 'Stock Actualizado Exitosamente',
+            html: `
+                <div style="font-size: 0.95rem;">
+                    Insumo: <strong>${window.escapeApptText(itemName)}</strong><br>
+                    Ajuste: <strong style="color: ${qty > 0 ? '#10b981' : '#ef4444'};">${qty > 0 ? '+' + qty : qty} ${window.escapeApptText(unit)}</strong><br>
+                    Nuevo stock disponible: <strong style="color: #0d9488; font-size: 1.15rem;">${newStock} ${window.escapeApptText(unit)}</strong>
+                </div>
+            `,
+            timer: 2500,
+            showConfirmButton: false
+        });
+    }
 };
 
 window.deleteInventoryItem = async function(code) {
@@ -10859,14 +10993,32 @@ window.checkGlobalStockAlerts = async function() {
     if (alertBox) {
         alertBox.innerHTML = '';
         if (criticalItems.length > 0) {
-            const renderStockItem = (a) => `
-                <div style="padding: 8px 12px; border-radius: 6px; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); margin-bottom: 8px; font-size: 0.82rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
-                    <div>
-                        <strong style="color: #b91c1c;">${a.name}:</strong> ${a.currentStock} ${a.unit || 'U'} restantes (Mín: ${a.minStock || 5})
+            const renderStockItem = (a) => {
+                const itemCode = (a.code || a.id || a.name || '').replace(/'/g, "\\'");
+                const itemName = (a.name || 'Insumo').replace(/'/g, "\\'");
+                return `
+                    <div class="dashboard-stock-item-card" onclick="window.adjustStockPrompt('${itemCode}')" title="Haga clic para ajustar el stock de ${itemName}" style="padding: 9px 12px; border-radius: 8px; background: rgba(239, 68, 68, 0.08); border: 1.5px solid rgba(239, 68, 68, 0.28); margin-bottom: 8px; font-size: 0.83rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; cursor: pointer; transition: all 0.2s ease;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="width: 32px; height: 32px; border-radius: 6px; background: rgba(239, 68, 68, 0.15); color: #dc2626; display: flex; align-items: center; justify-content: center; font-size: 0.95rem; flex-shrink: 0;">
+                                <i class="fa-solid fa-box-archive"></i>
+                            </div>
+                            <div>
+                                <strong style="color: #991b1b; font-size: 0.88rem; display: block; line-height: 1.2;">${a.name}</strong>
+                                <span style="font-size: 0.76rem; color: #64748b;">
+                                    <span style="color: #dc2626; font-weight: 700;">${a.currentStock} ${a.unit || 'U'} restantes</span> 
+                                    <span style="color: #cbd5e1;">•</span> Mín: ${a.minStock || 5} ${a.unit || 'U'}
+                                </span>
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span class="badge-tag red" style="font-size: 0.7rem; font-weight: 700;">Stock Crítico</span>
+                            <button type="button" class="btn btn-xs" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: #ffffff; border: none; border-radius: 6px; padding: 4px 10px; font-size: 0.74rem; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; box-shadow: 0 1px 3px rgba(220,38,38,0.25); pointer-events: none;">
+                                <i class="fa-solid fa-sliders"></i> Ajustar
+                            </button>
+                        </div>
                     </div>
-                    <span class="badge-tag red" style="font-size: 0.7rem; font-weight: 700;">Stock Crítico</span>
-                </div>
-            `;
+                `;
+            };
 
             const hasMoreThan5 = criticalItems.length > 5;
             const visibleItems = hasMoreThan5 ? criticalItems.slice(0, 5) : criticalItems;
