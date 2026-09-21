@@ -151,20 +151,22 @@ h4 { font-size: 1rem; }
     height: 100vh;
     height: 100dvh;
     max-height: 100dvh;
-    overflow-y: hidden;
+    overflow: visible;
     z-index: 100;
     transition: background-color 0.25s;
 }
 
 .brand {
-    padding: 14px 18px;
+    padding: 12px 14px 12px 20px;
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     border-bottom: 1px solid var(--border-color);
     flex-shrink: 0;
     min-height: 72px;
     background: #ffffff;
+    position: relative;
+    overflow: visible;
 }
 
 .brand-icon {
@@ -206,12 +208,12 @@ h4 { font-size: 1rem; }
 }
 
 .clinic-logo-sidebar {
-    max-height: 48px;
-    max-width: 200px;
+    max-height: 44px;
+    max-width: 165px;
     width: auto;
     object-fit: contain;
     display: block;
-    margin: 0 auto;
+    margin: 0;
     filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.04));
     transition: transform 0.25s ease;
 }
@@ -386,31 +388,31 @@ h4 { font-size: 1rem; }
 /* Sidebar Collapse Toggle Button */
 .btn-sidebar-collapse {
     position: absolute;
-    right: -13px;
+    right: 12px;
     top: 50%;
     transform: translateY(-50%);
-    width: 26px;
-    height: 26px;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
-    background: #ffffff;
-    border: 1.5px solid var(--border-color);
-    color: var(--text-muted);
+    background: linear-gradient(135deg, #7fa13c 0%, #608127 100%);
+    border: 1.5px solid #608127;
+    color: #ffffff;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 8px rgba(127, 161, 60, 0.35);
     z-index: 105;
     transition: all 0.22s ease;
-    font-size: 0.72rem;
+    font-size: 0.74rem;
 }
 
 .btn-sidebar-collapse:hover {
-    background: var(--primary-cyan);
-    color: #ffffff;
-    border-color: var(--primary-cyan);
+    background: #ffffff !important;
+    color: #7fa13c !important;
+    border-color: #7fa13c !important;
     transform: translateY(-50%) scale(1.1);
-    box-shadow: 0 4px 12px rgba(127, 161, 60, 0.35);
+    box-shadow: 0 4px 12px rgba(127, 161, 60, 0.45);
 }
 
 .sidebar {
@@ -432,6 +434,17 @@ body.sidebar-collapsed .sidebar {
 
 body.sidebar-collapsed .main-content {
     margin-left: 72px;
+}
+
+body.sidebar-collapsed #sidebar-brand-logo-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    justify-content: center !important;
+    margin: 0 !important;
+}
+
+body.sidebar-collapsed .btn-sidebar-collapse {
+    right: -13px;
 }
 
 body.sidebar-collapsed .clinic-logo-sidebar {
