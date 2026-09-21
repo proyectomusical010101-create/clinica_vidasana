@@ -5898,6 +5898,95 @@ document.addEventListener('click', (e) => {
 window.currentDirectSaleItems = [];
 window.lastProcessedDirectSaleDoc = null;
 window.currentReceiptsHubPatientId = null;
+window.currentDirectSaleType = 'contado';
+
+window.toggleDirectSaleSection1 = function() {
+    const body = document.getElementById('ds-sec1-body');
+    const chevron = document.getElementById('ds-sec1-chevron');
+    const summary = document.getElementById('ds-sec1-summary');
+    if (!body) return;
+    const isHidden = (body.style.display === 'none');
+    if (isHidden) {
+        body.style.display = 'block';
+        if (chevron) {
+            chevron.className = 'fa-solid fa-chevron-up';
+        }
+        if (summary) {
+            summary.style.display = 'none';
+        }
+    } else {
+        body.style.display = 'none';
+        if (chevron) {
+            chevron.className = 'fa-solid fa-chevron-down';
+        }
+        if (summary) {
+            const searchInput = document.getElementById('ds-patient-search-input');
+            const patientSelect = document.getElementById('ds-patient-select');
+            if (patientSelect && patientSelect.value && searchInput && searchInput.value) {
+                summary.textContent = searchInput.value;
+                summary.style.display = 'inline-block';
+            } else {
+                summary.textContent = 'Sin paciente seleccionado';
+                summary.style.display = 'inline-block';
+            }
+        }
+    }
+};
+
+window.setDirectSaleSaleType = function(type) {
+    window.currentDirectSaleType = type;
+    const hiddenType = document.getElementById('ds-sale-type');
+    if (hiddenType) hiddenType.value = type;
+
+    ['contado', 'credito', 'cashea'].forEach(t => {
+        const btn = document.getElementById(`btn-ds-type-${t}`);
+        if (btn) {
+            if (t === type) {
+                btn.classList.add('active');
+                btn.style.border = '1.5px solid #0284c7';
+                btn.style.background = '#e0f2fe';
+                btn.style.color = '#0369a1';
+            } else {
+                btn.classList.remove('active');
+                btn.style.border = '1.5px solid #cbd5e1';
+                btn.style.background = '#fff';
+                btn.style.color = '#475569';
+            }
+        }
+    });
+
+    const amountPaidCard = document.getElementById('ds-amount-paid-card');
+    const casheaBox = document.getElementById('ds-cashea-config-container');
+    const paymentMethodSelect = document.getElementById('ds-payment-method');
+
+    if (type === 'contado') {
+        if (amountPaidCard) amountPaidCard.style.display = 'none';
+        if (casheaBox) casheaBox.style.display = 'none';
+        if (paymentMethodSelect && paymentMethodSelect.value === 'cashea') {
+            paymentMethodSelect.value = 'pagomovil';
+            const pmBanner = document.getElementById('ds-pagomovil-info-banner');
+            if (pmBanner) pmBanner.style.display = 'flex';
+        }
+    } else if (type === 'credito') {
+        if (amountPaidCard) amountPaidCard.style.display = 'block';
+        if (casheaBox) casheaBox.style.display = 'none';
+        if (paymentMethodSelect && paymentMethodSelect.value === 'cashea') {
+            paymentMethodSelect.value = 'pagomovil';
+            const pmBanner = document.getElementById('ds-pagomovil-info-banner');
+            if (pmBanner) pmBanner.style.display = 'flex';
+        }
+    } else if (type === 'cashea') {
+        if (amountPaidCard) amountPaidCard.style.display = 'block';
+        if (casheaBox) casheaBox.style.display = 'block';
+        if (paymentMethodSelect && paymentMethodSelect.value !== 'cashea' && paymentMethodSelect.value !== 'split') {
+            paymentMethodSelect.value = 'cashea';
+            const pmBanner = document.getElementById('ds-pagomovil-info-banner');
+            if (pmBanner) pmBanner.style.display = 'none';
+        }
+    }
+
+    window.calculateDirectSaleTotals();
+};
 
 window.openDirectSaleModal = async function(preselectedPatientId = null) {
     window.currentDirectSaleItems = [];
@@ -5906,6 +5995,20 @@ window.openDirectSaleModal = async function(preselectedPatientId = null) {
     // Reset UI
     const overlay = document.getElementById('ds-success-overlay');
     if (overlay) overlay.style.display = 'none';
+
+    // Ensure Section 1 is expanded
+    const sec1Body = document.getElementById('ds-sec1-body');
+    const sec1Chevron = document.getElementById('ds-sec1-chevron');
+    const sec1Summary = document.getElementById('ds-sec1-summary');
+    if (sec1Body) sec1Body.style.display = 'block';
+    if (sec1Chevron) sec1Chevron.className = 'fa-solid fa-chevron-up';
+    if (sec1Summary) {
+        sec1Summary.textContent = '';
+        sec1Summary.style.display = 'none';
+    }
+
+    // Default sale type to Contado
+    window.setDirectSaleSaleType('contado');
 
     openModal('modal-direct-sale');
 
@@ -5994,7 +6097,7 @@ window.openDirectSaleModal = async function(preselectedPatientId = null) {
         if (clearBtn) clearBtn.style.display = 'none';
         if (searchResults) searchResults.style.display = 'none';
         const infoBox = document.getElementById('ds-patient-info-box');
-        if (infoBox) infoBox.innerHTML = '<em>Escribe en el buscador el nombre o cédula del paciente para seleccionarlo.</em>';
+        if (infoBox) infoBox.innerHTML = '';
     }
 
     // 2. Populate Doctors & Setup Doctor Search Autocomplete
@@ -6234,7 +6337,21 @@ window.resetDirectSaleForm = function() {
     window.currentDirectSaleItems = [];
     window.lastProcessedDirectSaleDoc = null;
     window.renderDirectSaleItems();
-    window.calculateDirectSaleTotals();
+    
+    // Ensure Section 1 is expanded
+    const body = document.getElementById('ds-sec1-body');
+    const chevron = document.getElementById('ds-sec1-chevron');
+    const summary = document.getElementById('ds-sec1-summary');
+    if (body) body.style.display = 'block';
+    if (chevron) chevron.className = 'fa-solid fa-chevron-up';
+    if (summary) {
+        summary.textContent = '';
+        summary.style.display = 'none';
+    }
+
+    // Reset sale type to contado
+    window.setDirectSaleSaleType('contado');
+
     const qtyIn = document.getElementById('ds-item-qty');
     if (qtyIn) qtyIn.value = '1';
     const priceIn = document.getElementById('ds-item-price');
@@ -6251,15 +6368,26 @@ window.resetDirectSaleForm = function() {
     if (notesIn) notesIn.value = '';
     window.clearDirectSalePatientSearch();
     window.clearDirectSaleServiceSearch(false);
+    window.calculateDirectSaleTotals();
 };
 
 window.onDirectSalePatientChange = async function(patientId) {
     const infoBox = document.getElementById('ds-patient-info-box');
     const discIn = document.getElementById('ds-item-discount');
+    const sec1Summary = document.getElementById('ds-sec1-summary');
+    const sec1Badge = document.getElementById('ds-patient-tag-badge');
     if (!infoBox) return;
 
     if (!patientId) {
-        infoBox.innerHTML = '<em>Seleccione un paciente registrado para cargar sus datos y convenios.</em>';
+        infoBox.innerHTML = '';
+        if (sec1Summary) {
+            sec1Summary.textContent = '';
+            sec1Summary.style.display = 'none';
+        }
+        if (sec1Badge) {
+            sec1Badge.innerHTML = '';
+            sec1Badge.style.display = 'none';
+        }
         if (discIn) discIn.value = '0';
         return;
     }
@@ -6292,21 +6420,26 @@ window.onDirectSalePatientChange = async function(patientId) {
                 if (discIn) discIn.value = '0';
             }
         }
-        tagBadge = `<span style="font-size:0.75rem; padding:2px 8px; border-radius:4px; background:${pTagColor}20; color:${pTagColor}; border:1px solid ${pTagColor}50; font-weight:700; margin-left:6px;"><i class="fa-solid fa-tags"></i> ${pTag}${ruleText}</span>`;
+        tagBadge = `<span style="font-size:0.75rem; padding:2px 8px; border-radius:4px; background:${pTagColor}20; color:${pTagColor}; border:1px solid ${pTagColor}50; font-weight:700;"><i class="fa-solid fa-tags"></i> ${pTag}${ruleText}</span>`;
     } else {
         if (discIn) discIn.value = '0';
     }
 
-    infoBox.innerHTML = `
-        <div style="background:#fff; border:1px solid #e2e8f0; border-radius:6px; padding:8px 12px; margin-top:4px;">
-            <div style="font-weight:700; color:#0f172a; font-size:0.88rem; display:flex; align-items:center; flex-wrap:wrap;">
-                ${p.fullname} ${tagBadge}
-            </div>
-            <div style="font-size:0.78rem; color:#64748b; margin-top:2px;">
-                Cédula: <strong>${p.id}</strong> • Teléfono: <strong>${p.phone || 'N/A'}</strong> • Edad: <strong>${p.birthdate ? calculateAge(p.birthdate) + ' años' : 'N/A'}</strong>
-            </div>
-        </div>
-    `;
+    // Update Section 1 summary and badge for collapsed state
+    if (sec1Summary) {
+        sec1Summary.textContent = `${p.fullname} (${p.id})`;
+    }
+    if (sec1Badge) {
+        sec1Badge.innerHTML = tagBadge;
+        sec1Badge.style.display = tagBadge ? 'inline-block' : 'none';
+    }
+
+    // Do NOT render redundant patient identification card. Only show tag badge if exists.
+    if (tagBadge) {
+        infoBox.innerHTML = `<div style="display: flex; align-items: center; gap: 6px; padding: 4px 0;">${tagBadge}</div>`;
+    } else {
+        infoBox.innerHTML = '';
+    }
 };
 
 window.onDirectSaleSpecialtyChange = async function(specialty) {
@@ -6773,6 +6906,7 @@ window.calculateDirectSaleTotals = function() {
     const paymentMethod = document.getElementById('ds-payment-method')?.value || 'pagomovil';
     const splitCasheaVal = parseFloat(document.getElementById('ds-split-cashea')?.value || 0);
     const isCashea = (paymentMethod === 'cashea') || (paymentMethod === 'split' && splitCasheaVal > 0);
+    const saleType = document.getElementById('ds-sale-type')?.value || window.currentDirectSaleType || 'contado';
 
     let totalUSD = subtotalAfterDisc;
     let casheaSurchargeUSD = 0;
@@ -6781,9 +6915,11 @@ window.calculateDirectSaleTotals = function() {
     let casheaInitialUSD = 0;
 
     const casheaBox = document.getElementById('ds-cashea-config-container');
+    const amountPaidCard = document.getElementById('ds-amount-paid-card');
 
     if (isCashea) {
         if (casheaBox) casheaBox.style.display = 'block';
+        if (amountPaidCard) amountPaidCard.style.display = 'block';
         const surchargeInput = document.getElementById('ds-cashea-surcharge-pct');
         if (surchargeInput && surchargeInput.value !== '') {
             casheaSurchargePct = parseFloat(surchargeInput.value) || 0;
@@ -6821,9 +6957,18 @@ window.calculateDirectSaleTotals = function() {
     } else {
         if (casheaBox) casheaBox.style.display = 'none';
         const amountPaidIn = document.getElementById('ds-amount-paid');
-        if (amountPaidIn && (!amountPaidIn.value || parseFloat(amountPaidIn.value) === 0 || amountPaidIn.dataset.autoFilled === 'true')) {
-            amountPaidIn.value = totalUSD.toFixed(2);
-            amountPaidIn.dataset.autoFilled = 'true';
+        if (saleType === 'contado') {
+            if (amountPaidCard) amountPaidCard.style.display = 'none';
+            if (amountPaidIn) {
+                amountPaidIn.value = totalUSD.toFixed(2);
+                amountPaidIn.dataset.autoFilled = 'true';
+            }
+        } else {
+            // Crédito
+            if (amountPaidCard) amountPaidCard.style.display = 'block';
+            if (amountPaidIn && (!amountPaidIn.value || amountPaidIn.dataset.autoFilled === 'true')) {
+                // If switching to credito and empty, start from 0 or preserve
+            }
         }
     }
 
@@ -6968,11 +7113,16 @@ window.onDirectSalePaymentMethodChange = function(method) {
     if (splitContainer) {
         splitContainer.style.display = method === 'split' ? 'block' : 'none';
     }
-    if (casheaBox) {
-        casheaBox.style.display = method === 'cashea' ? 'block' : 'none';
-    }
     if (pmBanner) {
         pmBanner.style.display = (method === 'pagomovil' || method === 'pos') ? 'flex' : 'none';
+    }
+
+    if (method === 'cashea') {
+        window.setDirectSaleSaleType('cashea');
+    } else if (window.currentDirectSaleType === 'cashea') {
+        if (method !== 'split') {
+            window.setDirectSaleSaleType('contado');
+        }
     }
 
     window.calculateDirectSaleTotals();
@@ -7150,8 +7300,17 @@ window.processDirectSale = async function() {
     const rate = getExchangeRate();
     const totalBs = totalUSD * rate;
 
+    const saleType = document.getElementById('ds-sale-type')?.value || window.currentDirectSaleType || 'contado';
     const amountPaidIn = document.getElementById('ds-amount-paid');
-    const paidUSD = isCashea ? casheaInitialUSD : (parseFloat(amountPaidIn ? amountPaidIn.value : 0) || 0);
+
+    let paidUSD = 0;
+    if (isCashea) {
+        paidUSD = casheaInitialUSD;
+    } else if (saleType === 'contado') {
+        paidUSD = totalUSD;
+    } else {
+        paidUSD = parseFloat(amountPaidIn ? amountPaidIn.value : 0) || 0;
+    }
     const paidBs = paidUSD * rate;
 
     const isFull = isCashea ? true : (paidUSD >= totalUSD);
@@ -7174,6 +7333,7 @@ window.processDirectSale = async function() {
     }
 
     const specialtyPrimary = window.currentDirectSaleItems[0]?.specialty || 'General';
+    const paymentTerms = isCashea ? 'Financiamiento Cashea' : (saleType === 'credito' && !isFull ? 'Abono Parcial (Crédito)' : 'Contado');
 
     const salePayload = {
         id: docId,
@@ -7181,7 +7341,8 @@ window.processDirectSale = async function() {
         patientName,
         date: new Date().toISOString().split('T')[0],
         paymentMethod: isCashea ? (paymentMethod === 'split' ? 'Mixto (con Cashea)' : 'Cashea') : paymentMethod,
-        paymentTerms: isCashea ? 'Financiamiento Cashea' : (isFull ? 'Contado' : 'Abono Parcial'),
+        paymentTerms,
+        saleType,
         items: [...window.currentDirectSaleItems],
         totalUSD,
         totalBs,

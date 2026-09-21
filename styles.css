@@ -6963,9 +6963,31 @@ select, .form-select, select.form-control {
     transform: translateY(0);
 }
 
+/* ==========================================
+   DIRECT SALE MODAL ENHANCEMENTS
+   ========================================== */
+#ds-patient-accordion-card {
+    transition: all 0.2s ease;
+}
 
+.ds-type-btn {
+    transition: all 0.18s ease !important;
+    user-select: none;
+}
 
+.ds-type-btn:hover {
+    filter: brightness(0.97);
+}
 
+.ds-type-btn.active {
+    box-shadow: 0 2px 4px rgba(2, 132, 199, 0.2) !important;
+}
 
+#ds-amount-paid-card {
+    transition: all 0.2s ease;
+}
 
-
+#ds-amount-paid-card input {
+    box-sizing: border-box !important;
+    width: 100% !important;
+}
