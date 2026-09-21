@@ -5745,10 +5745,65 @@ select, .form-select, select.form-control {
 }
 
 .ds-service-input-row {
-    display: grid;
-    grid-template-columns: 75px minmax(0, 1fr) 85px auto;
-    gap: 10px;
+    display: flex;
     align-items: flex-end;
+    gap: 8px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.ds-service-input-row > div {
+    min-width: 0;
+    box-sizing: border-box;
+    position: relative;
+}
+
+.ds-service-col-qty {
+    width: 58px;
+    flex: 0 0 58px;
+}
+
+.ds-service-col-price {
+    width: 105px;
+    flex: 0 0 105px;
+}
+
+.ds-service-col-disc {
+    width: 70px;
+    flex: 0 0 70px;
+}
+
+.ds-service-col-btn {
+    flex: 1 1 auto;
+    min-width: 100px;
+}
+
+.ds-service-input-row input.form-control {
+    width: 100% !important;
+    box-sizing: border-box !important;
+    min-height: 36px !important;
+    height: 36px !important;
+    -moz-appearance: textfield;
+}
+
+.ds-service-col-qty input {
+    padding: 0 4px !important;
+    text-align: center !important;
+}
+
+.ds-service-col-price input {
+    padding: 0 8px !important;
+}
+
+.ds-service-col-disc input {
+    padding: 0 4px !important;
+    text-align: center !important;
+}
+
+.ds-service-col-btn button {
+    width: 100% !important;
+    white-space: nowrap !important;
+    height: 36px !important;
 }
 
 .ds-staff-row {
@@ -5812,12 +5867,32 @@ select, .form-select, select.form-control {
     }
 
     .ds-service-input-row {
-        grid-template-columns: 1fr 1fr 1fr !important;
+        display: flex !important;
+        flex-wrap: wrap !important;
         gap: 8px !important;
     }
 
-    .ds-service-input-row button {
-        grid-column: span 3 !important;
+    .ds-service-col-qty {
+        flex: 1 1 calc(25% - 6px) !important;
+        width: auto !important;
+    }
+
+    .ds-service-col-price {
+        flex: 2 1 calc(45% - 6px) !important;
+        width: auto !important;
+    }
+
+    .ds-service-col-disc {
+        flex: 1 1 calc(30% - 6px) !important;
+        width: auto !important;
+    }
+
+    .ds-service-col-btn {
+        flex: 1 1 100% !important;
+        width: 100% !important;
+    }
+
+    .ds-service-col-btn button {
         width: 100% !important;
         justify-content: center !important;
         margin-top: 4px;

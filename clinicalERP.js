@@ -183,7 +183,22 @@
 
             const grandTotalRevenue = perf.totalRevenueUSD || totalSpecRevenue || 1;
 
-            container.innerHTML = list.map(s => {
+            // Sort list by revenue descending, then by count, then by name (Top 1, 2, 3, 4, 5...)
+            list.sort((a, b) => {
+                const aName = a.name || '';
+                const bName = b.name || '';
+                const aPerf = (perf.specialtyStats && (perf.specialtyStats[aName] || perf.specialtyStats[aName.toLowerCase()])) || { totalUSD: 0, count: 0 };
+                const bPerf = (perf.specialtyStats && (perf.specialtyStats[bName] || perf.specialtyStats[bName.toLowerCase()])) || { totalUSD: 0, count: 0 };
+                if (bPerf.totalUSD !== aPerf.totalUSD) {
+                    return bPerf.totalUSD - aPerf.totalUSD;
+                }
+                if (bPerf.count !== aPerf.count) {
+                    return bPerf.count - aPerf.count;
+                }
+                return aName.localeCompare(bName);
+            });
+
+            container.innerHTML = list.map((s, index) => {
                 const docPct = parseFloat(s.doctor_commission_pct || s.doctor_percentage || 60);
                 const cliPct = parseFloat(s.clinic_commission_pct || s.clinic_percentage || 40);
                 const isActive = s.status ? s.status === 'Activo' : (s.active !== false);
@@ -193,14 +208,28 @@
                 // Find performance for this specialty
                 const specName = s.name || '';
                 const specPerf = (perf.specialtyStats && (perf.specialtyStats[specName] || perf.specialtyStats[specName.toLowerCase()])) || { totalUSD: 0, count: 0 };
-                const isTop = topSpec && (topSpec.name === specName || topSpec.name.toLowerCase() === specName.toLowerCase()) && specPerf.totalUSD > 0;
                 const sharePct = specPerf.totalUSD > 0 ? Math.round((specPerf.totalUSD / grandTotalRevenue) * 100) : 0;
+
+                // Badges for Top 1 to 5 to the left of the icon
+                let topBadge = '';
+                if (index === 0) {
+                    topBadge = `<span class="badge-top-rank rank-1" style="font-size: 0.7rem; padding: 2px 7px; font-weight: 800; border-radius: 6px; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); color: #92400e; border: 1px solid #f59e0b; box-shadow: 0 1px 4px rgba(245, 158, 11, 0.25); white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;" title="1er Lugar en Facturación"><i class="fa-solid fa-crown" style="color: #d97706;"></i> #1 Top</span>`;
+                } else if (index === 1) {
+                    topBadge = `<span class="badge-top-rank rank-2" style="font-size: 0.7rem; padding: 2px 7px; font-weight: 800; border-radius: 6px; background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); color: #334155; border: 1px solid #94a3b8; box-shadow: 0 1px 4px rgba(148, 163, 184, 0.25); white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;" title="2do Lugar en Facturación"><i class="fa-solid fa-medal" style="color: #64748b;"></i> #2 Top</span>`;
+                } else if (index === 2) {
+                    topBadge = `<span class="badge-top-rank rank-3" style="font-size: 0.7rem; padding: 2px 7px; font-weight: 800; border-radius: 6px; background: linear-gradient(135deg, #ffedd5 0%, #fed7aa 100%); color: #9a3412; border: 1px solid #f97316; box-shadow: 0 1px 4px rgba(249, 115, 22, 0.25); white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;" title="3er Lugar en Facturación"><i class="fa-solid fa-medal" style="color: #ea580c;"></i> #3 Top</span>`;
+                } else if (index === 3) {
+                    topBadge = `<span class="badge-top-rank rank-4" style="font-size: 0.7rem; padding: 2px 7px; font-weight: 800; border-radius: 6px; background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); color: #166534; border: 1px solid #22c55e; box-shadow: 0 1px 4px rgba(34, 197, 94, 0.2); white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;" title="4to Lugar en Facturación"><i class="fa-solid fa-star" style="color: #16a34a;"></i> #4 Top</span>`;
+                } else if (index === 4) {
+                    topBadge = `<span class="badge-top-rank rank-5" style="font-size: 0.7rem; padding: 2px 7px; font-weight: 800; border-radius: 6px; background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); color: #1e40af; border: 1px solid #3b82f6; box-shadow: 0 1px 4px rgba(59, 130, 246, 0.2); white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;" title="5to Lugar en Facturación"><i class="fa-solid fa-award" style="color: #2563eb;"></i> #5 Top</span>`;
+                }
 
                 return `
                     <tr>
                         <td>
-                            <div style="display: flex; align-items: center; gap: 14px;">
-                                <div class="erp-circle-avatar" style="background: ${colorCode}1a; color: ${colorCode}; border: 1px solid ${colorCode}33;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                ${topBadge}
+                                <div class="erp-circle-avatar" style="background: ${colorCode}1a; color: ${colorCode}; border: 1px solid ${colorCode}33; flex-shrink: 0;">
                                     <i class="fa-solid ${iconClass}"></i>
                                 </div>
                                 <div>
@@ -224,7 +253,6 @@
                                 <div style="display: flex; align-items: center; gap: 6px;">
                                     <strong style="font-size: 0.95rem; color: #0f172a;">$${specPerf.totalUSD.toFixed(2)}</strong>
                                     <small style="color: #64748b; font-size: 0.72rem; font-weight: 600;">USD</small>
-                                    ${isTop ? '<span class="badge-tag amber" style="font-size: 0.68rem; padding: 1px 6px; font-weight: 700; background: rgba(245, 158, 11, 0.15); color: #b45309;"><i class="fa-solid fa-crown"></i> Líder</span>' : ''}
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 8px;">
                                     <small style="color: #64748b; font-size: 0.76rem;">${specPerf.count} ${specPerf.count === 1 ? 'atención' : 'atenciones'}</small>
