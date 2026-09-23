@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=331">
+    <link rel="stylesheet" href="styles.css?v=332">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -1595,8 +1595,9 @@
                                         <div class="payments-overview">
                                             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                                                 <h3 style="margin:0;"><i class="fa-solid fa-receipt"></i> Historial de Abonos y Pagos</h3>
-                                                <button class="btn btn-sm btn-success" onclick="openModal('modal-payment')">+ Registrar Abono</button>
+                                                <button class="btn btn-sm btn-success" onclick="window.openEhrPaymentModal()">+ Registrar Abono</button>
                                             </div>
+                                            <div id="ehr-payments-summary-banner" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px;"></div>
                                             <div class="table-responsive">
                                                 <table class="table">
                                                     <thead>
@@ -1609,6 +1610,7 @@
                                                             <th>Abonado</th>
                                                             <th>Saldo Pendiente</th>
                                                             <th>Estado</th>
+                                                            <th class="text-center" style="width: 80px;">Acciones</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody id="ehr-payments-table-body">
@@ -7744,14 +7746,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=331"></script>
-    <script src="supabaseClient.js?v=331"></script>
-    <script src="odontogram.js?v=331"></script>
-    <script src="signature.js?v=331"></script>
-    <script src="whatsapp.js?v=331"></script>
-    <script src="kardex.js?v=331"></script>
-    <script src="app.js?v=331"></script>
-    <script src="clinicalERP.js?v=331"></script>
-    <script src="tutorial.js?v=331"></script>
+    <script src="seededData.js?v=332"></script>
+    <script src="supabaseClient.js?v=332"></script>
+    <script src="odontogram.js?v=332"></script>
+    <script src="signature.js?v=332"></script>
+    <script src="whatsapp.js?v=332"></script>
+    <script src="kardex.js?v=332"></script>
+    <script src="app.js?v=332"></script>
+    <script src="clinicalERP.js?v=332"></script>
+    <script src="tutorial.js?v=332"></script>
 </body>
 </html>

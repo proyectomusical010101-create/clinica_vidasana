@@ -74,7 +74,7 @@ window.universalPrintHTML = function(htmlContent, title = 'Documento Clínico') 
                     <meta charset="UTF-8">
                     <title>${title}</title>
                     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-                    <link rel="stylesheet" href="styles.css?v=331">
+                    <link rel="stylesheet" href="styles.css?v=332">
                     <style>
                         @page { size: A4 portrait; margin: 8mm 10mm 8mm 10mm; }
                         * { box-sizing: border-box; }
@@ -1867,7 +1867,11 @@ function initMobileFabActions() {
             if (activeId) {
                 const paymentPatientId = document.getElementById('payment-patient-id');
                 if (paymentPatientId) paymentPatientId.value = activeId;
-                openModal('modal-payment');
+                if (typeof window.openEhrPaymentModal === 'function') {
+                    window.openEhrPaymentModal();
+                } else {
+                    openModal('modal-payment');
+                }
             } else {
                 await window.navigateToTab('finance');
                 Swal.fire({
@@ -8208,8 +8212,12 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
             }
 
             // 3. Obtener Presupuestos y Tratamientos para Sincronización Total (Solo Aprobados)
-            const allInvoices = await SupabaseDataService.getInvoices();
-            const patientBudgets = allInvoices.filter(i => String(i.patientId) === String(activePatient.id));
+            const allInvoices = await SupabaseDataService.getInvoices(true);
+            const patientBudgets = allInvoices.filter(i => 
+                String(i.patientId) === String(activePatient.id) ||
+                String(i.patient_id) === String(activePatient.id) ||
+                String(i.metadata?.patientId) === String(activePatient.id)
+            );
             const approvedBudgets = patientBudgets.filter(b => 
                 String(b.status).toLowerCase() === 'aprobado' || 
                 String(b.status).toLowerCase() === 'approved' || 
@@ -8534,21 +8542,116 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
                 };
             }
 
-            // 5. Pagos Tab (Balance Financiero 360° del Paciente - SOLO APROBADOS)
+            // 5. Pagos Tab (Balance Financiero 360° del Paciente - Facturas, Recibos de Abono, Citas y Ventas)
             const payTbody = document.getElementById('ehr-payments-table-body');
-            payTbody.innerHTML = '';
+            if (payTbody) payTbody.innerHTML = '';
             
             const allPaymentsList = [];
             const processedEhrPayKeys = new Set();
 
-            // 1. Pagos asentados directamente al paciente (incluye ventas rápidas, abonos y sesiones)
+            // 1. Obtener todos los documentos formales de facturación / abonos del paciente
+            const patientDocsList = allInvoices.filter(inv => 
+                String(inv.patientId) === String(activePatient.id) ||
+                String(inv.patient_id) === String(activePatient.id) ||
+                String(inv.metadata?.patientId) === String(activePatient.id) ||
+                (inv.patientName && activePatient.fullname && inv.patientName.trim().toLowerCase() === activePatient.fullname.trim().toLowerCase())
+            );
+
+            patientDocsList.forEach(b => {
+                const docId = String(b.id || '');
+                if (docId) processedEhrPayKeys.add(docId);
+                if (b.reference) processedEhrPayKeys.add(String(b.reference));
+                if (b.metadata?.reference) processedEhrPayKeys.add(String(b.metadata.reference));
+                if (b.docId) processedEhrPayKeys.add(String(b.docId));
+
+                const isCashea = !!(b.is_cashea || b.casheaDetails || b.metadata?.isCashea || b.paymentTerms === 'Financiamiento Cashea');
+                const isFactura = docId.startsWith('FAC-') || b.docType === 'Factura';
+                const isRecibo = docId.startsWith('REC-') || b.docType === 'Recibo de Abono';
+                const totRef = parseFloat(b.totalRef !== undefined ? b.totalRef : (b.totalUSD || 0));
+
+                let paidAmt = 0;
+                if (isCashea) {
+                    paidAmt = parseFloat(b.casheaDetails?.initialPaidUSD || b.paidRef || b.metadata?.paidUSD || 0);
+                } else if (b.paidRef !== undefined) {
+                    paidAmt = parseFloat(b.paidRef);
+                } else if (b.metadata?.paidUSD !== undefined) {
+                    paidAmt = parseFloat(b.metadata.paidUSD);
+                } else if (b.status === 'Pagado' || b.status === 'Pagada' || isFactura) {
+                    paidAmt = totRef;
+                } else if (b.status === 'Aprobado') {
+                    paidAmt = totRef;
+                } else {
+                    paidAmt = 0;
+                }
+
+                let balAmt = 0;
+                if (isCashea) {
+                    balAmt = 0;
+                } else if (b.balanceRef !== undefined) {
+                    balAmt = parseFloat(b.balanceRef);
+                } else if (b.metadata?.balanceUSD !== undefined) {
+                    balAmt = parseFloat(b.metadata.balanceUSD);
+                } else {
+                    balAmt = Math.max(0, totRef - paidAmt);
+                }
+
+                let statusLabel = 'Pendiente';
+                if (isCashea) {
+                    statusLabel = 'Financiado Cashea';
+                } else if (balAmt <= 0 || b.status === 'Pagado' || b.status === 'Pagada') {
+                    statusLabel = 'Pagado';
+                } else if (paidAmt > 0) {
+                    statusLabel = 'Abono Parcial';
+                } else if (b.status) {
+                    statusLabel = b.status;
+                }
+
+                let conceptStr = '';
+                if (b.items && b.items.length > 0) {
+                    const itemNames = b.items.map(it => it.name || it.description).filter(Boolean).join(', ');
+                    const docTypeName = isCashea ? 'Factura Cashea' : (isFactura ? 'Factura' : (isRecibo ? 'Recibo de Abono' : 'Presupuesto'));
+                    conceptStr = `${docTypeName} ${docId}: ${itemNames}`;
+                } else if (b.notes) {
+                    conceptStr = b.notes;
+                } else {
+                    conceptStr = isFactura ? `Factura ${docId}` : (isRecibo ? `Recibo de Abono ${docId}` : `Documento ${docId}`);
+                }
+
+                allPaymentsList.push({
+                    date: b.invoiceDate || b.date || (b.createdAt ? b.createdAt.split('T')[0] : '2026-01-01'),
+                    concept: conceptStr,
+                    method: b.paymentMethod || 'transferencia',
+                    bank: b.bank || (b.paymentMethod === 'cash' ? 'Efectivo en Mano' : 'Caja Principal'),
+                    reference: b.reference || docId,
+                    docId: docId,
+                    totalUSD: totRef,
+                    paidUSD: paidAmt,
+                    balanceUSD: balAmt,
+                    status: statusLabel,
+                    isCashea: isCashea,
+                    casheaFinancedUSD: isCashea ? (parseFloat(b.casheaDetails?.financedUSD || (totRef - paidAmt)) || 0) : 0
+                });
+            });
+
+            // 2. Pagos asentados directamente al paciente (incluye abonos y pagos de sesiones no duplicados)
             if (activePatient.payments && activePatient.payments.length > 0) {
                 activePatient.payments.forEach(p => {
-                    const payKey = p.id || p.reference || p.docId || `${p.date}_${p.paidUSD}`;
-                    processedEhrPayKeys.add(payKey);
-                    if (p.id) processedEhrPayKeys.add(p.id);
-                    if (p.reference) processedEhrPayKeys.add(p.reference);
-                    if (p.docId) processedEhrPayKeys.add(p.docId);
+                    const payId = String(p.id || '');
+                    const payDocId = String(p.docId || '');
+                    const payRef = String(p.reference || '');
+
+                    if (payId && processedEhrPayKeys.has(payId)) return;
+                    if (payDocId && processedEhrPayKeys.has(payDocId)) return;
+                    if (payRef && payRef !== 'N/A' && processedEhrPayKeys.has(payRef)) return;
+
+                    if (payId) processedEhrPayKeys.add(payId);
+                    if (payDocId) processedEhrPayKeys.add(payDocId);
+                    if (payRef) processedEhrPayKeys.add(payRef);
+
+                    const tot = parseFloat(p.totalUSD || p.paidUSD || 0);
+                    const paid = parseFloat(p.paidUSD || 0);
+                    const bal = p.balanceUSD !== undefined ? parseFloat(p.balanceUSD) : Math.max(0, tot - paid);
+                    const st = p.status || (bal <= 0 ? 'Pagado' : 'Abono Parcial');
 
                     allPaymentsList.push({
                         date: p.date || new Date().toISOString().split('T')[0],
@@ -8556,63 +8659,80 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
                         method: p.method || 'cash',
                         bank: p.bank || (p.method === 'cash' ? 'Efectivo en Mano' : 'No especificado'),
                         reference: p.reference || p.id || 'N/A',
-                        totalUSD: parseFloat(p.totalUSD || 0),
-                        paidUSD: parseFloat(p.paidUSD || 0),
-                        balanceUSD: parseFloat(p.balanceUSD || 0),
-                        status: p.status || (parseFloat(p.balanceUSD || 0) <= 0 ? 'Pagado' : 'Abono Parcial')
+                        docId: p.docId || p.id || '',
+                        totalUSD: tot,
+                        paidUSD: paid,
+                        balanceUSD: bal,
+                        status: st,
+                        isCashea: !!p.isCashea,
+                        casheaFinancedUSD: 0
                     });
                 });
             }
 
-            // 2. Presupuestos Aprobados o Facturas no duplicadas
-            approvedBudgets.forEach(b => {
-                if (!processedEhrPayKeys.has(b.id)) {
-                    processedEhrPayKeys.add(b.id);
-                    const totRef = parseFloat(b.totalRef || 0);
-                    const isPaidFull = b.status === 'Pagado' || b.status === 'Pagada' || String(b.id).startsWith('FAC-');
-                    const paidAmt = b.paidRef !== undefined ? parseFloat(b.paidRef) : (isPaidFull ? totRef : (b.status === 'Aprobado' ? totRef : 0));
-                    const balAmt = b.balanceRef !== undefined ? parseFloat(b.balanceRef) : Math.max(0, totRef - paidAmt);
-                    const statusLabel = balAmt <= 0 ? 'Pagado' : (paidAmt > 0 ? 'Abono Parcial' : 'Pendiente');
+            // Ordenar pagos del más reciente al más antiguo
+            allPaymentsList.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
 
-                    allPaymentsList.push({
-                        date: b.invoiceDate || '2026-01-01',
-                        concept: String(b.id).startsWith('FAC-') ? `Factura ${b.id} (${b.paymentTerms || 'Contado'})` : `Presupuesto ${b.id} (${b.paymentTerms || 'Contado'})`,
-                        method: b.paymentMethod || 'transferencia',
-                        bank: b.bank || 'Caja Principal',
-                        reference: b.reference || b.id,
-                        totalUSD: totRef,
-                        paidUSD: paidAmt,
-                        balanceUSD: balAmt,
-                        status: statusLabel
-                    });
-                }
+            // Calcular métricas de balance total del paciente
+            let totalQuoted = 0;
+            let totalPaid = 0;
+            let totalDebt = 0;
+
+            allPaymentsList.forEach(pay => {
+                totalQuoted += pay.totalUSD;
+                totalPaid += pay.paidUSD;
+                totalDebt += pay.balanceUSD;
             });
 
-            if (allPaymentsList.length > 0) {
-                let totalQuoted = 0;
-                let totalPaid = 0;
-                let totalDebt = 0;
+            // Actualizar banner de resumen financiero
+            const summaryBanner = document.getElementById('ehr-payments-summary-banner');
+            if (summaryBanner) {
+                summaryBanner.innerHTML = `
+                    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 16px; border-left: 4px solid var(--primary-cyan);">
+                        <div style="font-size: 0.75rem; text-transform: uppercase; color: #64748b; font-weight: 700;"><i class="fa-solid fa-file-invoice-dollar"></i> Total Facturado / Presupuesto</div>
+                        <div style="font-size: 1.25rem; font-weight: 800; color: var(--text-main); margin-top: 4px;">$${totalQuoted.toFixed(2)} USD</div>
+                    </div>
+                    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 16px; border-left: 4px solid #10b981;">
+                        <div style="font-size: 0.75rem; text-transform: uppercase; color: #059669; font-weight: 700;"><i class="fa-solid fa-circle-check"></i> Total Abonado / Pagado</div>
+                        <div style="font-size: 1.25rem; font-weight: 800; color: #10b981; margin-top: 4px;">$${totalPaid.toFixed(2)} USD</div>
+                    </div>
+                    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 16px; border-left: 4px solid ${totalDebt > 0 ? '#ef4444' : '#64748b'};">
+                        <div style="font-size: 0.75rem; text-transform: uppercase; color: ${totalDebt > 0 ? '#dc2626' : '#64748b'}; font-weight: 700;"><i class="fa-solid fa-hand-holding-dollar"></i> Saldo Pendiente Total</div>
+                        <div style="font-size: 1.25rem; font-weight: 800; color: ${totalDebt > 0 ? '#ef4444' : '#64748b'}; margin-top: 4px;">$${totalDebt.toFixed(2)} USD</div>
+                    </div>
+                `;
+            }
 
-                allPaymentsList.forEach(pay => {
-                    totalQuoted += pay.totalUSD;
-                    totalPaid += pay.paidUSD;
-                    totalDebt += pay.balanceUSD;
+            if (payTbody) {
+                if (allPaymentsList.length > 0) {
+                    payTbody.innerHTML = '';
+                    allPaymentsList.forEach(pay => {
+                        const tr = document.createElement('tr');
+                        const statusBadgeClass = (pay.status === 'Pagado' || pay.status === 'Aprobado') ? 'green' : (pay.status === 'Financiado Cashea' ? 'blue' : 'amber');
+                        const safeDocId = (pay.docId || pay.reference || '').replace(/'/g, "\\'");
+                        const actionButtons = safeDocId ? `
+                            <div style="display: flex; gap: 4px; justify-content: center;">
+                                <button type="button" class="btn btn-xs btn-outline" onclick="window.printEhrPaymentReceipt('${safeDocId}')" title="Reimprimir Comprobante"><i class="fa-solid fa-print"></i></button>
+                                <button type="button" class="btn btn-xs btn-outline" onclick="window.downloadEhrPaymentReceiptPDF('${safeDocId}')" title="Descargar PDF"><i class="fa-solid fa-file-pdf text-blue"></i></button>
+                            </div>
+                        ` : `<span class="text-muted" style="font-size:0.75rem;">-</span>`;
 
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td>${pay.date}</td>
-                        <td><strong>${pay.concept}</strong></td>
-                        <td><span style="font-size: 0.82rem; color: #1e40af; font-weight: 600;"><i class="fa-solid fa-building-columns"></i> ${pay.bank}</span> <small style="display:block; color:#64748b;">${getPaymentMethodLabel(pay.method)}</small></td>
-                        <td><span class="badge-tag" style="background:#e0f2fe; color:#0369a1; font-family: monospace; font-size:0.75rem; padding: 2px 6px;">${pay.reference}</span></td>
-                        <td>$${pay.totalUSD.toFixed(2)}</td>
-                        <td class="text-green" style="font-weight:600;">$${pay.paidUSD.toFixed(2)}</td>
-                        <td class="${pay.balanceUSD > 0 ? 'text-red' : 'text-muted'}" style="font-weight:600;">$${pay.balanceUSD.toFixed(2)}</td>
-                        <td><span class="badge-tag ${pay.status === 'Pagado' || pay.status === 'Aprobado' ? 'green' : 'amber'}">${pay.status}</span></td>
-                    `;
-                    payTbody.appendChild(tr);
-                });
-            } else {
-                payTbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted" style="padding:20px;">Sin registro de pagos o saldos pendientes. Haga clic en "+ Registrar Pago / Abono" arriba.</td></tr>`;
+                        tr.innerHTML = `
+                            <td>${pay.date}</td>
+                            <td><strong>${pay.concept}</strong>${pay.isCashea ? `<small style="display:block; color:#0284c7; font-weight:600;"><i class="fa-solid fa-credit-card"></i> Financiado Cashea: $${pay.casheaFinancedUSD.toFixed(2)}</small>` : ''}</td>
+                            <td><span style="font-size: 0.82rem; color: #1e40af; font-weight: 600;"><i class="fa-solid fa-building-columns"></i> ${pay.bank}</span> <small style="display:block; color:#64748b;">${getPaymentMethodLabel(pay.method)}</small></td>
+                            <td><span class="badge-tag" style="background:#e0f2fe; color:#0369a1; font-family: monospace; font-size:0.75rem; padding: 2px 6px;">${pay.reference}</span></td>
+                            <td>$${pay.totalUSD.toFixed(2)}</td>
+                            <td class="text-green" style="font-weight:600;">$${pay.paidUSD.toFixed(2)}</td>
+                            <td class="${pay.balanceUSD > 0 ? 'text-red' : 'text-muted'}" style="font-weight:600;">$${pay.balanceUSD.toFixed(2)}</td>
+                            <td><span class="badge-tag ${statusBadgeClass}">${pay.status}</span></td>
+                            <td class="text-center">${actionButtons}</td>
+                        `;
+                        payTbody.appendChild(tr);
+                    });
+                } else {
+                    payTbody.innerHTML = `<tr><td colspan="9" class="text-center text-muted" style="padding:24px;"><i class="fa-solid fa-receipt" style="font-size:1.8rem; display:block; margin-bottom:8px; opacity:0.5;"></i>Sin registro de pagos o saldos pendientes. Haga clic en "+ Registrar Abono" arriba.</td></tr>`;
+                }
             }
 
             // 5. Interconsultas, Récipes e Indicaciones Tab
@@ -13298,10 +13418,13 @@ function initGlobalEvents() {
 
             // Record payment in patient payments history if any
             if (paymentUSD > 0) {
+                const sessionDocId = 'REC-' + Date.now().toString().slice(-6);
+                const sessionDate = datetime.split(' ')[0] || new Date().toISOString().split('T')[0];
                 if (!patient.payments) patient.payments = [];
                 patient.payments.unshift({
-                    id: 'pay-' + Date.now(),
-                    date: datetime.split(' ')[0] || new Date().toISOString().split('T')[0],
+                    id: sessionDocId,
+                    docId: sessionDocId,
+                    date: sessionDate,
                     concept: `Abono en Sesión #${sessionNum} (${procedure.substring(0, 35)}...)`,
                     totalUSD: paymentUSD,
                     paidUSD: paymentUSD,
@@ -13309,9 +13432,50 @@ function initGlobalEvents() {
                     status: 'Pagado',
                     method: paymentMethod,
                     bank: paymentBank || (paymentMethod === 'cash' ? 'Efectivo en Mano' : 'No especificado'),
-                    reference: paymentReference || 'N/A',
+                    reference: paymentReference || sessionDocId,
                     splitPayments
                 });
+
+                try {
+                    const rate = getExchangeRate();
+                    const invoiceObj = {
+                        id: sessionDocId,
+                        patientId: patient.id,
+                        patientName: patient.fullname,
+                        invoiceDate: sessionDate,
+                        paymentMethod: paymentMethod,
+                        paymentTerms: 'Contado',
+                        currency: 'USD',
+                        items: [{
+                            name: `Sesión #${sessionNum}: ${procedure.substring(0, 45)}`,
+                            qty: 1,
+                            price: paymentUSD,
+                            totalUSD: paymentUSD
+                        }],
+                        totalRef: paymentUSD,
+                        totalBcv: paymentUSD * rate,
+                        paidRef: paymentUSD,
+                        paidBcv: paymentUSD * rate,
+                        balanceRef: 0,
+                        status: 'Pagado',
+                        docType: 'Recibo de Abono',
+                        doctor: (patient.assignedDoctor) || 'Dr. Médico Tratante',
+                        specialty: 'Odontología General',
+                        bank: paymentBank || (paymentMethod === 'cash' ? 'Efectivo en Mano' : 'No especificado'),
+                        reference: paymentReference || sessionDocId,
+                        notes: `Cobrado en Sesión #${sessionNum}: ${procedure.substring(0, 45)}`,
+                        metadata: {
+                            fromSession: true,
+                            sessionNum: sessionNum,
+                            patientId: patient.id,
+                            paidUSD: paymentUSD,
+                            balanceUSD: 0
+                        }
+                    };
+                    await SupabaseDataService.saveInvoice(invoiceObj);
+                } catch(invErr) {
+                    console.warn('[Session Payment] Error auto-saving invoice to Supabase:', invErr);
+                }
             }
 
             await SupabaseDataService.savePatient(patient);
@@ -13333,10 +13497,12 @@ function initGlobalEvents() {
             }
 
             closeModal('modal-session');
+            await SupabaseDataService.getInvoices(true);
             await renderEHRView();
             await renderInventoryTable();
             await renderDashboard();
             await renderCashFlow();
+            if (typeof renderBillingView === 'function') await renderBillingView();
             if (apptUpdated) {
                 await renderAgendaView();
             }
@@ -13492,27 +13658,97 @@ function initGlobalEvents() {
         };
     }
 
-    // Modal Registrar Pago Handler
+    // Modal Registrar Pago Handler (Global and Reciprocal)
+    window.openEhrPaymentModal = function() {
+        const activeId = getActivePatientId();
+        if (!activeId) {
+            Swal.fire({ icon: 'info', title: 'Seleccione un paciente', text: 'Active un paciente antes de registrar un pago o abono.' });
+            return;
+        }
+        document.getElementById('pay-date').value = new Date().toISOString().split('T')[0];
+        const rate = getExchangeRate();
+        const paidUsd = parseFloat(document.getElementById('pay-paid-usd')?.value) || 50;
+        const paidBsInput = document.getElementById('pay-paid-bs');
+        if (paidBsInput) paidBsInput.value = (paidUsd * rate).toFixed(2);
+        const rateHint = document.getElementById('pay-bcv-rate-hint');
+        if (rateHint) rateHint.innerText = `Tasa BCV: Bs. ${rate.toFixed(2)}`;
+        const payMethodSelect = document.getElementById('pay-method');
+        if (payMethodSelect && typeof window.onModalPaymentMethodChange === 'function') {
+            window.onModalPaymentMethodChange(payMethodSelect.value);
+        }
+        openModal('modal-payment');
+    };
+
+    window.printEhrPaymentReceipt = async function(docId) {
+        if (!docId) return;
+        const invoices = await SupabaseDataService.getInvoices();
+        let doc = invoices.find(i => String(i.id) === String(docId) || String(i.reference) === String(docId));
+        if (doc) {
+            await window.printDirectSaleReceipt(doc.id);
+        } else {
+            const pId = getActivePatientId();
+            const patients = await SupabaseDataService.getPatients();
+            const pat = patients.find(p => String(p.id) === String(pId));
+            const pay = pat && pat.payments ? pat.payments.find(x => x.id === docId || x.docId === docId || x.reference === docId) : null;
+            if (pay) {
+                window.lastProcessedDirectSaleDoc = {
+                    id: pay.docId || pay.id || 'REC-' + Date.now().toString().slice(-6),
+                    patientId: pat.id,
+                    patientName: pat.fullname,
+                    invoiceDate: pay.date,
+                    paymentMethod: pay.method,
+                    items: [{ name: pay.concept, qty: 1, price: pay.paidUSD, totalUSD: pay.paidUSD }],
+                    totalRef: pay.totalUSD || pay.paidUSD,
+                    paidRef: pay.paidUSD,
+                    balanceRef: pay.balanceUSD || 0,
+                    status: pay.status,
+                    bank: pay.bank,
+                    reference: pay.reference
+                };
+                await window.printDirectSaleReceipt();
+            } else {
+                Swal.fire({ icon: 'warning', title: 'Comprobante no encontrado', text: `No se encontró el documento ${docId}` });
+            }
+        }
+    };
+
+    window.downloadEhrPaymentReceiptPDF = async function(docId) {
+        if (!docId) return;
+        const invoices = await SupabaseDataService.getInvoices();
+        let doc = invoices.find(i => String(i.id) === String(docId) || String(i.reference) === String(docId));
+        if (doc) {
+            await window.downloadDirectSaleReceiptPDF(doc.id);
+        } else {
+            const pId = getActivePatientId();
+            const patients = await SupabaseDataService.getPatients();
+            const pat = patients.find(p => String(p.id) === String(pId));
+            const pay = pat && pat.payments ? pat.payments.find(x => x.id === docId || x.docId === docId || x.reference === docId) : null;
+            if (pay) {
+                window.lastProcessedDirectSaleDoc = {
+                    id: pay.docId || pay.id || 'REC-' + Date.now().toString().slice(-6),
+                    patientId: pat.id,
+                    patientName: pat.fullname,
+                    invoiceDate: pay.date,
+                    paymentMethod: pay.method,
+                    items: [{ name: pay.concept, qty: 1, price: pay.paidUSD, totalUSD: pay.paidUSD }],
+                    totalRef: pay.totalUSD || pay.paidUSD,
+                    paidRef: pay.paidUSD,
+                    balanceRef: pay.balanceUSD || 0,
+                    status: pay.status,
+                    bank: pay.bank,
+                    reference: pay.reference
+                };
+                await window.downloadDirectSaleReceiptPDF();
+            } else {
+                Swal.fire({ icon: 'warning', title: 'Comprobante no encontrado', text: `No se encontró el documento ${docId}` });
+            }
+        }
+    };
+
     const btnOpenPayModal = document.getElementById('btn-open-payment-modal');
     if (btnOpenPayModal) {
         btnOpenPayModal.onclick = () => {
-            const activeId = getActivePatientId();
-            if (!activeId) {
-                Swal.fire({ icon: 'info', title: 'Seleccione un paciente', text: 'Active un paciente antes de registrar un pago o abono.' });
-                return;
-            }
-            document.getElementById('pay-date').value = new Date().toISOString().split('T')[0];
-            const rate = getExchangeRate();
-            const paidUsd = parseFloat(document.getElementById('pay-paid-usd')?.value) || 50;
-            const paidBsInput = document.getElementById('pay-paid-bs');
-            if (paidBsInput) paidBsInput.value = (paidUsd * rate).toFixed(2);
-            const rateHint = document.getElementById('pay-bcv-rate-hint');
-            if (rateHint) rateHint.innerText = `Tasa BCV: Bs. ${rate.toFixed(2)}`;
-            const payMethodSelect = document.getElementById('pay-method');
-            if (payMethodSelect && typeof window.onModalPaymentMethodChange === 'function') {
-                window.onModalPaymentMethodChange(payMethodSelect.value);
-            }
-            openModal('modal-payment');
+            window.openEhrPaymentModal();
         };
     }
 
@@ -13526,7 +13762,7 @@ function initGlobalEvents() {
             const concept = document.getElementById('pay-concept').value.trim();
             const totalUSD = parseFloat(document.getElementById('pay-total-usd').value) || 0;
             const paidUSD = parseFloat(document.getElementById('pay-paid-usd').value) || 0;
-            const date = document.getElementById('pay-date').value;
+            const date = document.getElementById('pay-date').value || new Date().toISOString().split('T')[0];
             const method = document.getElementById('pay-method') ? document.getElementById('pay-method').value : 'pagomovil';
             const bank = document.getElementById('pay-bank') ? document.getElementById('pay-bank').value.trim() : '';
             const reference = document.getElementById('pay-reference') ? document.getElementById('pay-reference').value.trim() : '';
@@ -13537,14 +13773,17 @@ function initGlobalEvents() {
             }
 
             const balanceUSD = Math.max(0, totalUSD - paidUSD);
-            const status = balanceUSD === 0 ? 'Pagado' : 'Pendiente';
+            const status = balanceUSD === 0 ? 'Pagado' : 'Abono Parcial';
+            const docPrefix = balanceUSD === 0 ? 'FAC-' : 'REC-';
+            const docId = docPrefix + Date.now().toString().slice(-6);
 
             const patients = await SupabaseDataService.getPatients();
-            const p = patients.find(pat => pat.id === activeId);
+            const p = patients.find(pat => String(pat.id) === String(activeId));
             if (p) {
                 if (!p.payments) p.payments = [];
-                p.payments.unshift({
-                    id: 'pay-' + Date.now(),
+                const paymentRecord = {
+                    id: docId,
+                    docId: docId,
                     date,
                     concept,
                     totalUSD,
@@ -13553,20 +13792,70 @@ function initGlobalEvents() {
                     status,
                     method,
                     bank: bank || (method === 'cash' ? 'Efectivo en Mano' : 'No especificado'),
-                    reference: reference || 'N/A'
-                });
+                    reference: reference || docId
+                };
+                p.payments.unshift(paymentRecord);
+
+                const rate = getExchangeRate();
+                const isFull = balanceUSD === 0;
+                const invoiceObj = {
+                    id: docId,
+                    patientId: p.id,
+                    patientName: p.fullname,
+                    invoiceDate: date,
+                    paymentMethod: method,
+                    paymentTerms: isFull ? 'Contado' : 'Abono Parcial',
+                    currency: 'USD',
+                    items: [{
+                        name: concept,
+                        qty: 1,
+                        price: totalUSD,
+                        totalUSD: totalUSD
+                    }],
+                    totalRef: totalUSD,
+                    totalBcv: totalUSD * rate,
+                    paidRef: paidUSD,
+                    paidBcv: paidUSD * rate,
+                    balanceRef: balanceUSD,
+                    status: isFull ? 'Pagado' : 'Abono Parcial',
+                    docType: isFull ? 'Factura' : 'Recibo de Abono',
+                    doctor: p.assignedDoctor || 'Dr. Médico Tratante',
+                    specialty: 'Odontología General',
+                    bank: bank || (method === 'cash' ? 'Efectivo en Mano' : 'No especificado'),
+                    reference: reference || docId,
+                    notes: `Abono registrado desde Historia Clínica (Ref: ${reference || docId})`,
+                    metadata: {
+                        fromEHR: true,
+                        docType: isFull ? 'Factura' : 'Recibo de Abono',
+                        paidUSD: paidUSD,
+                        balanceUSD: balanceUSD,
+                        patientId: p.id,
+                        bank: bank,
+                        reference: reference
+                    }
+                };
+
+                try {
+                    await SupabaseDataService.saveInvoice(invoiceObj);
+                } catch(invErr) {
+                    console.warn('[EHR Payment] Error saving invoice to Supabase:', invErr);
+                }
 
                 await SupabaseDataService.savePatient(p);
                 closeModal('modal-payment');
+                await SupabaseDataService.getInvoices(true);
                 await renderEHRView();
                 await renderDashboard();
                 await renderCashFlow();
                 await renderAgendaView();
+                if (typeof renderBillingView === 'function') await renderBillingView();
+                if (typeof renderBudgetTable === 'function') await renderBudgetTable();
+
                 Swal.fire({ 
                     icon: 'success', 
-                    title: '¡Abono Registrado!', 
-                    html: `Abono de <strong>$${paidUSD.toFixed(2)}</strong> registrado exitosamente a <strong>${p.fullname}</strong>.<br><small style="color:#64748b;">Banco: ${bank || 'Efectivo'} | Ref: ${reference || 'N/A'}</small>`, 
-                    timer: 2500, 
+                    title: '¡Abono Registrado y Sincronizado!', 
+                    html: `Abono de <strong>$${paidUSD.toFixed(2)}</strong> registrado exitosamente a <strong>${p.fullname}</strong>.<br><small style="color:#64748b;">Comprobante: <strong>${docId}</strong> | Banco: ${bank || 'Efectivo'} | Ref: ${reference || 'N/A'}</small><br><span style="display:inline-block; margin-top:6px; font-size:0.8rem; color:#10b981;"><i class="fa-solid fa-arrows-rotate"></i> Sincronizado en Facturación, Caja y EHR</span>`, 
+                    timer: 3000, 
                     showConfirmButton: false 
                 });
             }
