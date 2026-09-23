@@ -5820,10 +5820,32 @@ select, .form-select, select.form-control {
     gap: 8px;
 }
 
+#ds-patient-accordion-card {
+    overflow: visible !important;
+    position: relative;
+    z-index: 30;
+}
+
 .ds-cashea-initial-row {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 125px 1fr;
     gap: 8px;
+    align-items: end;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.ds-cashea-initial-row > div {
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.ds-cashea-initial-row input,
+.ds-cashea-initial-row select {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
 }
 
 .ds-table-container {
@@ -5999,6 +6021,7 @@ select, .form-select, select.form-control {
 #ds-doctor-search-results {
     box-shadow: 0 10px 25px -5px rgba(0,0,0,0.18), 0 8px 10px -6px rgba(0,0,0,0.1) !important;
     scrollbar-width: thin;
+    z-index: 10950 !important;
 }
 
 .ds-doctor-search-item {
