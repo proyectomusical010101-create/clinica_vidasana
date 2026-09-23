@@ -74,7 +74,7 @@ window.universalPrintHTML = function(htmlContent, title = 'Documento Clínico') 
                     <meta charset="UTF-8">
                     <title>${title}</title>
                     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-                    <link rel="stylesheet" href="styles.css?v=330">
+                    <link rel="stylesheet" href="styles.css?v=331">
                     <style>
                         @page { size: A4 portrait; margin: 8mm 10mm 8mm 10mm; }
                         * { box-sizing: border-box; }
@@ -1333,6 +1333,21 @@ let activeEditingBudgetId = null;
 // CONTROL DE SIDEBAR (COLAPSO/EXPANSIÓN) Y PERFIL DE USUARIO
 // ==========================================
 window.toggleSidebarCollapse = function() {
+    const sidebar = document.querySelector('.sidebar');
+    const isMobileMode = window.innerWidth <= 1024 || (sidebar && sidebar.classList.contains('mobile-open'));
+
+    // En versión responsive Mobile, su única función es cerrar el menú lateral (igual que el botón hamburguesa)
+    if (isMobileMode) {
+        if (typeof window.closeMobileSidebar === 'function') {
+            window.closeMobileSidebar();
+        } else if (sidebar) {
+            sidebar.classList.remove('mobile-open');
+            const mobileBackdrop = document.getElementById('mobile-sidebar-backdrop');
+            if (mobileBackdrop) mobileBackdrop.classList.add('hidden');
+        }
+        return;
+    }
+
     const isCollapsed = document.body.classList.toggle('sidebar-collapsed');
     try {
         localStorage.setItem('vidasana_sidebar_collapsed', isCollapsed ? 'true' : 'false');
@@ -1484,9 +1499,9 @@ document.addEventListener('click', (e) => {
     }
 });
 
-// Restaurar preferencia guardada de sidebar colapsado
+// Restaurar preferencia guardada de sidebar colapsado (únicamente en pantallas de escritorio)
 try {
-    if (localStorage.getItem('vidasana_sidebar_collapsed') === 'true') {
+    if (window.innerWidth > 1024 && localStorage.getItem('vidasana_sidebar_collapsed') === 'true') {
         document.body.classList.add('sidebar-collapsed');
     }
 } catch(e) {}
@@ -19496,6 +19511,18 @@ document.addEventListener('DOMContentLoaded', () => {
         mobileBackdrop.onclick = () => {
             closeMobileSidebar();
         };
+
+        const collapseBtn = document.getElementById('btn-sidebar-collapse');
+        if (collapseBtn) {
+            collapseBtn.addEventListener('click', (e) => {
+                const isMobile = window.innerWidth <= 1024 || (sidebar && sidebar.classList.contains('mobile-open'));
+                if (isMobile) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    closeMobileSidebar();
+                }
+            });
+        }
     }
 
     document.querySelectorAll('.nav-menu .nav-item').forEach(item => {

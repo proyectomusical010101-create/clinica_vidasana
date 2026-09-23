@@ -2635,6 +2635,30 @@ html, body {
         transform: translateX(0) !important;
     }
 
+    /* En modo móvil, garantizar que el sidebar drawer conserve su presentación completa y que el botón colapsar actúe para cerrar */
+    body.sidebar-collapsed .sidebar {
+        width: 280px !important;
+        max-width: 85vw !important;
+    }
+    body.sidebar-collapsed .nav-item span {
+        display: inline !important;
+    }
+    body.sidebar-collapsed .clinic-logo-sidebar {
+        display: block !important;
+    }
+    body.sidebar-collapsed .clinic-logo-collapsed {
+        display: none !important;
+    }
+    body.sidebar-collapsed #sidebar-profile-info {
+        display: block !important;
+    }
+    body.sidebar-collapsed .btn-sidebar-collapse {
+        position: absolute !important;
+        right: 12px !important;
+        top: 50% !important;
+        transform: translateY(-50%) !important;
+    }
+
     .main-content {
         margin-left: 0 !important;
         width: 100% !important;
