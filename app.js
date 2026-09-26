@@ -20068,7 +20068,7 @@ function buildMedicalDocumentHTML(opts) {
     const effectiveApproved = (approvedAmountUSD > 0) ? approvedAmountUSD : totalUSD;
 
     return `
-        <div class="medical-doc-container" style="background: #ffffff; color: #1e293b; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 0.72rem; line-height: 1.2; width: 100%; max-width: 780px; margin: 0 auto; padding: 8px 14px; box-sizing: border-box;">
+        <div class="medical-doc-container" style="background: #ffffff; color: #1e293b; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 0.72rem; line-height: 1.2; width: 100%; max-width: 100%; margin: 0 auto; padding: 6px 10px; box-sizing: border-box;">
             
             <!-- 1. Header (Logo left, Title & metadata right) -->
             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; padding-bottom: 4px; border-bottom: 1px solid #e2e8f0; gap: 12px;">
@@ -20112,9 +20112,9 @@ function buildMedicalDocumentHTML(opts) {
                 </div>
 
                 <!-- Col 3: Datos del Paciente -->
-                <div>
+                <div style="overflow: hidden; word-break: break-word;">
                     <div style="font-size: 0.60rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1px;">DATOS DEL PACIENTE</div>
-                    <strong style="font-size: 0.76rem; color: #0f172a; display: block; margin-bottom: 1px;">${patientName}</strong>
+                    <strong style="font-size: 0.76rem; color: #0f172a; display: block; margin-bottom: 1px; word-break: break-word;">${patientName}</strong>
                     <div style="color: #475569; font-size: 0.68rem;">C.I.: ${patientId}</div>
                     <div style="color: #475569; font-size: 0.68rem;">Tlf: ${patientPhone}</div>
                 </div>
@@ -20125,9 +20125,9 @@ function buildMedicalDocumentHTML(opts) {
                 <thead>
                     <tr>
                         <th style="background: #0066f5; color: #ffffff; padding: 3px 6px; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.05em; text-align: left; text-transform: uppercase; border-top-left-radius: 4px; border-bottom-left-radius: 4px;">PROCEDIMIENTO / TRATAMIENTO</th>
-                        <th style="background: #0066f5; color: #ffffff; padding: 3px 4px; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.05em; text-align: center; text-transform: uppercase; width: 60px;">CANTIDAD</th>
-                        <th style="background: #0066f5; color: #ffffff; padding: 3px 6px; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.05em; text-align: right; text-transform: uppercase; width: 85px;">PRECIO UNIT.</th>
-                        <th style="background: #0066f5; color: #ffffff; padding: 3px 6px; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.05em; text-align: right; text-transform: uppercase; width: 85px; border-top-right-radius: 4px; border-bottom-right-radius: 4px;">MONTO</th>
+                        <th style="background: #0066f5; color: #ffffff; padding: 3px 4px; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.05em; text-align: center; text-transform: uppercase; width: 55px;">CANTIDAD</th>
+                        <th style="background: #0066f5; color: #ffffff; padding: 3px 6px; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.05em; text-align: right; text-transform: uppercase; width: 80px;">PRECIO UNIT.</th>
+                        <th style="background: #0066f5; color: #ffffff; padding: 3px 6px; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.05em; text-align: right; text-transform: uppercase; width: 80px; border-top-right-radius: 4px; border-bottom-right-radius: 4px;">MONTO</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -21139,12 +21139,12 @@ async function renderBillingView() {
 
         const container = document.createElement('div');
         container.className = 'invoice-pdf-export-container';
-        container.style.width = '794px';
-        container.style.minWidth = '794px';
-        container.style.maxWidth = '794px';
+        container.style.width = '100%';
+        container.style.minWidth = '0';
+        container.style.maxWidth = '100%';
         container.style.background = '#ffffff';
         container.style.color = '#0f172a';
-        container.style.margin = '0';
+        container.style.margin = '0 auto';
         container.style.padding = '0';
         container.style.boxSizing = 'border-box';
         container.innerHTML = previewEl.innerHTML;
@@ -23821,13 +23821,13 @@ function getPaymentMethodLabel(method) {
 async function generatePDFFromElement(element, filename) {
     if (!element) return false;
 
-    // 1. Ensure element is styled in-flow with explicit width & white background
+    // 1. Ensure element is styled in-flow with 100% width & white background
     element.style.position = 'relative';
     element.style.top = '0';
     element.style.left = '0';
-    element.style.width = '794px';
-    element.style.minWidth = '794px';
-    element.style.maxWidth = '794px';
+    element.style.width = '100%';
+    element.style.minWidth = '0';
+    element.style.maxWidth = '100%';
     element.style.maxHeight = 'none';
     element.style.height = 'auto';
     element.style.overflow = 'visible';
@@ -23836,7 +23836,7 @@ async function generatePDFFromElement(element, filename) {
     element.style.color = '#1e293b';
     element.style.display = 'block';
     element.style.visibility = 'visible';
-    element.style.padding = '16px 20px';
+    element.style.padding = '4px 6px';
     element.style.boxSizing = 'border-box';
 
     // Remove any overflow or max-height restrictions on children
@@ -23851,6 +23851,7 @@ async function generatePDFFromElement(element, filename) {
     const innerDoc = element.querySelector('.medical-doc-container');
     if (innerDoc) {
         innerDoc.style.maxWidth = '100%';
+        innerDoc.style.minWidth = '0';
         innerDoc.style.width = '100%';
         innerDoc.style.padding = '0';
         innerDoc.style.margin = '0 auto';
@@ -23859,6 +23860,7 @@ async function generatePDFFromElement(element, filename) {
         innerDoc.style.maxHeight = 'none';
         innerDoc.style.height = 'auto';
         innerDoc.style.overflow = 'visible';
+        innerDoc.style.boxSizing = 'border-box';
     }
 
     // Mount inside an absolute staging wrapper placed at the current scroll position so coordinates are accurate
@@ -23867,8 +23869,9 @@ async function generatePDFFromElement(element, filename) {
     stagingWrapper.style.position = 'absolute';
     stagingWrapper.style.top = (window.scrollY || 0) + 'px';
     stagingWrapper.style.left = '0';
-    stagingWrapper.style.width = '794px';
-    stagingWrapper.style.zIndex = '999999';
+    stagingWrapper.style.width = '730px';
+    stagingWrapper.style.maxWidth = '100%';
+    stagingWrapper.style.zIndex = '-9999';
     stagingWrapper.style.pointerEvents = 'none';
     stagingWrapper.style.overflow = 'visible';
     stagingWrapper.style.backgroundColor = '#ffffff';
@@ -23967,12 +23970,13 @@ async function generatePDFFromElement(element, filename) {
                             html2canvas: { 
                                 scale: 2, 
                                 useCORS: true, 
-                                allowTaint: true,
+                                allowTaint: true, 
                                 letterRendering: true, 
                                 backgroundColor: '#ffffff', 
                                 logging: false, 
-                                scrollY: (window.scrollY || 0),
-                                scrollX: 0
+                                scrollY: 0,
+                                scrollX: 0,
+                                windowWidth: 1200
                             },
                             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
                             pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
@@ -24002,9 +24006,9 @@ async function generatePDFFromElement(element, filename) {
                             }
                             const imgString = canvas.toDataURL('image/jpeg', 0.98);
                             const pdf = new jsPDFClass('p', 'mm', 'a4');
-                            const pdfWidth = 210;
+                            const pdfWidth = 194;
                             const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-                            pdf.addImage(imgString, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+                            pdf.addImage(imgString, 'JPEG', 8, 6, pdfWidth, pdfHeight);
                             if (isCancelled) {
                                 handleCancel();
                                 return;
