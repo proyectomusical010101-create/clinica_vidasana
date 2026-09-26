@@ -42,118 +42,75 @@ window.universalPrintHTML = function(htmlContent, title = 'Documento Clínico') 
     if (!htmlContent) return;
 
     try {
-        // Eliminar iframe previo si existiera
-        const oldIframe = document.getElementById('vidasana-universal-print-iframe');
-        if (oldIframe) {
-            try { oldIframe.remove(); } catch(e) {}
+        // 1. Eliminar contenedor previo si existiera
+        const oldContainer = document.getElementById('vidasana-print-container');
+        if (oldContainer) {
+            try { oldContainer.remove(); } catch(e) {}
         }
 
-        const iframe = document.createElement('iframe');
-        iframe.id = 'vidasana-universal-print-iframe';
-        iframe.style.position = 'fixed';
-        iframe.style.top = '0';
-        iframe.style.left = '-99999px';
-        iframe.style.width = '1024px';
-        iframe.style.height = '100vh';
-        iframe.style.border = 'none';
-        iframe.style.visibility = 'visible';
-        iframe.style.zIndex = '-9999';
-        iframe.setAttribute('aria-hidden', 'true');
-        document.body.appendChild(iframe);
+        // 2. Crear contenedor directo en el body con la clase print-section
+        const printContainer = document.createElement('div');
+        printContainer.id = 'vidasana-print-container';
+        printContainer.className = 'print-section';
+        printContainer.style.background = '#ffffff';
+        printContainer.style.color = '#000000';
+        printContainer.style.width = '100%';
+        printContainer.style.margin = '0 auto';
+        printContainer.style.padding = '0';
 
-        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-
-        let finalDoc = '';
-        if (htmlContent.trim().toLowerCase().startsWith('<!doctype') || htmlContent.trim().toLowerCase().startsWith('<html')) {
-            finalDoc = htmlContent;
-        } else {
-            finalDoc = `
-                <!DOCTYPE html>
-                <html lang="es">
-                <head>
-                    <meta charset="UTF-8">
-                    <title>${title}</title>
-                    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-                    <link rel="stylesheet" href="styles.css?v=332">
-                    <style>
-                        @page { size: A4 portrait; margin: 8mm 10mm 8mm 10mm; }
-                        * { box-sizing: border-box; }
-                        html, body {
-                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-                            margin: 0 !important;
-                            padding: 4px 8px !important;
-                            background: #ffffff !important;
-                            color: #0f172a !important;
-                            -webkit-print-color-adjust: exact !important;
-                            print-color-adjust: exact !important;
-                        }
-                        .medical-doc-container {
-                            width: 100% !important;
-                            max-width: 100% !important;
-                            padding: 4px 10px !important;
-                            margin: 0 auto !important;
-                            box-shadow: none !important;
-                            border: none !important;
-                        }
-                        table { border-collapse: collapse; width: 100%; }
-                    </style>
-                </head>
-                <body>
-                    ${htmlContent}
-                </body>
-                </html>
-            `;
-        }
-
-        iframeDoc.open();
-        iframeDoc.write(finalDoc);
-        iframeDoc.close();
-
-        // Esperar a que las imágenes y fuentes del iframe interno se rendericen completamente
-        const triggerPrint = () => {
-            try {
-                const imgs = Array.from(iframeDoc.images || []);
-                const imgPromises = imgs.map(img => {
-                    if (img.complete && img.naturalHeight > 0) return Promise.resolve();
-                    return new Promise(res => {
-                        img.onload = () => res();
-                        img.onerror = () => res();
-                        setTimeout(res, 600);
-                    });
-                });
-
-                Promise.all(imgPromises).then(() => {
-                    setTimeout(() => {
-                        try {
-                            iframe.contentWindow.focus();
-                            iframe.contentWindow.print();
-                        } catch (err) {
-                            console.warn('Iframe print error, usando fallback in-page:', err);
-                            const fallbackDiv = document.createElement('div');
-                            fallbackDiv.className = 'print-section';
-                            fallbackDiv.innerHTML = htmlContent;
-                            document.body.appendChild(fallbackDiv);
-                            window.print();
-                            setTimeout(() => {
-                                try { fallbackDiv.remove(); } catch(e) {}
-                            }, 1000);
-                        }
-                    }, 350);
-                });
-            } catch (err) {
-                console.error('Error triggering iframe print:', err);
-                iframe.contentWindow.print();
+        // Si el contenido contiene estructura html/body completa, extraer el interior del body
+        let contentToPrint = htmlContent;
+        if (htmlContent.includes('<body') && htmlContent.includes('</body>')) {
+            const match = htmlContent.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+            if (match && match[1]) {
+                contentToPrint = match[1];
             }
+        }
+        printContainer.innerHTML = contentToPrint;
+        document.body.appendChild(printContainer);
+        document.body.classList.add('is-printing');
+
+        const originalTitle = document.title;
+        if (title) document.title = title;
+
+        let isCleaned = false;
+        const cleanup = () => {
+            if (isCleaned) return;
+            isCleaned = true;
+            document.title = originalTitle;
+            document.body.classList.remove('is-printing');
+            if (document.body.contains(printContainer)) {
+                try { document.body.removeChild(printContainer); } catch(e) {}
+            }
+            window.removeEventListener('afterprint', cleanup);
         };
 
-        if (iframeDoc.readyState === 'complete') {
-            triggerPrint();
-        } else {
-            iframe.contentWindow.onload = triggerPrint;
-            setTimeout(triggerPrint, 500);
-        }
+        window.addEventListener('afterprint', cleanup);
+
+        // Esperar a que las imágenes carguen antes de imprimir
+        const imgs = Array.from(printContainer.querySelectorAll('img'));
+        const imgPromises = imgs.map(img => {
+            if (img.complete && img.naturalHeight > 0) return Promise.resolve();
+            return new Promise(res => {
+                img.onload = () => res();
+                img.onerror = () => res();
+                setTimeout(res, 350);
+            });
+        });
+
+        Promise.all(imgPromises).then(() => {
+            setTimeout(() => {
+                try {
+                    window.focus();
+                    window.print();
+                } catch(err) {
+                    console.error('Error invoking window.print:', err);
+                }
+                setTimeout(cleanup, 4000);
+            }, 100);
+        });
     } catch (e) {
-        console.error('Error en universalPrintHTML:', e);
+        console.error('Error in universalPrintHTML:', e);
         window.print();
     }
 };
@@ -21167,14 +21124,9 @@ async function renderBillingView() {
     document.getElementById('btn-print-invoice-final').onclick = () => {
         const previewEl = document.getElementById('invoice-paper-preview');
         if (!previewEl) return;
-        const printClone = previewEl.cloneNode(true);
-        printClone.style.padding = '0';
-        printClone.style.margin = '0 auto';
-        printClone.style.maxWidth = '100%';
-        document.body.appendChild(printClone);
-        printClone.classList.add('print-section');
-        window.print();
-        document.body.removeChild(printClone);
+        const invId = (activeBillingInvoice && activeBillingInvoice.id) || 'Digital';
+        const patName = (activePatient && activePatient.fullname) || '';
+        window.universalPrintHTML(previewEl.innerHTML, `Factura ${invId}${patName ? ' - ' + patName : ''}`);
     };
 
     document.getElementById('btn-pdf-invoice-final').onclick = async () => {
@@ -24505,7 +24457,9 @@ async function renderPublicBudgetView() {
         publicContent.innerHTML = html;
 
         // Hook up print & download
-        document.getElementById('btn-public-print').onclick = () => window.print();
+        document.getElementById('btn-public-print').onclick = () => {
+            window.universalPrintHTML(publicContent.innerHTML, `Presupuesto ${budget.id} - ${patient.fullname}`);
+        };
         document.getElementById('btn-public-download-pdf').onclick = async () => {
             const clone = publicContent.cloneNode(true);
             const filename = `Presupuesto_${budget.id}_${patient.fullname.replace(/\s+/g, '_')}.pdf`;
@@ -24722,7 +24676,9 @@ async function renderPublicSessionReceiptView() {
 
         publicContent.innerHTML = html;
 
-        document.getElementById('btn-public-session-print').onclick = () => window.print();
+        document.getElementById('btn-public-session-print').onclick = () => {
+            window.universalPrintHTML(publicContent.innerHTML, `Recibo Sesión ${session.sessionNum} - ${patient.fullname}`);
+        };
         document.getElementById('btn-public-session-download-pdf').onclick = async () => {
             const clone = publicContent.cloneNode(true);
             const filename = `Recibo_Sesion_${session.sessionNum}_${patient.fullname.replace(/\s+/g, '_')}.pdf`;
@@ -24842,7 +24798,9 @@ async function renderPublicRecipeView() {
             </div>
         `;
 
-        document.getElementById('btn-public-session-print').onclick = () => window.print();
+        document.getElementById('btn-public-session-print').onclick = () => {
+            window.universalPrintHTML(publicContent.innerHTML, `Récipe Médico - ${patient.fullname}`);
+        };
         document.getElementById('btn-public-session-download-pdf').onclick = async () => {
             const clone = document.getElementById('public-recipe-printable-doc').cloneNode(true);
             const filename = `Recipe_Medico_${patient.fullname.replace(/\s+/g, '_')}.pdf`;

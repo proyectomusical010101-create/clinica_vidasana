@@ -3538,14 +3538,16 @@ html, body {
         overflow: visible !important;
     }
 
-    /* Hide everything on the page except the print-section */
-    body > :not(.print-section) {
+    /* Hide everything on the page except the print-section when a print-section exists or is-printing */
+    body.is-printing > :not(.print-section),
+    body:has(.print-section) > :not(.print-section) {
         display: none !important;
     }
 
     /* Print section styling */
     .print-section {
         display: block !important;
+        visibility: visible !important;
         position: relative !important;
         left: 0 !important;
         top: 0 !important;
@@ -3560,6 +3562,10 @@ html, body {
         box-shadow: none !important;
         z-index: 9999999 !important;
         overflow: visible !important;
+    }
+
+    .print-section * {
+        visibility: visible !important;
     }
 
     .medical-doc-container {
