@@ -23869,9 +23869,9 @@ async function generatePDFFromElement(element, filename) {
     stagingWrapper.style.position = 'absolute';
     stagingWrapper.style.top = (window.scrollY || 0) + 'px';
     stagingWrapper.style.left = '0';
-    stagingWrapper.style.width = '730px';
+    stagingWrapper.style.width = '100%';
     stagingWrapper.style.maxWidth = '100%';
-    stagingWrapper.style.zIndex = '-9999';
+    stagingWrapper.style.zIndex = '999999';
     stagingWrapper.style.pointerEvents = 'none';
     stagingWrapper.style.overflow = 'visible';
     stagingWrapper.style.backgroundColor = '#ffffff';
@@ -23974,9 +23974,8 @@ async function generatePDFFromElement(element, filename) {
                                 letterRendering: true, 
                                 backgroundColor: '#ffffff', 
                                 logging: false, 
-                                scrollY: 0,
-                                scrollX: 0,
-                                windowWidth: 1200
+                                scrollY: (window.scrollY || 0),
+                                scrollX: 0
                             },
                             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
                             pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
