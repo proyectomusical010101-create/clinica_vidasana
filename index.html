@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=341">
+    <link rel="stylesheet" href="styles.css?v=342">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -3372,6 +3372,9 @@
                             <button type="button" class="btn btn-outline" onclick="window.ClinicalERP.openAddServiceLiquidationModal()" style="font-weight: 600;">
                                 <i class="fa-solid fa-file-invoice-dollar text-cyan"></i> + Registrar Servicio a Liquidar
                             </button>
+                            <button type="button" class="btn btn-outline" onclick="window.ClinicalERP.openSeniatConfigModal()" style="font-weight: 600; border-color: #0d9488; color: #0d9488;" title="Configurar % de Retención y Sustraendo SENIAT">
+                                <i class="fa-solid fa-sliders text-cyan"></i> Retención SENIAT / Clínica
+                            </button>
                             <button type="button" class="btn btn-primary" onclick="window.ClinicalERP.openAddPayroll()" style="background: linear-gradient(135deg, #7fa13c 0%, #608127 100%) !important; border: none !important; box-shadow: 0 4px 12px rgba(127, 161, 60, 0.35); font-weight: 700; border-radius: 10px; padding: 10px 18px;">
                                 <i class="fa-solid fa-plus"></i> Nueva Liquidación Nómina Fija
                             </button>
@@ -6174,6 +6177,56 @@
                         </div>
                     </div>
 
+                    <!-- Panel Deducción SENIAT / Clínica para Honorarios Médicos -->
+                    <div id="settle-seniat-panel" style="background: rgba(8, 145, 178, 0.04); border: 1px solid rgba(8, 145, 178, 0.25); border-radius: 10px; padding: 12px 14px; margin-bottom: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <label style="display: flex; align-items: center; gap: 7px; margin: 0; cursor: pointer; font-weight: 700; font-size: 0.88rem; color: #0f172a;">
+                                <input type="checkbox" id="settle-seniat-apply-chk" checked onchange="window.ClinicalERP.recalcSettleSeniatBreakdown()" style="width: 16px; height: 16px;">
+                                <span><i class="fa-solid fa-file-invoice-dollar text-cyan"></i> Deducción SENIAT / Clínica</span>
+                            </label>
+                            <button type="button" class="btn btn-xs btn-outline" onclick="window.ClinicalERP.saveSeniatDefaultsFromModal()" title="Guardar estos valores como predeterminados del sistema" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 6px; font-weight: 600;">
+                                <i class="fa-solid fa-floppy-disk"></i> Predeterminar
+                            </button>
+                        </div>
+
+                        <div id="settle-seniat-inputs-wrap" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                            <div>
+                                <label style="font-size: 0.75rem; font-weight: 600; color: #475569; display: block; margin-bottom: 3px;">% Retención Clínica:</label>
+                                <div style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="number" id="settle-seniat-pct-input" step="0.1" min="0" max="100" value="1.0" class="form-control" style="font-size: 0.82rem; padding: 4px 8px; font-weight: 700; height: 32px;" oninput="window.ClinicalERP.recalcSettleSeniatBreakdown()">
+                                    <span style="font-size: 0.8rem; font-weight: 700; color: #64748b;">%</span>
+                                </div>
+                            </div>
+                            <div>
+                                <label style="font-size: 0.75rem; font-weight: 600; color: #475569; display: block; margin-bottom: 3px;">Sustraendo SENIAT:</label>
+                                <div style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="number" id="settle-seniat-sustraendo-input" step="1" min="0" value="35" class="form-control" style="font-size: 0.82rem; padding: 4px 8px; font-weight: 700; height: 32px;" oninput="window.ClinicalERP.recalcSettleSeniatBreakdown()">
+                                    <span style="font-size: 0.8rem; font-weight: 700; color: #64748b;">Bs.</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Resumen en vivo de cálculo -->
+                        <div id="settle-seniat-breakdown-box" style="background: #ffffff; border: 1px dashed #cbd5e1; border-radius: 6px; padding: 8px 10px; font-size: 0.78rem; color: #334155; line-height: 1.5;">
+                            <div style="display: flex; justify-content: space-between;">
+                                <span>Honorarios Brutos Médicos:</span>
+                                <strong id="settle-bk-gross">$0.00</strong>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; color: #dc2626;">
+                                <span>(-) Retención (<span id="settle-bk-pct-lbl">1%</span> que queda a clínica):</span>
+                                <strong id="settle-bk-pct-amt">-$0.00</strong>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; color: #dc2626;">
+                                <span>(-) Sustraendo SENIAT (<span id="settle-bk-sust-bs">35 Bs</span> @ BCV):</span>
+                                <strong id="settle-bk-sust-usd">-$0.00</strong>
+                            </div>
+                            <div style="border-top: 1px solid #e2e8f0; margin-top: 4px; padding-top: 4px; display: flex; justify-content: space-between; font-weight: 700; color: #16a34a;">
+                                <span>(=) Neto a Liquidar al Médico:</span>
+                                <strong id="settle-bk-net">$0.00</strong>
+                            </div>
+                        </div>
+                    </div>
+
                     <div style="background: var(--card-bg); border: 1px dashed var(--primary-cyan); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
                         <span style="font-size: 0.9rem; font-weight: 600; color: var(--text-color);">Monto a Liquidar:</span>
                         <div style="display: flex; align-items: center; gap: 6px;">
@@ -6208,6 +6261,69 @@
                     <button type="button" class="btn btn-outline" data-close-erp="modal-settle-service">Cancelar</button>
                     <button type="submit" class="btn btn-primary" style="background: #16a34a !important; border: none !important;">
                         <i class="fa-solid fa-check"></i> Confirmar y Liquidar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: CONFIGURAR RETENCIÓN SENIAT Y SUSTRAENDO -->
+    <div class="modal-overlay hidden" id="modal-seniat-config" style="z-index: 10700;">
+        <div class="modal-dialog" style="max-width: 520px; width: 95vw;">
+            <div class="modal-header">
+                <h3 id="modal-seniat-config-title"><i class="fa-solid fa-sliders text-cyan"></i> Configuración de Retención SENIAT</h3>
+                <button type="button" class="modal-close" data-close-erp="modal-seniat-config">&times;</button>
+            </div>
+            <form id="form-seniat-config" onsubmit="window.ClinicalERP.saveSeniatConfigForm(event)">
+                <div class="modal-body" style="padding: 20px;">
+                    <div style="background: rgba(8, 145, 178, 0.05); border: 1px solid rgba(8, 145, 178, 0.2); border-radius: 10px; padding: 12px 16px; margin-bottom: 16px;">
+                        <p style="margin: 0; font-size: 0.85rem; color: var(--text-color); line-height: 1.5;">
+                            Establezca los valores predeterminados de retención fiscal y clínica que se deducen a las transacciones de honorarios médicos al liquidar servicios.
+                        </p>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 14px;">
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" id="cfg-seniat-enabled" checked style="width: 18px; height: 18px;">
+                            <span style="font-weight: 600; font-size: 0.9rem;">Habilitar Deducción SENIAT / Clínica por defecto</span>
+                        </label>
+                        <small class="text-muted" style="display: block; margin-top: 4px; margin-left: 26px;">Si está activo, se pre-seleccionará la retención al liquidar a médicos.</small>
+                    </div>
+
+                    <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px;">
+                        <div class="form-group">
+                            <label style="font-weight: 600;">% Retención Clínica / SENIAT *</label>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <input type="number" id="cfg-seniat-percent" class="form-control" step="0.01" min="0" max="100" value="1.0" required style="font-weight: 700;">
+                                <span style="font-weight: 700; color: var(--text-color);">%</span>
+                            </div>
+                            <small class="text-muted">Porcentaje deducido que queda a la clínica.</small>
+                        </div>
+                        <div class="form-group">
+                            <label style="font-weight: 600;">Sustraendo SENIAT (Bs.) *</label>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <input type="number" id="cfg-seniat-sustraendo" class="form-control" step="0.01" min="0" value="35.0" required style="font-weight: 700;">
+                                <span style="font-weight: 700; color: var(--text-color);">Bs.</span>
+                            </div>
+                            <small class="text-muted">Monto fijo del SENIAT en Bolívares.</small>
+                        </div>
+                    </div>
+
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; font-size: 0.84rem; color: #475569;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                            <span>Tasa Oficial BCV Actual:</span>
+                            <strong id="cfg-seniat-bcv-preview" style="color: #0284c7;">Bs. 0.00 / $</strong>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span>Equivalente del Sustraendo en USD:</span>
+                            <strong id="cfg-seniat-sustraendo-usd-preview" style="color: #16a34a;">$0.00</strong>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" data-close-erp="modal-seniat-config">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" style="background: #0891b2 !important; border: none !important;">
+                        <i class="fa-solid fa-floppy-disk"></i> Guardar Configuración
                     </button>
                 </div>
             </form>
@@ -7928,14 +8044,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=341"></script>
-    <script src="supabaseClient.js?v=341"></script>
-    <script src="odontogram.js?v=341"></script>
-    <script src="signature.js?v=341"></script>
-    <script src="whatsapp.js?v=341"></script>
-    <script src="kardex.js?v=341"></script>
-    <script src="app.js?v=341"></script>
-    <script src="clinicalERP.js?v=341"></script>
-    <script src="tutorial.js?v=341"></script>
+    <script src="seededData.js?v=342"></script>
+    <script src="supabaseClient.js?v=342"></script>
+    <script src="odontogram.js?v=342"></script>
+    <script src="signature.js?v=342"></script>
+    <script src="whatsapp.js?v=342"></script>
+    <script src="kardex.js?v=342"></script>
+    <script src="app.js?v=342"></script>
+    <script src="clinicalERP.js?v=342"></script>
+    <script src="tutorial.js?v=342"></script>
 </body>
 </html>

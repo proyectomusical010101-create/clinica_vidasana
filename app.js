@@ -732,6 +732,7 @@ function setActivePatientId(id) {
 function getExchangeRate() {
     return parseFloat(localStorage.getItem('dental_exchange_rate')) || DEFAULT_EXCHANGE_RATE;
 }
+window.getExchangeRate = getExchangeRate;
 
 // Helper: Persist Active Patient's Odontogram & Draft Budget Changes (With Anonymous Fallback)
 async function autoSaveActivePatientOdontogram() {

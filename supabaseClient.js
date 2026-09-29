@@ -2623,7 +2623,7 @@ class SupabaseDataService {
         }
     }
 
-    static async settleServicePayment({ liquidationId, target, paymentMethod, paymentRef, notes, customDoctorAmount, customAssistantAmount }) {
+    static async settleServicePayment({ liquidationId, target, paymentMethod, paymentRef, notes, customDoctorAmount, customAssistantAmount, deductions }) {
         let list = await this.getServiceLiquidations(true);
         const item = list.find(l => l.id === liquidationId);
         if (!item) throw new Error('Registro de liquidación no encontrado');
@@ -2632,8 +2632,17 @@ class SupabaseDataService {
 
         if (target === 'doctor' || target === 'both') {
             item.doctor = item.doctor || {};
+            if (deductions) {
+                item.doctor.deductions = deductions;
+                if (deductions.gross_doctor_amount) {
+                    item.doctor.gross_amount = deductions.gross_doctor_amount;
+                }
+            }
             if (customDoctorAmount !== undefined && customDoctorAmount !== null) {
                 item.doctor.amount = parseFloat(customDoctorAmount) || item.doctor.amount;
+                item.doctor.settled_amount = parseFloat(customDoctorAmount) || item.doctor.amount;
+            } else {
+                item.doctor.settled_amount = item.doctor.amount;
             }
             item.doctor.status = 'Liquidado';
             item.doctor.paid_at = nowStr;
@@ -2645,6 +2654,9 @@ class SupabaseDataService {
             if (item.assistant && item.assistant.has_assistant) {
                 if (customAssistantAmount !== undefined && customAssistantAmount !== null) {
                     item.assistant.amount = parseFloat(customAssistantAmount) || item.assistant.amount;
+                    item.assistant.settled_amount = parseFloat(customAssistantAmount) || item.assistant.amount;
+                } else {
+                    item.assistant.settled_amount = item.assistant.amount;
                 }
                 item.assistant.status = 'Liquidado';
                 item.assistant.paid_at = nowStr;
@@ -2666,9 +2678,9 @@ class SupabaseDataService {
 
         if (!item.settlement_log) item.settlement_log = [];
         let paidAmt = 0;
-        if (target === 'doctor') paidAmt = item.doctor ? item.doctor.amount : 0;
-        else if (target === 'assistant') paidAmt = item.assistant ? item.assistant.amount : 0;
-        else if (target === 'both') paidAmt = (item.doctor ? item.doctor.amount : 0) + (item.assistant ? item.assistant.amount : 0);
+        if (target === 'doctor') paidAmt = item.doctor ? (item.doctor.settled_amount || item.doctor.amount) : 0;
+        else if (target === 'assistant') paidAmt = item.assistant ? (item.assistant.settled_amount || item.assistant.amount) : 0;
+        else if (target === 'both') paidAmt = (item.doctor ? (item.doctor.settled_amount || item.doctor.amount) : 0) + (item.assistant ? (item.assistant.settled_amount || item.assistant.amount) : 0);
 
         item.settlement_log.push({
             target: target,
@@ -2676,7 +2688,8 @@ class SupabaseDataService {
             method: paymentMethod || 'Transferencia',
             ref: paymentRef || '',
             date: nowStr,
-            notes: notes || ''
+            notes: notes || '',
+            deductions: (target === 'doctor' || target === 'both') ? (deductions || null) : null
         });
 
         if (notes) {

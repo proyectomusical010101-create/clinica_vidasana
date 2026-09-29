@@ -1255,6 +1255,163 @@
             }).join('');
         },
 
+        getSeniatConfig() {
+            const saved = localStorage.getItem('vidasana_seniat_config');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    return {
+                        percent: parsed.percent !== undefined ? parseFloat(parsed.percent) : 1.0,
+                        sustraendoBs: parsed.sustraendoBs !== undefined ? parseFloat(parsed.sustraendoBs) : 35.0,
+                        enabled: parsed.enabled !== undefined ? !!parsed.enabled : true
+                    };
+                } catch(e) {}
+            }
+            return { percent: 1.0, sustraendoBs: 35.0, enabled: true };
+        },
+
+        saveSeniatConfig(cfg) {
+            const configObj = {
+                percent: parseFloat(cfg.percent) !== undefined ? parseFloat(cfg.percent) : 1.0,
+                sustraendoBs: parseFloat(cfg.sustraendoBs) !== undefined ? parseFloat(cfg.sustraendoBs) : 35.0,
+                enabled: cfg.enabled !== undefined ? !!cfg.enabled : true
+            };
+            localStorage.setItem('vidasana_seniat_config', JSON.stringify(configObj));
+            return configObj;
+        },
+
+        openSeniatConfigModal() {
+            const cfg = this.getSeniatConfig();
+            const chk = document.getElementById('cfg-seniat-enabled');
+            const inPct = document.getElementById('cfg-seniat-percent');
+            const inSust = document.getElementById('cfg-seniat-sustraendo');
+            const lblBcv = document.getElementById('cfg-seniat-bcv-preview');
+            const lblUsd = document.getElementById('cfg-seniat-sustraendo-usd-preview');
+
+            if (chk) chk.checked = cfg.enabled;
+            if (inPct) inPct.value = cfg.percent;
+            if (inSust) inSust.value = cfg.sustraendoBs;
+
+            const rate = (typeof window.getExchangeRate === 'function') 
+                ? window.getExchangeRate() 
+                : (parseFloat(localStorage.getItem('dental_exchange_rate')) || 36.5);
+
+            if (lblBcv) lblBcv.innerText = `Bs. ${rate.toFixed(2)} / $`;
+            if (lblUsd) {
+                const usdEquiv = rate > 0 ? (cfg.sustraendoBs / rate) : 0;
+                lblUsd.innerText = `$${usdEquiv.toFixed(2)}`;
+            }
+
+            const modal = document.getElementById('modal-seniat-config');
+            if (modal) modal.classList.remove('hidden');
+        },
+
+        saveSeniatConfigForm(e) {
+            if (e) e.preventDefault();
+            const enabled = document.getElementById('cfg-seniat-enabled')?.checked ?? true;
+            const percent = parseFloat(document.getElementById('cfg-seniat-percent')?.value) || 0;
+            const sustraendoBs = parseFloat(document.getElementById('cfg-seniat-sustraendo')?.value) || 0;
+
+            this.saveSeniatConfig({ enabled, percent, sustraendoBs });
+
+            const modal = document.getElementById('modal-seniat-config');
+            if (modal) modal.classList.add('hidden');
+
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Configuración Guardada',
+                    text: `Retención fijada en ${percent}% y Sustraendo en Bs. ${sustraendoBs.toFixed(2)}.`,
+                    timer: 1800,
+                    showConfirmButton: false
+                });
+            }
+        },
+
+        saveSeniatDefaultsFromModal() {
+            const enabled = document.getElementById('settle-seniat-apply-chk')?.checked ?? true;
+            const percent = parseFloat(document.getElementById('settle-seniat-pct-input')?.value) || 0;
+            const sustraendoBs = parseFloat(document.getElementById('settle-seniat-sustraendo-input')?.value) || 0;
+
+            this.saveSeniatConfig({ enabled, percent, sustraendoBs });
+
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Parámetros Predeterminados',
+                    text: `Se guardó ${percent}% de retención y ${sustraendoBs} Bs de sustraendo como valor por defecto.`,
+                    timer: 1600,
+                    showConfirmButton: false
+                });
+            }
+        },
+
+        recalcSettleSeniatBreakdown() {
+            const id = document.getElementById('settle-liquidation-id')?.value;
+            const item = this.serviceLiquidations.find(x => x.id === id);
+            if (!item) return;
+
+            const targetRadio = document.querySelector('input[name="settle_target"]:checked');
+            const target = targetRadio ? targetRadio.value : 'doctor';
+
+            const docAmt = (item.doctor && item.doctor.status === 'Pendiente') ? parseFloat(item.doctor.amount || 0) : 0;
+            const astAmt = (item.assistant && item.assistant.status === 'Pendiente') ? parseFloat(item.assistant.amount || 0) : 0;
+
+            const seniatPanel = document.getElementById('settle-seniat-panel');
+            const chkApply = document.getElementById('settle-seniat-apply-chk');
+            const pctInput = document.getElementById('settle-seniat-pct-input');
+            const sustInput = document.getElementById('settle-seniat-sustraendo-input');
+
+            if (target === 'assistant') {
+                if (seniatPanel) seniatPanel.style.display = 'none';
+                const input = document.getElementById('settle-amount-input');
+                if (input) input.value = astAmt.toFixed(2);
+                return;
+            }
+
+            if (seniatPanel) seniatPanel.style.display = 'block';
+
+            const shouldApply = chkApply ? chkApply.checked : true;
+            const pct = pctInput ? (parseFloat(pctInput.value) || 0) : 1.0;
+            const sustBs = sustInput ? (parseFloat(sustInput.value) || 0) : 35.0;
+
+            const rate = (typeof window.getExchangeRate === 'function') 
+                ? window.getExchangeRate() 
+                : (parseFloat(localStorage.getItem('dental_exchange_rate')) || 36.5);
+
+            let pctAmtUsd = 0;
+            let sustAmtUsd = 0;
+            let netDocAmt = docAmt;
+
+            if (shouldApply && docAmt > 0) {
+                pctAmtUsd = (docAmt * pct) / 100;
+                sustAmtUsd = rate > 0 ? (sustBs / rate) : 0;
+                netDocAmt = Math.max(0, docAmt - pctAmtUsd - sustAmtUsd);
+            }
+
+            const elGross = document.getElementById('settle-bk-gross');
+            const elPctLbl = document.getElementById('settle-bk-pct-lbl');
+            const elPctAmt = document.getElementById('settle-bk-pct-amt');
+            const elSustBs = document.getElementById('settle-bk-sust-bs');
+            const elSustUsd = document.getElementById('settle-bk-sust-usd');
+            const elNet = document.getElementById('settle-bk-net');
+
+            if (elGross) elGross.innerText = `$${docAmt.toFixed(2)} (Bs. ${(docAmt * rate).toFixed(2)})`;
+            if (elPctLbl) elPctLbl.innerText = `${pct}%`;
+            if (elPctAmt) elPctAmt.innerText = shouldApply ? `-$${pctAmtUsd.toFixed(2)} (Bs. ${(pctAmtUsd * rate).toFixed(2)})` : '$0.00';
+            if (elSustBs) elSustBs.innerText = `${sustBs.toFixed(2)} Bs`;
+            if (elSustUsd) elSustUsd.innerText = shouldApply ? `-$${sustAmtUsd.toFixed(2)} (Bs. ${sustBs.toFixed(2)})` : '$0.00';
+            if (elNet) elNet.innerText = `$${netDocAmt.toFixed(2)} (Bs. ${(netDocAmt * rate).toFixed(2)})`;
+
+            let totalToSettle = netDocAmt;
+            if (target === 'both') {
+                totalToSettle += astAmt;
+            }
+
+            const input = document.getElementById('settle-amount-input');
+            if (input) input.value = totalToSettle.toFixed(2);
+        },
+
         openSettleModal(id, preselectedTarget = 'doctor') {
             const item = this.serviceLiquidations.find(x => x.id === id);
             if (!item) return;
@@ -1293,6 +1450,16 @@
             const radio = document.querySelector(`input[name="settle_target"][value="${activeTarget}"]`);
             if (radio) radio.checked = true;
 
+            // Load SENIAT configuration defaults
+            const cfg = this.getSeniatConfig();
+            const chkApply = document.getElementById('settle-seniat-apply-chk');
+            const pctInput = document.getElementById('settle-seniat-pct-input');
+            const sustInput = document.getElementById('settle-seniat-sustraendo-input');
+
+            if (chkApply) chkApply.checked = cfg.enabled;
+            if (pctInput) pctInput.value = cfg.percent;
+            if (sustInput) sustInput.value = cfg.sustraendoBs;
+
             this.updateSettleModalTarget(activeTarget);
 
             const modal = document.getElementById('modal-settle-service');
@@ -1300,24 +1467,7 @@
         },
 
         updateSettleModalTarget(target) {
-            const id = document.getElementById('settle-liquidation-id').value;
-            const item = this.serviceLiquidations.find(x => x.id === id);
-            if (!item) return;
-
-            const docAmt = (item.doctor && item.doctor.status === 'Pendiente') ? parseFloat(item.doctor.amount || 0) : 0;
-            const astAmt = (item.assistant && item.assistant.status === 'Pendiente') ? parseFloat(item.assistant.amount || 0) : 0;
-
-            let finalAmt = 0;
-            if (target === 'doctor') {
-                finalAmt = docAmt;
-            } else if (target === 'assistant') {
-                finalAmt = astAmt;
-            } else if (target === 'both') {
-                finalAmt = docAmt + astAmt;
-            }
-
-            const input = document.getElementById('settle-amount-input');
-            if (input) input.value = finalAmt.toFixed(2);
+            this.recalcSettleSeniatBreakdown();
         },
 
         async confirmSettlement(e) {
@@ -1330,6 +1480,55 @@
             const notes = document.getElementById('settle-notes').value.trim();
             const amountVal = parseFloat(document.getElementById('settle-amount-input').value) || 0;
 
+            const item = this.serviceLiquidations.find(x => x.id === id);
+            const docGross = (item && item.doctor) ? parseFloat(item.doctor.amount || 0) : 0;
+            const astAmt = (item && item.assistant && item.assistant.status === 'Pendiente') ? parseFloat(item.assistant.amount || 0) : 0;
+
+            const rate = (typeof window.getExchangeRate === 'function') 
+                ? window.getExchangeRate() 
+                : (parseFloat(localStorage.getItem('dental_exchange_rate')) || 36.5);
+
+            const shouldApply = (target === 'doctor' || target === 'both') && document.getElementById('settle-seniat-apply-chk')?.checked;
+            let deductionsObj = null;
+            let customDocAmt = null;
+            let customAstAmt = null;
+
+            if (shouldApply && docGross > 0) {
+                const pct = parseFloat(document.getElementById('settle-seniat-pct-input')?.value) || 0;
+                const sustBs = parseFloat(document.getElementById('settle-seniat-sustraendo-input')?.value) || 0;
+                const pctAmtUsd = (docGross * pct) / 100;
+                const sustAmtUsd = rate > 0 ? (sustBs / rate) : 0;
+                const totalDedUsd = pctAmtUsd + sustAmtUsd;
+                const docNetUsd = Math.max(0, docGross - totalDedUsd);
+
+                deductionsObj = {
+                    applied: true,
+                    gross_doctor_amount: docGross,
+                    retention_percent: pct,
+                    retention_amount_usd: pctAmtUsd,
+                    retention_amount_bs: pctAmtUsd * rate,
+                    sustraendo_bs: sustBs,
+                    sustraendo_usd: sustAmtUsd,
+                    total_deductions_usd: totalDedUsd,
+                    net_doctor_amount: docNetUsd,
+                    bcv_rate: rate
+                };
+
+                if (target === 'doctor') {
+                    customDocAmt = amountVal;
+                } else if (target === 'both') {
+                    customDocAmt = Math.max(0, amountVal - astAmt);
+                    customAstAmt = astAmt;
+                }
+            } else {
+                if (target === 'doctor') customDocAmt = amountVal;
+                else if (target === 'assistant') customAstAmt = amountVal;
+                else if (target === 'both') {
+                    customDocAmt = Math.max(0, amountVal - astAmt);
+                    customAstAmt = astAmt;
+                }
+            }
+
             try {
                 if (window.SupabaseDataService) {
                     await window.SupabaseDataService.settleServicePayment({
@@ -1338,8 +1537,9 @@
                         paymentMethod: paymentMethod,
                         paymentRef: paymentRef,
                         notes: notes,
-                        customDoctorAmount: (target === 'doctor' || target === 'both') ? amountVal : null,
-                        customAssistantAmount: (target === 'assistant') ? amountVal : null
+                        customDoctorAmount: customDocAmt,
+                        customAssistantAmount: customAstAmt,
+                        deductions: deductionsObj
                     });
                 }
                 await this.loadAll();
@@ -1846,6 +2046,11 @@
                 ? (item.assistant.status === 'Liquidado' ? '<span style="color: #16a34a; font-weight: bold;">LIQUIDADO / PAGADO</span>' : '<span style="color: #f59e0b; font-weight: bold;">PENDIENTE POR PAGAR</span>') 
                 : '<span>NO APLICA</span>';
 
+            const docDeds = item.doctor?.deductions;
+            const hasDeds = docDeds && docDeds.applied;
+            const docGrossVal = hasDeds ? parseFloat(docDeds.gross_doctor_amount || item.doctor?.gross_amount || 0) : parseFloat(item.doctor?.amount || 0);
+            const docNetVal = hasDeds ? parseFloat(docDeds.net_doctor_amount || item.doctor?.amount || 0) : parseFloat(item.doctor?.amount || 0);
+
             const printContent = `
                 <div style="font-family: Arial, sans-serif; padding: 32px; border: 1px solid #cbd5e1; max-width: 650px; margin: auto; border-radius: 12px; background: #ffffff;">
                     <div style="text-align: center; border-bottom: 2px solid #7fa13c; padding-bottom: 14px; margin-bottom: 20px;">
@@ -1883,9 +2088,28 @@
                                 <td style="padding: 10px 8px;"><strong>Médico Especialista</strong></td>
                                 <td style="padding: 10px 8px;">${item.doctor?.name || 'Médico S/N'}</td>
                                 <td style="padding: 10px 8px; text-align: center;">${item.doctor?.type === 'fixed' ? 'Fijo $' + item.doctor.rate : (item.doctor?.rate || 40) + '%'}</td>
-                                <td style="padding: 10px 8px; text-align: right; font-weight: bold; color: #0f172a;">$${parseFloat(item.doctor?.amount || 0).toFixed(2)}</td>
+                                <td style="padding: 10px 8px; text-align: right; font-weight: bold; color: #0f172a;">$${docGrossVal.toFixed(2)}</td>
                                 <td style="padding: 10px 8px; text-align: right;">${docStatus}</td>
                             </tr>
+                            ${hasDeds ? `
+                            <tr style="border-bottom: 1px dashed #cbd5e1; font-size: 0.82rem; color: #dc2626; background: #fff1f2;">
+                                <td colspan="2" style="padding: 6px 8px;">↳ <strong>(-) Retención Clínica (${docDeds.retention_percent}%):</strong> que queda a la clínica</td>
+                                <td style="padding: 6px 8px; text-align: center;">-${docDeds.retention_percent}%</td>
+                                <td style="padding: 6px 8px; text-align: right; font-weight: bold;">-$${parseFloat(docDeds.retention_amount_usd || 0).toFixed(2)}</td>
+                                <td style="padding: 6px 8px; text-align: right; font-size: 0.75rem;">Retenido</td>
+                            </tr>
+                            <tr style="border-bottom: 1px dashed #cbd5e1; font-size: 0.82rem; color: #dc2626; background: #fff1f2;">
+                                <td colspan="2" style="padding: 6px 8px;">↳ <strong>(-) Sustraendo SENIAT:</strong> ${parseFloat(docDeds.sustraendo_bs || 0).toFixed(2)} Bs (@ BCV ${docDeds.bcv_rate})</td>
+                                <td style="padding: 6px 8px; text-align: center;">${parseFloat(docDeds.sustraendo_bs || 0).toFixed(2)} Bs</td>
+                                <td style="padding: 6px 8px; text-align: right; font-weight: bold;">-$${parseFloat(docDeds.sustraendo_usd || 0).toFixed(2)}</td>
+                                <td style="padding: 6px 8px; text-align: right; font-size: 0.75rem;">Retenido</td>
+                            </tr>
+                            <tr style="border-bottom: 1px solid #e2e8f0; font-size: 0.88rem; color: #166534; background: #f0fdf4;">
+                                <td colspan="3" style="padding: 6px 8px;"><strong>(=) Honorarios Netos Pagados al Médico:</strong></td>
+                                <td style="padding: 6px 8px; text-align: right; font-weight: bold;">$${docNetVal.toFixed(2)}</td>
+                                <td style="padding: 6px 8px; text-align: right; font-weight: bold; font-size: 0.75rem;">NETO</td>
+                            </tr>
+                            ` : ''}
                             ${item.assistant && item.assistant.status !== 'No Aplica' ? `
                             <tr style="border-bottom: 1px solid #e2e8f0;">
                                 <td style="padding: 10px 8px;"><strong>Asistente Clínico</strong></td>
@@ -1898,7 +2122,7 @@
                             <tr style="border-top: 2px solid #334155; font-size: 1.05rem; font-weight: bold; background: #f8fafc;">
                                 <td colspan="3" style="padding: 12px 8px;">TOTAL HONORARIOS PROFESIONALES:</td>
                                 <td style="padding: 12px 8px; text-align: right; color: #608127;">
-                                    $${((item.doctor?.amount || 0) + (item.assistant && item.assistant.status !== 'No Aplica' ? (item.assistant?.amount || 0) : 0)).toFixed(2)}
+                                    $${(docNetVal + (item.assistant && item.assistant.status !== 'No Aplica' ? (parseFloat(item.assistant?.amount) || 0) : 0)).toFixed(2)}
                                 </td>
                                 <td></td>
                             </tr>
