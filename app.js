@@ -6343,6 +6343,10 @@ window.openDirectSaleModal = async function(preselectedPatientId = null) {
 
     window.renderDirectSaleItems();
     window.calculateDirectSaleTotals();
+    const dsInitMethod = document.getElementById('ds-payment-method')?.value || 'pagomovil';
+    if (typeof window.populateAccountSelects === 'function') {
+        window.populateAccountSelects(dsInitMethod, 'ds-account-select', 'ds-account-group', 'ds-account-label');
+    }
 };
 
 window.renderDirectSalePatientSearchResults = async function(query) {
@@ -7268,6 +7272,10 @@ window.onDirectSalePaymentMethodChange = function(method) {
         }
     }
 
+    if (typeof window.populateAccountSelects === 'function') {
+        window.populateAccountSelects(method, 'ds-account-select', 'ds-account-group', 'ds-account-label');
+    }
+
     window.calculateDirectSaleTotals();
 };
 
@@ -7296,7 +7304,7 @@ window.onModalPaymentMethodChange = function(method) {
     const rate = getExchangeRate();
     if (rateHint) rateHint.innerText = `Tasa BCV: Bs. ${rate.toFixed(2)}`;
     if (bsGroup) {
-        if (method === 'pagomovil' || method === 'transferencia' || method === 'punto') {
+        if (method === 'pagomovil' || method === 'transferencia' || method === 'punto' || method === 'pos') {
             bsGroup.style.background = '#f0fdf4';
             bsGroup.style.padding = '6px 8px';
             bsGroup.style.borderRadius = '6px';
@@ -7306,6 +7314,10 @@ window.onModalPaymentMethodChange = function(method) {
             bsGroup.style.padding = '0';
             bsGroup.style.border = 'none';
         }
+    }
+
+    if (typeof window.populateAccountSelects === 'function') {
+        window.populateAccountSelects(method, 'pay-account', 'pay-account-group', 'pay-account-label');
     }
 };
 
@@ -7334,13 +7346,17 @@ window.onSessionPaymentMethodChange = function(method) {
     if (usdInput && bsInput) {
         const usd = parseFloat(usdInput.value) || 0;
         bsInput.value = (usd * rate).toFixed(2);
-        if (method === 'pagomovil' || method === 'punto') {
+        if (method === 'pagomovil' || method === 'punto' || method === 'pos') {
             bsInput.style.background = '#f0fdf4';
             bsInput.style.borderColor = '#10b981';
         } else {
             bsInput.style.background = '#fff';
             bsInput.style.borderColor = '#38bdf8';
         }
+    }
+
+    if (typeof window.populateAccountSelects === 'function') {
+        window.populateAccountSelects(method, 's-payment-account', 's-account-group', 's-account-label');
     }
 };
 
@@ -7381,6 +7397,288 @@ window.updateBillingSplitBsHints = function() {
         const usd = parseFloat(pmInput.value) || 0;
         pmHint.innerText = `≈ Bs. ${(usd * rate).toFixed(2)}`;
     }
+};
+
+// ============================================================================
+// GESTIÓN DE CUENTAS BANCARIAS, TERMINALES Y PUNTOS DE VENTA (MULTI-CUENTA)
+// ============================================================================
+
+const DEFAULT_FINANCIAL_ACCOUNTS = [
+    { id: 'acc_pos_banesco', name: 'Punto Banesco #1', type: 'pos', bank: 'Banesco', currency: 'BS', commission: 1.5, status: 'active' },
+    { id: 'acc_pos_bancamiga', name: 'Punto Bancamiga #2', type: 'pos', bank: 'Bancamiga', currency: 'BS', commission: 1.5, status: 'active' },
+    { id: 'acc_pm_mercantil', name: 'Pago Móvil Mercantil', type: 'pagomovil', bank: 'Mercantil', currency: 'BS', commission: 0.3, status: 'active' },
+    { id: 'acc_pm_banesco', name: 'Pago Móvil Banesco', type: 'pagomovil', bank: 'Banesco', currency: 'BS', commission: 0.3, status: 'active' },
+    { id: 'acc_zelle_principal', name: 'Zelle Principal (Oficina)', type: 'zelle', bank: 'Chase / BoA', currency: 'USD', commission: 0.0, status: 'active' },
+    { id: 'acc_transf_banesco', name: 'Transferencia Banesco Cta Corriente', type: 'transferencia', bank: 'Banesco', currency: 'BS', commission: 0.0, status: 'active' },
+    { id: 'acc_cash_usd', name: 'Caja Chica Efectivo USD', type: 'cash', bank: 'Caja Principal', currency: 'USD', commission: 0.0, status: 'active' },
+    { id: 'acc_cash_bs', name: 'Caja Chica Efectivo Bs.', type: 'cash_bs', bank: 'Caja Principal', currency: 'BS', commission: 0.0, status: 'active' }
+];
+
+window.getFinancialAccounts = function() {
+    let accounts = [];
+    try {
+        const raw = localStorage.getItem('dental_financial_accounts');
+        if (raw) {
+            accounts = JSON.parse(raw);
+        }
+    } catch (e) {
+        console.warn('Error reading dental_financial_accounts', e);
+    }
+    if (!accounts || accounts.length === 0) {
+        accounts = [...DEFAULT_FINANCIAL_ACCOUNTS];
+        window.saveFinancialAccountsToStorage(accounts);
+    }
+    return accounts;
+};
+
+window.saveFinancialAccountsToStorage = function(accounts) {
+    try {
+        localStorage.setItem('dental_financial_accounts', JSON.stringify(accounts));
+    } catch (e) {
+        console.error('Error saving dental_financial_accounts', e);
+    }
+    if (window.SupabaseDataService && typeof window.SupabaseDataService.saveClinicConfigItem === 'function') {
+        window.SupabaseDataService.saveClinicConfigItem('financial_accounts', accounts).catch(() => {});
+    }
+};
+
+window.openFinancialAccountsModal = function() {
+    window.resetFinancialAccountForm();
+    window.renderFinancialAccountsTable();
+    openModal('modal-financial-accounts');
+};
+
+window.renderFinancialAccountsTable = function() {
+    const tbody = document.getElementById('fa-accounts-tbody');
+    const badge = document.getElementById('fa-count-badge');
+    if (!tbody) return;
+
+    const accounts = window.getFinancialAccounts();
+    if (badge) badge.textContent = `${accounts.length} cuenta${accounts.length === 1 ? '' : 's'}`;
+
+    if (accounts.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding: 20px;">No hay cuentas ni terminales configurados. Registre uno arriba.</td></tr>';
+        return;
+    }
+
+    const typeLabels = {
+        pos: '💳 Punto (POS)',
+        pagomovil: '📱 Pago Móvil',
+        transferencia: '🏦 Transferencia',
+        zelle: '🇺🇸 Zelle',
+        cash: '💵 Efectivo USD',
+        cash_bs: '🇻🇪 Efectivo Bs.',
+        otro: '⚙️ Otro'
+    };
+
+    tbody.innerHTML = accounts.map(acc => {
+        const isActive = acc.status === 'active';
+        const statusBadge = isActive 
+            ? `<span class="badge-tag green" style="font-size:0.72rem; cursor:pointer;" onclick="window.toggleFinancialAccountStatus('${acc.id}')" title="Clic para cambiar estado">🟢 Activa</span>`
+            : `<span class="badge-tag gray" style="font-size:0.72rem; cursor:pointer;" onclick="window.toggleFinancialAccountStatus('${acc.id}')" title="Clic para activar">🔴 Inactiva</span>`;
+        
+        return `
+            <tr style="font-size: 0.8rem; border-bottom: 1px solid var(--border-color);">
+                <td><strong>${acc.name}</strong></td>
+                <td><span class="badge-tag blue" style="font-size: 0.72rem;">${typeLabels[acc.type] || acc.type}</span></td>
+                <td>${acc.bank || '<span class="text-muted">--</span>'}</td>
+                <td class="text-center"><span class="badge-tag ${acc.currency === 'USD' ? 'green' : 'amber'}" style="font-size: 0.70rem;">${acc.currency || 'BS'}</span></td>
+                <td class="text-right"><strong>${(parseFloat(acc.commission) || 0).toFixed(2)}%</strong></td>
+                <td class="text-center">${statusBadge}</td>
+                <td class="text-center">
+                    <button type="button" class="btn btn-xs btn-outline" onclick="window.editFinancialAccount('${acc.id}')" title="Editar cuenta" style="padding: 2px 6px; font-size: 0.72rem; color: #0284c7; border-color: #0284c7;">
+                        <i class="fa-solid fa-pen"></i>
+                    </button>
+                    <button type="button" class="btn btn-xs btn-outline" onclick="window.deleteFinancialAccount('${acc.id}')" title="Eliminar cuenta" style="padding: 2px 6px; font-size: 0.72rem; color: #ef4444; border-color: #fca5a5;">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+};
+
+window.saveFinancialAccountSubmit = function(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    const idEl = document.getElementById('fa-account-id');
+    const nameEl = document.getElementById('fa-name');
+    const typeEl = document.getElementById('fa-type');
+    const bankEl = document.getElementById('fa-bank');
+    const curEl = document.getElementById('fa-currency');
+    const comEl = document.getElementById('fa-commission');
+    const statusEl = document.getElementById('fa-status');
+
+    const name = (nameEl ? nameEl.value : '').trim();
+    if (!name) {
+        if (typeof Swal !== 'undefined') Swal.fire({ icon: 'warning', title: 'Nombre requerido', text: 'Indique un nombre identificador para la cuenta.' });
+        return;
+    }
+
+    const type = typeEl ? typeEl.value : 'pos';
+    const bank = (bankEl ? bankEl.value : '').trim();
+    const currency = curEl ? curEl.value : 'BS';
+    const commission = parseFloat(comEl ? comEl.value : 0) || 0;
+    const status = statusEl ? statusEl.value : 'active';
+
+    const accounts = window.getFinancialAccounts();
+    const editId = idEl ? idEl.value.trim() : '';
+
+    if (editId) {
+        const idx = accounts.findIndex(a => a.id === editId);
+        if (idx !== -1) {
+            accounts[idx] = { ...accounts[idx], name, type, bank, currency, commission, status };
+        }
+    } else {
+        const newId = 'acc_' + type + '_' + Date.now().toString().slice(-6);
+        accounts.push({ id: newId, name, type, bank, currency, commission, status });
+    }
+
+    window.saveFinancialAccountsToStorage(accounts);
+    window.resetFinancialAccountForm();
+    window.renderFinancialAccountsTable();
+
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            icon: 'success',
+            title: editId ? 'Cuenta actualizada' : 'Cuenta registrada',
+            text: `La cuenta "${name}" ha sido guardada correctamente.`,
+            timer: 1600,
+            showConfirmButton: false
+        });
+    }
+};
+
+window.editFinancialAccount = function(id) {
+    const accounts = window.getFinancialAccounts();
+    const acc = accounts.find(a => a.id === id);
+    if (!acc) return;
+
+    document.getElementById('fa-account-id').value = acc.id;
+    document.getElementById('fa-name').value = acc.name || '';
+    document.getElementById('fa-type').value = acc.type || 'pos';
+    document.getElementById('fa-bank').value = acc.bank || '';
+    document.getElementById('fa-currency').value = acc.currency || 'BS';
+    document.getElementById('fa-commission').value = acc.commission !== undefined ? acc.commission : 0;
+    document.getElementById('fa-status').value = acc.status || 'active';
+
+    const title = document.getElementById('fa-form-title');
+    if (title) title.innerHTML = `<i class="fa-solid fa-pen-to-square text-cyan"></i> Editando: <strong>${acc.name}</strong>`;
+    const btnCancel = document.getElementById('fa-btn-cancel-edit');
+    if (btnCancel) btnCancel.classList.remove('hidden');
+    const btnSubmit = document.getElementById('fa-btn-submit');
+    if (btnSubmit) btnSubmit.innerHTML = `<i class="fa-solid fa-save"></i> Actualizar Cuenta`;
+};
+
+window.resetFinancialAccountForm = function() {
+    const form = document.getElementById('form-financial-account');
+    if (form) form.reset();
+    const idEl = document.getElementById('fa-account-id');
+    if (idEl) idEl.value = '';
+    const title = document.getElementById('fa-form-title');
+    if (title) title.innerHTML = `<i class="fa-solid fa-plus-circle text-cyan"></i> Registrar Nueva Cuenta o Terminal`;
+    const btnCancel = document.getElementById('fa-btn-cancel-edit');
+    if (btnCancel) btnCancel.classList.add('hidden');
+    const btnSubmit = document.getElementById('fa-btn-submit');
+    if (btnSubmit) btnSubmit.innerHTML = `<i class="fa-solid fa-save"></i> Guardar Cuenta`;
+};
+
+window.toggleFinancialAccountStatus = function(id) {
+    const accounts = window.getFinancialAccounts();
+    const acc = accounts.find(a => a.id === id);
+    if (!acc) return;
+    acc.status = acc.status === 'active' ? 'inactive' : 'active';
+    window.saveFinancialAccountsToStorage(accounts);
+    window.renderFinancialAccountsTable();
+};
+
+window.deleteFinancialAccount = function(id) {
+    const accounts = window.getFinancialAccounts();
+    const acc = accounts.find(a => a.id === id);
+    if (!acc) return;
+
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: '¿Eliminar cuenta / terminal?',
+            text: `¿Desea eliminar la cuenta "${acc.name}"? Los comprobantes previos mantendrán su nombre histórico.`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#ef4444'
+        }).then(res => {
+            if (res.isConfirmed) {
+                const updated = accounts.filter(a => a.id !== id);
+                window.saveFinancialAccountsToStorage(updated);
+                window.renderFinancialAccountsTable();
+                Swal.fire({ icon: 'success', title: 'Cuenta eliminada', timer: 1400, showConfirmButton: false });
+            }
+        });
+    } else {
+        if (confirm(`¿Eliminar la cuenta "${acc.name}"?`)) {
+            const updated = accounts.filter(a => a.id !== id);
+            window.saveFinancialAccountsToStorage(updated);
+            window.renderFinancialAccountsTable();
+        }
+    }
+};
+
+window.populateAccountSelects = function(rawMethod, selectElementId, groupElementId, labelElementId) {
+    const select = document.getElementById(selectElementId);
+    const group = document.getElementById(groupElementId);
+    if (!select) return;
+
+    const m = (rawMethod || '').toLowerCase();
+    let targetType = '';
+    let labelText = 'Cuenta / Destino:';
+
+    if (m === 'pos' || m.includes('punto') || m.includes('tarjeta') || m.includes('debito')) {
+        targetType = 'pos';
+        labelText = '💳 Seleccione el Punto / POS:';
+    } else if (m === 'pagomovil' || m.includes('movil') || m.includes('móvil') || m.includes('pago')) {
+        targetType = 'pagomovil';
+        labelText = '📱 Seleccione el Pago Móvil:';
+    } else if (m === 'transferencia') {
+        targetType = 'transferencia';
+        labelText = '🏦 Seleccione la Cuenta Bancaria:';
+    } else if (m === 'zelle') {
+        targetType = 'zelle';
+        labelText = '🇺🇸 Seleccione la Cuenta Zelle:';
+    } else if (m === 'cash' || m === 'efectivo') {
+        targetType = 'cash';
+        labelText = '💵 Seleccione Caja de Efectivo:';
+    }
+
+    if (!targetType) {
+        if (group) group.style.display = 'none';
+        select.innerHTML = '';
+        return;
+    }
+
+    const allAccounts = window.getFinancialAccounts();
+    const matching = allAccounts.filter(a => a.status === 'active' && (a.type === targetType || (targetType === 'cash' && (a.type === 'cash' || a.type === 'cash_bs'))));
+
+    if (matching.length === 0) {
+        select.innerHTML = `<option value="acc_generic_${targetType}" data-commission="0">${targetType.toUpperCase()} Principal (Por defecto)</option>`;
+        if (group) group.style.display = 'block';
+    } else {
+        select.innerHTML = matching.map(acc => {
+            const bankStr = acc.bank ? ` [${acc.bank}]` : '';
+            const commStr = (parseFloat(acc.commission) || 0) > 0 ? ` (Comisión: ${acc.commission}%)` : '';
+            return `<option value="${acc.id}" data-commission="${acc.commission || 0}" data-bank="${acc.bank || ''}" data-name="${acc.name}">${acc.name}${bankStr}${commStr}</option>`;
+        }).join('');
+        if (group) group.style.display = 'block';
+    }
+
+    const label = labelElementId ? document.getElementById(labelElementId) : null;
+    if (label) label.textContent = labelText;
+};
+
+window.onBillingPaymentMethodChange = function(method) {
+    if (typeof window.populateAccountSelects === 'function') {
+        window.populateAccountSelects(method, 'bill-account', 'bill-account-group', 'bill-account-label');
+    }
+    if (typeof updateBillingTotals === 'function') updateBillingTotals();
+    if (typeof refreshBillingLivePreview === 'function') refreshBillingLivePreview();
 };
 
 window.processDirectSale = async function() {
@@ -7478,12 +7776,26 @@ window.processDirectSale = async function() {
     const specialtyPrimary = window.currentDirectSaleItems[0]?.specialty || 'General';
     const paymentTerms = isCashea ? 'Financiamiento Cashea' : (saleType === 'credito' && !isFull ? 'Abono Parcial (Crédito)' : 'Contado');
 
+    const dsAccEl = document.getElementById('ds-account-select');
+    let dsAccountId = '';
+    let dsAccountName = '';
+    let dsCommission = 0;
+    if (dsAccEl && dsAccEl.value && document.getElementById('ds-account-group')?.style.display !== 'none') {
+        dsAccountId = dsAccEl.value;
+        const selectedOpt = dsAccEl.options[dsAccEl.selectedIndex];
+        dsAccountName = selectedOpt ? (selectedOpt.getAttribute('data-name') || selectedOpt.text) : '';
+        dsCommission = parseFloat(selectedOpt?.getAttribute('data-commission') || 0);
+    }
+
     const salePayload = {
         id: docId,
         patientId,
         patientName,
         date: new Date().toISOString().split('T')[0],
         paymentMethod: isCashea ? (paymentMethod === 'split' ? 'Mixto (con Cashea)' : 'Cashea') : paymentMethod,
+        accountId: dsAccountId,
+        accountName: dsAccountName,
+        commission: dsCommission,
         paymentTerms,
         saleType,
         items: [...window.currentDirectSaleItems],
@@ -13302,6 +13614,17 @@ function initGlobalEvents() {
             if (!patient) return;
 
             if (!patient.sessions) patient.sessions = [];
+
+            const sAccountEl = document.getElementById('s-payment-account');
+            let sAccountId = '';
+            let sAccountName = '';
+            let sCommission = 0;
+            if (sAccountEl && sAccountEl.value && document.getElementById('s-account-group')?.style.display !== 'none') {
+                sAccountId = sAccountEl.value;
+                const selOpt = sAccountEl.options[sAccountEl.selectedIndex];
+                sAccountName = selOpt ? (selOpt.getAttribute('data-name') || selOpt.text) : '';
+                sCommission = parseFloat(selOpt?.getAttribute('data-commission') || 0);
+            }
             
             // Construct new session
             const sessionObj = {
@@ -13314,6 +13637,9 @@ function initGlobalEvents() {
                 paymentUSD,
                 paymentMethod,
                 paymentMethodLabel,
+                accountId: sAccountId,
+                accountName: sAccountName,
+                commission: sCommission,
                 paymentBank: paymentBank || (paymentMethod === 'cash' ? 'Efectivo en Mano' : 'No especificado'),
                 paymentReference: paymentReference || 'N/A',
                 splitPayments
@@ -13388,6 +13714,9 @@ function initGlobalEvents() {
                     balanceUSD: 0.00,
                     status: 'Pagado',
                     method: paymentMethod,
+                    accountId: sAccountId,
+                    accountName: sAccountName,
+                    commission: sCommission,
                     bank: paymentBank || (paymentMethod === 'cash' ? 'Efectivo en Mano' : 'No especificado'),
                     reference: paymentReference || sessionDocId,
                     splitPayments
@@ -13401,6 +13730,9 @@ function initGlobalEvents() {
                         patientName: patient.fullname,
                         invoiceDate: sessionDate,
                         paymentMethod: paymentMethod,
+                        accountId: sAccountId,
+                        accountName: sAccountName,
+                        commission: sCommission,
                         paymentTerms: 'Contado',
                         currency: 'USD',
                         items: [{
@@ -13729,6 +14061,17 @@ function initGlobalEvents() {
                 return;
             }
 
+            const payAccountEl = document.getElementById('pay-account');
+            let payAccountId = '';
+            let payAccountName = '';
+            let payCommission = 0;
+            if (payAccountEl && payAccountEl.value && document.getElementById('pay-account-group')?.style.display !== 'none') {
+                payAccountId = payAccountEl.value;
+                const selOpt = payAccountEl.options[payAccountEl.selectedIndex];
+                payAccountName = selOpt ? (selOpt.getAttribute('data-name') || selOpt.text) : '';
+                payCommission = parseFloat(selOpt?.getAttribute('data-commission') || 0);
+            }
+
             const balanceUSD = Math.max(0, totalUSD - paidUSD);
             const status = balanceUSD === 0 ? 'Pagado' : 'Abono Parcial';
             const docPrefix = balanceUSD === 0 ? 'FAC-' : 'REC-';
@@ -13748,6 +14091,9 @@ function initGlobalEvents() {
                     balanceUSD,
                     status,
                     method,
+                    accountId: payAccountId,
+                    accountName: payAccountName,
+                    commission: payCommission,
                     bank: bank || (method === 'cash' ? 'Efectivo en Mano' : 'No especificado'),
                     reference: reference || docId
                 };
@@ -13761,6 +14107,9 @@ function initGlobalEvents() {
                     patientName: p.fullname,
                     invoiceDate: date,
                     paymentMethod: method,
+                    accountId: payAccountId,
+                    accountName: payAccountName,
+                    commission: payCommission,
                     paymentTerms: isFull ? 'Contado' : 'Abono Parcial',
                     currency: 'USD',
                     items: [{
@@ -20938,7 +21287,13 @@ async function renderBillingView() {
     assistantSelect.onchange = () => refreshBillingLivePreview();
     document.getElementById('bill-currency').onchange = () => updateBillingTotals();
     document.getElementById('bill-terms').onchange = () => updateBillingTotals();
-    document.getElementById('bill-method').onchange = () => updateBillingTotals();
+    const billMethodInput = document.getElementById('bill-method');
+    if (billMethodInput) {
+        billMethodInput.onchange = () => {
+            window.onBillingPaymentMethodChange(billMethodInput.value);
+        };
+        window.onBillingPaymentMethodChange(billMethodInput.value);
+    }
     const footerInput = document.getElementById('bill-footer-note');
     if (footerInput) footerInput.oninput = () => refreshBillingLivePreview();
 
@@ -21021,12 +21376,26 @@ async function renderBillingView() {
             patSig = activePatient.metadata.patientSignature;
         }
 
+        const billAccEl = document.getElementById('bill-account');
+        let billAccountId = '';
+        let billAccountName = '';
+        let billCommission = 0;
+        if (billAccEl && billAccEl.value && document.getElementById('bill-account-group')?.style.display !== 'none') {
+            billAccountId = billAccEl.value;
+            const selOpt = billAccEl.options[billAccEl.selectedIndex];
+            billAccountName = selOpt ? (selOpt.getAttribute('data-name') || selOpt.text) : '';
+            billCommission = parseFloat(selOpt?.getAttribute('data-commission') || 0);
+        }
+
         // Save invoice obj
         const invoiceObj = {
             id: invoiceId,
             patientId: pId,
             invoiceDate: new Date().toISOString().split('T')[0],
             paymentMethod: method,
+            accountId: billAccountId,
+            accountName: billAccountName,
+            commission: billCommission,
             paymentTerms: terms,
             currency: currency,
             items: billingItems,
@@ -22883,6 +23252,9 @@ window.renderDailyClosingView = async function() {
                         concept: matchedConcept,
                         method: pay.method ? getPaymentMethodLabel(pay.method) : 'Efectivo USD',
                         rawMethod: cleanMethod,
+                        accountId: pay.accountId || (matchInv && matchInv.accountId) || '',
+                        accountName: pay.accountName || (matchInv && matchInv.accountName) || (pay.bank ? `${pay.method ? getPaymentMethodLabel(pay.method) : 'Pago'} (${pay.bank})` : ''),
+                        commission: parseFloat(pay.commission || (matchInv && matchInv.commission) || 0),
                         amountUSD: payAmt,
                         amountBs: payAmt * rate,
                         splitDetails: pay.splitDetails || null,
@@ -22924,6 +23296,9 @@ window.renderDailyClosingView = async function() {
                     concept: itemsConcept,
                     method: inv.paymentMethod ? getPaymentMethodLabel(inv.paymentMethod) : 'Efectivo USD',
                     rawMethod: (inv.paymentMethod || 'cash').toLowerCase(),
+                    accountId: inv.accountId || '',
+                    accountName: inv.accountName || (inv.bank ? `${inv.paymentMethod ? getPaymentMethodLabel(inv.paymentMethod) : 'Pago'} (${inv.bank})` : ''),
+                    commission: parseFloat(inv.commission || 0),
                     amountUSD: invPaid,
                     amountBs: invPaid * rate,
                     splitDetails: inv.splitDetails || null,
@@ -23270,7 +23645,10 @@ window.renderDailyClosingDeptShiftView = function() {
                         <td><strong>${t.concept}</strong></td>
                         <td><i class="fa-solid fa-user-doctor text-cyan"></i> ${t.doctor}</td>
                         <td>${asstBadge}</td>
-                        <td><span class="badge-tag" style="background:#f1f5f9; font-size:0.75rem;">${t.method}</span></td>
+                        <td>
+                            <span class="badge-tag" style="background:#f1f5f9; font-size:0.75rem;">${t.method}</span>
+                            ${t.accountName ? `<small style="display:block; color:#0284c7; font-weight:600; font-size:0.7rem; margin-top:2px;"><i class="fa-solid fa-cash-register"></i> ${t.accountName}</small>` : ''}
+                        </td>
                         <td class="text-right" style="font-weight: 800; color: #059669; white-space: nowrap;">
                             $${t.amountUSD.toFixed(2)}<br>
                             <small style="color: #0284c7; font-weight: normal;">Bs. ${t.amountBs.toFixed(2)}</small>
@@ -23283,6 +23661,120 @@ window.renderDailyClosingDeptShiftView = function() {
             }).join('');
         }
     }
+
+    // Refresh subbreakdown drawer if currently open
+    if (window.currentDailyClosingSubbreakdownMethod) {
+        window.toggleDailyClosingAccountSubbreakdown(window.currentDailyClosingSubbreakdownMethod, true);
+    }
+};
+
+window.currentDailyClosingSubbreakdownMethod = null;
+
+window.closeDailyClosingAccountSubbreakdown = function() {
+    const drawer = document.getElementById('dc-accounts-subbreakdown');
+    if (drawer) drawer.classList.add('hidden');
+    window.currentDailyClosingSubbreakdownMethod = null;
+};
+
+window.toggleDailyClosingAccountSubbreakdown = function(methodKey, keepOpen = false) {
+    const drawer = document.getElementById('dc-accounts-subbreakdown');
+    const content = document.getElementById('dc-subbreakdown-content');
+    const title = document.getElementById('dc-subbreakdown-title');
+    if (!drawer || !content) return;
+
+    if (!keepOpen && window.currentDailyClosingSubbreakdownMethod === methodKey && !drawer.classList.contains('hidden')) {
+        window.closeDailyClosingAccountSubbreakdown();
+        return;
+    }
+
+    window.currentDailyClosingSubbreakdownMethod = methodKey;
+
+    const areaName = window.currentDailyClosingArea;
+    const shift = window.currentDailyClosingShift;
+    const rate = getExchangeRate();
+    const areaTxs = (window.dailyClosingTransactionsCache || []).filter(t => t.area === areaName);
+    const filtered = shift === 'morning' ? areaTxs.filter(t => t.shift === 'morning') : (shift === 'afternoon' ? areaTxs.filter(t => t.shift === 'afternoon') : areaTxs);
+
+    // Filter transactions matching this method
+    const matchingTxs = filtered.filter(t => {
+        const m = (t.rawMethod || '').toLowerCase();
+        if (methodKey === 'pagomovil') return m.includes('pago') || m.includes('movil') || m.includes('móvil') || m.includes('transferencia');
+        if (methodKey === 'pos') return m.includes('pos') || m.includes('punto') || m.includes('tarjeta') || m.includes('debito');
+        if (methodKey === 'zelle') return m.includes('zelle');
+        if (methodKey === 'cash_bs') return m.includes('bs') || m.includes('bolivares') || m.includes('bolívares');
+        if (methodKey === 'cashea') return t.is_cashea || m.includes('cashea');
+        return methodKey === 'cash' && (!m.includes('pos') && !m.includes('pago') && !m.includes('zelle') && !m.includes('cashea') && !m.includes('bs'));
+    });
+
+    const methodTitles = {
+        pagomovil: '📱 Desglose por Cuenta de Pago Móvil',
+        pos: '💳 Desglose por Terminal de Punto de Venta (POS)',
+        zelle: '🇺🇸 Desglose por Cuenta Zelle',
+        cash: '💵 Desglose por Caja Chica (Efectivo USD)',
+        cash_bs: '🇻🇪 Desglose por Caja de Efectivo Bs.',
+        cashea: '🟡 Desglose Cashea'
+    };
+
+    if (title) title.innerHTML = `<i class="fa-solid fa-list-check"></i> ${methodTitles[methodKey] || 'Desglose por Cuenta'} (${matchingTxs.length} operaciones)`;
+
+    if (matchingTxs.length === 0) {
+        content.innerHTML = '<div style="grid-column: 1 / -1; padding: 10px; text-align: center; color: #64748b; font-size: 0.8rem;">No hay operaciones registradas con este método en este turno.</div>';
+        drawer.classList.remove('hidden');
+        return;
+    }
+
+    // Group matching transactions by accountName / terminal
+    const accountsGroup = {};
+    matchingTxs.forEach(t => {
+        let accName = t.accountName;
+        if (!accName) {
+            accName = t.method ? `${t.method} General` : 'Cuenta General';
+        }
+        if (!accountsGroup[accName]) {
+            accountsGroup[accName] = {
+                name: accName,
+                count: 0,
+                totalUSD: 0,
+                totalBs: 0,
+                commissionPct: t.commission || 0,
+                commissionUSD: 0
+            };
+        }
+        accountsGroup[accName].count++;
+        accountsGroup[accName].totalUSD += t.amountUSD;
+        accountsGroup[accName].totalBs += t.amountBs;
+        if (t.commission && t.commission > 0) {
+            accountsGroup[accName].commissionPct = t.commission;
+            accountsGroup[accName].commissionUSD += (t.amountUSD * (t.commission / 100));
+        }
+    });
+
+    content.innerHTML = Object.values(accountsGroup).map(acc => {
+        const netUSD = acc.totalUSD - acc.commissionUSD;
+        const commHtml = acc.commissionUSD > 0
+            ? `<div style="font-size: 0.7rem; color: #dc2626; margin-top: 2px;">
+                 Comisión (${acc.commissionPct}%): -$${acc.commissionUSD.toFixed(2)} | <strong>Neto: $${netUSD.toFixed(2)}</strong>
+               </div>`
+            : '';
+
+        return `
+            <div style="background: #ffffff; border: 1.5px solid #86efac; border-radius: 8px; padding: 10px 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <strong style="font-size: 0.82rem; color: #1e293b;"><i class="fa-solid fa-building-columns text-cyan"></i> ${acc.name}</strong>
+                    <span class="badge-tag green" style="font-size: 0.68rem;">${acc.count} op.</span>
+                </div>
+                <div style="margin-top: 6px; font-size: 1.1rem; font-weight: 800; color: #059669;">
+                    $${acc.totalUSD.toFixed(2)}
+                </div>
+                <div style="font-size: 0.72rem; color: #0284c7; font-weight: 700;">
+                    Bs. ${acc.totalBs.toFixed(2)}
+                </div>
+                ${commHtml}
+            </div>
+        `;
+    }).join('');
+
+    drawer.classList.remove('hidden');
 };
 
 window.printDailyClosingDept = function() {
@@ -23297,6 +23789,17 @@ window.printDailyClosingDept = function() {
 
     const totalUSD = filtered.reduce((acc, t) => acc + t.amountUSD, 0);
     const totalBs = totalUSD * rate;
+
+    // Group by account for ticket print
+    const accBreakdown = {};
+    filtered.forEach(t => {
+        const acc = t.accountName || `${t.method} General`;
+        if (!accBreakdown[acc]) {
+            accBreakdown[acc] = { name: acc, count: 0, totalUSD: 0, method: t.method };
+        }
+        accBreakdown[acc].count++;
+        accBreakdown[acc].totalUSD += t.amountUSD;
+    });
 
     const closingHtml = `
         <div style="font-family: Arial, sans-serif; padding: 20px; color: #1e293b; font-size: 12px; background: #fff;">
@@ -23328,6 +23831,32 @@ window.printDailyClosingDept = function() {
                 </div>
             </div>
 
+            ${Object.keys(accBreakdown).length > 0 ? `
+            <div style="margin-bottom: 16px;">
+                <div style="font-size: 11px; font-weight: bold; text-transform: uppercase; color: #475569; margin-bottom: 6px; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px;">
+                    Resumen por Cuenta / Terminal de Cobro:
+                </div>
+                <table style="width: 100%; border-collapse: collapse; font-size: 10.5px;">
+                    <thead>
+                        <tr style="background: #f1f5f9;">
+                            <th style="padding: 5px 8px; text-align: left; border: 1px solid #cbd5e1;">Cuenta / Terminal</th>
+                            <th style="padding: 5px 8px; text-align: center; border: 1px solid #cbd5e1;">Nº Op.</th>
+                            <th style="padding: 5px 8px; text-align: right; border: 1px solid #cbd5e1;">Total Recaudado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${Object.values(accBreakdown).map(ab => `
+                            <tr>
+                                <td style="padding: 5px 8px; border: 1px solid #e2e8f0;"><strong>${ab.name}</strong></td>
+                                <td style="padding: 5px 8px; text-align: center; border: 1px solid #e2e8f0;">${ab.count}</td>
+                                <td style="padding: 5px 8px; text-align: right; border: 1px solid #e2e8f0; color: #059669; font-weight: bold;">$${ab.totalUSD.toFixed(2)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+            ` : ''}
+
             <table style="width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px;">
                 <thead>
                     <tr style="background: #f1f5f9;">
@@ -23337,7 +23866,7 @@ window.printDailyClosingDept = function() {
                         <th style="padding: 8px; text-align: left; border-bottom: 1.5px solid #cbd5e1; text-transform: uppercase; font-size: 10px;">Procedimiento</th>
                         <th style="padding: 8px; text-align: left; border-bottom: 1.5px solid #cbd5e1; text-transform: uppercase; font-size: 10px;">Médico Tratante</th>
                         <th style="padding: 8px; text-align: left; border-bottom: 1.5px solid #cbd5e1; text-transform: uppercase; font-size: 10px;">Asistente</th>
-                        <th style="padding: 8px; text-align: left; border-bottom: 1.5px solid #cbd5e1; text-transform: uppercase; font-size: 10px;">Método</th>
+                        <th style="padding: 8px; text-align: left; border-bottom: 1.5px solid #cbd5e1; text-transform: uppercase; font-size: 10px;">Método / Terminal</th>
                         <th style="padding: 8px; text-align: right; border-bottom: 1.5px solid #cbd5e1; text-transform: uppercase; font-size: 10px;">Monto ($)</th>
                     </tr>
                 </thead>
@@ -23350,7 +23879,7 @@ window.printDailyClosingDept = function() {
                             <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0;">${t.concept}</td>
                             <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0;">${t.doctor}</td>
                             <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0;">${t.assistant || '--'}</td>
-                            <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0;">${t.method}</td>
+                            <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0;">${t.method}${t.accountName ? `<br><small style="color:#0284c7;">${t.accountName}</small>` : ''}</td>
                             <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0; text-align: right;"><strong>$${t.amountUSD.toFixed(2)}</strong></td>
                         </tr>
                     `).join('')}
