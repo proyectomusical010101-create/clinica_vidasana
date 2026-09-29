@@ -1176,13 +1176,23 @@
                     ? `Bono $${parseFloat(item.assistant.rate || 0).toFixed(2)}` 
                     : `${item.assistant?.rate || 5}%`;
 
+                const isCashea = !!(item.is_cashea || (item.payment_method || '').toLowerCase().includes('cashea') || (item.notes || '').toLowerCase().includes('cashea'));
+                const isCredit = !!(item.is_credit || (item.payment_terms || '').toLowerCase().includes('crédito') || (item.payment_terms || '').toLowerCase().includes('credito') || (item.payment_method || '').toLowerCase().includes('credito') || (item.notes || '').toLowerCase().includes('crédito') || (item.notes || '').toLowerCase().includes('credito'));
+
+                const methodBadge = isCashea 
+                    ? `<span class="badge-tag" style="background: #fdf2f8; color: #db2777; border: 1px solid #fbcfe8; font-size: 0.68rem; font-weight: 700; margin-left: 4px;" title="Atención concretada con financiamiento Cashea. Honorarios listos para liquidar al médico."><i class="fa-solid fa-mobile-screen-button"></i> Cashea</span>` 
+                    : (isCredit 
+                        ? `<span class="badge-tag" style="background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; font-size: 0.68rem; font-weight: 700; margin-left: 4px;" title="Atención concretada a crédito interno de la clínica. Honorarios listos para liquidar al médico."><i class="fa-solid fa-hand-holding-dollar"></i> Crédito Interno</span>` 
+                        : '');
+
                 return `
                     <tr>
                         <td>
                             <div style="font-weight: 700; color: #0f172a;">${item.patient_name || 'Paciente S/N'}</div>
-                            <div style="font-size: 0.78rem; color: #64748b; margin-top: 2px;">
-                                <i class="fa-regular fa-calendar" style="margin-right: 3px;"></i> ${item.date || (item.created_at ? item.created_at.substring(0, 10) : 'Hoy')}
-                                ${item.invoice_id ? `<span class="badge-tag gray" style="font-size: 0.68rem; margin-left: 4px;">#${item.invoice_id}</span>` : ''}
+                            <div style="font-size: 0.78rem; color: #64748b; margin-top: 2px; display: flex; align-items: center; flex-wrap: wrap; gap: 3px;">
+                                <span><i class="fa-regular fa-calendar" style="margin-right: 3px;"></i> ${item.date || (item.created_at ? item.created_at.substring(0, 10) : 'Hoy')}</span>
+                                ${item.invoice_id ? `<span class="badge-tag gray" style="font-size: 0.68rem;">#${item.invoice_id}</span>` : ''}
+                                ${methodBadge}
                             </div>
                         </td>
                         <td>

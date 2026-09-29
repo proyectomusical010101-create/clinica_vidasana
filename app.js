@@ -2777,6 +2777,10 @@ window.finalizeBudgetDirect = async function(budgetId) {
             const currentUser = getCurrentUser();
             const docName = budget.doctor || (currentUser ? currentUser.fullname : 'Médico Tratante');
             const docId = currentUser ? currentUser.id : null;
+            const bMethod = (formValues.method || '');
+            const isCasheaBudget = bMethod.toLowerCase().includes('cashea');
+            const isCreditBudget = bMethod.toLowerCase().includes('crédito') || bMethod.toLowerCase().includes('credito') || budget.terms === 'Crédito';
+
             const itemsToLiquidate = Array.isArray(budget.items) && budget.items.length > 0
                 ? budget.items 
                 : (pat && pat.metadata && Array.isArray(pat.metadata.treatments) ? pat.metadata.treatments : []);
@@ -2793,7 +2797,11 @@ window.finalizeBudgetDirect = async function(budgetId) {
                         doctorId: docId,
                         doctorName: docName,
                         sourceType: 'budget_completion',
-                        notes: `Finalizado con Presupuesto #${budget.id} (${formValues.receiptNum || 'Recibo'})`
+                        isCashea: isCasheaBudget,
+                        isCredit: isCreditBudget,
+                        paymentMethod: bMethod,
+                        paymentTerms: budget.terms || (isCreditBudget ? 'Crédito' : 'Contado'),
+                        notes: `Finalizado con Presupuesto #${budget.id} (${formValues.receiptNum || 'Recibo'}) - ${bMethod}${isCasheaBudget ? ' (Cashea)' : isCreditBudget ? ' (Crédito Interno)' : ''}`
                     });
                 }
             }
@@ -8217,6 +8225,8 @@ window.processDirectSale = async function() {
             }
             if (typeof renderPatientsTable === 'function') await renderPatientsTable();
             if (typeof window.renderPatientReceiptsHubTable === 'function') await window.renderPatientReceiptsHubTable();
+            if (typeof renderProviderBills === 'function') await renderProviderBills();
+            if (window.ClinicalERP && typeof window.ClinicalERP.renderServiceLiquidations === 'function') window.ClinicalERP.renderServiceLiquidations();
             if (window.ClinicalERP && typeof window.ClinicalERP.renderSpecialties === 'function') window.ClinicalERP.renderSpecialties();
         } catch(refreshErr) {
             console.warn('Post direct-sale view refresh notice:', refreshErr);
@@ -14061,6 +14071,28 @@ function initGlobalEvents() {
                         const toothNum = parseInt(trt.tooth);
                         const faceKey = trt.face ? `${toothNum}-${trt.face}` : `${toothNum}-center`;
                         patient.odontogramData[faceKey] = 'restoration';
+                    }
+
+                    // Auto-record medical liquidation for completed session treatment
+                    try {
+                        const currentUser = getCurrentUser();
+                        const srvDoc = (trt.specialist && trt.specialist !== 'Especialista General') ? trt.specialist : (currentUser ? currentUser.fullname : (patient.assignedDoctor || 'Médico Tratante'));
+                        const srvPrice = parseFloat(trt.price || trt.cost || paymentUSD || 0);
+                        if (srvPrice > 0 || trt.name || trt.treatment) {
+                            await SupabaseDataService.recordServiceCompletionForLiquidation({
+                                serviceCode: trt.serviceCode || trt.code || 'SES-TRT',
+                                serviceName: trt.name || trt.treatment || procedure || 'Procedimiento Clínico',
+                                servicePrice: srvPrice,
+                                patientId: patient.id,
+                                patientName: patient.fullname,
+                                doctorName: srvDoc,
+                                sourceType: 'clinical_session',
+                                date: datetime ? datetime.split(' ')[0] : new Date().toISOString().split('T')[0],
+                                notes: `Sesión clínica #${sessionNum} concretada (${procedure})`
+                            });
+                        }
+                    } catch(eLiq) {
+                        console.warn('Error recording liquidation from session:', eLiq);
                     }
                 }
             }
@@ -22007,6 +22039,8 @@ async function renderBillingView() {
             const docId = currentUser ? currentUser.id : null;
             const astName = selectedAssistant ? selectedAssistant.fullname : '';
             const astId = selectedAssistant ? selectedAssistant.id : null;
+            const isCasheaInvoice = (method || '').toLowerCase().includes('cashea');
+            const isCreditInvoice = (terms === 'Crédito') || (method || '').toLowerCase().includes('credito') || (method || '').toLowerCase().includes('crédito');
 
             for (const bItem of billingItems) {
                 const itemPrice = (parseFloat(bItem.price) || 0) * (parseInt(bItem.qty) || 1);
@@ -22023,12 +22057,19 @@ async function renderBillingView() {
                     hasAssistant: !!selectedAssistant,
                     sourceType: 'billing_invoice',
                     invoiceId: invoiceId,
+                    isCashea: isCasheaInvoice,
+                    isCredit: isCreditInvoice,
+                    paymentMethod: method,
+                    paymentTerms: terms,
                     date: invoiceObj.invoiceDate,
-                    notes: `Facturado en Caja (${invoiceId}) - Método: ${method}`
+                    notes: `Facturado en Caja (${invoiceId}) - Método: ${method}${isCasheaInvoice ? ' (Cashea)' : isCreditInvoice ? ' (Crédito Interno)' : ''}`
                 });
             }
             if (window.ClinicalERP && window.ClinicalERP.loadAll) {
                 await window.ClinicalERP.loadAll();
+            }
+            if (typeof renderProviderBills === 'function') {
+                await renderProviderBills();
             }
         } catch (liqErr) {
             console.warn('[Liquidation] Error auto-recording billed liquidation:', liqErr);
@@ -22642,18 +22683,80 @@ async function renderProviderBills() {
     tbody.innerHTML = '';
 
     const bills = await SupabaseDataService.getProviderBills();
+    let liquidations = [];
+    try {
+        liquidations = await SupabaseDataService.getServiceLiquidations(true);
+    } catch(e) {
+        console.warn('Error loading liquidations for payables:', e);
+    }
+
     const remindersBox = document.getElementById('payable-reminders');
-    remindersBox.innerHTML = '';
+    if (remindersBox) remindersBox.innerHTML = '';
 
     let alertMessages = [];
     const today = new Date();
 
-    if (bills.length === 0) {
+    // Pending doctor fees to pay
+    const pendingDocLiqs = (liquidations || []).filter(l => l && l.doctor && l.doctor.status === 'Pendiente');
+
+    if (bills.length === 0 && pendingDocLiqs.length === 0) {
         tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding: 15px;">No hay gastos ni cuentas por pagar registradas.</td></tr>';
-        remindersBox.innerHTML = '<span class="text-muted" style="font-size:0.8rem;"><i class="fa-solid fa-bell-slash"></i> Sin recordatorios de vencimiento pendientes.</span>';
+        if (remindersBox) remindersBox.innerHTML = '<span class="text-muted" style="font-size:0.8rem;"><i class="fa-solid fa-bell-slash"></i> Sin recordatorios de vencimiento pendientes.</span>';
         return;
     }
 
+    // 1. Render pending doctor fees (Honorarios Médicos por Pagar)
+    let totalPendingDoctorFees = 0;
+    pendingDocLiqs.forEach(liq => {
+        const price = parseFloat(liq.service_price || 0);
+        let docFee = 0;
+        if (liq.doctor.type === 'fixed') {
+            docFee = parseFloat(liq.doctor.rate || 0);
+        } else {
+            const pct = parseFloat(liq.doctor.rate || 40) / 100;
+            docFee = price * pct;
+        }
+        totalPendingDoctorFees += docFee;
+
+        const isCashea = !!(liq.is_cashea || (liq.payment_method || '').toLowerCase().includes('cashea') || (liq.notes || '').toLowerCase().includes('cashea'));
+        const isCredit = !!(liq.is_credit || (liq.payment_terms || '').toLowerCase().includes('crédito') || (liq.payment_terms || '').toLowerCase().includes('credito') || (liq.payment_method || '').toLowerCase().includes('credito') || (liq.notes || '').toLowerCase().includes('crédito') || (liq.notes || '').toLowerCase().includes('credito'));
+
+        const methodBadge = isCashea 
+            ? `<span class="badge-tag" style="background: #fdf2f8; color: #db2777; border: 1px solid #fbcfe8; font-size: 0.68rem; font-weight: 700; margin-left: 4px;" title="Atención con Cashea (Médico cobra de inmediato)"><i class="fa-solid fa-mobile-screen-button"></i> Cashea</span>` 
+            : (isCredit 
+                ? `<span class="badge-tag" style="background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; font-size: 0.68rem; font-weight: 700; margin-left: 4px;" title="Atención a crédito interno (Médico cobra de inmediato)"><i class="fa-solid fa-hand-holding-dollar"></i> Crédito Interno</span>` 
+                : '');
+
+        const tr = document.createElement('tr');
+        tr.style.background = 'rgba(6, 182, 212, 0.04)';
+        tr.innerHTML = `
+            <td>
+                <strong><i class="fa-solid fa-user-doctor text-cyan" style="margin-right: 4px;"></i>${liq.doctor.name || 'Médico Tratante'}</strong>
+                <div style="font-size: 0.74rem; color: #64748b;">Honorario Médico ${methodBadge}</div>
+            </td>
+            <td>
+                <div style="font-weight: 600; color: #0f172a;">${liq.service_name || 'Servicio Médico'}</div>
+                <small class="text-muted"><i class="fa-regular fa-user"></i> Pac: ${liq.patient_name || 'Paciente'}</small>
+            </td>
+            <td style="font-weight: 700; color: #0f172a;">$${docFee.toFixed(2)}</td>
+            <td><small><i class="fa-regular fa-calendar"></i> ${liq.date || (liq.created_at ? liq.created_at.substring(0, 10) : 'Hoy')}</small></td>
+            <td><span class="badge-tag amber"><i class="fa-solid fa-clock"></i> Pendiente</span></td>
+            <td>
+                <div class="actions-cell-group">
+                    <button class="btn btn-xs btn-primary" onclick="if(window.ClinicalERP && window.ClinicalERP.openSettleModal){ window.ClinicalERP.openSettleModal('${liq.id}', 'doctor'); } else { alert('Módulo ERP no disponible'); }" title="Liquidar Honorarios Médicos">
+                        <i class="fa-solid fa-hand-holding-dollar"></i> Liquidar
+                    </button>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    if (pendingDocLiqs.length > 0) {
+        alertMessages.push(`<div style="color: #059669; font-weight: 600; margin-bottom: 4px;"><i class="fa-solid fa-user-doctor"></i> HONORARIOS MÉDICOS POR PAGAR: ${pendingDocLiqs.length} atención(es) concretada(s) lista(s) para liquidar por un total de <strong>$${totalPendingDoctorFees.toFixed(2)} USD</strong> (incluye atenciones con Cashea y Crédito Interno).</div>`);
+    }
+
+    // 2. Render provider bills
     bills.forEach(bill => {
         const dueDateObj = new Date(bill.dueDate);
         const timeDiff = dueDateObj.getTime() - today.getTime();

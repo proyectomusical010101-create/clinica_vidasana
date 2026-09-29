@@ -1532,6 +1532,45 @@ class SupabaseDataService {
             console.warn('Error recording direct sale in patient history:', pErr);
         }
 
+        // 3. Auto-record medical liquidation (cuenta por pagar al médico) apenas se concreta la atención
+        try {
+            const docName = saleData.doctor;
+            const hasDoctor = docName && docName !== '--' && docName.trim() !== '';
+            if (hasDoctor) {
+                const saleItems = (saleData.items && saleData.items.length > 0) 
+                    ? saleData.items 
+                    : [{ name: saleData.specialty || 'Servicio Facturado', price: saleData.totalUSD, qty: 1, code: 'POS-SRV' }];
+
+                for (const item of saleItems) {
+                    const itemPrice = (parseFloat(item.price) || 0) * (parseInt(item.qty) || 1);
+                    await this.recordServiceCompletionForLiquidation({
+                        serviceCode: item.code || 'POS-SRV',
+                        serviceName: item.name || 'Servicio Atendido',
+                        servicePrice: itemPrice,
+                        patientId: saleData.patientId || '',
+                        patientName: saleData.patientName || 'Paciente Clínico',
+                        doctorName: docName,
+                        assistantName: saleData.assistant || '',
+                        hasAssistant: !!saleData.assistant,
+                        sourceType: 'direct_sale',
+                        invoiceId: docId,
+                        date: invoiceObj.invoiceDate,
+                        isCashea: isCashea,
+                        isCredit: (saleData.paymentTerms === 'Crédito' || saleData.paymentMethod === 'credito'),
+                        paymentMethod: saleData.paymentMethod,
+                        paymentTerms: saleData.paymentTerms,
+                        notes: isCashea 
+                            ? `Atención concretada con Cashea (${docId}) - Inicial: $${invoiceObj.paidRef.toFixed(2)}, Financiado: $${casheaFinancedUSD.toFixed(2)}`
+                            : (saleData.paymentTerms === 'Crédito' || saleData.paymentMethod === 'credito'
+                                ? `Atención concretada a Crédito Interno (${docId}) - Saldo Paciente: $${invoiceObj.balanceRef.toFixed(2)}`
+                                : `Atención concretada (${docId}) - Método: ${saleData.paymentMethod}`)
+                    });
+                }
+            }
+        } catch(liqErr) {
+            console.warn('[DirectSale] Error recording service liquidation for doctor:', liqErr);
+        }
+
         this._invoicesCacheTime = 0;
         this._invoicesPromise = null;
         this._patientsCacheTime = 0;
@@ -2712,6 +2751,11 @@ class SupabaseDataService {
             assistantId = '',
             hasAssistant = false,
             sourceType = 'clinical_service',
+            invoiceId = '',
+            isCashea = false,
+            isCredit = false,
+            paymentMethod = '',
+            paymentTerms = '',
             date = new Date().toISOString().split('T')[0],
             notes = ''
         } = params;
@@ -2778,6 +2822,11 @@ class SupabaseDataService {
             service_price: price,
             date: date,
             source_type: sourceType,
+            invoice_id: invoiceId || '',
+            is_cashea: !!isCashea,
+            is_credit: !!isCredit,
+            payment_method: paymentMethod || '',
+            payment_terms: paymentTerms || '',
             doctor: {
                 id: docUser ? docUser.id : (doctorId || ''),
                 name: docUser ? docUser.fullname : (doctorName || 'Médico Especialista'),
