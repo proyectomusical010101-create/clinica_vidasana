@@ -15441,6 +15441,10 @@ function initGlobalEvents() {
         if (selectedBox) selectedBox.style.display = 'flex';
         if (searchWrapper) searchWrapper.style.display = 'none';
         if (searchResults) searchResults.style.display = 'none';
+
+        if (typeof window.checkAppointmentConflictsLive === 'function') {
+            window.checkAppointmentConflictsLive();
+        }
     };
 
     window.clearAppointmentPatientSearch = function() {
@@ -15463,6 +15467,12 @@ function initGlobalEvents() {
         }
         if (clearBtn) clearBtn.style.display = 'none';
         window.filterAppointmentPatients('');
+
+        const warnBox = document.getElementById('app-conflict-warning-box');
+        if (warnBox) {
+            warnBox.innerHTML = '';
+            warnBox.classList.add('hidden');
+        }
     };
 
     window.clearAppointmentPatientInput = function() {
@@ -15575,6 +15585,61 @@ function initGlobalEvents() {
         });
     };
 
+    window.checkAppointmentConflictsLive = async function() {
+        const box = document.getElementById('app-conflict-warning-box');
+        if (!box) return;
+
+        const patientSelect = document.getElementById('app-patient-select');
+        const patientId = patientSelect ? patientSelect.value : '';
+        if (!patientId) {
+            box.innerHTML = '';
+            box.classList.add('hidden');
+            return;
+        }
+
+        const dayTarget = document.getElementById('app-day-target')?.value || 'today';
+        const customDate = document.getElementById('app-custom-date')?.value || '';
+        const isTomorrow = dayTarget === 'tomorrow';
+        const finalDate = (dayTarget === 'custom' && customDate) ? customDate : (isTomorrow ? 'tomorrow' : 'today');
+        const targetDateStr = getNormalizedAppointmentDate({ date: finalDate, isTomorrow });
+
+        const existingId = document.getElementById('app-id')?.value || '';
+
+        try {
+            const allAppts = await SupabaseDataService.getAppointments();
+            const patientSameDay = (allAppts || []).filter(a => 
+                String(a.id) !== String(existingId) &&
+                String(a.patientId) === String(patientId) &&
+                a.status !== 'Cancelada' &&
+                a.status !== 'Cancelado' &&
+                a.status !== 'Atendida' &&
+                getNormalizedAppointmentDate(a) === targetDateStr
+            );
+
+            if (patientSameDay.length === 0) {
+                box.innerHTML = '';
+                box.classList.add('hidden');
+                return;
+            }
+
+            box.innerHTML = `
+                <div style="display: flex; align-items: flex-start; gap: 10px;">
+                    <i class="fa-solid fa-triangle-exclamation" style="font-size: 1.2rem; color: #d97706; margin-top: 2px;"></i>
+                    <div style="flex: 1;">
+                        <strong style="color: #b45309; font-size: 0.85rem;">Atención: Citas previas de este paciente para el ${targetDateStr}:</strong>
+                        <ul style="margin: 4px 0 0 0; padding-left: 18px; line-height: 1.5; font-size: 0.8rem;">
+                            ${patientSameDay.map(a => `<li><strong>⏰ ${a.time}</strong> - ${a.specialty || 'General'} con ${a.doctorName || 'Médico tratante'}: <em>${a.treatment}</em> <span class="badge-tag blue" style="font-size:0.68rem; padding: 1px 5px;">${a.status || 'Programada'}</span></li>`).join('')}
+                        </ul>
+                        <small style="color: #92400e; display: block; margin-top: 4px;">Asegúrese de no solapar el horario con otra consulta de la clínica.</small>
+                    </div>
+                </div>
+            `;
+            box.classList.remove('hidden');
+        } catch(e) {
+            console.warn('[checkAppointmentConflictsLive] Error:', e);
+        }
+    };
+
     // Modal Cita Helpers: New & Edit
     window.openNewAppointmentModal = async function({ prefillDate = null, prefillTime = null, prefillPatientId = null, prefillDoctorId = null } = {}) {
         window.initAppointmentPatientSearch();
@@ -15643,6 +15708,22 @@ function initGlobalEvents() {
             window.setAppointmentPatient(prefillPatientId);
         } else {
             window.clearAppointmentPatientSearch();
+        }
+
+        const warnBox = document.getElementById('app-conflict-warning-box');
+        if (warnBox) {
+            warnBox.innerHTML = '';
+            warnBox.classList.add('hidden');
+        }
+
+        if (!window._apptLiveCheckAttached) {
+            window._apptLiveCheckAttached = true;
+            document.getElementById('app-day-target')?.addEventListener('change', () => window.checkAppointmentConflictsLive());
+            document.getElementById('app-custom-date')?.addEventListener('change', () => window.checkAppointmentConflictsLive());
+            document.getElementById('app-time')?.addEventListener('input', () => window.checkAppointmentConflictsLive());
+            document.getElementById('app-time')?.addEventListener('blur', () => window.checkAppointmentConflictsLive());
+            document.getElementById('app-doctor-select')?.addEventListener('change', () => window.checkAppointmentConflictsLive());
+            document.getElementById('app-specialty-select')?.addEventListener('change', () => window.checkAppointmentConflictsLive());
         }
 
         openModal('modal-appointment');
@@ -15818,6 +15899,128 @@ function initGlobalEvents() {
             const selectedRoomOpt = roomSel && roomSel.selectedIndex > 0 ? roomSel.options[roomSel.selectedIndex] : null;
             const roomId = selectedRoomOpt ? selectedRoomOpt.value : '';
             const roomName = selectedRoomOpt ? (selectedRoomOpt.dataset.name || selectedRoomOpt.text) : '';
+
+            // --- VALIDACIONES INTELIGENTES DE CONFLICTOS Y DUPLICADOS ---
+            const targetDateStr = getNormalizedAppointmentDate({ date: finalDate, isTomorrow });
+            const targetMinutes = parseTimeToMinutes(time);
+
+            try {
+                const allExistingAppts = (await SupabaseDataService.getAppointments()) || [];
+                const activeDayAppts = allExistingAppts.filter(a => {
+                    if (String(a.id) === String(existingId)) return false;
+                    const st = (a.status || '').toLowerCase();
+                    if (st === 'cancelada' || st === 'cancelado' || st === 'atendida') return false;
+                    return getNormalizedAppointmentDate(a) === targetDateStr;
+                });
+
+                // NIVEL 1: Cita Idéntica / Duplicada del mismo paciente (Bloqueo Total)
+                const exactDuplicate = activeDayAppts.find(a => {
+                    const isSamePatient = String(a.patientId) === String(patientId) || 
+                        (patientName && a.patientName && a.patientName.trim().toLowerCase() === patientName.trim().toLowerCase());
+                    if (!isSamePatient) return false;
+
+                    const aMin = parseTimeToMinutes(a.time);
+                    const timeDiff = Math.abs(aMin - targetMinutes);
+                    const sameDoc = (doctorId && a.doctorId && String(a.doctorId) === String(doctorId)) || 
+                        (doctorName && a.doctorName && a.doctorName.trim().toLowerCase() === doctorName.trim().toLowerCase());
+                    const sameSpec = specialty && a.specialty && a.specialty.trim().toLowerCase() === specialty.trim().toLowerCase();
+                    const sameTreat = treatment && a.treatment && a.treatment.trim().toLowerCase() === treatment.trim().toLowerCase();
+
+                    // Mismo paciente, horario muy próximo (<15 min) y coincide médico, especialidad o tratamiento
+                    return timeDiff < 15 && (sameDoc || sameSpec || sameTreat);
+                });
+
+                if (exactDuplicate) {
+                    await Swal.fire({
+                        icon: 'error',
+                        title: 'Cita Duplicada Detectada',
+                        html: `El paciente <strong>${patientName || 'seleccionado'}</strong> ya tiene una cita idéntica registrada para esta fecha:<br><br>
+                               <div style="background: #fee2e2; border-left: 4px solid #ef4444; padding: 12px; text-align: left; border-radius: 6px; font-size: 0.88rem; color: #7f1d1d;">
+                                   <strong>📅 Fecha:</strong> ${targetDateStr}<br>
+                                   <strong>⏰ Hora:</strong> ${exactDuplicate.time}<br>
+                                   <strong>🩺 Especialidad:</strong> ${exactDuplicate.specialty || 'General'}<br>
+                                   <strong>👨‍⚕️ Médico:</strong> ${exactDuplicate.doctorName || 'No asignado'}<br>
+                                   <strong>📋 Tratamiento:</strong> ${exactDuplicate.treatment || 'Consulta'}
+                               </div><br>
+                               <span style="font-size: 0.9rem; color: #475569;">No es posible agendar dos veces la misma cita en el mismo horario. Por favor verifique o modifique los datos.</span>`,
+                        confirmButtonColor: '#ef4444',
+                        confirmButtonText: 'Entendido'
+                    });
+                    return;
+                }
+
+                // NIVEL 2: Conflicto de Horario del Paciente en otra cita/especialidad (Alerta y Confirmación)
+                const patientOverlap = activeDayAppts.find(a => {
+                    const isSamePatient = String(a.patientId) === String(patientId) || 
+                        (patientName && a.patientName && a.patientName.trim().toLowerCase() === patientName.trim().toLowerCase());
+                    if (!isSamePatient) return false;
+
+                    const aMin = parseTimeToMinutes(a.time);
+                    return Math.abs(aMin - targetMinutes) < 30; // Ventana de 30 minutos
+                });
+
+                if (patientOverlap) {
+                    const confirmPatient = await Swal.fire({
+                        icon: 'warning',
+                        title: 'Conflicto de Horario del Paciente',
+                        html: `El paciente <strong>${patientName || 'seleccionado'}</strong> ya tiene otra cita agendada en un horario que choca o es muy próximo:<br><br>
+                               <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px; text-align: left; border-radius: 6px; font-size: 0.88rem; color: #78350f;">
+                                   <strong>⏰ Hora existente:</strong> ${patientOverlap.time}<br>
+                                   <strong>🩺 Especialidad / Servicio:</strong> ${patientOverlap.specialty || 'General'} - ${patientOverlap.treatment || 'Consulta'}<br>
+                                   <strong>👨‍⚕️ Médico:</strong> ${patientOverlap.doctorName || 'Médico tratante'}
+                               </div><br>
+                               <span style="font-size: 0.9rem; color: #334155;">El paciente no puede estar físicamente en dos consultas simultáneamente.<br><strong>¿Desea forzar el agendamiento de esta cita de todos modos?</strong></span>`,
+                        showCancelButton: true,
+                        confirmButtonColor: '#f59e0b',
+                        cancelButtonColor: '#64748b',
+                        confirmButtonText: '<i class="fa-solid fa-triangle-exclamation"></i> Sí, forzar y agendar',
+                        cancelButtonText: 'Modificar horario'
+                    });
+                    if (!confirmPatient.isConfirmed) {
+                        return;
+                    }
+                }
+
+                // NIVEL 3: Conflicto de Horario del Médico (Alerta y Confirmación de Sobrecupo)
+                if (doctorId || doctorName) {
+                    const doctorOverlap = activeDayAppts.find(a => {
+                        const isSameDoc = (doctorId && a.doctorId && String(a.doctorId) === String(doctorId)) || 
+                            (doctorName && a.doctorName && a.doctorName.trim().toLowerCase() === doctorName.trim().toLowerCase());
+                        if (!isSameDoc) return false;
+
+                        // Diferente paciente
+                        const isSamePatient = String(a.patientId) === String(patientId) || 
+                            (patientName && a.patientName && a.patientName.trim().toLowerCase() === patientName.trim().toLowerCase());
+                        if (isSamePatient) return false;
+
+                        const aMin = parseTimeToMinutes(a.time);
+                        return Math.abs(aMin - targetMinutes) < 20; // Ventana de 20 minutos
+                    });
+
+                    if (doctorOverlap) {
+                        const confirmDoc = await Swal.fire({
+                            icon: 'info',
+                            title: 'Médico Ocupado en este Horario',
+                            html: `El/la especialista <strong>${doctorName || 'seleccionado(a)'}</strong> ya tiene una consulta a las <strong>${doctorOverlap.time}</strong> con el paciente <strong>${doctorOverlap.patientName || 'Otro paciente'}</strong>.<br><br>
+                                   <div style="background: #e0f2fe; border-left: 4px solid #0284c7; padding: 10px 12px; text-align: left; border-radius: 6px; font-size: 0.85rem; color: #0369a1;">
+                                       <strong>Tratamiento:</strong> ${doctorOverlap.treatment || 'Consulta'}<br>
+                                       <strong>Estado:</strong> ${doctorOverlap.status || 'Programada'}
+                                   </div><br>
+                                   <span style="font-size: 0.9rem; color: #334155;">¿Desea registrar esta cita como un sobrecupo / cita simultánea para el médico?</span>`,
+                            showCancelButton: true,
+                            confirmButtonColor: '#0284c7',
+                            cancelButtonColor: '#64748b',
+                            confirmButtonText: '<i class="fa-solid fa-user-plus"></i> Sí, agendar sobrecupo',
+                            cancelButtonText: 'Modificar horario'
+                        });
+                        if (!confirmDoc.isConfirmed) {
+                            return;
+                        }
+                    }
+                }
+            } catch (errCheck) {
+                console.warn('[saveAppointment] Error checking conflicts:', errCheck);
+            }
 
             const appointmentObj = {
                 id: existingId || ('appt-' + Date.now()),
