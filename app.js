@@ -115,6 +115,70 @@ window.universalPrintHTML = function(htmlContent, title = 'Documento Clínico') 
     }
 };
 
+// ==========================================================================
+// FILTRADO ESTRICTO DE ROLES CLÍNICOS (MÉDICOS, ESPECIALISTAS Y ASISTENTES)
+// Excluye rigurosamente roles administrativos internos (Super Admin, Admin, Gerente, Caja, Recepción)
+// ==========================================================================
+
+function isSystemAdminRole(roleStr) {
+    if (!roleStr) return false;
+    const r = roleStr.toLowerCase().trim();
+    // Excluir de plano roles con palabras clave netamente administrativas
+    if (r.includes('super administrador') || r.includes('superadmin') || r.includes('gerente') || 
+        r.includes('recep') || r.includes('caja') || r.includes('factura') || 
+        r.includes('auditor') || r.includes('contad') || r.includes('sistema') || r.includes('soporte')) {
+        return true;
+    }
+    // Si contiene "admin" y no contiene títulos médicos explícitos
+    if (r.includes('admin') && !r.includes('odont') && !r.includes('médic') && !r.includes('medico') && !r.includes('doctor')) {
+        return true;
+    }
+    return false;
+}
+window.isSystemAdminRole = isSystemAdminRole;
+
+function isDoctorOrAssistantUser(user) {
+    if (!user) return false;
+    const r = (user.role || '').toLowerCase().trim();
+    const n = (user.fullname || user.name || '').toLowerCase().trim();
+
+    // 1. Descartar de inmediato roles administrativos / de sistema
+    if (isSystemAdminRole(r)) return false;
+    if (r === 'admin' || r === 'administrador') return false;
+
+    // 2. Verificar rol médico / odontológico / especialista / quirúrgico
+    const isDoc = r.includes('odont') || r.includes('médic') || r.includes('medico') || 
+                  r.includes('doctor') || r.includes('especialist') || r.includes('cirujan') || 
+                  r.includes('dentist') || n.startsWith('dr.') || n.startsWith('dra.') || 
+                  n.startsWith('dr ') || n.startsWith('dra ');
+
+    // 3. Verificar rol asistencial / enfermería / auxiliar
+    const isAst = r.includes('asist') || r.includes('enferm') || r.includes('higien') || r.includes('auxiliar');
+
+    // 4. Perfil médico activo o especialidad clínica configurada
+    const hasDocProfile = !!(user.doctorProfile?.specialty || user.doctor_profile?.specialty);
+
+    return isDoc || isAst || hasDocProfile;
+}
+window.isDoctorOrAssistantUser = isDoctorOrAssistantUser;
+
+function isDoctorUser(user) {
+    if (!isDoctorOrAssistantUser(user)) return false;
+    const r = (user.role || '').toLowerCase().trim();
+    if (r.includes('asist') || r.includes('enferm') || r.includes('higien') || r.includes('auxiliar')) {
+        return false;
+    }
+    return true;
+}
+window.isDoctorUser = isDoctorUser;
+
+function isAssistantUser(user) {
+    if (!isDoctorOrAssistantUser(user)) return false;
+    const r = (user.role || '').toLowerCase().trim();
+    return r.includes('asist') || r.includes('enferm') || r.includes('higien') || r.includes('auxiliar');
+}
+window.isAssistantUser = isAssistantUser;
+
 document.addEventListener('DOMContentLoaded', async () => {
     // 1. Instant local storage seed & initial render setup
     initStorage();
@@ -2853,7 +2917,7 @@ window.openMedicalBudgetEditor = async function({ budgetId = null, specialtyCate
     if (doctorSelect) {
         try {
             const users = await SupabaseDataService.getUsers();
-            const doctors = users.filter(u => u.role === 'Odontólogo' || u.role === 'Especialista' || u.role === 'Doctor' || (u.name && u.name.toLowerCase().includes('dr')) || (u.fullname && u.fullname.toLowerCase().includes('dr')));
+            const doctors = users.filter(u => window.isDoctorOrAssistantUser(u));
             if (doctors.length > 0) {
                 doctorSelect.innerHTML = doctors.map(d => `<option value="${d.fullname || d.name}" data-id="${d.id}">${d.fullname || d.name} (${d.role || 'Médico'})</option>`).join('');
             } else {
@@ -6474,8 +6538,31 @@ window.openDirectSaleModal = async function(preselectedPatientId = null) {
     const docSearchInput = document.getElementById('ds-doctor-search-input');
     const docClearBtn = document.getElementById('ds-doctor-clear-btn');
     const users = await SupabaseDataService.getUsers();
+    let staff = [];
+    try {
+        if (SupabaseDataService.getPayrollStaff) {
+            staff = await SupabaseDataService.getPayrollStaff();
+        }
+    } catch(e) {}
     
-    const doctors = users.filter(u => !u.role.toLowerCase().includes('asistente'));
+    // Filtrar EXCLUSIVAMENTE médicos y asistentes (excluyendo administradores, gerentes, cajeros, recepcionistas)
+    const doctors = users.filter(u => window.isDoctorOrAssistantUser(u));
+
+    // Agregar personal clínico/asistencial de nómina si no estuviese ya en usuarios
+    (staff || []).forEach(st => {
+        if (window.isDoctorOrAssistantUser(st)) {
+            const stName = (st.name || st.fullname || '').trim();
+            if (stName && !doctors.some(d => (d.fullname || d.name || '').toLowerCase() === stName.toLowerCase())) {
+                doctors.push({
+                    id: st.id,
+                    fullname: stName,
+                    role: st.role || st.puesto || 'Médico Especialista',
+                    doctorProfile: { specialty: st.department || 'Medicina General' }
+                });
+            }
+        }
+    });
+
     window._cachedDirectSaleDoctors = doctors;
 
     if (doctorSelect) {
@@ -6520,9 +6607,21 @@ window.openDirectSaleModal = async function(preselectedPatientId = null) {
     }
 
     if (assistantSelect) {
-        const assistants = users.filter(u => u.role.toLowerCase().includes('asistente'));
+        const assistants = users.filter(u => window.isAssistantUser(u));
+        (staff || []).forEach(st => {
+            if (window.isAssistantUser(st)) {
+                const stName = (st.name || st.fullname || '').trim();
+                if (stName && !assistants.some(a => (a.fullname || a.name || '').toLowerCase() === stName.toLowerCase())) {
+                    assistants.push({
+                        id: st.id,
+                        fullname: stName,
+                        role: st.role || st.puesto || 'Asistente Dental'
+                    });
+                }
+            }
+        });
         assistantSelect.innerHTML = '<option value="">Sin Asistente Asignado</option>' + 
-            assistants.map(a => `<option value="${a.fullname}">${a.fullname}</option>`).join('');
+            assistants.map(a => `<option value="${a.fullname}">${a.fullname} (${a.role || 'Asistente'})</option>`).join('');
     }
 
     // 3. Populate Baremo Services & Setup Service Search Autocomplete
@@ -7065,7 +7164,7 @@ window.renderDirectSaleDoctorSearchResults = function(query) {
         resultsContainer.innerHTML = `
             <div style="padding: 12px; text-align: center; color: #64748b; font-size: 0.82rem;">
                 <div><i class="fa-solid fa-user-slash" style="font-size: 1.1rem; color: #94a3b8; margin-bottom: 4px;"></i></div>
-                <div>No se encontraron doctores para "<strong>${safeTerm}</strong>"</div>
+                <div>No se encontraron médicos ni asistentes para "<strong>${safeTerm}</strong>"</div>
             </div>
         `;
         resultsContainer.style.display = 'block';
@@ -7074,11 +7173,11 @@ window.renderDirectSaleDoctorSearchResults = function(query) {
 
     const header = !term
         ? `<div style="padding: 6px 12px; background: #f8fafc; font-size: 0.72rem; font-weight: 700; color: #64748b; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between;">
-            <span>Especialistas Disponibles (${doctors.length})</span>
+            <span>Médicos y Asistentes Clínicos (${doctors.length})</span>
             <span style="color: #94a3b8;">Selecciona uno</span>
            </div>`
         : `<div style="padding: 6px 12px; background: #f0fdfa; font-size: 0.72rem; font-weight: 700; color: #0f766e; border-bottom: 1px solid #ccfbf1; display: flex; justify-content: space-between;">
-            <span>Doctores encontrados (${matches.length})</span>
+            <span>Resultados encontrados (${matches.length})</span>
             <span style="font-weight: 500;">Enter para seleccionar</span>
            </div>`;
 
@@ -7088,12 +7187,17 @@ window.renderDirectSaleDoctorSearchResults = function(query) {
         const role = (d.role || 'Médico').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const specialty = (d.doctor_profile?.specialty || d.doctorProfile?.specialty || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const roomName = (d.doctor_profile?.roomName || d.doctorProfile?.roomName || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const isAst = window.isAssistantUser ? window.isAssistantUser(d) : (d.role || '').toLowerCase().includes('asist');
+        const roleIcon = isAst ? 'fa-user-nurse' : 'fa-user-doctor';
+        const badgeStyle = isAst 
+            ? 'background: #fdf2f8; color: #db2777; border: 1px solid #fbcfe8;' 
+            : 'background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd;';
 
         return `
-            <div class="ds-doctor-search-item" onclick="window.selectDirectSaleDoctor('${safeName}')">
+            <div class="ds-doctor-search-item" onclick="window.selectDirectSaleDoctor('${safeName}')" style="cursor: pointer; padding: 8px 12px; border-bottom: 1px solid #f1f5f9; transition: background 0.15s ease;">
                 <div style="font-weight: 700; color: #0f172a; font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center;">
-                    <span><i class="fa-solid fa-user-md text-cyan" style="margin-right: 6px;"></i>${displayName}</span>
-                    <span style="font-size: 0.72rem; font-weight: 600; padding: 2px 7px; border-radius: 4px; background: #e0f2fe; color: #0369a1;">${specialty || role}</span>
+                    <span><i class="fa-solid ${roleIcon} text-cyan" style="margin-right: 6px;"></i>${displayName}</span>
+                    <span style="font-size: 0.72rem; font-weight: 600; padding: 2px 7px; border-radius: 4px; ${badgeStyle}">${specialty || role}</span>
                 </div>
                 ${roomName ? `<div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;"><i class="fa-solid fa-door-open" style="margin-right: 4px;"></i>${roomName}</div>` : ''}
             </div>
@@ -11055,10 +11159,7 @@ async function renderAgendaView(filter = (window.currentAgendaFilter || 'pending
     if (filterDocSel && filterDocSel.options.length <= 1) {
         let users = [];
         try { users = await SupabaseDataService.getUsers(); } catch(e) {}
-        const doctors = users.filter(u => {
-            const r = (u.role || '').toLowerCase();
-            return r.includes('odont') || r.includes('especialista') || r.includes('cirujano') || r.includes('médico') || r.includes('medico') || r.includes('doctor');
-        });
+        const doctors = users.filter(u => window.isDoctorOrAssistantUser(u));
         const currVal = filterDocSel.value;
         filterDocSel.innerHTML = '<option value="all">👨‍⚕️ Todos los Médicos</option>' + 
             doctors.map(d => `<option value="${d.id}">${d.fullname || d.name}</option>`).join('');
@@ -12185,17 +12286,7 @@ window.deletePricingService = async function(code) {
     });
 };
 
-// Helper to identify if a role is purely administrative (System User)
-function isSystemAdminRole(roleStr) {
-    if (!roleStr) return false;
-    const r = roleStr.toLowerCase().trim();
-    // Clinical roles take precedence
-    if (r.includes('odont') || r.includes('médico') || r.includes('medico') || r.includes('cirujano') || r.includes('enferm') || r.includes('asistente dental')) {
-        return false;
-    }
-    return r.includes('admin') || r.includes('gerente') || r.includes('recep') || r.includes('caja') || r.includes('factura');
-}
-window.isSystemAdminRole = isSystemAdminRole;
+// Note: isSystemAdminRole is defined at the top of app.js with strict administrative role detection
 
 // ==========================================
 // MOTOR DE RENDIMIENTO CLÍNICO & INGRESOS
@@ -15437,18 +15528,11 @@ function initGlobalEvents() {
             SupabaseDataService.getClinicRooms ? SupabaseDataService.getClinicRooms().catch(() => []) : []
         ]);
 
-        const doctors = users.filter(u => {
-            const r = (u.role || '').toLowerCase();
-            const n = (u.fullname || '').toLowerCase();
-            return r.includes('odont') || r.includes('médic') || r.includes('medic') || 
-                   r.includes('doctor') || r.includes('especialista') || r.includes('admin') ||
-                   n.startsWith('dr') || n.startsWith('dra');
-        });
+        const doctors = users.filter(u => window.isDoctorOrAssistantUser(u));
 
         (staff || []).forEach(st => {
-            const r = (st.role || st.puesto || '').toLowerCase();
-            const n = (st.name || st.fullname || '').toLowerCase();
-            if (r.includes('médic') || r.includes('doctor') || r.includes('odont') || n.startsWith('dr') || n.startsWith('dra')) {
+            if (window.isDoctorOrAssistantUser(st)) {
+                const n = (st.name || st.fullname || '').toLowerCase();
                 if (!doctors.some(d => (d.fullname || '').toLowerCase() === n)) {
                     doctors.push({
                         id: st.id,
@@ -15465,13 +15549,9 @@ function initGlobalEvents() {
         // 3. Assistants
         const asstSel = document.getElementById('app-assistant-select');
         if (asstSel) {
-            const assistants = users.filter(u => {
-                const r = (u.role || '').toLowerCase();
-                return r.includes('asist') || r.includes('enferm') || r.includes('auxiliar') || r.includes('higien');
-            });
+            const assistants = users.filter(u => window.isAssistantUser(u));
             (staff || []).forEach(st => {
-                const r = (st.role || st.puesto || '').toLowerCase();
-                if (r.includes('asist') || r.includes('enferm') || r.includes('auxiliar') || r.includes('higien')) {
+                if (window.isAssistantUser(st)) {
                     if (!assistants.some(a => (a.fullname || '').toLowerCase() === (st.name || '').toLowerCase())) {
                         assistants.push({ id: st.id, fullname: st.name || st.fullname, role: st.role || 'Asistente' });
                     }
@@ -26347,11 +26427,8 @@ window.openRecipeModal = async function(sessionNum = null, sessionTitle = '') {
         doctorSelect.innerHTML = '';
         try {
             const users = await SupabaseDataService.getUsers();
-            const doctors = users.filter(u => {
-                const r = (u.role || '').toLowerCase();
-                return r.includes('odont') || r.includes('medico') || r.includes('médico') || r.includes('especialista') || r.includes('cirujano') || r.includes('doctor') || (u.license && u.license !== 'N/A');
-            });
-            const targetDoctors = (doctors.length > 0) ? doctors : users;
+            const doctors = users.filter(u => window.isDoctorOrAssistantUser(u) && !window.isSystemAdminRole(u.role));
+            const targetDoctors = (doctors.length > 0) ? doctors : [];
             const currentUser = getCurrentUser();
 
             targetDoctors.forEach(doc => {

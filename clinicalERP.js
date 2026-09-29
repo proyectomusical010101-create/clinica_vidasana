@@ -758,20 +758,25 @@
                     users = (typeof INITIAL_USERS !== 'undefined') ? INITIAL_USERS : [];
                 }
 
-                // Filter active medical doctors / dentists / specialists / admins
+                // Filter active medical doctors / dentists / specialists / assistants (strictly excluding system admins)
                 const doctors = users.filter(u => {
+                    if (window.isDoctorOrAssistantUser) return window.isDoctorOrAssistantUser(u);
                     const r = (u.role || '').toLowerCase();
                     const n = (u.fullname || u.name || '').toLowerCase();
+                    if (r.includes('admin') || r.includes('gerente') || r.includes('recep') || r.includes('caja')) return false;
                     return r.includes('odont') || r.includes('médic') || r.includes('medic') || 
-                           r.includes('doctor') || r.includes('especialista') || r.includes('admin') ||
+                           r.includes('doctor') || r.includes('especialista') || r.includes('asist') ||
                            n.startsWith('dr') || n.startsWith('dra');
                 });
 
-                // Add medical staff from payrollStaff if not already present
+                // Add clinical staff from payrollStaff if not already present
                 (staff || []).forEach(st => {
                     const r = (st.role || st.puesto || '').toLowerCase();
                     const n = (st.name || st.fullname || '').toLowerCase();
-                    if (r.includes('médic') || r.includes('doctor') || r.includes('odont') || n.startsWith('dr') || n.startsWith('dra')) {
+                    const isClinical = window.isDoctorOrAssistantUser 
+                        ? window.isDoctorOrAssistantUser(st) 
+                        : (r.includes('médic') || r.includes('doctor') || r.includes('odont') || r.includes('asist') || n.startsWith('dr') || n.startsWith('dra'));
+                    if (isClinical) {
                         if (!doctors.some(d => (d.fullname || d.name || '').toLowerCase() === n)) {
                             doctors.push({
                                 id: st.id,
@@ -1552,18 +1557,26 @@
             if (docSelect && window.SupabaseDataService) {
                 try {
                     const users = await window.SupabaseDataService.getUsers();
-                    const doctors = users.filter(u => u.role === 'Odontólogo' || u.role === 'Especialista' || u.role === 'Doctor' || (u.name && u.name.toLowerCase().includes('dr')));
-                    const assistants = users.filter(u => u.role === 'Asistente' || u.role === 'Higienista' || u.role === 'Enfermera');
+                    const doctors = users.filter(u => {
+                        if (window.isDoctorUser) return window.isDoctorUser(u);
+                        if (window.isDoctorOrAssistantUser) return window.isDoctorOrAssistantUser(u);
+                        return !((u.role || '').toLowerCase().includes('admin'));
+                    });
+                    const assistants = users.filter(u => {
+                        if (window.isAssistantUser) return window.isAssistantUser(u);
+                        const r = (u.role || '').toLowerCase();
+                        return (r.includes('asist') || r.includes('higien') || r.includes('enferm')) && !r.includes('admin');
+                    });
 
                     if (doctors.length > 0) {
-                        docSelect.innerHTML = doctors.map(d => `<option value="${d.id}" data-name="${d.name}" data-rate="${d.commissionRate || 40}">${d.name} (${d.role})</option>`).join('');
+                        docSelect.innerHTML = doctors.map(d => `<option value="${d.id}" data-name="${d.fullname || d.name}" data-rate="${d.commissionRate || 40}">${d.fullname || d.name} (${d.role})</option>`).join('');
                     } else {
                         docSelect.innerHTML = '<option value="doc-1" data-name="Médico Tratante" data-rate="40">Médico Tratante (40%)</option>';
                     }
 
                     if (astSelect) {
                         astSelect.innerHTML = '<option value="">(No aplica asistente)</option>' + 
-                            assistants.map(a => `<option value="${a.id}" data-name="${a.name}" data-rate="${a.commissionRate || 5}">${a.name} (${a.role})</option>`).join('');
+                            assistants.map(a => `<option value="${a.id}" data-name="${a.fullname || a.name}" data-rate="${a.commissionRate || 5}">${a.fullname || a.name} (${a.role})</option>`).join('');
                     }
                 } catch(e) {
                     docSelect.innerHTML = '<option value="doc-1" data-name="Médico Tratante" data-rate="40">Médico Tratante (40%)</option>';
