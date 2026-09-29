@@ -4047,6 +4047,14 @@
                                     <option value="Enfermero(a)">Enfermero(a) Asistencial</option>
                                 </select>
                             </div>
+                            <div class="form-group" style="margin: 0;">
+                                <label style="font-size: 0.78rem; font-weight: 700; margin-bottom: 4px;"><i class="fa-brands fa-whatsapp text-emerald"></i> Teléfono / WhatsApp</label>
+                                <input type="tel" id="u-phone" class="form-control" placeholder="+58 414 1234567" style="height: 38px;">
+                            </div>
+                            <div class="form-group" style="margin: 0;">
+                                <label style="font-size: 0.78rem; font-weight: 700; margin-bottom: 4px;"><i class="fa-brands fa-instagram text-pink"></i> Instagram (Opcional)</label>
+                                <input type="text" id="u-instagram" class="form-control" placeholder="@doctor_instagram" style="height: 38px;">
+                            </div>
                         </div>
                         <div id="u-role-scope-hint" style="margin-top: 10px; padding: 10px 12px; border-radius: 8px; font-size: 0.82rem; line-height: 1.45; background: rgba(8, 145, 178, 0.06); border: 1px solid rgba(8, 145, 178, 0.2); border-left: 4px solid var(--primary-cyan);">
                             <!-- Populated dynamically -->
@@ -4526,6 +4534,10 @@
                             <div class="form-group">
                                 <label>Correo Electrónico</label>
                                 <input type="email" id="p-email" placeholder="paciente@gmail.com">
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fa-brands fa-instagram text-pink"></i> Instagram (Opcional)</label>
+                                <input type="text" id="p-instagram" placeholder="@usuario_paciente">
                             </div>
                             <div class="form-group">
                                 <label>Dirección Habitación *</label>
@@ -6069,7 +6081,7 @@
                             <input type="number" id="payroll-staff-salary" class="form-control" step="0.01" min="0" value="0.00" placeholder="0.00">
                         </div>
                     </div>
-                    <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
                         <div class="form-group">
                             <label>Teléfono / WhatsApp</label>
                             <input type="text" id="payroll-staff-phone" class="form-control" placeholder="+58 412-1234567">
@@ -6077,6 +6089,10 @@
                         <div class="form-group">
                             <label>Correo Electrónico (Opcional)</label>
                             <input type="email" id="payroll-staff-email" class="form-control" placeholder="contacto@ejemplo.com">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fa-brands fa-instagram text-pink"></i> Instagram (Opcional)</label>
+                            <input type="text" id="payroll-staff-instagram" class="form-control" placeholder="@colaborador_instagram">
                         </div>
                     </div>
                     <div class="form-group">
@@ -7905,14 +7921,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=338"></script>
-    <script src="supabaseClient.js?v=338"></script>
-    <script src="odontogram.js?v=338"></script>
-    <script src="signature.js?v=338"></script>
-    <script src="whatsapp.js?v=338"></script>
-    <script src="kardex.js?v=338"></script>
-    <script src="app.js?v=338"></script>
-    <script src="clinicalERP.js?v=338"></script>
-    <script src="tutorial.js?v=338"></script>
+    <script src="seededData.js?v=339"></script>
+    <script src="supabaseClient.js?v=339"></script>
+    <script src="odontogram.js?v=339"></script>
+    <script src="signature.js?v=339"></script>
+    <script src="whatsapp.js?v=339"></script>
+    <script src="kardex.js?v=339"></script>
+    <script src="app.js?v=339"></script>
+    <script src="clinicalERP.js?v=339"></script>
+    <script src="tutorial.js?v=339"></script>
 </body>
 </html>

@@ -2299,6 +2299,9 @@
                         <td class="text-center">${statusBadge}</td>
                         <td class="text-right">
                             <div style="display: flex; gap: 4px; justify-content: flex-end;">
+                                <button type="button" class="btn btn-xs btn-outline text-blue" onclick="window.ClinicalERP.copyStaffContact('${s.id}', event)" title="Ver y Copiar Datos de Contacto (Teléfono, Correo, Instagram)" style="color: #0284c7; border-color: #bae6fd; padding: 4px 8px;">
+                                    <i class="fa-solid fa-address-card"></i>
+                                </button>
                                 <button type="button" class="btn btn-xs btn-primary" onclick="window.ClinicalERP.openAddPayrollForStaff('${s.id}')" title="Liquidar Nómina a este Colaborador" style="background: #7fa13c; border-color: #7fa13c; padding: 4px 8px;">
                                     <i class="fa-solid fa-money-bill-wave"></i> Liquidar
                                 </button>
@@ -2313,6 +2316,28 @@
                     </tr>
                 `;
             }).join('');
+        },
+
+        copyStaffContact(staffId, event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            const s = (this.payrollStaff || []).find(x => String(x.id) === String(staffId));
+            if (!s) return;
+            if (typeof window.showContactInfoModal === 'function') {
+                window.showContactInfoModal({
+                    title: 'Ficha de Contacto - Colaborador',
+                    name: s.fullname,
+                    role: s.role_or_title || 'Colaborador',
+                    department: s.department || '',
+                    type: 'personal',
+                    dni: s.dni || '',
+                    phone: s.phone || '',
+                    email: s.email || '',
+                    instagram: s.instagram || ''
+                });
+            }
         },
 
         openAddPayrollStaffModal(staffId = null) {
@@ -2334,6 +2359,9 @@
                     document.getElementById('payroll-staff-salary').value = s.base_salary || 0;
                     document.getElementById('payroll-staff-phone').value = s.phone || '';
                     document.getElementById('payroll-staff-email').value = s.email || '';
+                    if (document.getElementById('payroll-staff-instagram')) {
+                        document.getElementById('payroll-staff-instagram').value = s.instagram || '';
+                    }
                     document.getElementById('payroll-staff-bank').value = s.bank_info || '';
                     document.getElementById('payroll-staff-hiredate').value = s.hire_date || '';
                     document.getElementById('payroll-staff-status').value = s.status || 'Activo';
@@ -2344,6 +2372,9 @@
                 if (titleEl) titleEl.innerHTML = '<i class="fa-solid fa-user-plus text-cyan"></i> Registrar Colaborador de Nómina';
                 const statusEl = document.getElementById('payroll-staff-status');
                 if (statusEl) statusEl.value = 'Activo';
+                if (document.getElementById('payroll-staff-instagram')) {
+                    document.getElementById('payroll-staff-instagram').value = '';
+                }
             }
 
             const modal = document.getElementById('modal-payroll-staff');
@@ -2363,6 +2394,7 @@
                 base_salary: parseFloat(document.getElementById('payroll-staff-salary').value) || 0,
                 phone: document.getElementById('payroll-staff-phone').value.trim(),
                 email: document.getElementById('payroll-staff-email').value.trim(),
+                instagram: (document.getElementById('payroll-staff-instagram')?.value || '').trim(),
                 bank_info: document.getElementById('payroll-staff-bank').value.trim(),
                 hire_date: document.getElementById('payroll-staff-hiredate').value,
                 status: document.getElementById('payroll-staff-status').value,

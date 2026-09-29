@@ -5256,6 +5256,9 @@ async function renderPatientsTable(filter = null, searchQuery = null, highlightP
             <td><span class="badge-tag ${statusClass}">${p.status}</span></td>
             <td>
                 <div class="patient-actions-cluster">
+                    <button class="btn btn-xs btn-outline btn-act-contact" onclick="window.copyPatientContact('${p.id}', event)" title="Ver y Copiar Datos de Contacto (Teléfono, Correo, Instagram)" style="color: #0284c7; border-color: #bae6fd;">
+                        <i class="fa-solid fa-address-card"></i> <span>Contacto</span>
+                    </button>
                     <button class="btn btn-xs btn-outline btn-act-cobrar" onclick="window.openDirectSaleModal('${p.id}')" title="Venta Directa / Cobro Rápido">
                         <i class="fa-solid fa-bolt"></i> <span>Cobrar</span>
                     </button>
@@ -5390,6 +5393,9 @@ window.openPatientRowActionsMenu = function(patientId, btnEl, event, isAssistant
     `;
 
     menu.innerHTML = `
+        <a href="javascript:void(0)" class="patient-menu-item text-blue" onclick="window.closePatientRowActionsMenu(); window.copyPatientContact('${patientId}', event)">
+            <i class="fa-solid fa-address-card text-cyan"></i> <span>Copiar Datos de Contacto</span>
+        </a>
         <a href="javascript:void(0)" class="patient-menu-item" onclick="window.closePatientRowActionsMenu(); window.openPatientReceiptsHub('${patientId}')">
             <i class="fa-solid fa-receipt text-purple"></i> <span>Recibos y Facturas</span>
         </a>
@@ -5421,6 +5427,225 @@ window.openPatientRowActionsMenu = function(patientId, btnEl, event, isAssistant
 window.closePatientRowActionsMenu = function() {
     const menu = document.getElementById('patient-row-actions-floating-menu');
     if (menu) menu.style.display = 'none';
+};
+
+// ==========================================
+// FICHA Y COPIADO DE DATOS DE CONTACTO (GLOBAL)
+// ==========================================
+window.showContactInfoModal = async function({
+    title = 'Ficha de Contacto',
+    name = '',
+    role = '',
+    type = 'paciente', // 'paciente', 'medico', 'personal'
+    dni = '',
+    phone = '',
+    email = '',
+    instagram = '',
+    specialty = '',
+    address = '',
+    department = ''
+}) {
+    const cleanName = (name || '').trim() || 'Sin Nombre';
+    const cleanRole = (role || specialty || (type === 'paciente' ? 'Paciente' : 'Personal')).trim();
+    const cleanPhone = (phone || '').trim();
+    const cleanEmail = (email || '').trim();
+    let cleanIg = (instagram || '').trim();
+    if (cleanIg.startsWith('@')) cleanIg = cleanIg.substring(1);
+    const igHandle = cleanIg ? `@${cleanIg}` : '';
+    const igUrl = cleanIg ? `https://instagram.com/${cleanIg}` : '';
+
+    const waNumber = cleanPhone.replace(/[^0-9]/g, '');
+    const waUrl = waNumber ? `https://wa.me/${waNumber}` : '';
+
+    const textLines = [];
+    textLines.push(`📋 DATOS DE CONTACTO - ${cleanName.toUpperCase()}`);
+    if (cleanRole) textLines.push(`💼 Cargo / Rol: ${cleanRole}`);
+    if (dni) textLines.push(`🪪 Documento / ID: ${dni}`);
+    if (cleanPhone) textLines.push(`📱 Teléfono / WhatsApp: ${cleanPhone}`);
+    if (cleanEmail) textLines.push(`✉️ Correo: ${cleanEmail}`);
+    if (igHandle) textLines.push(`📸 Instagram: ${igHandle}`);
+    if (department) textLines.push(`🏢 Departamento: ${department}`);
+    if (address) textLines.push(`📍 Dirección: ${address}`);
+
+    const textToCopy = textLines.join('\n');
+
+    let copiedSuccessfully = false;
+    try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(textToCopy);
+            copiedSuccessfully = true;
+        } else {
+            const ta = document.createElement('textarea');
+            ta.value = textToCopy;
+            ta.style.position = 'fixed';
+            ta.style.left = '-9999px';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            copiedSuccessfully = true;
+        }
+    } catch (err) {
+        console.warn('Error copying to clipboard:', err);
+    }
+
+    const typeBadges = {
+        paciente: '<span class="badge-tag blue" style="font-size:0.75rem;"><i class="fa-solid fa-hospital-user"></i> Paciente</span>',
+        medico: '<span class="badge-tag" style="background:#e0f2fe; color:#0369a1; border:1px solid #7dd3fc; font-size:0.75rem;"><i class="fa-solid fa-user-doctor"></i> Médico / Especialista</span>',
+        personal: '<span class="badge-tag" style="background:#fef3c7; color:#92400e; border:1px solid #fde68a; font-size:0.75rem;"><i class="fa-solid fa-id-badge"></i> Colaborador / Personal</span>'
+    };
+    const typeBadge = typeBadges[type] || '';
+
+    Swal.fire({
+        title: title || 'Ficha de Contacto',
+        html: `
+            <div style="text-align: left; font-size: 0.9rem; line-height: 1.5; color: #1e293b;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #e2e8f0; gap: 8px; flex-wrap: wrap;">
+                    <div>
+                        <div style="font-weight: 800; font-size: 1.15rem; color: #0f172a;">${cleanName}</div>
+                        <div style="font-size: 0.82rem; color: #64748b;">${cleanRole} ${dni ? `• CI/ID: ${dni}` : ''}</div>
+                    </div>
+                    <div>${typeBadge}</div>
+                </div>
+
+                ${copiedSuccessfully ? `
+                    <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 8px 12px; margin-bottom: 14px; font-size: 0.82rem; color: #065f46; display: flex; align-items: center; gap: 8px;">
+                        <i class="fa-solid fa-circle-check" style="font-size: 1.1rem; color: #10b981; flex-shrink: 0;"></i>
+                        <span><strong>¡Datos copiados al portapapeles!</strong> Listos para pegar donde los necesites.</span>
+                    </div>
+                ` : ''}
+
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;">
+                    <!-- Teléfono / WhatsApp -->
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="width: 34px; height: 34px; border-radius: 8px; background: #dcfce7; color: #15803d; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0;">
+                                <i class="fa-brands fa-whatsapp"></i>
+                            </div>
+                            <div>
+                                <span style="font-size: 0.72rem; color: #64748b; font-weight: 700; text-transform: uppercase;">Teléfono / WhatsApp</span>
+                                <div style="font-weight: 700; font-size: 0.92rem; color: #0f172a;">${cleanPhone || '<span class="text-muted" style="font-weight: 400;">No registrado</span>'}</div>
+                            </div>
+                        </div>
+                        ${waUrl ? `
+                            <a href="${waUrl}" target="_blank" class="btn btn-xs btn-success" style="padding: 4px 10px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; background:#22c55e; border:none; color:#fff;">
+                                <i class="fa-brands fa-whatsapp"></i> Chat
+                            </a>
+                        ` : ''}
+                    </div>
+
+                    <!-- Correo Electrónico -->
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; border-top: 1px solid #f1f5f9; padding-top: 8px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="width: 34px; height: 34px; border-radius: 8px; background: #e0f2fe; color: #0284c7; display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0;">
+                                <i class="fa-regular fa-envelope"></i>
+                            </div>
+                            <div>
+                                <span style="font-size: 0.72rem; color: #64748b; font-weight: 700; text-transform: uppercase;">Correo Electrónico</span>
+                                <div style="font-weight: 700; font-size: 0.88rem; color: #0f172a; word-break: break-all;">${cleanEmail || '<span class="text-muted" style="font-weight: 400;">No registrado</span>'}</div>
+                            </div>
+                        </div>
+                        ${cleanEmail ? `
+                            <a href="mailto:${cleanEmail}" class="btn btn-xs btn-outline" style="padding: 4px 10px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; color: #0284c7; border-color: #bae6fd;">
+                                <i class="fa-regular fa-paper-plane"></i> Enviar
+                            </a>
+                        ` : ''}
+                    </div>
+
+                    <!-- Instagram -->
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; border-top: 1px solid #f1f5f9; padding-top: 8px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="width: 34px; height: 34px; border-radius: 8px; background: #fce7f3; color: #db2777; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0;">
+                                <i class="fa-brands fa-instagram"></i>
+                            </div>
+                            <div>
+                                <span style="font-size: 0.72rem; color: #64748b; font-weight: 700; text-transform: uppercase;">Instagram</span>
+                                <div style="font-weight: 700; font-size: 0.9rem; color: #0f172a;">${igHandle || '<span class="text-muted" style="font-weight: 400;">No registrado</span>'}</div>
+                            </div>
+                        </div>
+                        ${igUrl ? `
+                            <a href="${igUrl}" target="_blank" class="btn btn-xs btn-outline" style="padding: 4px 10px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; color: #db2777; border-color: #fbcfe8;">
+                                <i class="fa-solid fa-arrow-up-right-from-square"></i> Perfil
+                            </a>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: '<i class="fa-solid fa-copy"></i> Copiar Texto de Nuevo',
+        cancelButtonText: 'Cerrar',
+        confirmButtonColor: '#0284c7',
+        cancelButtonColor: '#64748b'
+    }).then(async (res) => {
+        if (res.isConfirmed) {
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(textToCopy);
+                } else {
+                    const ta = document.createElement('textarea');
+                    ta.value = textToCopy;
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(ta);
+                }
+                Swal.fire({
+                    icon: 'success',
+                    title: '¡Copiado!',
+                    text: 'Datos copiados nuevamente al portapapeles.',
+                    timer: 1500,
+                    showConfirmButton: false
+                });
+            } catch(e) {}
+        }
+    });
+};
+
+window.copyPatientContact = async function(patientId, event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    const patients = await SupabaseDataService.getPatients();
+    const p = patients.find(pat => String(pat.id) === String(patientId));
+    if (!p) return;
+
+    window.showContactInfoModal({
+        title: 'Ficha de Contacto - Paciente',
+        name: p.fullname,
+        type: 'paciente',
+        dni: p.cedula || p.id,
+        phone: p.phone || p.metadata?.mobilePhone || '',
+        email: p.email || '',
+        instagram: p.instagram || p.metadata?.instagram || '',
+        address: p.address || p.metadata?.address || ''
+    });
+};
+
+window.copyUserContact = async function(userId, event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    const users = await SupabaseDataService.getUsers();
+    const u = users.find(usr => String(usr.id) === String(userId));
+    if (!u) return;
+
+    const r = (u.role || '').toLowerCase();
+    const isDoc = r.includes('odont') || r.includes('médic') || r.includes('medic') || r.includes('cirujan') || r.includes('especialist') || r.includes('doctor');
+
+    window.showContactInfoModal({
+        title: isDoc ? 'Ficha de Contacto - Médico' : 'Ficha de Contacto - Personal',
+        name: u.fullname,
+        type: isDoc ? 'medico' : 'personal',
+        role: u.role || 'Personal',
+        specialty: u.doctorProfile?.specialty || '',
+        dni: u.license || '',
+        phone: u.phone || u.whatsapp || u.doctorProfile?.phone || '',
+        email: u.email || '',
+        instagram: u.instagram || u.doctorProfile?.instagram || ''
+    });
 };
 
 window.deletePatient = async function(patientId) {
@@ -12365,8 +12590,9 @@ async function renderUsersTable(filter = 'all', searchQuery = '') {
             </td>
             <td><span class="badge-tag green">${u.status || 'Activo'}</span></td>
             <td>${u.createdAt || '-'}</td>
-            <td style="white-space: nowrap; text-align: center; width: 80px;">
+            <td style="white-space: nowrap; text-align: center; width: 110px;">
                 <div style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap;">
+                    <button class="btn btn-xs btn-outline text-blue" onclick="window.copyUserContact('${u.id}', event)" title="Ver y Copiar Datos de Contacto (Teléfono, Correo, Instagram)" style="color: #0284c7; border-color: #bae6fd;"><i class="fa-solid fa-address-card"></i></button>
                     <button class="btn btn-xs btn-outline text-cyan" onclick="editUser('${u.id}')" title="Editar Ficha Médica"><i class="fa-solid fa-user-pen"></i></button>
                     <button class="btn btn-xs btn-outline text-red" onclick="deleteUser('${u.id}')" title="Eliminar"><i class="fa-solid fa-user-xmark"></i></button>
                 </div>
@@ -12411,6 +12637,7 @@ window.renderSystemUsersTable = async function() {
             <td><span class="badge-tag ${u.status === 'Inactivo' ? 'red' : 'green'}">${u.status || 'Activo'}</span></td>
             <td>${u.createdAt || '-'}</td>
             <td style="text-align: center;">
+                <button class="btn btn-xs btn-outline text-blue" onclick="window.copyUserContact('${u.id}', event)" title="Ver y Copiar Datos de Contacto" style="color: #0284c7; border-color: #bae6fd; margin-right: 4px;"><i class="fa-solid fa-address-card"></i></button>
                 <button class="btn btn-xs btn-outline text-cyan" onclick="window.editSystemUser('${u.id}')" title="Editar Cuenta" style="margin-right: 4px;"><i class="fa-solid fa-user-pen"></i></button>
                 <button class="btn btn-xs btn-outline text-red" onclick="window.deleteSystemUser('${u.id}')" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
             </td>
@@ -12720,6 +12947,11 @@ window.openCreateUserModal = async function() {
         else b.classList.remove('active-category-pill');
     });
 
+    const phoneInputNew = document.getElementById('u-phone');
+    if (phoneInputNew) phoneInputNew.value = '';
+    const igInputNew = document.getElementById('u-instagram');
+    if (igInputNew) igInputNew.value = '';
+
     await populateDoctorServicesSelect([]);
     await window.populateUserModalSelects({});
 
@@ -12753,6 +12985,11 @@ window.editUser = async function(userId) {
 
     document.getElementById('u-fullname').value = user.fullname || '';
     document.getElementById('u-email').value = user.email || '';
+
+    const phoneInput = document.getElementById('u-phone');
+    if (phoneInput) phoneInput.value = user.phone || user.whatsapp || user.doctorProfile?.phone || '';
+    const igInput = document.getElementById('u-instagram');
+    if (igInput) igInput.value = user.instagram || user.doctorProfile?.instagram || '';
 
     const passInput = document.getElementById('u-password');
     if (passInput) {
@@ -16289,6 +16526,8 @@ function initGlobalEvents() {
             const existingUserId = document.getElementById('u-user-id')?.value;
             const fullname = document.getElementById('u-fullname').value.trim();
             const email = document.getElementById('u-email').value.trim();
+            const phone = document.getElementById('u-phone')?.value?.trim() || '';
+            const instagram = document.getElementById('u-instagram')?.value?.trim() || '';
             const password = document.getElementById('u-password').value.trim();
             const role = document.getElementById('u-role').value;
             const rawLicense = document.getElementById('u-license').value.trim();
@@ -16339,7 +16578,9 @@ function initGlobalEvents() {
                     assignedServices,
                     schedule,
                     commission,
-                    availability
+                    availability,
+                    phone,
+                    instagram
                 };
             }
 
@@ -16352,6 +16593,8 @@ function initGlobalEvents() {
                     id: existingUserId,
                     fullname,
                     email,
+                    phone: phone || (existing ? existing.phone : ''),
+                    instagram: instagram || (existing ? existing.instagram : ''),
                     password: password || (existing ? existing.password : '123456'),
                     role,
                     license,
@@ -16365,6 +16608,8 @@ function initGlobalEvents() {
                     id: 'usr-' + Date.now(),
                     fullname,
                     email,
+                    phone,
+                    instagram,
                     password,
                     role,
                     license,
@@ -16706,6 +16951,7 @@ function initGlobalEvents() {
                     birthdate,
                     phone,
                     email: getVal('p-email'),
+                    instagram: getVal('p-instagram'),
                     occupation: profession,
                     address: address,
                     allergies,
@@ -16733,6 +16979,7 @@ function initGlobalEvents() {
                         localPhone,
                         workPhone,
                         profession,
+                        instagram: getVal('p-instagram'),
                         consultReason,
                         repName,
                         repId,
@@ -16790,6 +17037,7 @@ function initGlobalEvents() {
                     birthdate,
                     phone,
                     email: getVal('p-email'),
+                    instagram: getVal('p-instagram'),
                     occupation: profession,
                     allergies,
                     systemic,
@@ -16821,6 +17069,7 @@ function initGlobalEvents() {
                         localPhone,
                         workPhone,
                         profession,
+                        instagram: getVal('p-instagram'),
                         consultReason,
                         repName,
                         repId,
@@ -19893,6 +20142,7 @@ function loadPatientDataIntoForm(p) {
     setVal('p-mobile-phone', p.phone || (p.metadata && p.metadata.mobilePhone) || '');
     setVal('p-local-phone', p.metadata?.localPhone || '');
     setVal('p-email', p.email || '');
+    setVal('p-instagram', p.instagram || p.metadata?.instagram || '');
     setVal('p-profession', p.occupation || p.metadata?.profession || '');
     setVal('p-gender', p.metadata?.gender || 'Femenino');
     setVal('p-address', p.address || p.metadata?.address || '');
