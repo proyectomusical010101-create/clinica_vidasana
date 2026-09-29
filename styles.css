@@ -7237,3 +7237,17 @@ select, .form-select, select.form-control {
         gap: 10px !important;
     }
 }
+
+/* Off-screen PDF generation staging container: Prevents invoice/document peek during PDF generation */
+[id^="vidasana-pdf-staging"],
+.vidasana-pdf-staging {
+    position: fixed !important;
+    left: -99999px !important;
+    top: -99999px !important;
+    width: 794px !important;
+    max-width: 794px !important;
+    pointer-events: none !important;
+    z-index: -999999 !important;
+    overflow: hidden !important;
+}
+

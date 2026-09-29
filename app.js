@@ -24595,20 +24595,22 @@ async function generatePDFFromElement(element, filename) {
         innerDoc.style.boxSizing = 'border-box';
     }
 
-    // Mount inside an absolute staging wrapper placed at the current scroll position so coordinates are accurate
+    // Mount inside an off-screen staging wrapper placed far off-screen so it stays completely hidden and never flashes behind modals or system UI
     const stagingWrapper = document.createElement('div');
     stagingWrapper.id = 'vidasana-pdf-staging-' + Date.now();
-    stagingWrapper.style.position = 'absolute';
-    stagingWrapper.style.top = (window.scrollY || 0) + 'px';
-    stagingWrapper.style.left = '0';
-    stagingWrapper.style.width = '100%';
-    stagingWrapper.style.maxWidth = '100%';
-    stagingWrapper.style.zIndex = '999999';
+    stagingWrapper.className = 'vidasana-pdf-staging';
+    stagingWrapper.style.position = 'fixed';
+    stagingWrapper.style.top = '-99999px';
+    stagingWrapper.style.left = '-99999px';
+    stagingWrapper.style.width = '794px';
+    stagingWrapper.style.maxWidth = '794px';
+    stagingWrapper.style.height = 'auto';
+    stagingWrapper.style.overflow = 'hidden';
+    stagingWrapper.style.zIndex = '-999999';
     stagingWrapper.style.pointerEvents = 'none';
-    stagingWrapper.style.overflow = 'visible';
     stagingWrapper.style.backgroundColor = '#ffffff';
     stagingWrapper.style.visibility = 'visible';
-    stagingWrapper.style.opacity = '1';
+    stagingWrapper.style.opacity = '0';
     stagingWrapper.appendChild(element);
     document.body.appendChild(stagingWrapper);
 
@@ -24706,7 +24708,7 @@ async function generatePDFFromElement(element, filename) {
                                 letterRendering: true, 
                                 backgroundColor: '#ffffff', 
                                 logging: false, 
-                                scrollY: (window.scrollY || 0),
+                                scrollY: 0,
                                 scrollX: 0
                             },
                             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
@@ -24730,7 +24732,9 @@ async function generatePDFFromElement(element, filename) {
                                 handleCancel();
                                 return;
                             }
+                            stagingWrapper.style.opacity = '1';
                             const canvas = await window.html2canvas(element, opt.html2canvas);
+                            stagingWrapper.style.opacity = '0';
                             if (isCancelled) {
                                 handleCancel();
                                 return;
