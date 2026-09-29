@@ -2204,43 +2204,61 @@ window.selectPatientAndLoadApprovedBudget = async function(patientId) {
 
     setActivePatientId(patientId);
 
-    // 1. Consultar si este paciente tiene un presupuesto en invoices (Aprobado o Borrador)
+    // 1. Consultar si este paciente tiene un presupuesto en invoices (Aprobado o Borrador) de ODONTOLOGÍA
     const invoices = await SupabaseDataService.getInvoices();
     const patientInvoices = invoices.filter(inv => String(inv.patientId) === String(patientId));
-    const approvedBudget = patientInvoices.find(inv => (String(inv.status).toLowerCase() === 'aprobado' || String(inv.status).toLowerCase() === 'approved' || String(inv.status).toLowerCase() === 'completada' || String(inv.status).toLowerCase() === 'finalizado'));
-    const latestBudget = approvedBudget || patientInvoices.sort((a, b) => new Date(b.invoiceDate || b.createdAt || 0) - new Date(a.invoiceDate || a.createdAt || 0))[0];
+    const dentalInvoices = patientInvoices.filter(inv => !inv.category || inv.category === 'Odontología');
+    const approvedBudget = dentalInvoices.find(inv => (String(inv.status).toLowerCase() === 'aprobado' || String(inv.status).toLowerCase() === 'approved' || String(inv.status).toLowerCase() === 'completada' || String(inv.status).toLowerCase() === 'finalizado'));
+    const latestBudget = approvedBudget || dentalInvoices.sort((a, b) => new Date(b.invoiceDate || b.createdAt || 0) - new Date(a.invoiceDate || a.createdAt || 0))[0];
 
     if (latestBudget && window.loadBudgetIntoEditor) {
         await window.loadBudgetIntoEditor(latestBudget.id);
     } else {
-        // Si no tiene presupuesto registrado en invoices: cargar borrador en metadata si existe
+        // Si no tiene presupuesto registrado en invoices: verificar si tiene borrador propio en metadata
         const patients = await SupabaseDataService.getPatients();
         const p = patients.find(pat => String(pat.id) === String(patientId));
-        activeEditingBudgetId = (p?.metadata?.draftBudget && p.metadata.draftBudget.id) || null;
-        currentBudgetItems = (p?.metadata?.draftBudget && Array.isArray(p.metadata.draftBudget.items))
-            ? [...p.metadata.draftBudget.items]
-            : [];
-        const draftOdData = (p?.metadata && p.metadata.draftOdontogramData) || (p?.odontogramData) || {};
+        const hasDraftBudget = p?.metadata?.draftBudget && Array.isArray(p.metadata.draftBudget.items) && p.metadata.draftBudget.items.length > 0;
+
+        activeEditingBudgetId = hasDraftBudget ? (p.metadata.draftBudget.id || null) : null;
+        currentBudgetItems = hasDraftBudget ? [...p.metadata.draftBudget.items] : [];
+        const draftOdData = (hasDraftBudget && p?.metadata?.draftOdontogramData) || (p?.odontogramData) || {};
+
         if (window.patientSigPad) {
             window.patientSigPad.clear();
             if (p?.metadata?.patientSignature) {
                 try { window.patientSigPad.loadFromDataURL(p.metadata.patientSignature); } catch(e){}
             }
         }
+
+        const notesInput = document.getElementById('budget-notes');
+        if (notesInput) {
+            notesInput.value = (hasDraftBudget && p?.metadata?.draftBudget?.notes) || '';
+        }
+
         await renderOdontogramView();
-        if (window.odontogram && Object.keys(draftOdData).length > 0) {
-            window.odontogram.setData(draftOdData);
+
+        // RESET ESTRICTO: Si el paciente no tiene marcas de odontodiagrama, resetear completamente a {} (en blanco a cero)
+        if (window.odontogram) {
+            if (draftOdData && Object.keys(draftOdData).length > 0) {
+                window.odontogram.setData(draftOdData);
+            } else {
+                window.odontogram.setData({});
+            }
         }
 
         // Auto-aplicar regla de convenio / etiqueta del paciente si no hay borrador con descuento propio
         const discInput = document.getElementById('budget-discount-input');
-        if (discInput && p) {
-            const rule = p.tagRule || (p.metadata && p.metadata.tagRule);
-            if (rule && rule.type === 'discount') {
-                discInput.value = parseFloat(rule.value) || 0;
-            } else if (rule && rule.type === 'exonerated') {
-                discInput.value = 100;
-            } else if (!p?.metadata?.draftBudget) {
+        if (discInput) {
+            if (p) {
+                const rule = p.tagRule || (p.metadata && p.metadata.tagRule);
+                if (rule && rule.type === 'discount') {
+                    discInput.value = parseFloat(rule.value) || 0;
+                } else if (rule && rule.type === 'exonerated') {
+                    discInput.value = 100;
+                } else if (!hasDraftBudget) {
+                    discInput.value = 0;
+                }
+            } else {
                 discInput.value = 0;
             }
         }
@@ -3936,6 +3954,18 @@ async function renderOdontogramView() {
         };
         searchInput.onfocus = async (e) => {
             await renderPatientSearchResults(e.target.value);
+        };
+        searchInput.onkeydown = async (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const firstResult = document.querySelector('#od-patient-search-results .search-result-item');
+                if (firstResult) {
+                    firstResult.click();
+                }
+            } else if (e.key === 'Escape') {
+                const res = document.getElementById('od-patient-search-results');
+                if (res) res.style.display = 'none';
+            }
         };
     }
 
@@ -12168,17 +12198,11 @@ async function renderPricingTable(filter = 'all', searchQuery = '') {
     const tbody = document.getElementById('pricing-table-body');
     if (!tbody) return;
 
-    // Dynamic header: "Tiempo de Espera" for Laboratorio, "Tiempo Silla (min)" otherwise
+    // Header: "Tiempo de Espera / Entrega"
     const thTime = document.getElementById('th-pricing-time');
-    const isLabFilter = (filter && filter.toLowerCase() === 'laboratorio');
     if (thTime) {
-        if (isLabFilter) {
-            thTime.innerHTML = '<i class="fa-solid fa-clock text-purple"></i> Tiempo de Espera';
-            thTime.title = 'Tiempo estimado para tener listos y entregar los resultados';
-        } else {
-            thTime.innerHTML = 'Tiempo Silla (min)';
-            thTime.title = 'Tiempo estimado de atención en sillón (minutos)';
-        }
+        thTime.innerHTML = '<i class="fa-solid fa-clock text-cyan"></i> Tiempo de Espera / Entrega';
+        thTime.title = 'Tiempo estimado de atención clínica o entrega de resultados (minutos, horas o días)';
     }
 
     tbody.innerHTML = '';
@@ -12226,9 +12250,26 @@ async function renderPricingTable(filter = 'all', searchQuery = '') {
         const areaInfo = typeof getAreaIconInfo === 'function' ? getAreaIconInfo(p.area) : { icon: 'fa-hospital', color: '#64748b', bg: 'rgba(100,116,139,0.1)' };
 
         const isLabService = (p.area && p.area.toLowerCase() === 'laboratorio') || isLabFilter;
-        const timeDisplay = isLabService 
-            ? (isLabFilter ? `${p.chairTimeMin} min` : `${p.chairTimeMin} min <small class="text-purple" style="font-size:0.75rem; font-weight:600;" title="Tiempo de espera para resultados">(Espera)</small>`)
-            : `${p.chairTimeMin} min`;
+        let timeDisplay = '';
+        if (p.timeDisplay) {
+            timeDisplay = p.timeDisplay;
+        } else {
+            const unit = p.timeUnit || p.chairTimeUnit;
+            const val = Number(p.timeValue || p.chairTimeMin || 0);
+            if (unit === 'dias') {
+                timeDisplay = `${p.timeValue || Math.round(val / 1440) || 1} día(s)`;
+            } else if (unit === 'horas') {
+                timeDisplay = `${p.timeValue || Math.round(val / 60) || 1} hora(s)`;
+            } else if (unit === 'min') {
+                timeDisplay = `${p.timeValue || val} min`;
+            } else if (val >= 1440 && val % 1440 === 0) {
+                timeDisplay = `${val / 1440} día(s)`;
+            } else if (val >= 60 && val % 60 === 0 && (isLabService || (p.category || '').toLowerCase().includes('lab'))) {
+                timeDisplay = `${val / 60} hora(s)`;
+            } else {
+                timeDisplay = `${val || 30} min`;
+            }
+        }
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
@@ -14655,14 +14696,17 @@ function initGlobalEvents() {
         const isLabCat = srvCategory && srvCategory.value && srvCategory.value.toLowerCase().includes('laboratorio');
 
         if (isLabArea || isLabCat) {
-            lblTime.innerHTML = '<i class="fa-solid fa-flask-vial text-purple"></i> Tiempo de Espera (Minutos)';
+            lblTime.innerHTML = '<i class="fa-solid fa-flask-vial text-purple"></i> Tiempo de Espera / Entrega';
             if (hintTime) {
                 hintTime.style.display = 'block';
-                hintTime.textContent = 'Tiempo estimado en minutos en el cual los resultados estarán listos para su entrega.';
+                hintTime.textContent = 'Tiempo estimado en el cual los resultados estarán listos para entrega (minutos, horas o días).';
             }
         } else {
-            lblTime.innerHTML = 'Tiempo Estimado en Silla (Minutos)';
-            if (hintTime) hintTime.style.display = 'none';
+            lblTime.innerHTML = '<i class="fa-solid fa-clock text-cyan"></i> Tiempo Estimado / Entrega';
+            if (hintTime) {
+                hintTime.style.display = 'block';
+                hintTime.textContent = 'Tiempo estimado de atención clínica en sillón o entrega del procedimiento (minutos, horas o días).';
+            }
         }
     }
 
@@ -14700,14 +14744,17 @@ function initGlobalEvents() {
             const category = document.getElementById('srv-category').value.trim() || 'General';
             const priceUSD = parseFloat(document.getElementById('srv-price').value) || 0;
             const hygienistBonus = parseFloat(document.getElementById('srv-hygienist-bonus').value) || 0;
-            const chairTimeMin = parseInt(document.getElementById('srv-time').value) || 30;
+            const timeVal = parseFloat(document.getElementById('srv-time').value) || 30;
+            const timeUnit = document.getElementById('srv-time-unit')?.value || 'min';
+            const chairTimeMin = timeUnit === 'dias' ? timeVal * 1440 : (timeUnit === 'horas' ? timeVal * 60 : timeVal);
+            const timeDisplay = `${timeVal} ${timeUnit === 'dias' ? 'día(s)' : (timeUnit === 'horas' ? 'hora(s)' : 'min')}`;
 
             if (!code || !name || priceUSD <= 0) {
                 Swal.fire({ icon: 'warning', title: 'Campos requeridos', text: 'Por favor complete los campos obligatorios (*)' });
                 return;
             }
 
-            await SupabaseDataService.saveBaremoService({ code, name, area, category, priceUSD, chairTimeMin, materials: [], hygienistBonus });
+            await SupabaseDataService.saveBaremoService({ code, name, area, category, priceUSD, chairTimeMin, timeUnit, timeValue: timeVal, timeDisplay, materials: [], hygienistBonus });
 
             closeModal('modal-service');
             await renderPricingTable();
@@ -16837,6 +16884,11 @@ function initGlobalEvents() {
     if (formSysUser) formSysUser.onsubmit = handleSaveSystemUser;
 
     window.openBudgetForNewPatient = async function(patientId) {
+        if (window.selectPatientAndLoadApprovedBudget) {
+            await window.selectPatientAndLoadApprovedBudget(patientId);
+            return;
+        }
+
         setActivePatientId(patientId);
 
         // Forzar cambio al editor
@@ -16853,21 +16905,25 @@ function initGlobalEvents() {
         const patients = await SupabaseDataService.getPatients();
         const patient = patients.find(p => String(p.id) === String(patientId));
 
-        // Si ya hay ítems de presupuesto en memoria (por ejemplo, recién seleccionados en el odontograma), NO los borramos.
-        // Si no hay en memoria, intentamos recuperarlos del borrador guardado en metadata.draftBudget.items del paciente.
-        if (!currentBudgetItems || currentBudgetItems.length === 0) {
-            if (patient && patient.metadata && patient.metadata.draftBudget && Array.isArray(patient.metadata.draftBudget.items) && patient.metadata.draftBudget.items.length > 0) {
-                currentBudgetItems = [...patient.metadata.draftBudget.items];
+        // RESET ESTRICTO: No arrastrar ítems de presupuestos ni marcas de otros pacientes
+        if (patient && patient.metadata && patient.metadata.draftBudget && Array.isArray(patient.metadata.draftBudget.items) && patient.metadata.draftBudget.items.length > 0) {
+            currentBudgetItems = [...patient.metadata.draftBudget.items];
+            activeEditingBudgetId = patient.metadata.draftBudget.id || null;
+        } else {
+            currentBudgetItems = [];
+            activeEditingBudgetId = null;
+        }
+
+        if (window.odontogram) {
+            if (patient && patient.odontogramData && Object.keys(patient.odontogramData).length > 0) {
+                window.odontogram.setData(patient.odontogramData);
+            } else {
+                window.odontogram.setData({});
             }
         }
 
-        // De igual forma con el odontograma: si ya tiene marcas en memoria, preservarlas. Si no, cargar del paciente.
-        if (window.odontogram) {
-            const currentOdData = window.odontogram.getData();
-            const hasCurrentOdData = currentOdData && Object.keys(currentOdData).length > 0;
-            if (!hasCurrentOdData && patient && patient.odontogramData && Object.keys(patient.odontogramData).length > 0) {
-                window.odontogram.setData(patient.odontogramData);
-            }
+        if (window.patientSigPad) {
+            window.patientSigPad.clear();
         }
 
         if (window.doctorSigPad) {
@@ -26391,6 +26447,18 @@ window.openRecipeModal = async function(sessionNum = null, sessionTitle = '') {
         });
         searchInput.addEventListener('focus', () => {
             window.renderRecipePatientSearchResults(searchInput.value);
+        });
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const res = document.getElementById('recipe-patient-search-results');
+                if (res) res.style.display = 'none';
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                const firstItem = document.querySelector('#recipe-patient-search-results .recipe-patient-search-item');
+                if (firstItem) {
+                    firstItem.click();
+                }
+            }
         });
     }
 
