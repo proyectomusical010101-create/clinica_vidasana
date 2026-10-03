@@ -12221,6 +12221,7 @@ async function renderPricingTable(filter = 'all', searchQuery = '') {
     const rate = getExchangeRate();
     const currentUser = getCurrentUser();
     const isAssistant = currentUser && currentUser.role.toLowerCase().includes('asistente');
+    const isLabFilter = (filter && filter.toLowerCase() === 'laboratorio');
 
     // Ensure each service has an area assigned
     baremo.forEach(p => {
@@ -12256,54 +12257,61 @@ async function renderPricingTable(filter = 'all', searchQuery = '') {
     }
 
     baremo.forEach(p => {
-        const priceVES = (p.priceUSD * rate).toFixed(2);
-        const deleteSrvBtn = isAssistant ? '' : `<button class="btn btn-xs btn-outline text-red" onclick="deletePricingService('${p.code}')" title="Eliminar Servicio"><i class="fa-solid fa-trash"></i></button>`;
-        const areaInfo = typeof getAreaIconInfo === 'function' ? getAreaIconInfo(p.area) : { icon: 'fa-hospital', color: '#64748b', bg: 'rgba(100,116,139,0.1)' };
+        try {
+            const pUSD = parseFloat(p.priceUSD !== undefined && p.priceUSD !== null ? p.priceUSD : (p.price || 0)) || 0;
+            const priceVES = (pUSD * rate).toFixed(2);
+            const deleteSrvBtn = isAssistant ? '' : `<button class="btn btn-xs btn-outline text-red" onclick="deletePricingService('${p.code}')" title="Eliminar Servicio"><i class="fa-solid fa-trash"></i></button>`;
+            const areaInfo = typeof getAreaIconInfo === 'function' ? getAreaIconInfo(p.area) : { icon: 'fa-hospital', color: '#64748b', bg: 'rgba(100,116,139,0.1)' };
 
-        const isLabService = (p.area && p.area.toLowerCase() === 'laboratorio') || isLabFilter;
-        let timeDisplay = '';
-        if (p.timeDisplay) {
-            timeDisplay = p.timeDisplay;
-        } else {
-            const unit = p.timeUnit || p.chairTimeUnit;
-            const val = Number(p.timeValue || p.chairTimeMin || 0);
-            if (unit === 'dias') {
-                timeDisplay = `${p.timeValue || Math.round(val / 1440) || 1} día(s)`;
-            } else if (unit === 'horas') {
-                timeDisplay = `${p.timeValue || Math.round(val / 60) || 1} hora(s)`;
-            } else if (unit === 'min') {
-                timeDisplay = `${p.timeValue || val} min`;
-            } else if (val >= 1440 && val % 1440 === 0) {
-                timeDisplay = `${val / 1440} día(s)`;
-            } else if (val >= 60 && val % 60 === 0 && (isLabService || (p.category || '').toLowerCase().includes('lab'))) {
-                timeDisplay = `${val / 60} hora(s)`;
+            const isLabService = (p.area && p.area.toLowerCase() === 'laboratorio') || (p.category && p.category.toLowerCase().includes('lab')) || isLabFilter;
+            let timeDisplay = '';
+            if (p.timeDisplay) {
+                timeDisplay = p.timeDisplay;
             } else {
-                timeDisplay = `${val || 30} min`;
+                const unit = p.timeUnit || p.chairTimeUnit;
+                const val = Number(p.timeValue || p.chairTimeMin || 0);
+                if (unit === 'dias') {
+                    timeDisplay = `${p.timeValue || Math.round(val / 1440) || 1} día(s)`;
+                } else if (unit === 'horas') {
+                    timeDisplay = `${p.timeValue || Math.round(val / 60) || 1} hora(s)`;
+                } else if (unit === 'min') {
+                    timeDisplay = `${p.timeValue || val} min`;
+                } else if (val >= 1440 && val % 1440 === 0) {
+                    timeDisplay = `${val / 1440} día(s)`;
+                } else if (val >= 60 && val % 60 === 0 && (isLabService || (p.category || '').toLowerCase().includes('lab'))) {
+                    timeDisplay = `${val / 60} hora(s)`;
+                } else {
+                    timeDisplay = `${val || 30} min`;
+                }
             }
-        }
 
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td><strong>${p.code}</strong></td>
-            <td>
-                <span class="badge-tag" style="background: ${areaInfo.bg}; color: ${areaInfo.color}; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
-                    <i class="fa-solid ${areaInfo.icon}"></i> ${p.area}
-                </span>
-            </td>
-            <td><span class="badge-tag blue" style="font-size: 0.72rem;">${p.category || 'General'}</span></td>
-            <td><strong>${p.name}</strong></td>
-            <td class="text-cyan"><strong>$${p.priceUSD.toFixed(2)}</strong></td>
-            <td>Bs. ${priceVES}</td>
-            <td><strong>$${(p.hygienistBonus || 0).toFixed(2)}</strong></td>
-            <td>${timeDisplay}</td>
-            <td>${p.materials ? p.materials.length : 0} insumos</td>
-            <td>
-                <div class="actions-cell-group">
-                    ${deleteSrvBtn}
-                </div>
-            </td>
-        `;
-        tbody.appendChild(tr);
+            const hBonus = parseFloat(p.hygienistBonus || 0) || 0;
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><strong>${p.code}</strong></td>
+                <td>
+                    <span class="badge-tag" style="background: ${areaInfo.bg}; color: ${areaInfo.color}; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
+                        <i class="fa-solid ${areaInfo.icon}"></i> ${p.area || 'General'}
+                    </span>
+                </td>
+                <td><span class="badge-tag blue" style="font-size: 0.72rem;">${p.category || 'General'}</span></td>
+                <td><strong>${p.name}</strong></td>
+                <td class="text-cyan"><strong>$${pUSD.toFixed(2)}</strong></td>
+                <td>Bs. ${priceVES}</td>
+                <td><strong>$${hBonus.toFixed(2)}</strong></td>
+                <td>${timeDisplay}</td>
+                <td>${p.materials ? p.materials.length : 0} insumos</td>
+                <td>
+                    <div class="actions-cell-group">
+                        ${deleteSrvBtn}
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        } catch (itemErr) {
+            console.error('Error rendering service row:', itemErr, p);
+        }
     });
 }
 
