@@ -635,31 +635,80 @@ async function autoLoadDoctorSignatureInBudget(targetDoctorName = null) {
 
 // Storage Initializer
 function initStorage() {
+    // Purge operational data cache (patients, ehr, payroll, invoices) while strictly preserving baremo and inventory
+    const PURGE_VERSION = 'purge_2026_10_05_v1';
+    if (localStorage.getItem('_clinic_purge_ver') !== PURGE_VERSION) {
+        localStorage.setItem('_clinic_purge_ver', PURGE_VERSION);
+        localStorage.setItem('dental_patients', JSON.stringify([]));
+        localStorage.setItem('dental_invoices', JSON.stringify([]));
+        localStorage.setItem('dental_appointments', JSON.stringify([]));
+        localStorage.setItem('dental_provider_bills', JSON.stringify([]));
+        localStorage.setItem('vidasana_payroll', JSON.stringify([]));
+        localStorage.setItem('vidasana_payroll_staff', JSON.stringify([]));
+        localStorage.setItem('vidasana_service_liquidations', JSON.stringify([]));
+        localStorage.setItem('dental_trash_bin', JSON.stringify([]));
+        localStorage.setItem('dental_account_transfers', JSON.stringify([]));
+        localStorage.removeItem('dental_active_patient_id');
+        localStorage.removeItem('dental_anonymous_odontogram_data');
+        localStorage.removeItem('dental_anonymous_draft_budget');
+        localStorage.removeItem('dental_budget_split_data');
+        if (typeof SupabaseDataService !== 'undefined') {
+            SupabaseDataService._patientsCacheTime = 0;
+            SupabaseDataService._patientsPromise = null;
+        }
+    }
+
     if (!localStorage.getItem('dental_users')) {
         localStorage.setItem('dental_users', JSON.stringify(INITIAL_USERS));
     }
     if (!localStorage.getItem('dental_patients')) {
-        localStorage.setItem('dental_patients', JSON.stringify(INITIAL_PATIENTS));
+        localStorage.setItem('dental_patients', JSON.stringify([]));
     }
     if (!localStorage.getItem('dental_baremo')) {
         localStorage.setItem('dental_baremo', JSON.stringify(INITIAL_BAREMO));
     }
     if (!localStorage.getItem('dental_appointments')) {
-        const appointmentsWithDates = INITIAL_APPOINTMENTS.map((app, idx) => ({
-            id: `appt-${idx + 1}`,
-            time: app.time,
-            patientName: app.patientName,
-            patientId: app.patientId,
-            treatment: app.treatment,
-            status: app.status,
-            isTomorrow: idx < 2
-        }));
-        localStorage.setItem('dental_appointments', JSON.stringify(appointmentsWithDates));
+        localStorage.setItem('dental_appointments', JSON.stringify([]));
     }
     if (!localStorage.getItem('dental_exchange_rate')) {
         localStorage.setItem('dental_exchange_rate', DEFAULT_EXCHANGE_RATE.toString());
     }
 }
+
+window.purgeAllOperationalData = async function(skipConfirm = false) {
+    if (!skipConfirm) {
+        const ok = confirm('⚠️ ADVERTENCIA CRÍTICA: ¿Está seguro de que desea reiniciar la clínica y borrar todos los pacientes, historias clínicas, facturas, citas y nómina médica?\n\nLos SERVICIOS (Baremo) y los INSUMOS (Inventario) se mantendrán intactos.');
+        if (!ok) return false;
+    }
+    
+    // 1. Reset local storage
+    localStorage.setItem('dental_patients', JSON.stringify([]));
+    localStorage.setItem('dental_invoices', JSON.stringify([]));
+    localStorage.setItem('dental_appointments', JSON.stringify([]));
+    localStorage.setItem('dental_provider_bills', JSON.stringify([]));
+    localStorage.setItem('vidasana_payroll', JSON.stringify([]));
+    localStorage.setItem('vidasana_payroll_staff', JSON.stringify([]));
+    localStorage.setItem('vidasana_service_liquidations', JSON.stringify([]));
+    localStorage.setItem('dental_trash_bin', JSON.stringify([]));
+    localStorage.setItem('dental_account_transfers', JSON.stringify([]));
+    localStorage.removeItem('dental_active_patient_id');
+    localStorage.removeItem('dental_anonymous_odontogram_data');
+    localStorage.removeItem('dental_anonymous_draft_budget');
+    localStorage.removeItem('dental_budget_split_data');
+
+    // 2. Cloud purge if connected
+    if (typeof SupabaseDataService !== 'undefined' && SupabaseDataService.isCloudConnected()) {
+        await SupabaseDataService.purgeOperationalDataCloud();
+    }
+
+    if (typeof showToast === 'function') {
+        showToast('Base de datos operacional reiniciada exitosamente (Insumos y Servicios preservados)', 'success');
+    }
+    if (typeof renderPatientsTable === 'function') renderPatientsTable();
+    if (typeof renderInvoicesTable === 'function') renderInvoicesTable();
+    return true;
+};
+
 
 // ==========================================
 // DOLARAPI VENEZUELA LIVE EXCHANGE RATE API

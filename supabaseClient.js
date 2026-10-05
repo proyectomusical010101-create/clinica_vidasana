@@ -2033,6 +2033,66 @@ class SupabaseDataService {
         } catch(e) {}
     }
 
+    static async purgeOperationalDataCloud() {
+        if (!this.isCloudConnected()) return false;
+        try {
+            console.log('🧹 Purging operational data from Supabase Cloud (preserving baremo, inventory, users, clinic configs)...');
+
+            // 1. Delete all real patients (preserving SYS-* config records)
+            try {
+                await supabaseClient.from('patients').delete().not('id', 'like', 'SYS-%');
+            } catch(e) { console.warn('Purge patients cloud err:', e); }
+
+            // 2. Clear operational secondary tables
+            try { await supabaseClient.from('appointments').delete().neq('id', 'keep-alive'); } catch(e) {}
+            try { await supabaseClient.from('invoices').delete().neq('id', 'keep-alive'); } catch(e) {}
+            try { await supabaseClient.from('provider_bills').delete().neq('id', 'keep-alive'); } catch(e) {}
+            try { await supabaseClient.from('payroll_records').delete().neq('id', 'keep-alive'); } catch(e) {}
+            try { await supabaseClient.from('doctor_schedules').delete().neq('id', 'keep-alive'); } catch(e) {}
+            try { await supabaseClient.from('recycle_bin').delete().neq('id', 'keep-alive'); } catch(e) {}
+
+            // 3. Reset operational SYS- containers in patients table
+            const sysResetContainers = [
+                { id: 'SYS-SERVICE-LIQUIDATIONS', name: 'Liquidaciones de Médicos', data: { liquidations: [] } },
+                { id: 'SYS-PAYROLL-STAFF', name: 'Personal de Nómina', data: { _staff: [] } },
+                { id: 'SYS-AUDIT-LOGS', name: 'Auditoría', data: { logs: [] } },
+                { id: 'SYS-RECYCLE-BIN', name: 'Papelera', data: { items: [] } },
+                { id: 'SYS-ACCOUNT-TRANSFERS', name: 'Traslado de Cuentas', data: { transfers: [] } }
+            ];
+
+            for (const item of sysResetContainers) {
+                try {
+                    await supabaseClient.from('patients').upsert({
+                        id: item.id,
+                        fullname: `Sistema ${item.name}`,
+                        birthdate: '2026-01-01',
+                        phone: '',
+                        status: 'Sistema',
+                        odontogram_data: item.data
+                    });
+                } catch(e) {}
+            }
+
+            // Invalidate caches
+            this._patientsCacheTime = 0;
+            this._patientsPromise = null;
+            this._invoicesCacheTime = 0;
+            this._invoicesPromise = null;
+            this._apptsCacheTime = 0;
+            this._apptsPromise = null;
+
+            this.notifyDataChanged('patients');
+            this.notifyDataChanged('invoices');
+            this.notifyDataChanged('appointments');
+            await this.refreshActiveViews(true);
+            return true;
+        } catch(err) {
+            console.error('purgeOperationalDataCloud error:', err);
+            return false;
+        }
+    }
+
+
     static async saveAccountTransfers(transfersList) {
         localStorage.setItem('dental_account_transfers', JSON.stringify(transfersList));
         if (!this.isCloudConnected()) return;
