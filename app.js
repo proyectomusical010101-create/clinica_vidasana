@@ -7425,7 +7425,7 @@ window.calculateDirectSaleTotals = function() {
 
     let totalUSD = subtotalAfterDisc;
     let casheaSurchargeUSD = 0;
-    let casheaSurchargePct = 7.0;
+    let casheaSurchargePct = 0.0;
     let casheaFinancedUSD = 0;
     let casheaInitialUSD = 0;
 
@@ -7446,7 +7446,12 @@ window.calculateDirectSaleTotals = function() {
         const surDisplay = document.getElementById('ds-cashea-surcharge-display');
         const totDisplay = document.getElementById('ds-cashea-total-display');
         if (subDisplay) subDisplay.innerText = `$${subtotalAfterDisc.toFixed(2)}`;
-        if (surDisplay) surDisplay.innerText = `+$${casheaSurchargeUSD.toFixed(2)} (${casheaSurchargePct.toFixed(1)}%)`;
+        if (surDisplay) {
+            surDisplay.innerText = casheaSurchargeUSD > 0 ? `+$${casheaSurchargeUSD.toFixed(2)} (${casheaSurchargePct.toFixed(1)}%)` : '$0.00 (0%)';
+            if (surDisplay.parentElement) {
+                surDisplay.parentElement.style.display = casheaSurchargeUSD > 0 ? 'flex' : 'none';
+            }
+        }
         if (totDisplay) totDisplay.innerText = `$${totalUSD.toFixed(2)} USD`;
 
         if (paymentMethod === 'cashea') {
@@ -8080,7 +8085,7 @@ window.processDirectSale = async function() {
     const splitCasheaVal = parseFloat(document.getElementById('ds-split-cashea')?.value || 0);
     const isCashea = (paymentMethod === 'cashea') || (paymentMethod === 'split' && splitCasheaVal > 0);
 
-    let casheaSurchargePct = 7.0;
+    let casheaSurchargePct = 0.0;
     let casheaSurchargeUSD = 0;
     let totalUSD = subtotalAfterDisc;
     let casheaFinancedUSD = 0;
@@ -8300,19 +8305,29 @@ window.printDirectSaleReceipt = async function(docId = null) {
     const paidVal = doc.paidRef !== undefined ? doc.paidRef : (doc.metadata?.paidUSD || doc.totalRef || 0);
     const balanceVal = doc.balanceRef !== undefined ? doc.balanceRef : (doc.metadata?.balanceUSD || 0);
 
+    const baseItemsTotal = (doc.items || []).reduce((acc, it) => acc + (parseFloat(it.totalUSD || (it.price * (it.qty || 1))) || 0), 0);
+    const effectiveTotal = (doc.is_cashea || doc.casheaDetails) && doc.casheaDetails?.surchargeAmountUSD > 0 && baseItemsTotal > 0
+        ? baseItemsTotal 
+        : parseFloat(doc.totalRef || baseItemsTotal || 0);
+
+    const casheaInitial = (doc.casheaDetails?.initialPaidUSD !== undefined)
+        ? Math.min(effectiveTotal, parseFloat(doc.casheaDetails.initialPaidUSD))
+        : Math.min(effectiveTotal, parseFloat(paidVal));
+    const casheaFinanced = Math.max(0, effectiveTotal - casheaInitial);
+
     const receiptHtml = `
         <div style="font-family: 'Segoe UI', Arial, sans-serif; padding: 20px; color: #1e293b; line-height: 1.4; background: #fff;">
-            <table style="width: 100%; border-bottom: 2px solid #0d9488; padding-bottom: 12px; margin-bottom: 20px;">
+            <table style="width: 100%; border-bottom: 2px solid #0d9488; padding-bottom: 12px; margin-bottom: 18px; border-collapse: collapse;">
                 <tr>
-                    <td>
-                        ${logoBase64 ? `<img src="${logoBase64}" style="max-height: 55px; margin-bottom: 6px; display: block;">` : ''}
-                        <h2 style="margin: 0; color: #0d9488; font-size: 18pt;">${clinicName}</h2>
-                        <div style="font-size: 9pt; color: #64748b; margin-top: 2px;">Centro Médico y Odontológico Integral</div>
+                    <td style="vertical-align: middle; width: 60%; text-align: left;">
+                        ${logoBase64 ? `<img src="${logoBase64}" alt="Logo" style="height: 48px; max-height: 48px; max-width: 220px; width: auto; object-fit: contain; object-position: left center; margin-bottom: 6px; display: block;">` : ''}
+                        <h2 style="margin: 0; color: #0d9488; font-size: 15pt; font-weight: bold; line-height: 1.2;">${clinicName}</h2>
+                        <div style="font-size: 8.5pt; color: #64748b; margin-top: 2px;">Centro Médico y Odontológico Integral</div>
                     </td>
-                    <td style="text-align: right;">
-                        <span style="background: #0d9488; color: white; padding: 4px 10px; border-radius: 6px; font-weight: bold; font-size: 13pt;">${docTitle}</span>
-                        <div style="font-weight: bold; font-size: 12pt; margin-top: 4px; color: #0f172a;">N° ${doc.id}</div>
-                        <div style="font-size: 9.5pt; color: #64748b;">Fecha: ${doc.invoiceDate || new Date().toISOString().split('T')[0]}</div>
+                    <td style="vertical-align: middle; text-align: right; width: 40%;">
+                        <span style="background: #0d9488; color: white; padding: 4px 12px; border-radius: 6px; font-weight: bold; font-size: 12pt; display: inline-block;">${docTitle}</span>
+                        <div style="font-weight: bold; font-size: 11pt; margin-top: 5px; color: #0f172a;">N° ${doc.id}</div>
+                        <div style="font-size: 9pt; color: #64748b; margin-top: 2px;">Fecha: ${doc.invoiceDate || new Date().toISOString().split('T')[0]}</div>
                     </td>
                 </tr>
             </table>
@@ -8339,19 +8354,18 @@ window.printDirectSaleReceipt = async function(docId = null) {
             </table>
 
             <div style="margin-top: 20px; float: right; width: 280px; font-size: 11pt;">
-                <div style="display: flex; justify-content: space-between; padding: 3px 0;"><span>Total Servicios:</span> <strong>$${parseFloat(doc.totalRef || 0).toFixed(2)} USD</strong></div>
+                <div style="display: flex; justify-content: space-between; padding: 3px 0;"><span>Total Servicios:</span> <strong>$${effectiveTotal.toFixed(2)} USD</strong></div>
                 <div style="display: flex; justify-content: space-between; padding: 3px 0;"><span>Tasa BCV Oficial:</span> <span>Bs. ${rate.toFixed(2)}</span></div>
-                <div style="display: flex; justify-content: space-between; padding: 3px 0;"><span>Equivalente en Bs:</span> <span style="color:#0284c7; font-weight:bold;">Bs. ${(parseFloat(doc.totalRef || 0) * rate).toFixed(2)}</span></div>
+                <div style="display: flex; justify-content: space-between; padding: 3px 0;"><span>Equivalente en Bs:</span> <span style="color:#0284c7; font-weight:bold;">Bs. ${(effectiveTotal * rate).toFixed(2)}</span></div>
                 <hr style="border: none; border-top: 1px solid #cbd5e1; margin: 6px 0;">
                 ${(doc.is_cashea || doc.casheaDetails) ? `
-                    <div style="color: #0369a1; font-weight: bold;"><span>Plan de Pago:</span> <span>Financiamiento Cashea</span></div>
-                    ${doc.casheaDetails?.surchargeAmountUSD > 0 ? `<div style="font-size: 10pt; color: #0284c7;"><span>Recargo Cashea (${doc.casheaDetails.surchargePct}%):</span> <span>+$${doc.casheaDetails.surchargeAmountUSD.toFixed(2)} USD</span></div>` : ''}
-                    <div style="font-size: 11pt; color: #059669;"><span>Inicial Pagada en Recepción:</span> <strong>$${parseFloat(doc.casheaDetails?.initialPaidUSD || paidVal).toFixed(2)} USD</strong></div>
-                    <div style="font-size: 11.5pt; color: #0284c7;"><span>Financiado por Cashea:</span> <strong>$${parseFloat(doc.casheaDetails?.financedUSD || (doc.totalRef - paidVal)).toFixed(2)} USD</strong></div>
-                    <div style="font-size: 8.5pt; color: #64748b; font-style: italic; margin-top: 4px;">* Las cuotas quincenales son abonadas por el paciente directamente en la App Cashea.</div>
+                    <div style="color: #0369a1; font-weight: bold; margin-bottom: 4px;"><span>Plan de Pago:</span> <span>Financiamiento Cashea</span></div>
+                    <div style="font-size: 11pt; color: #059669; display: flex; justify-content: space-between; padding: 2px 0;"><span>Inicial Pagada en Recepción:</span> <strong>$${casheaInitial.toFixed(2)} USD</strong></div>
+                    <div style="font-size: 11pt; color: #0284c7; display: flex; justify-content: space-between; padding: 2px 0;"><span>Financiado por Cashea:</span> <strong>$${casheaFinanced.toFixed(2)} USD</strong></div>
+                    <div style="font-size: 8pt; color: #64748b; font-style: italic; margin-top: 5px; line-height: 1.3;">* Las cuotas quincenales son abonadas por el paciente directamente en la App Cashea.</div>
                 ` : `
-                    <div style="font-size: 12pt; color: #059669;"><span>Monto Cobrado / Pagado:</span> <strong>$${parseFloat(paidVal).toFixed(2)} USD</strong></div>
-                    ${balanceVal > 0 ? `<div style="display: flex; justify-content: space-between; padding: 3px 0; font-size: 11pt; color: #e11d48;"><span>Saldo Restante Pendiente:</span> <strong>$${parseFloat(balanceVal).toFixed(2)} USD</strong></div>` : ''}
+                    <div style="font-size: 11pt; color: #059669; display: flex; justify-content: space-between; padding: 2px 0;"><span>Monto Cobrado / Pagado:</span> <strong>$${parseFloat(paidVal).toFixed(2)} USD</strong></div>
+                    ${balanceVal > 0 ? `<div style="display: flex; justify-content: space-between; padding: 2px 0; font-size: 11pt; color: #e11d48;"><span>Saldo Restante Pendiente:</span> <strong>$${parseFloat(balanceVal).toFixed(2)} USD</strong></div>` : ''}
                 `}
             </div>
 
@@ -8398,8 +8412,18 @@ window.downloadDirectSaleReceiptPDF = async function(docId = null) {
         </tr>
     `).join('');
 
+    const baseItemsTotal = (doc.items || []).reduce((acc, it) => acc + (parseFloat(it.totalUSD || (it.price * (it.qty || 1))) || 0), 0);
+    const effectiveTotal = (doc.is_cashea || doc.casheaDetails) && doc.casheaDetails?.surchargeAmountUSD > 0 && baseItemsTotal > 0
+        ? baseItemsTotal 
+        : parseFloat(doc.totalRef || baseItemsTotal || 0);
+
     const paidVal = doc.paidRef !== undefined ? doc.paidRef : (doc.metadata?.paidUSD || doc.totalRef || 0);
     const balanceVal = doc.balanceRef !== undefined ? doc.balanceRef : (doc.metadata?.balanceUSD || 0);
+
+    const casheaInitial = (doc.casheaDetails?.initialPaidUSD !== undefined)
+        ? Math.min(effectiveTotal, parseFloat(doc.casheaDetails.initialPaidUSD))
+        : Math.min(effectiveTotal, parseFloat(paidVal));
+    const casheaFinanced = Math.max(0, effectiveTotal - casheaInitial);
 
     const stationery = await SupabaseDataService.getStationeryConfig();
     const busData = getClinicBusData(stationery);
@@ -8408,17 +8432,17 @@ window.downloadDirectSaleReceiptPDF = async function(docId = null) {
     const container = document.createElement('div');
     container.innerHTML = `
         <div style="font-family: 'Segoe UI', Arial, sans-serif; padding: 25px; color: #1e293b; line-height: 1.4; background: #fff;">
-            <table style="width: 100%; border-bottom: 2px solid #0d9488; padding-bottom: 12px; margin-bottom: 20px;">
+            <table style="width: 100%; border-bottom: 2px solid #0d9488; padding-bottom: 12px; margin-bottom: 18px; border-collapse: collapse;">
                 <tr>
-                    <td>
-                        ${logoBase64 ? `<img src="${logoBase64}" style="max-height: 55px; margin-bottom: 6px; display: block;">` : ''}
-                        <h2 style="margin: 0; color: #0d9488; font-size: 18pt;">${clinicName}</h2>
-                        <div style="font-size: 9pt; color: #64748b; margin-top: 2px;">Centro Médico y Odontológico Integral</div>
+                    <td style="vertical-align: middle; width: 60%; text-align: left;">
+                        ${logoBase64 ? `<img src="${logoBase64}" alt="Logo" style="height: 48px; max-height: 48px; max-width: 220px; width: auto; object-fit: contain; object-position: left center; margin-bottom: 6px; display: block;">` : ''}
+                        <h2 style="margin: 0; color: #0d9488; font-size: 15pt; font-weight: bold; line-height: 1.2;">${clinicName}</h2>
+                        <div style="font-size: 8.5pt; color: #64748b; margin-top: 2px;">Centro Médico y Odontológico Integral</div>
                     </td>
-                    <td style="text-align: right;">
-                        <span style="background: #0d9488; color: white; padding: 4px 10px; border-radius: 6px; font-weight: bold; font-size: 13pt;">${docTitle}</span>
-                        <div style="font-weight: bold; font-size: 12pt; margin-top: 4px; color: #0f172a;">N° ${doc.id}</div>
-                        <div style="font-size: 9.5pt; color: #64748b;">Fecha: ${doc.invoiceDate || new Date().toISOString().split('T')[0]}</div>
+                    <td style="vertical-align: middle; text-align: right; width: 40%;">
+                        <span style="background: #0d9488; color: white; padding: 4px 12px; border-radius: 6px; font-weight: bold; font-size: 12pt; display: inline-block;">${docTitle}</span>
+                        <div style="font-weight: bold; font-size: 11pt; margin-top: 5px; color: #0f172a;">N° ${doc.id}</div>
+                        <div style="font-size: 9pt; color: #64748b; margin-top: 2px;">Fecha: ${doc.invoiceDate || new Date().toISOString().split('T')[0]}</div>
                     </td>
                 </tr>
             </table>
@@ -8445,19 +8469,18 @@ window.downloadDirectSaleReceiptPDF = async function(docId = null) {
             </table>
 
             <div style="margin-top: 20px; float: right; width: 280px; font-size: 11pt;">
-                <div style="display: flex; justify-content: space-between; padding: 3px 0;"><span>Total Servicios:</span> <strong>$${parseFloat(doc.totalRef || 0).toFixed(2)} USD</strong></div>
+                <div style="display: flex; justify-content: space-between; padding: 3px 0;"><span>Total Servicios:</span> <strong>$${effectiveTotal.toFixed(2)} USD</strong></div>
                 <div style="display: flex; justify-content: space-between; padding: 3px 0;"><span>Tasa BCV Oficial:</span> <span>Bs. ${rate.toFixed(2)}</span></div>
-                <div style="display: flex; justify-content: space-between; padding: 3px 0;"><span>Equivalente en Bs:</span> <span style="color:#0284c7; font-weight:bold;">Bs. ${(parseFloat(doc.totalRef || 0) * rate).toFixed(2)}</span></div>
+                <div style="display: flex; justify-content: space-between; padding: 3px 0;"><span>Equivalente en Bs:</span> <span style="color:#0284c7; font-weight:bold;">Bs. ${(effectiveTotal * rate).toFixed(2)}</span></div>
                 <hr style="border: none; border-top: 1px solid #cbd5e1; margin: 6px 0;">
                 ${(doc.is_cashea || doc.casheaDetails) ? `
-                    <div style="color: #0369a1; font-weight: bold;"><span>Plan de Pago:</span> <span>Financiamiento Cashea</span></div>
-                    ${doc.casheaDetails?.surchargeAmountUSD > 0 ? `<div style="font-size: 10pt; color: #0284c7;"><span>Recargo Cashea (${doc.casheaDetails.surchargePct}%):</span> <span>+$${doc.casheaDetails.surchargeAmountUSD.toFixed(2)} USD</span></div>` : ''}
-                    <div style="font-size: 11pt; color: #059669;"><span>Inicial Pagada en Recepción:</span> <strong>$${parseFloat(doc.casheaDetails?.initialPaidUSD || paidVal).toFixed(2)} USD</strong></div>
-                    <div style="font-size: 11.5pt; color: #0284c7;"><span>Financiado por Cashea:</span> <strong>$${parseFloat(doc.casheaDetails?.financedUSD || (doc.totalRef - paidVal)).toFixed(2)} USD</strong></div>
-                    <div style="font-size: 8.5pt; color: #64748b; font-style: italic; margin-top: 4px;">* Las cuotas quincenales son abonadas por el paciente directamente en la App Cashea.</div>
+                    <div style="color: #0369a1; font-weight: bold; margin-bottom: 4px;"><span>Plan de Pago:</span> <span>Financiamiento Cashea</span></div>
+                    <div style="font-size: 11pt; color: #059669; display: flex; justify-content: space-between; padding: 2px 0;"><span>Inicial Pagada en Recepción:</span> <strong>$${casheaInitial.toFixed(2)} USD</strong></div>
+                    <div style="font-size: 11pt; color: #0284c7; display: flex; justify-content: space-between; padding: 2px 0;"><span>Financiado por Cashea:</span> <strong>$${casheaFinanced.toFixed(2)} USD</strong></div>
+                    <div style="font-size: 8pt; color: #64748b; font-style: italic; margin-top: 5px; line-height: 1.3;">* Las cuotas quincenales son abonadas por el paciente directamente en la App Cashea.</div>
                 ` : `
-                    <div style="font-size: 12pt; color: #059669;"><span>Monto Cobrado / Pagado:</span> <strong>$${parseFloat(paidVal).toFixed(2)} USD</strong></div>
-                    ${balanceVal > 0 ? `<div style="display: flex; justify-content: space-between; padding: 3px 0; font-size: 11pt; color: #e11d48;"><span>Saldo Restante Pendiente:</span> <strong>$${parseFloat(balanceVal).toFixed(2)} USD</strong></div>` : ''}
+                    <div style="font-size: 11pt; color: #059669; display: flex; justify-content: space-between; padding: 2px 0;"><span>Monto Cobrado / Pagado:</span> <strong>$${parseFloat(paidVal).toFixed(2)} USD</strong></div>
+                    ${balanceVal > 0 ? `<div style="display: flex; justify-content: space-between; padding: 2px 0; font-size: 11pt; color: #e11d48;"><span>Saldo Restante Pendiente:</span> <strong>$${parseFloat(balanceVal).toFixed(2)} USD</strong></div>` : ''}
                 `}
             </div>
 
@@ -8501,9 +8524,19 @@ window.sendDirectSaleReceiptWhatsApp = async function(docId = null) {
     const isFull = doc.status === 'Pagado' || doc.id.startsWith('FAC-');
     const docTypeLabel = isFull ? 'Factura de Atención' : 'Recibo de Abono';
     const rate = getExchangeRate();
-    const totalBs = (parseFloat(doc.totalRef || 0) * rate).toFixed(2);
+    const baseItemsTotal = (doc.items || []).reduce((acc, it) => acc + (parseFloat(it.totalUSD || (it.price * (it.qty || 1))) || 0), 0);
+    const effectiveTotal = (doc.is_cashea || doc.casheaDetails) && doc.casheaDetails?.surchargeAmountUSD > 0 && baseItemsTotal > 0
+        ? baseItemsTotal 
+        : parseFloat(doc.totalRef || baseItemsTotal || 0);
+
+    const totalBs = (effectiveTotal * rate).toFixed(2);
     const paidVal = doc.paidRef !== undefined ? doc.paidRef : (doc.metadata?.paidUSD || doc.totalRef || 0);
     const balanceVal = doc.balanceRef !== undefined ? doc.balanceRef : (doc.metadata?.balanceUSD || 0);
+
+    const casheaInitial = (doc.casheaDetails?.initialPaidUSD !== undefined)
+        ? Math.min(effectiveTotal, parseFloat(doc.casheaDetails.initialPaidUSD))
+        : Math.min(effectiveTotal, parseFloat(paidVal));
+    const casheaFinanced = Math.max(0, effectiveTotal - casheaInitial);
 
     const srvList = (doc.items || []).map(i => `• ${i.qty || 1}x ${i.name || i.description} ($${parseFloat(i.totalUSD || i.price || 0).toFixed(2)})`).join('\n');
 
@@ -8512,14 +8545,13 @@ window.sendDirectSaleReceiptWhatsApp = async function(docId = null) {
     msg += `📄 *${docTypeLabel} N°:* ${doc.id}\n`;
     msg += `📅 *Fecha:* ${doc.invoiceDate || new Date().toISOString().split('T')[0]}\n\n`;
     msg += `*Servicios Realizados:*\n${srvList}\n\n`;
-    msg += `💰 *Total Servicios:* $${parseFloat(doc.totalRef || 0).toFixed(2)} USD (Bs. ${totalBs})\n`;
+    msg += `💰 *Total Servicios:* $${effectiveTotal.toFixed(2)} USD (Bs. ${totalBs})\n`;
     if (doc.is_cashea || doc.casheaDetails) {
         msg += `💳 *Método de Pago:* Financiamiento Cashea\n`;
-        if (doc.casheaDetails?.surchargeAmountUSD > 0) {
-            msg += `➕ *Recargo Cashea (${doc.casheaDetails.surchargePct}%):* +$${doc.casheaDetails.surchargeAmountUSD.toFixed(2)} USD\n`;
+        msg += `✅ *Inicial Cobrada en Recepción:* $${casheaInitial.toFixed(2)} USD\n`;
+        if (casheaFinanced > 0) {
+            msg += `📱 *Saldo Financiado por Cashea:* $${casheaFinanced.toFixed(2)} USD (a pagar en sus cuotas por la App Cashea)\n`;
         }
-        msg += `✅ *Inicial Cobrada en Recepción:* $${(doc.casheaDetails?.initialPaidUSD || paidVal).toFixed(2)} USD\n`;
-        msg += `📱 *Saldo Financiado por Cashea:* $${(doc.casheaDetails?.financedUSD || (doc.totalRef - paidVal)).toFixed(2)} USD (a pagar en sus cuotas por la App Cashea)\n`;
     } else {
         msg += `✅ *Monto Pagado:* $${parseFloat(paidVal).toFixed(2)} USD\n`;
         if (balanceVal > 0) {
@@ -25069,12 +25101,20 @@ async function generatePDFFromElement(element, filename) {
     element.style.padding = '4px 6px';
     element.style.boxSizing = 'border-box';
 
-    // Remove any overflow or max-height restrictions on children
+    // Remove any overflow or max-height restrictions on containers (preserve IMG, SVG, CANVAS to prevent distortion)
     element.querySelectorAll('*').forEach(child => {
-        if (child.style) {
+        if (child.style && child.tagName !== 'IMG' && child.tagName !== 'SVG' && child.tagName !== 'CANVAS') {
             if (child.style.maxHeight) child.style.maxHeight = 'none';
             if (child.style.overflow && child.style.overflow !== 'visible') child.style.overflow = 'visible';
             if (child.style.overflowY && child.style.overflowY !== 'visible') child.style.overflowY = 'visible';
+        }
+    });
+
+    // Ensure images are properly bounded and keep aspect ratio
+    element.querySelectorAll('img').forEach(img => {
+        if (img.style) {
+            img.style.maxWidth = img.style.maxWidth || '100%';
+            img.style.objectFit = img.style.objectFit || 'contain';
         }
     });
 
