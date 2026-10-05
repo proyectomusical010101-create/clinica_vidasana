@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=346">
+    <link rel="stylesheet" href="styles.css?v=347">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -947,7 +947,7 @@
                                 </div>
                                 <div class="form-group mb-0" style="flex: 1; min-width: 100px;">
                                     <label id="custom-price-label" class="form-label" style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase;">Precio ($ USD)</label>
-                                    <input type="number" id="custom-item-price" class="form-input" value="40">
+                                    <input type="number" id="custom-item-price" class="form-input" step="any" min="0" value="40">
                                 </div>
                                 <button class="btn btn-success" id="btn-add-custom-item-direct" style="background: #0d9488 !important; border: none !important; height: var(--input-height); display: flex; align-items: center; justify-content: center; gap: 6px; font-weight: 600; padding: 0 20px;">
                                     <i class="fa-solid fa-plus"></i> Agregar
@@ -986,7 +986,7 @@
                                      <div class="payment-terms-group" style="display: flex; flex-direction: column; gap: 15px; min-width: 300px;">
                                           <div style="display: flex; align-items: center; gap: 10px;">
                                               <span style="font-weight: 700; font-size: 0.85rem; min-width: 160px;">⚡ Descuento Manual (%):</span>
-                                              <input type="number" id="budget-discount-input" class="form-input" style="width: 70px; padding: 4px 8px; height: auto;" value="0" min="0" max="100">
+                                              <input type="number" id="budget-discount-input" class="form-input" style="width: 70px; padding: 4px 8px; height: auto;" value="0" min="0" max="100" step="any">
                                               <span style="font-weight: 600;">%</span>
                                           </div>
                                           
@@ -5749,11 +5749,11 @@
                     <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                         <div class="form-group">
                             <label>% Ganancia Médico *</label>
-                            <input type="number" id="specialty-doc-pct" class="form-control" min="0" max="100" value="60" required>
+                            <input type="number" id="specialty-doc-pct" class="form-control" min="0" max="100" step="any" value="60" required>
                         </div>
                         <div class="form-group">
                             <label>% Ganancia Clínica *</label>
-                            <input type="number" id="specialty-cli-pct" class="form-control" min="0" max="100" value="40" required>
+                            <input type="number" id="specialty-cli-pct" class="form-control" min="0" max="100" step="any" value="40" required>
                         </div>
                     </div>
                     <small class="text-muted mb-3 d-block"><i class="fa-solid fa-info-circle"></i> Ambos porcentajes deben sumar exactamente 100%.</small>
@@ -6193,14 +6193,14 @@
                             <div>
                                 <label style="font-size: 0.75rem; font-weight: 600; color: #475569; display: block; margin-bottom: 3px;">% Retención Clínica:</label>
                                 <div style="display: flex; align-items: center; gap: 4px;">
-                                    <input type="number" id="settle-seniat-pct-input" step="0.1" min="0" max="100" value="1.0" class="form-control" style="font-size: 0.82rem; padding: 4px 8px; font-weight: 700; height: 32px;" oninput="window.ClinicalERP.recalcSettleSeniatBreakdown()">
+                                    <input type="number" id="settle-seniat-pct-input" step="any" min="0" max="100" value="1.0" class="form-control" style="font-size: 0.82rem; padding: 4px 8px; font-weight: 700; height: 32px;" oninput="window.ClinicalERP.recalcSettleSeniatBreakdown()">
                                     <span style="font-size: 0.8rem; font-weight: 700; color: #64748b;">%</span>
                                 </div>
                             </div>
                             <div>
                                 <label style="font-size: 0.75rem; font-weight: 600; color: #475569; display: block; margin-bottom: 3px;">Sustraendo SENIAT:</label>
                                 <div style="display: flex; align-items: center; gap: 4px;">
-                                    <input type="number" id="settle-seniat-sustraendo-input" step="1" min="0" value="35" class="form-control" style="font-size: 0.82rem; padding: 4px 8px; font-weight: 700; height: 32px;" oninput="window.ClinicalERP.recalcSettleSeniatBreakdown()">
+                                    <input type="number" id="settle-seniat-sustraendo-input" step="any" min="0" value="35" class="form-control" style="font-size: 0.82rem; padding: 4px 8px; font-weight: 700; height: 32px;" oninput="window.ClinicalERP.recalcSettleSeniatBreakdown()">
                                     <span style="font-size: 0.8rem; font-weight: 700; color: #64748b;">Bs.</span>
                                 </div>
                             </div>
@@ -6294,7 +6294,7 @@
                         <div class="form-group">
                             <label style="font-weight: 600;">% Retención Clínica / SENIAT *</label>
                             <div style="display: flex; align-items: center; gap: 6px;">
-                                <input type="number" id="cfg-seniat-percent" class="form-control" step="0.01" min="0" max="100" value="1.0" required style="font-weight: 700;">
+                                <input type="number" id="cfg-seniat-percent" class="form-control" step="any" min="0" max="100" value="1.0" required style="font-weight: 700;">
                                 <span style="font-weight: 700; color: var(--text-color);">%</span>
                             </div>
                             <small class="text-muted">Porcentaje deducido que queda a la clínica.</small>
@@ -6302,7 +6302,7 @@
                         <div class="form-group">
                             <label style="font-weight: 600;">Sustraendo SENIAT (Bs.) *</label>
                             <div style="display: flex; align-items: center; gap: 6px;">
-                                <input type="number" id="cfg-seniat-sustraendo" class="form-control" step="0.01" min="0" value="35.0" required style="font-weight: 700;">
+                                <input type="number" id="cfg-seniat-sustraendo" class="form-control" step="any" min="0" value="35.0" required style="font-weight: 700;">
                                 <span style="font-weight: 700; color: var(--text-color);">Bs.</span>
                             </div>
                             <small class="text-muted">Monto fijo del SENIAT en Bolívares.</small>
@@ -8044,14 +8044,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=346"></script>
-    <script src="supabaseClient.js?v=346"></script>
-    <script src="odontogram.js?v=346"></script>
-    <script src="signature.js?v=346"></script>
-    <script src="whatsapp.js?v=346"></script>
-    <script src="kardex.js?v=346"></script>
-    <script src="app.js?v=346"></script>
-    <script src="clinicalERP.js?v=346"></script>
-    <script src="tutorial.js?v=346"></script>
+    <script src="seededData.js?v=347"></script>
+    <script src="supabaseClient.js?v=347"></script>
+    <script src="odontogram.js?v=347"></script>
+    <script src="signature.js?v=347"></script>
+    <script src="whatsapp.js?v=347"></script>
+    <script src="kardex.js?v=347"></script>
+    <script src="app.js?v=347"></script>
+    <script src="clinicalERP.js?v=347"></script>
+    <script src="tutorial.js?v=347"></script>
 </body>
 </html>

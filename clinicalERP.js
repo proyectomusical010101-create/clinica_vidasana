@@ -1349,7 +1349,7 @@
                 Swal.fire({
                     icon: 'success',
                     title: 'Parámetros Predeterminados',
-                    text: `Se guardó ${percent}% de retención y ${sustraendoBs} Bs de sustraendo como valor por defecto.`,
+                    text: `Se guardó ${percent}% de retención y ${parseFloat(sustraendoBs).toFixed(2)} Bs de sustraendo como valor por defecto.`,
                     timer: 1600,
                     showConfirmButton: false
                 });
