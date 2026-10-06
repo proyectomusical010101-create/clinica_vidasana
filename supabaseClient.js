@@ -2250,6 +2250,9 @@ class SupabaseDataService {
                             if (b && b.shifts && !r.shifts) {
                                 r.shifts = b.shifts;
                             }
+                            if (b && b.schedules && !r.schedules) {
+                                r.schedules = b.schedules;
+                            }
                             return r;
                         });
                     }
@@ -2267,9 +2270,13 @@ class SupabaseDataService {
                             const parsed = JSON.parse(equip);
                             if (parsed && typeof parsed === 'object') {
                                 if (parsed.shifts) r.shifts = parsed.shifts;
+                                if (parsed.schedules) r.schedules = parsed.schedules;
                                 if (parsed.notes !== undefined) r.equipment = parsed.notes;
                             }
                         } catch(e) {}
+                    }
+                    if (!r.schedules) {
+                        r.schedules = [];
                     }
                     // Default shifts if missing
                     if (!r.shifts) {
@@ -2323,7 +2330,8 @@ class SupabaseDataService {
                 // Encode notes and shifts in equipment column
                 const equipPayload = JSON.stringify({
                     notes: room.equipment || '',
-                    shifts: room.shifts || null
+                    shifts: room.shifts || null,
+                    schedules: room.schedules || []
                 });
 
                 const dbRoom = {

@@ -28,6 +28,9 @@
         specialtiesSearch: '',
         roomsFilter: 'all',
         roomsSearch: '',
+        roomsDayFilter: 'all',
+        roomsMonthFilter: 'all',
+        currentRoomSchedules: [],
         payrollFilter: 'all',
         payrollSearch: '',
         payrollStaffFilter: 'all',
@@ -480,6 +483,16 @@
             this.renderRooms();
         },
 
+        filterRoomsByDay(day) {
+            this.roomsDayFilter = (day || 'all').toLowerCase();
+            this.renderRooms();
+        },
+
+        filterRoomsByMonth(month) {
+            this.roomsMonthFilter = month || 'all';
+            this.renderRooms();
+        },
+
         searchRooms(query) {
             this.roomsSearch = (query || '').toLowerCase().trim();
             this.renderRooms();
@@ -506,6 +519,28 @@
                 } else {
                     list = list.filter(r => (r.status || '').toLowerCase() === f);
                 }
+            }
+
+            if (this.roomsDayFilter && this.roomsDayFilter !== 'all') {
+                const dayTarget = this.roomsDayFilter.toLowerCase();
+                list = list.filter(r => {
+                    if (r.schedules && r.schedules.length > 0) {
+                        return r.schedules.some(s => (s.days || []).map(d => d.toLowerCase()).includes(dayTarget));
+                    }
+                    return false;
+                });
+            }
+
+            if (this.roomsMonthFilter && this.roomsMonthFilter !== 'all') {
+                const now = new Date();
+                const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                const targetM = this.roomsMonthFilter === 'current' ? curMonth : this.roomsMonthFilter;
+                list = list.filter(r => {
+                    if (r.schedules && r.schedules.length > 0) {
+                        return r.schedules.some(s => s.period_type === 'permanent' || s.month === targetM || s.month === 'all');
+                    }
+                    return true;
+                });
             }
 
             if (this.roomsSearch) {
@@ -624,46 +659,103 @@
                                 <span class="badge-tag gray" style="font-size: 0.7rem;">${r.rental_mode || 'Por Turno'}</span>
                             </div>
 
-                            <!-- BLOQUE DE TURNOS (MAÑANA Y TARDE) -->
-                            <div class="erp-room-shifts-container">
-                                <!-- TURNO MAÑANA -->
-                                <div class="erp-room-shift-block morning">
-                                    <div class="erp-room-shift-header">
-                                        <span style="font-weight: 700; color: #b45309; display: flex; align-items: center; gap: 5px;">
-                                            <i class="fa-solid fa-sun" style="color: #f59e0b;"></i> Turno Mañana
-                                        </span>
-                                        <div style="display: flex; align-items: center; gap: 6px;">
-                                            <span style="font-size: 0.72rem; font-weight: 600; color: #78350f;">$${parseFloat(morning.canon || 35).toFixed(2)}</span>
-                                            ${shiftStatusBadge(morning.status)}
-                                        </div>
-                                    </div>
-                                    <div class="erp-room-shift-doctor">
-                                        <span><i class="fa-solid fa-user-doctor" style="color: #f59e0b; margin-right: 4px;"></i> <strong>${morningDoc}</strong></span>
-                                    </div>
-                                    <div class="erp-room-shift-hours">
-                                        <i class="fa-regular fa-clock"></i> ${morning.start_time || '08:00'} - ${morning.end_time || '13:00'} (${morning.hours || 5} hrs)
-                                    </div>
-                                </div>
+                            ${(() => {
+                                const hasSchedules = Array.isArray(r.schedules) && r.schedules.length > 0;
+                                if (hasSchedules) {
+                                    return `
+                                        <div class="erp-room-shifts-container">
+                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                                                <span style="font-size: 0.78rem; font-weight: 700; color: #0f766e; display: flex; align-items: center; gap: 5px;">
+                                                    <i class="fa-solid fa-calendar-week"></i> Asignaciones por Días (${r.schedules.length})
+                                                </span>
+                                                <span class="badge-tag green" style="font-size: 0.68rem; font-weight: 700;">Multi-Día</span>
+                                            </div>
+                                            ${r.schedules.map(sch => {
+                                                const daysBadges = (sch.days || []).map(d => {
+                                                    const short = d.substring(0, 3).toUpperCase();
+                                                    return `<span style="background: #ccfbf1; color: #0f766e; padding: 2px 5px; border-radius: 4px; font-size: 0.68rem; font-weight: 800; border: 1px solid #99f6e4;">${short}</span>`;
+                                                }).join(' ');
 
-                                <!-- TURNO TARDE -->
-                                <div class="erp-room-shift-block afternoon">
-                                    <div class="erp-room-shift-header">
-                                        <span style="font-weight: 700; color: #4338ca; display: flex; align-items: center; gap: 5px;">
-                                            <i class="fa-solid fa-moon" style="color: #6366f1;"></i> Turno Tarde
-                                        </span>
-                                        <div style="display: flex; align-items: center; gap: 6px;">
-                                            <span style="font-size: 0.72rem; font-weight: 600; color: #312e81;">$${parseFloat(afternoon.canon || 35).toFixed(2)}</span>
-                                            ${shiftStatusBadge(afternoon.status)}
+                                                let shiftBadge = '';
+                                                if (sch.shift === 'both') {
+                                                    shiftBadge = '<span class="badge-tag" style="background: #fdf4ff; color: #a21caf; border: 1px solid #f0abfc; font-weight: 700; font-size: 0.68rem;"><i class="fa-solid fa-bolt" style="color: #c084fc;"></i> Mañana y Tarde (Ambos)</span>';
+                                                } else if (sch.shift === 'morning') {
+                                                    shiftBadge = '<span class="badge-tag" style="background: #fef3c7; color: #b45309; font-weight: 700; font-size: 0.68rem;"><i class="fa-solid fa-sun" style="color: #f59e0b;"></i> Mañana</span>';
+                                                } else {
+                                                    shiftBadge = '<span class="badge-tag" style="background: #e0e7ff; color: #4338ca; font-weight: 700; font-size: 0.68rem;"><i class="fa-solid fa-moon" style="color: #6366f1;"></i> Tarde</span>';
+                                                }
+
+                                                const monthBadge = (!sch.month || sch.month === 'all' || sch.period_type === 'permanent')
+                                                    ? '<span class="badge-tag gray" style="font-size: 0.68rem;"><i class="fa-regular fa-calendar"></i> Permanente</span>'
+                                                    : `<span class="badge-tag blue" style="font-size: 0.68rem;"><i class="fa-regular fa-calendar"></i> ${sch.month_name || sch.month}</span>`;
+
+                                                return `
+                                                    <div class="erp-sched-item-card ${sch.shift === 'both' ? 'shift-both' : (sch.shift === 'morning' ? 'shift-morning' : 'shift-afternoon')}">
+                                                        <div style="flex: 1; min-width: 0;">
+                                                            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px; flex-wrap: wrap;">
+                                                                <strong style="color: #0f172a; font-size: 0.84rem;"><i class="fa-solid fa-user-doctor text-cyan"></i> ${sch.doctor_name}</strong>
+                                                                ${shiftBadge}
+                                                                ${monthBadge}
+                                                            </div>
+                                                            <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+                                                                <span style="font-size: 0.7rem; color: #64748b; font-weight: 600;">Días:</span>
+                                                                ${daysBadges || '<span class="text-muted" style="font-size: 0.7rem;">Sin días</span>'}
+                                                            </div>
+                                                        </div>
+                                                        <div style="text-align: right; flex-shrink: 0;">
+                                                            <strong style="font-size: 0.85rem; color: #059669; display: block;">$${parseFloat(sch.canon || 0).toFixed(2)}</strong>
+                                                            <span style="font-size: 0.65rem; color: #64748b;">${sch.shift === 'both' ? 'por día' : 'por turno'}</span>
+                                                        </div>
+                                                    </div>
+                                                `;
+                                            }).join('')}
                                         </div>
-                                    </div>
-                                    <div class="erp-room-shift-doctor">
-                                        <span><i class="fa-solid fa-user-doctor" style="color: #6366f1; margin-right: 4px;"></i> <strong>${afternoonDoc}</strong></span>
-                                    </div>
-                                    <div class="erp-room-shift-hours">
-                                        <i class="fa-regular fa-clock"></i> ${afternoon.start_time || '14:00'} - ${afternoon.end_time || '19:00'} (${afternoon.hours || 5} hrs)
-                                    </div>
-                                </div>
-                            </div>
+                                    `;
+                                } else {
+                                    return `
+                                        <!-- BLOQUE DE TURNOS (MAÑANA Y TARDE) -->
+                                        <div class="erp-room-shifts-container">
+                                            <!-- TURNO MAÑANA -->
+                                            <div class="erp-room-shift-block morning">
+                                                <div class="erp-room-shift-header">
+                                                    <span style="font-weight: 700; color: #b45309; display: flex; align-items: center; gap: 5px;">
+                                                        <i class="fa-solid fa-sun" style="color: #f59e0b;"></i> Turno Mañana
+                                                    </span>
+                                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                                        <span style="font-size: 0.72rem; font-weight: 600; color: #78350f;">$${parseFloat(morning.canon || 35).toFixed(2)}</span>
+                                                        ${shiftStatusBadge(morning.status)}
+                                                    </div>
+                                                </div>
+                                                <div class="erp-room-shift-doctor">
+                                                    <span><i class="fa-solid fa-user-doctor" style="color: #f59e0b; margin-right: 4px;"></i> <strong>${morningDoc}</strong></span>
+                                                </div>
+                                                <div class="erp-room-shift-hours">
+                                                    <i class="fa-regular fa-clock"></i> ${morning.start_time || '08:00'} - ${morning.end_time || '13:00'} (${morning.hours || 5} hrs)
+                                                </div>
+                                            </div>
+
+                                            <!-- TURNO TARDE -->
+                                            <div class="erp-room-shift-block afternoon">
+                                                <div class="erp-room-shift-header">
+                                                    <span style="font-weight: 700; color: #4338ca; display: flex; align-items: center; gap: 5px;">
+                                                        <i class="fa-solid fa-moon" style="color: #6366f1;"></i> Turno Tarde
+                                                    </span>
+                                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                                        <span style="font-size: 0.72rem; font-weight: 600; color: #312e81;">$${parseFloat(afternoon.canon || 35).toFixed(2)}</span>
+                                                        ${shiftStatusBadge(afternoon.status)}
+                                                    </div>
+                                                </div>
+                                                <div class="erp-room-shift-doctor">
+                                                    <span><i class="fa-solid fa-user-doctor" style="color: #6366f1; margin-right: 4px;"></i> <strong>${afternoonDoc}</strong></span>
+                                                </div>
+                                                <div class="erp-room-shift-hours">
+                                                    <i class="fa-regular fa-clock"></i> ${afternoon.start_time || '14:00'} - ${afternoon.end_time || '19:00'} (${afternoon.hours || 5} hrs)
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `;
+                                }
+                            })()}
 
                             <div class="erp-room-rates-strip">
                                 <div>
@@ -805,9 +897,228 @@
 
                 morningSelect.innerHTML = buildOptions();
                 afternoonSelect.innerHTML = buildOptions();
+                const schedSelect = document.getElementById('sched-doctor-select');
+                if (schedSelect) {
+                    schedSelect.innerHTML = buildOptions();
+                }
             } catch(e) {
                 console.warn('Error populating room doctor selects:', e);
             }
+        },
+
+        toggleSchedDay(btn) {
+            if (!btn) return;
+            btn.classList.toggle('active');
+        },
+
+        selectSchedQuickDays(mode) {
+            const container = document.getElementById('sched-days-selector-wrap');
+            if (!container) return;
+            const btns = container.querySelectorAll('.btn-sched-day');
+            btns.forEach(b => {
+                const day = b.getAttribute('data-day');
+                if (mode === 'all') {
+                    b.classList.add('active');
+                } else if (mode === 'none') {
+                    b.classList.remove('active');
+                } else if (mode === 'weekdays') {
+                    if (['lunes', 'martes', 'miércoles', 'jueves', 'viernes'].includes(day)) {
+                        b.classList.add('active');
+                    } else {
+                        b.classList.remove('active');
+                    }
+                }
+            });
+        },
+
+        setSchedShift(shift) {
+            const wrap = document.getElementById('sched-shift-selector-wrap');
+            if (wrap) {
+                wrap.querySelectorAll('.btn-sched-shift').forEach(b => {
+                    b.classList.toggle('active', b.getAttribute('data-shift') === shift);
+                });
+            }
+            const hidden = document.getElementById('sched-selected-shift');
+            if (hidden) hidden.value = shift;
+
+            const canonInput = document.getElementById('sched-canon-input');
+            if (canonInput) {
+                if (shift === 'both') {
+                    if (parseFloat(canonInput.value) <= 35) canonInput.value = 70;
+                } else {
+                    if (parseFloat(canonInput.value) >= 70) canonInput.value = 35;
+                }
+            }
+        },
+
+        onSchedDoctorChange(val) {
+            const customInput = document.getElementById('sched-doctor-custom');
+            if (val === '__custom__') {
+                if (customInput) customInput.classList.remove('hidden');
+            } else {
+                if (customInput) customInput.classList.add('hidden');
+            }
+        },
+
+        onSchedPeriodTypeChange(val) {
+            const monthInput = document.getElementById('sched-month-input');
+            if (monthInput) {
+                if (val === 'permanent') {
+                    monthInput.style.opacity = '0.4';
+                    monthInput.disabled = true;
+                } else {
+                    monthInput.style.opacity = '1';
+                    monthInput.disabled = false;
+                    if (!monthInput.value) {
+                        const now = new Date();
+                        monthInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                    }
+                }
+            }
+        },
+
+        renderModalSchedulesList() {
+            const container = document.getElementById('room-schedules-list-container');
+            const countBadge = document.getElementById('sched-count-badge');
+            if (!container) return;
+
+            const list = this.currentRoomSchedules || [];
+            if (countBadge) {
+                countBadge.innerText = `${list.length} asignación${list.length === 1 ? '' : 'es'}`;
+            }
+
+            if (list.length === 0) {
+                container.innerHTML = `
+                    <div style="background: #ffffff; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 12px; text-align: center; color: #94a3b8; font-size: 0.8rem;">
+                        <i class="fa-solid fa-calendar-plus" style="font-size: 1.2rem; color: #cbd5e1; display: block; margin-bottom: 4px;"></i>
+                        No hay asignaciones por días aún. Use el formulario de arriba para asignar días y turnos.
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = list.map((sch, idx) => {
+                const daysBadges = (sch.days || []).map(d => {
+                    const short = d.substring(0, 3).toUpperCase();
+                    return `<span style="background: #ccfbf1; color: #0f766e; padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 800; border: 1px solid #99f6e4;">${short}</span>`;
+                }).join(' ');
+
+                let shiftBadge = '';
+                if (sch.shift === 'both') {
+                    shiftBadge = '<span class="badge-tag" style="background: #fdf4ff; color: #a21caf; border: 1px solid #f0abfc; font-weight: 700; font-size: 0.72rem;"><i class="fa-solid fa-bolt" style="color: #c084fc;"></i> Mañana y Tarde (Ambos)</span>';
+                } else if (sch.shift === 'morning') {
+                    shiftBadge = '<span class="badge-tag" style="background: #fef3c7; color: #b45309; font-weight: 700; font-size: 0.72rem;"><i class="fa-solid fa-sun" style="color: #f59e0b;"></i> Mañana</span>';
+                } else {
+                    shiftBadge = '<span class="badge-tag" style="background: #e0e7ff; color: #4338ca; font-weight: 700; font-size: 0.72rem;"><i class="fa-solid fa-moon" style="color: #6366f1;"></i> Tarde</span>';
+                }
+
+                const monthBadge = (!sch.month || sch.month === 'all' || sch.period_type === 'permanent')
+                    ? '<span class="badge-tag gray" style="font-size: 0.72rem;"><i class="fa-regular fa-calendar"></i> Permanente</span>'
+                    : `<span class="badge-tag blue" style="font-size: 0.72rem;"><i class="fa-regular fa-calendar"></i> ${sch.month_name || sch.month}</span>`;
+
+                return `
+                    <div class="erp-sched-item-card ${sch.shift === 'both' ? 'shift-both' : (sch.shift === 'morning' ? 'shift-morning' : 'shift-afternoon')}">
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px; flex-wrap: wrap;">
+                                <strong style="color: #0f172a; font-size: 0.88rem;"><i class="fa-solid fa-user-doctor text-cyan"></i> ${sch.doctor_name}</strong>
+                                ${shiftBadge}
+                                ${monthBadge}
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+                                <span style="font-size: 0.72rem; color: #64748b; font-weight: 600;">Días:</span>
+                                ${daysBadges || '<span class="text-muted" style="font-size: 0.7rem;">Sin días</span>'}
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="text-align: right;">
+                                <strong style="font-size: 0.9rem; color: #059669; display: block;">$${parseFloat(sch.canon || 0).toFixed(2)}</strong>
+                                <span style="font-size: 0.68rem; color: #64748b;">${sch.shift === 'both' ? 'por día' : 'por turno'}</span>
+                            </div>
+                            <button type="button" class="btn btn-xs btn-outline" onclick="window.ClinicalERP.removeScheduleFromRoom(${idx})" title="Eliminar asignación" style="color: #ef4444; border-color: #fca5a5; padding: 4px 8px; border-radius: 6px;">
+                                <i class="fa-solid fa-trash-can"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        },
+
+        addScheduleToRoom() {
+            const docSelect = document.getElementById('sched-doctor-select');
+            const docCustom = document.getElementById('sched-doctor-custom');
+            let docName = docSelect ? docSelect.value : '';
+            if (docName === '__custom__' && docCustom) {
+                docName = docCustom.value.trim();
+            }
+            if (!docName) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({ icon: 'warning', title: 'Médico Requerido', text: 'Por favor seleccione o escriba el médico a asignar.' });
+                } else {
+                    alert('Por favor seleccione un médico a asignar.');
+                }
+                return;
+            }
+
+            // Days
+            const dayBtns = document.querySelectorAll('#sched-days-selector-wrap .btn-sched-day.active');
+            const selectedDays = Array.from(dayBtns).map(b => b.getAttribute('data-day'));
+            if (selectedDays.length === 0) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({ icon: 'warning', title: 'Días Requeridos', text: 'Seleccione al menos un día de la semana (ej: Miércoles, Jueves, Viernes).' });
+                } else {
+                    alert('Seleccione al menos un día de la semana.');
+                }
+                return;
+            }
+
+            // Period / Month
+            const periodType = document.getElementById('sched-period-type')?.value || 'month';
+            const monthInputVal = document.getElementById('sched-month-input')?.value || '';
+            const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+            let monthLabel = 'Permanente';
+            let monthVal = 'all';
+
+            if (periodType === 'month' && monthInputVal) {
+                monthVal = monthInputVal;
+                const [y, m] = monthInputVal.split('-');
+                const mIdx = parseInt(m, 10) - 1;
+                monthLabel = (mIdx >= 0 && mIdx < 12) ? `${monthNames[mIdx]} ${y}` : monthInputVal;
+            }
+
+            // Shift
+            const shift = document.getElementById('sched-selected-shift')?.value || 'both';
+            const canon = parseFloat(document.getElementById('sched-canon-input')?.value) || 0;
+            const status = document.getElementById('sched-status-select')?.value || 'alquilado';
+
+            const newSched = {
+                id: 'sch-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+                doctor_name: docName,
+                period_type: periodType,
+                month: monthVal,
+                month_name: monthLabel,
+                days: selectedDays,
+                shift: shift,
+                canon: canon,
+                status: status
+            };
+
+            this.currentRoomSchedules = this.currentRoomSchedules || [];
+            this.currentRoomSchedules.push(newSched);
+            this.renderModalSchedulesList();
+
+            // Set rental mode to por_dias automatically
+            const rentalMode = document.getElementById('room-rental-mode');
+            if (rentalMode) rentalMode.value = 'por_dias';
+
+            if (typeof showToast === 'function') {
+                showToast(`Asignación agregada para ${docName} (${selectedDays.join(', ')})`, 'success');
+            }
+        },
+
+        removeScheduleFromRoom(idx) {
+            if (!this.currentRoomSchedules || !this.currentRoomSchedules[idx]) return;
+            this.currentRoomSchedules.splice(idx, 1);
+            this.renderModalSchedulesList();
         },
 
         async openAddRoom() {
@@ -816,6 +1127,17 @@
             document.getElementById('modal-room-title').innerText = 'Nuevo Consultorio / Área Física';
             
             await this.populateRoomDoctorSelects();
+
+            // Schedules reset
+            this.currentRoomSchedules = [];
+            this.renderModalSchedulesList();
+            const mInput = document.getElementById('sched-month-input');
+            if (mInput) {
+                const now = new Date();
+                mInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            }
+            this.setSchedShift('both');
+            this.selectSchedQuickDays('none');
 
             // Defaults for new room
             document.getElementById('room-morning-start').value = '08:00';
@@ -850,6 +1172,17 @@
             document.getElementById('room-renter-name').value = r.current_tenant || '';
             document.getElementById('room-notes').value = r.equipment || '';
             document.getElementById('modal-room-title').innerText = 'Editar: ' + r.name;
+
+            // Load schedules
+            this.currentRoomSchedules = Array.isArray(r.schedules) ? JSON.parse(JSON.stringify(r.schedules)) : [];
+            this.renderModalSchedulesList();
+            const mInput = document.getElementById('sched-month-input');
+            if (mInput) {
+                const now = new Date();
+                mInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            }
+            this.setSchedShift('both');
+            this.selectSchedQuickDays('none');
 
             // Load shifts data
             const morning = (r.shifts && r.shifts.morning) ? r.shifts.morning : {
@@ -982,9 +1315,18 @@
                 }
             };
 
+            // Extract Schedules
+            const schedules = this.currentRoomSchedules || [];
+
             // Summary tenant string for compatibility
             let tenantSummary = '';
-            if (morningDoc && afternoonDoc) {
+            if (schedules.length > 0) {
+                tenantSummary = schedules.map(s => {
+                    const daysStr = (s.days || []).map(d => d.substring(0, 3)).join(',');
+                    const shiftStr = s.shift === 'both' ? 'Ambos' : (s.shift === 'morning' ? 'Mañana' : 'Tarde');
+                    return `${s.doctor_name} (${daysStr} - ${shiftStr})`;
+                }).join(' | ');
+            } else if (morningDoc && afternoonDoc) {
                 tenantSummary = `Mañana: ${morningDoc} | Tarde: ${afternoonDoc}`;
             } else if (morningDoc) {
                 tenantSummary = `Mañana: ${morningDoc}`;
@@ -994,10 +1336,15 @@
 
             // Determine general status
             let generalStatus = document.getElementById('room-status').value;
-            if (morningDoc || afternoonDoc) {
+            if (schedules.length > 0 || morningDoc || afternoonDoc) {
                 if (generalStatus === 'disponible') {
-                    generalStatus = (morningDoc && afternoonDoc) ? 'alquilado' : 'alquilado';
+                    generalStatus = 'alquilado';
                 }
+            }
+
+            let rentalModeVal = document.getElementById('room-rental-mode').value;
+            if (schedules.length > 0 && rentalModeVal === 'por_turno') {
+                rentalModeVal = 'por_dias';
             }
 
             const data = {
@@ -1006,13 +1353,14 @@
                 name: document.getElementById('room-name').value.trim(),
                 department: document.getElementById('room-type').value,
                 status: generalStatus,
-                rental_mode: document.getElementById('room-rental-mode').value,
+                rental_mode: rentalModeVal,
                 rental_fee_monthly: canonVal,
                 rental_fee_shift: morningCanon || afternoonCanon || 35,
                 rental_fee_hourly: Math.round(canonVal / 40) || 10,
                 current_tenant: tenantSummary || null,
                 equipment: document.getElementById('room-notes').value.trim(),
-                shifts: shifts
+                shifts: shifts,
+                schedules: schedules
             };
 
             try {
