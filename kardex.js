@@ -53,9 +53,15 @@ class KardexInventory {
         }
     }
 
-    // Auto-deduct inventory based on a service/treatment code
     deductForTreatment(serviceCode) {
-        const service = INITIAL_BAREMO.find(s => s.code === serviceCode);
+        let baremo = [];
+        try {
+            baremo = JSON.parse(localStorage.getItem('dental_baremo')) || [];
+        } catch(e) {}
+        if ((!baremo || baremo.length === 0) && typeof INITIAL_BAREMO !== 'undefined') {
+            baremo = INITIAL_BAREMO;
+        }
+        const service = baremo.find(s => s.code === serviceCode);
         if (service && service.materials) {
             service.materials.forEach(mat => {
                 this.updateStock(mat.code, -mat.qty);

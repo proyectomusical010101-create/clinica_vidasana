@@ -952,30 +952,39 @@ class SupabaseDataService {
                 // Fallback: If kardex_inventory returned 0 rows, check SYS-INVENTORY-CONFIG backup in patients table
                 try {
                     const { data: sysData } = await supabaseClient.from('patients').select('odontogram_data').eq('id', 'SYS-INVENTORY-CONFIG').single();
-                    if (sysData && sysData.odontogram_data && Array.isArray(sysData.odontogram_data._inventory) && sysData.odontogram_data._inventory.length > 0) {
-                        const restored = sysData.odontogram_data._inventory;
-                        console.warn(`[getInventory] Restored ${restored.length} items from SYS-INVENTORY-CONFIG backup. Repopulating kardex_inventory...`);
-                        (async () => {
-                            for (const it of restored) {
-                                try {
-                                    await supabaseClient.from('kardex_inventory').upsert({
-                                        code: it.code,
-                                        name: it.name,
-                                        area: it.area || (typeof detectClinicalArea === 'function' ? detectClinicalArea(it.category, it.name) : 'Odontología'),
-                                        category: it.category,
-                                        current_stock: it.currentStock,
-                                        min_stock: it.minStock,
-                                        unit: it.unit,
-                                        expiry_date: SupabaseDataService._sanitizeDate(it.expiryDate)
-                                    });
-                                } catch (e) {}
-                            }
-                        })();
-                        localStorage.setItem('dental_kardex', JSON.stringify(restored));
-                        localStorage.setItem('dental_inventory', JSON.stringify(restored));
-                        if (window.kardex) window.kardex.items = restored;
-                        this._inventoryCacheTime = Date.now();
-                        return restored;
+                    if (sysData && sysData.odontogram_data && sysData.odontogram_data._initialized) {
+                        if (Array.isArray(sysData.odontogram_data._inventory) && sysData.odontogram_data._inventory.length > 0) {
+                            const restored = sysData.odontogram_data._inventory;
+                            console.warn(`[getInventory] Restored ${restored.length} items from SYS-INVENTORY-CONFIG backup. Repopulating kardex_inventory...`);
+                            (async () => {
+                                for (const it of restored) {
+                                    try {
+                                        await supabaseClient.from('kardex_inventory').upsert({
+                                            code: it.code,
+                                            name: it.name,
+                                            area: it.area || (typeof detectClinicalArea === 'function' ? detectClinicalArea(it.category, it.name) : 'Odontología'),
+                                            category: it.category,
+                                            current_stock: it.currentStock,
+                                            min_stock: it.minStock,
+                                            unit: it.unit,
+                                            expiry_date: SupabaseDataService._sanitizeDate(it.expiryDate)
+                                        });
+                                    } catch (e) {}
+                                }
+                            })();
+                            localStorage.setItem('dental_kardex', JSON.stringify(restored));
+                            localStorage.setItem('dental_inventory', JSON.stringify(restored));
+                            if (window.kardex) window.kardex.items = restored;
+                            this._inventoryCacheTime = Date.now();
+                            return restored;
+                        } else {
+                            // Legitimate empty inventory in cloud
+                            localStorage.setItem('dental_kardex', JSON.stringify([]));
+                            localStorage.setItem('dental_inventory', JSON.stringify([]));
+                            if (window.kardex) window.kardex.items = [];
+                            this._inventoryCacheTime = Date.now();
+                            return [];
+                        }
                     }
                 } catch (sysErr) {
                     console.warn('[getInventory] SYS-INVENTORY-CONFIG check fallback:', sysErr);
@@ -2088,6 +2097,45 @@ class SupabaseDataService {
             return true;
         } catch(err) {
             console.error('purgeOperationalDataCloud error:', err);
+            return false;
+        }
+    }
+
+    static async purgeCatalogDataCloud() {
+        if (!this.isCloudConnected()) return false;
+        try {
+            console.log('🧹 Purging services and inventory from Supabase Cloud...');
+            try { await supabaseClient.from('baremo_services').delete().neq('code', 'KEEP_ALIVE_NONE'); } catch(e) {}
+            try { await supabaseClient.from('kardex_inventory').delete().neq('code', 'KEEP_ALIVE_NONE'); } catch(e) {}
+            try {
+                await supabaseClient.from('patients').upsert({
+                    id: 'SYS-BAREMO-CONFIG',
+                    fullname: 'Configuración Baremo Maestro',
+                    birthdate: '2026-01-01',
+                    phone: 'SYS',
+                    status: 'Sistema',
+                    odontogram_data: { _is_baremo_config: true, _initialized: true, _baremo: [] }
+                });
+            } catch(e) {}
+            try {
+                await supabaseClient.from('patients').upsert({
+                    id: 'SYS-INVENTORY-CONFIG',
+                    fullname: 'Configuración Inventario Maestro',
+                    birthdate: '2026-01-01',
+                    phone: 'SYS',
+                    status: 'Sistema',
+                    odontogram_data: { _is_inventory_config: true, _initialized: true, _inventory: [], updatedAt: new Date().toISOString() }
+                });
+            } catch(e) {}
+            this._baremoCacheTime = 0;
+            this._baremoPromise = null;
+            this._inventoryCacheTime = 0;
+            this._inventoryPromise = null;
+            this.notifyDataChanged('baremo');
+            this.notifyDataChanged('inventory');
+            return true;
+        } catch(err) {
+            console.error('purgeCatalogDataCloud error:', err);
             return false;
         }
     }

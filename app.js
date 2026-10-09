@@ -635,8 +635,8 @@ async function autoLoadDoctorSignatureInBudget(targetDoctorName = null) {
 
 // Storage Initializer
 function initStorage() {
-    // Purge operational data cache (patients, ehr, payroll, invoices) while strictly preserving baremo and inventory
-    const PURGE_VERSION = 'purge_2026_10_05_v1';
+    // Purge cache and catalog (patients, ehr, payroll, invoices, baremo services and inventory)
+    const PURGE_VERSION = 'purge_2026_10_09_v2';
     if (localStorage.getItem('_clinic_purge_ver') !== PURGE_VERSION) {
         localStorage.setItem('_clinic_purge_ver', PURGE_VERSION);
         localStorage.setItem('dental_patients', JSON.stringify([]));
@@ -648,6 +648,9 @@ function initStorage() {
         localStorage.setItem('vidasana_service_liquidations', JSON.stringify([]));
         localStorage.setItem('dental_trash_bin', JSON.stringify([]));
         localStorage.setItem('dental_account_transfers', JSON.stringify([]));
+        localStorage.setItem('dental_baremo', JSON.stringify([]));
+        localStorage.setItem('dental_kardex', JSON.stringify([]));
+        localStorage.setItem('dental_inventory', JSON.stringify([]));
         localStorage.removeItem('dental_active_patient_id');
         localStorage.removeItem('dental_anonymous_odontogram_data');
         localStorage.removeItem('dental_anonymous_draft_budget');
@@ -655,6 +658,13 @@ function initStorage() {
         if (typeof SupabaseDataService !== 'undefined') {
             SupabaseDataService._patientsCacheTime = 0;
             SupabaseDataService._patientsPromise = null;
+            SupabaseDataService._baremoCacheTime = 0;
+            SupabaseDataService._baremoPromise = null;
+            SupabaseDataService._inventoryCacheTime = 0;
+            SupabaseDataService._inventoryPromise = null;
+        }
+        if (window.kardex) {
+            window.kardex.items = [];
         }
     }
 
@@ -706,6 +716,30 @@ window.purgeAllOperationalData = async function(skipConfirm = false) {
     }
     if (typeof renderPatientsTable === 'function') renderPatientsTable();
     if (typeof renderInvoicesTable === 'function') renderInvoicesTable();
+    return true;
+};
+
+window.purgeServicesAndInventory = async function(skipConfirm = false) {
+    if (!skipConfirm) {
+        const ok = confirm('⚠️ ¿Está seguro de que desea borrar todos los SERVICIOS (Baremo) y todos los INSUMOS (Inventario)?');
+        if (!ok) return false;
+    }
+
+    localStorage.setItem('dental_baremo', JSON.stringify([]));
+    localStorage.setItem('dental_kardex', JSON.stringify([]));
+    localStorage.setItem('dental_inventory', JSON.stringify([]));
+    if (window.kardex) window.kardex.items = [];
+
+    if (typeof SupabaseDataService !== 'undefined' && SupabaseDataService.isCloudConnected()) {
+        await SupabaseDataService.purgeCatalogDataCloud();
+    }
+
+    if (typeof showToast === 'function') {
+        showToast('Servicios e insumos borrados exitosamente.', 'success');
+    }
+    if (typeof renderServicesTable === 'function') renderServicesTable();
+    if (typeof renderInventoryTable === 'function') renderInventoryTable();
+    if (typeof renderKardexTable === 'function') renderKardexTable();
     return true;
 };
 
