@@ -19941,15 +19941,16 @@ function initPatientStepperWizard() {
                 }
 
                 // Check for representative fields if child
-                const age = calculateAge(birthdate);
-                if (age < 18) {
+                const pTypeValNav = document.getElementById('p-type') ? document.getElementById('p-type').value : 'Adulto';
+                const ageNav = birthdate ? calculateAge(birthdate) : (parseInt(document.getElementById('p-age')?.value, 10) || 0);
+                if (pTypeValNav === 'Infantil' || (ageNav > 0 && ageNav < 18)) {
                     const repName = document.getElementById('p-rep-name') ? document.getElementById('p-rep-name').value.trim() : '';
                     const repId = document.getElementById('p-rep-id') ? document.getElementById('p-rep-id').value.trim() : '';
                     const repPhone = document.getElementById('p-rep-phone') ? document.getElementById('p-rep-phone').value.trim() : '';
                     const repRelation = document.getElementById('p-rep-relation') ? document.getElementById('p-rep-relation').value.trim() : '';
 
                     if (!repName || !repId || !repPhone || !repRelation) {
-                        Swal.fire({ icon: 'warning', title: 'Representante Obligatorio', text: 'El paciente es menor de edad. Por favor complete los datos del representante legal.' });
+                        Swal.fire({ icon: 'warning', title: 'Representante Obligatorio', text: 'El paciente es menor de edad. Por favor complete los datos del representante legal en el Paso 1.' });
                         return;
                     }
                 }
@@ -19986,15 +19987,16 @@ function initPatientStepperWizard() {
                 }
 
                 // Check for representative fields if child
-                const age = calculateAge(birthdate);
-                if (age < 18) {
+                const pTypeValNext = document.getElementById('p-type') ? document.getElementById('p-type').value : 'Adulto';
+                const ageNext = birthdate ? calculateAge(birthdate) : (parseInt(document.getElementById('p-age')?.value, 10) || 0);
+                if (pTypeValNext === 'Infantil' || (ageNext > 0 && ageNext < 18)) {
                     const repName = document.getElementById('p-rep-name').value.trim();
                     const repId = document.getElementById('p-rep-id').value.trim();
                     const repPhone = document.getElementById('p-rep-phone').value.trim();
                     const repRelation = document.getElementById('p-rep-relation').value.trim();
 
                     if (!repName || !repId || !repPhone || !repRelation) {
-                        Swal.fire({ icon: 'warning', title: 'Representante Obligatorio', text: 'El paciente es menor de edad. Por favor complete los datos del representante legal.' });
+                        Swal.fire({ icon: 'warning', title: 'Representante Obligatorio', text: 'El paciente es menor de edad. Por favor complete los datos del representante legal en el Paso 1.' });
                         return;
                     }
                 }
@@ -20007,38 +20009,90 @@ function initPatientStepperWizard() {
         };
     }
 
-    // Auto calculate age and toggle pediatrician
-    const pBirthdate = document.getElementById('p-birthdate');
-    if (pBirthdate) {
-        pBirthdate.onchange = () => {
-            const birthdate = pBirthdate.value;
-            if (birthdate) {
-                const age = calculateAge(birthdate);
-                const pAge = document.getElementById('p-age');
-                if (pAge) pAge.value = age;
-                
-                const pTypeSelect = document.getElementById('p-type');
-                const repFieldsDiv = document.getElementById('representative-fields');
-                
-                if (pTypeSelect && repFieldsDiv) {
-                    if (age < 18) {
-                        pTypeSelect.value = 'Infantil';
-                        repFieldsDiv.classList.remove('hidden');
-                        document.getElementById('p-rep-name').setAttribute('required', 'true');
-                        document.getElementById('p-rep-id').setAttribute('required', 'true');
-                        document.getElementById('p-rep-phone').setAttribute('required', 'true');
-                        document.getElementById('p-rep-relation').setAttribute('required', 'true');
-                    } else {
-                        pTypeSelect.value = 'Adulto';
-                        repFieldsDiv.classList.add('hidden');
-                        document.getElementById('p-rep-name').removeAttribute('required');
-                        document.getElementById('p-rep-id').removeAttribute('required');
-                        document.getElementById('p-rep-phone').removeAttribute('required');
-                        document.getElementById('p-rep-relation').removeAttribute('required');
-                    }
+    // Synchronize and toggle representative fields for pediatric / child patient
+    window.updatePatientRepresentativeVisibility = function(source = 'generic') {
+        const pTypeSelect = document.getElementById('p-type');
+        const repFieldsDiv = document.getElementById('representative-fields');
+        const pBirthdate = document.getElementById('p-birthdate');
+        const pAge = document.getElementById('p-age');
+        if (!pTypeSelect || !repFieldsDiv) return;
+
+        let isChild = (pTypeSelect.value === 'Infantil');
+
+        if (source === 'birthdate' && pBirthdate && pBirthdate.value) {
+            const calculatedAge = calculateAge(pBirthdate.value);
+            if (pAge) pAge.value = calculatedAge;
+            if (calculatedAge < 18) {
+                isChild = true;
+                pTypeSelect.value = 'Infantil';
+            } else {
+                isChild = false;
+                pTypeSelect.value = 'Adulto';
+            }
+        } else if (source === 'age' && pAge && pAge.value !== '') {
+            const ageVal = parseInt(pAge.value, 10);
+            if (!isNaN(ageVal)) {
+                if (ageVal < 18) {
+                    isChild = true;
+                    pTypeSelect.value = 'Infantil';
+                } else {
+                    isChild = false;
+                    pTypeSelect.value = 'Adulto';
                 }
             }
-        };
+        } else if (source === 'type') {
+            isChild = (pTypeSelect.value === 'Infantil');
+            if (isChild && pAge && parseInt(pAge.value, 10) >= 18) {
+                pAge.value = '';
+            }
+        } else {
+            // Generic check
+            if (pBirthdate && pBirthdate.value) {
+                const calculatedAge = calculateAge(pBirthdate.value);
+                if (calculatedAge < 18) {
+                    isChild = true;
+                    pTypeSelect.value = 'Infantil';
+                }
+            } else if (pAge && pAge.value !== '' && parseInt(pAge.value, 10) < 18) {
+                isChild = true;
+                pTypeSelect.value = 'Infantil';
+            }
+        }
+
+        const repInputs = ['p-rep-name', 'p-rep-id', 'p-rep-phone', 'p-rep-relation'];
+        if (isChild) {
+            repFieldsDiv.classList.remove('hidden');
+            repFieldsDiv.style.display = 'block';
+            repInputs.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.setAttribute('required', 'true');
+            });
+        } else {
+            repFieldsDiv.classList.add('hidden');
+            repFieldsDiv.style.display = 'none';
+            repInputs.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.removeAttribute('required');
+            });
+        }
+    };
+
+    // Attach reactive listeners to Type, Birthdate and Age inputs
+    const pTypeSelectEl = document.getElementById('p-type');
+    if (pTypeSelectEl) {
+        pTypeSelectEl.addEventListener('change', () => window.updatePatientRepresentativeVisibility('type'));
+    }
+
+    const pBirthdateEl = document.getElementById('p-birthdate');
+    if (pBirthdateEl) {
+        pBirthdateEl.addEventListener('change', () => window.updatePatientRepresentativeVisibility('birthdate'));
+        pBirthdateEl.addEventListener('input', () => window.updatePatientRepresentativeVisibility('birthdate'));
+    }
+
+    const pAgeEl = document.getElementById('p-age');
+    if (pAgeEl) {
+        pAgeEl.addEventListener('input', () => window.updatePatientRepresentativeVisibility('age'));
+        pAgeEl.addEventListener('change', () => window.updatePatientRepresentativeVisibility('age'));
     }
 
     // Tissue cards interactiveness
@@ -20139,7 +20193,12 @@ function initPatientStepperWizard() {
         const sessInp = document.getElementById('p-init-treatment-sessions');
         if (sessInp) sessInp.value = '2';
         const repFieldsDiv = document.getElementById('representative-fields');
-        if (repFieldsDiv) repFieldsDiv.classList.add('hidden');
+        if (typeof window.updatePatientRepresentativeVisibility === 'function') {
+            window.updatePatientRepresentativeVisibility('generic');
+        } else if (repFieldsDiv) {
+            repFieldsDiv.classList.add('hidden');
+            repFieldsDiv.style.display = 'none';
+        }
 
         document.querySelectorAll('.toggle-switch-wrapper').forEach(w => {
             w.classList.remove('is-checked');
@@ -20442,12 +20501,18 @@ function loadPatientDataIntoForm(p) {
 
     const pType = p.metadata?.type || (age < 18 ? 'Infantil' : 'Adulto');
     setVal('p-type', pType);
-    const repFieldsDiv = document.getElementById('representative-fields');
-    if (repFieldsDiv) {
-        if (pType === 'Infantil') {
-            repFieldsDiv.classList.remove('hidden');
-        } else {
-            repFieldsDiv.classList.add('hidden');
+    if (typeof window.updatePatientRepresentativeVisibility === 'function') {
+        window.updatePatientRepresentativeVisibility('generic');
+    } else {
+        const repFieldsDiv = document.getElementById('representative-fields');
+        if (repFieldsDiv) {
+            if (pType === 'Infantil') {
+                repFieldsDiv.classList.remove('hidden');
+                repFieldsDiv.style.display = 'block';
+            } else {
+                repFieldsDiv.classList.add('hidden');
+                repFieldsDiv.style.display = 'none';
+            }
         }
     }
 

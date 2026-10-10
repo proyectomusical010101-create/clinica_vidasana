@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=349">
+    <link rel="stylesheet" href="styles.css?v=350">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -4506,7 +4506,7 @@
                         <div class="grid-form" style="grid-template-columns: 1fr 1fr; gap: 12px;">
                             <div class="form-group">
                                 <label>Tipo de Paciente *</label>
-                                <select id="p-type" required>
+                                <select id="p-type" required onchange="window.updatePatientRepresentativeVisibility && window.updatePatientRepresentativeVisibility('type')">
                                     <option value="Adulto" selected>Adulto</option>
                                     <option value="Infantil">Infantil (Menor de Edad)</option>
                                 </select>
@@ -4525,11 +4525,11 @@
                             </div>
                             <div class="form-group">
                                 <label>Fecha de Nacimiento *</label>
-                                <input type="date" id="p-birthdate" required>
+                                <input type="date" id="p-birthdate" required onchange="window.updatePatientRepresentativeVisibility && window.updatePatientRepresentativeVisibility('birthdate')" oninput="window.updatePatientRepresentativeVisibility && window.updatePatientRepresentativeVisibility('birthdate')">
                             </div>
                             <div class="form-group">
                                 <label>Edad *</label>
-                                <input type="number" id="p-age" min="0" required placeholder="ej: 28">
+                                <input type="number" id="p-age" min="0" required placeholder="ej: 28" oninput="window.updatePatientRepresentativeVisibility && window.updatePatientRepresentativeVisibility('age')" onchange="window.updatePatientRepresentativeVisibility && window.updatePatientRepresentativeVisibility('age')">
                             </div>
                             <div class="form-group">
                                 <label>Sexo *</label>
@@ -8166,14 +8166,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=349"></script>
-    <script src="supabaseClient.js?v=349"></script>
-    <script src="odontogram.js?v=349"></script>
-    <script src="signature.js?v=349"></script>
-    <script src="whatsapp.js?v=349"></script>
-    <script src="kardex.js?v=349"></script>
-    <script src="app.js?v=349"></script>
-    <script src="clinicalERP.js?v=349"></script>
-    <script src="tutorial.js?v=349"></script>
+    <script src="seededData.js?v=350"></script>
+    <script src="supabaseClient.js?v=350"></script>
+    <script src="odontogram.js?v=350"></script>
+    <script src="signature.js?v=350"></script>
+    <script src="whatsapp.js?v=350"></script>
+    <script src="kardex.js?v=350"></script>
+    <script src="app.js?v=350"></script>
+    <script src="clinicalERP.js?v=350"></script>
+    <script src="tutorial.js?v=350"></script>
 </body>
 </html>
