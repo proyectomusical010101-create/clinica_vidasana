@@ -196,6 +196,31 @@ class WhatsAppService {
             }, 100);
         }
     }
+
+    // Regla de horario diurno para recordatorios, felicitaciones y seguimientos (07:00 AM a 10:00 PM - Hora de Caracas)
+    static isNotificationTimeAllowed() {
+        try {
+            const options = { timeZone: 'America/Caracas', hour12: false, hour: 'numeric' };
+            const hour = parseInt(new Intl.DateTimeFormat('es-VE', options).format(new Date()), 10);
+            return hour >= 7 && hour < 22; // 07:00 AM a 09:59 PM (hasta las 10:00 PM)
+        } catch (e) {
+            const h = new Date().getHours();
+            return h >= 7 && h < 22;
+        }
+    }
+
+    static getFormattedLocalHour() {
+        try {
+            return new Intl.DateTimeFormat('es-VE', {
+                timeZone: 'America/Caracas',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            }).format(new Date());
+        } catch (e) {
+            return new Date().toLocaleTimeString('es-ES', { hour: 'numeric', minute: '2-digit' });
+        }
+    }
 }
 
 window.WhatsAppService = WhatsAppService;

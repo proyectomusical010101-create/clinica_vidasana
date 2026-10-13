@@ -6211,7 +6211,22 @@ window.mergeBirthdayMessage = function(p, turningAge, rawTemplate) {
         .replace(/\{clinica\}/g, clinicaName);
 };
 
-window.sendBirthdayWhatsApp = async function(patientId, customText) {
+window.sendBirthdayWhatsApp = async function(patientId, customText, bypassScheduleWarning = false) {
+    if (!bypassScheduleWarning && typeof WhatsAppService !== 'undefined' && !WhatsAppService.isNotificationTimeAllowed()) {
+        const curTime = WhatsAppService.getFormattedLocalHour();
+        const conf = await Swal.fire({
+            icon: 'warning',
+            title: '⚠️ Horario de Descanso Nocturno',
+            html: `Actualmente son las <strong>${curTime}</strong>.<br><br>El horario habitual para enviar felicitaciones de cumpleaños es entre las <strong>7:00 AM y las 10:00 PM</strong> para no despertar ni molestar al paciente en horas de la noche/madrugada.<br><br>¿Deseas enviar la felicitación ahora de todas formas?`,
+            showCancelButton: true,
+            confirmButtonColor: '#f59e0b',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: 'Enviar ahora de todas formas',
+            cancelButtonText: 'Esperar a la mañana (Recomendado)'
+        });
+        if (!conf.isConfirmed) return;
+    }
+
     const patients = await SupabaseDataService.getPatients();
     const p = patients.find(pat => String(pat.id) === String(patientId));
     if (!p) {
@@ -6297,6 +6312,21 @@ window.setPatientBirthdayStatus = async function(patientId, status) {
 };
 
 window.sendSelectedBirthdaysWhatsApp = async function() {
+    if (typeof WhatsAppService !== 'undefined' && !WhatsAppService.isNotificationTimeAllowed()) {
+        const curTime = WhatsAppService.getFormattedLocalHour();
+        const conf = await Swal.fire({
+            icon: 'warning',
+            title: '⚠️ Horario de Descanso Nocturno',
+            html: `Actualmente son las <strong>${curTime}</strong>.<br><br>El horario habitual para enviar felicitaciones de cumpleaños es de <strong>7:00 AM a 10:00 PM</strong>.<br><br>Enviar felicitaciones a múltiples pacientes de madrugada puede generar molestias.<br><br>¿Deseas enviar las felicitaciones ahora o esperar a la mañana?`,
+            showCancelButton: true,
+            confirmButtonColor: '#f59e0b',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: 'Enviar ahora de todas formas',
+            cancelButtonText: 'Esperar a la mañana (Recomendado)'
+        });
+        if (!conf.isConfirmed) return;
+    }
+
     const checkboxes = document.querySelectorAll('.bday-patient-checkbox:checked');
     if (checkboxes.length === 0) {
         Swal.fire({ icon: 'warning', title: 'Ningún paciente seleccionado', text: 'Marque al menos un paciente para felicitar por WhatsApp.' });
@@ -11803,7 +11833,22 @@ window.addApptToGoogleCalendarDirect = async function(apptId) {
     window.safeOpenExternalUrl(url);
 };
 
-window.sendWhatsAppReminderForAppt = async function(apptId) {
+window.sendWhatsAppReminderForAppt = async function(apptId, bypassScheduleWarning = false) {
+    if (!bypassScheduleWarning && typeof WhatsAppService !== 'undefined' && !WhatsAppService.isNotificationTimeAllowed()) {
+        const curTime = WhatsAppService.getFormattedLocalHour();
+        const conf = await Swal.fire({
+            icon: 'warning',
+            title: '⚠️ Horario de Descanso Nocturno',
+            html: `Actualmente son las <strong>${curTime}</strong>.<br><br>El horario habitual para enviar recordatorios a los pacientes es entre las <strong>7:00 AM y las 10:00 PM</strong> para no incomodarlos de madrugada.<br><br>¿Deseas enviar el recordatorio en este momento de todas formas?`,
+            showCancelButton: true,
+            confirmButtonColor: '#f59e0b',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: '<i class="fa-solid fa-paper-plane"></i> Enviar de todas formas',
+            cancelButtonText: '<i class="fa-solid fa-clock"></i> Esperar a la mañana'
+        });
+        if (!conf.isConfirmed) return;
+    }
+
     const appointments = await SupabaseDataService.getAppointments();
     const appt = appointments.find(a => a.id === apptId);
     if (!appt) return;
@@ -11824,6 +11869,21 @@ window.sendWhatsAppReminderForAppt = async function(apptId) {
 };
 
 window.sendRemindersForAllTomorrow = async function() {
+    if (typeof WhatsAppService !== 'undefined' && !WhatsAppService.isNotificationTimeAllowed()) {
+        const curTime = WhatsAppService.getFormattedLocalHour();
+        const conf = await Swal.fire({
+            icon: 'warning',
+            title: '⚠️ Horario de Descanso Nocturno',
+            html: `Actualmente son las <strong>${curTime}</strong>.<br><br>El horario habitual para enviar recordatorios es de <strong>7:00 AM a 10:00 PM</strong>.<br><br>Enviar recordatorios masivos en horas de madrugada puede perturbar el descanso de los pacientes.<br><br>¿Desea continuar con el envío masivo o esperar a la mañana?`,
+            showCancelButton: true,
+            confirmButtonColor: '#f59e0b',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: 'Enviar de todas formas',
+            cancelButtonText: 'Esperar a la mañana (Recomendado)'
+        });
+        if (!conf.isConfirmed) return;
+    }
+
     const appointments = await SupabaseDataService.getAppointments();
     const tomorrowAppts = appointments.filter(a => a.isTomorrow === true || a.date === 'tomorrow');
 
@@ -11845,7 +11905,7 @@ window.sendRemindersForAllTomorrow = async function() {
         if (result.isConfirmed) {
             tomorrowAppts.forEach((appt, idx) => {
                 setTimeout(() => {
-                    window.sendWhatsAppReminderForAppt(appt.id);
+                    window.sendWhatsAppReminderForAppt(appt.id, true);
                 }, idx * 1000);
             });
         }
