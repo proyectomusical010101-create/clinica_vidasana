@@ -330,6 +330,36 @@ class SupabaseDataService {
                 console.error('Supabase deleteBaremoService Error:', err);
             }
         }
+        this._baremoCacheTime = 0;
+        this._baremoPromise = null;
+        this.notifyDataChanged('baremo', code);
+    }
+
+    // Aliases for compatibility
+    static async getPricing(forceRefresh = false) {
+        return await this.getBaremo(forceRefresh);
+    }
+
+    static async savePricing(pricingList) {
+        if (Array.isArray(pricingList)) {
+            for (const item of pricingList) {
+                await this.saveBaremoService(item);
+            }
+        } else if (pricingList && typeof pricingList === 'object') {
+            await this.saveBaremoService(pricingList);
+        }
+    }
+
+    static async deletePricingService(code) {
+        return await this.deleteBaremoService(code);
+    }
+
+    static async saveInventory(items) {
+        if (Array.isArray(items)) {
+            return await this.saveInventoryBatch(items);
+        } else if (items && typeof items === 'object') {
+            return await this.saveInventoryItem(items);
+        }
     }
 
     // ==========================================

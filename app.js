@@ -12435,7 +12435,8 @@ async function renderPricingTable(filter = 'all', searchQuery = '') {
         try {
             const pUSD = parseFloat(p.priceUSD !== undefined && p.priceUSD !== null ? p.priceUSD : (p.price || 0)) || 0;
             const priceVES = (pUSD * rate).toFixed(2);
-            const deleteSrvBtn = isAssistant ? '' : `<button class="btn btn-xs btn-outline text-red" onclick="deletePricingService('${p.code}')" title="Eliminar Servicio"><i class="fa-solid fa-trash"></i></button>`;
+            const safeCode = (p.code || '').replace(/'/g, "\\'");
+            const deleteSrvBtn = isAssistant ? '' : `<button class="btn btn-xs btn-outline text-red" onclick="window.deletePricingService('${safeCode}')" title="Eliminar Servicio"><i class="fa-solid fa-trash"></i></button>`;
             const areaInfo = typeof getAreaIconInfo === 'function' ? getAreaIconInfo(p.area) : { icon: 'fa-hospital', color: '#64748b', bg: 'rgba(100,116,139,0.1)' };
 
             const isLabService = (p.area && p.area.toLowerCase() === 'laboratorio') || (p.category && p.category.toLowerCase().includes('lab')) || isLabFilter;
@@ -12497,8 +12498,10 @@ window.deletePricingService = async function(code) {
         return;
     }
 
-    const services = await SupabaseDataService.getPricing();
-    const service = services.find(s => s.code === code || s.id === code);
+    const services = (typeof SupabaseDataService !== 'undefined' && SupabaseDataService.getBaremo)
+        ? await SupabaseDataService.getBaremo(true)
+        : (JSON.parse(localStorage.getItem('dental_baremo')) || []);
+    const service = services.find(s => s.code === code || s.id === code || (s.name && s.name.toLowerCase() === String(code).toLowerCase()));
 
     Swal.fire({
         title: '¿Mover servicio a la Papelera?',
@@ -12514,7 +12517,13 @@ window.deletePricingService = async function(code) {
             if (window.moveToTrash && service) {
                 await window.moveToTrash('pricing', service, service.name);
             }
-            await SupabaseDataService.deleteBaremoService(code);
+            if (typeof SupabaseDataService !== 'undefined' && SupabaseDataService.deleteBaremoService) {
+                await SupabaseDataService.deleteBaremoService(code);
+            } else {
+                let localBaremo = JSON.parse(localStorage.getItem('dental_baremo')) || [];
+                localBaremo = localBaremo.filter(s => s.code !== code);
+                localStorage.setItem('dental_baremo', JSON.stringify(localBaremo));
+            }
             await renderPricingTable();
             Swal.fire({ icon: 'success', title: 'Servicio movido a la papelera', text: 'Puede restaurarlo en Ajustes > Papelera de Reciclaje.', timer: 1800, showConfirmButton: false });
         }
@@ -27451,10 +27460,14 @@ window.restoreFromTrash = async function(category, trashId) {
             if (typeof renderBudgetTable === 'function') await renderBudgetTable();
             if (typeof renderBudgetListView === 'function') await renderBudgetListView(true);
             if (typeof renderDashboard === 'function') await renderDashboard();
-        } else if (category === 'pricing') {
-            const pricingList = await SupabaseDataService.getPricing();
-            pricingList.push(original);
-            await SupabaseDataService.savePricing(pricingList);
+        } else if (category === 'pricing' || category === 'services' || category === 'baremo') {
+            if (typeof SupabaseDataService !== 'undefined' && SupabaseDataService.saveBaremoService) {
+                await SupabaseDataService.saveBaremoService(original);
+            } else if (typeof SupabaseDataService !== 'undefined' && SupabaseDataService.savePricing) {
+                const pricingList = await SupabaseDataService.getPricing();
+                pricingList.push(original);
+                await SupabaseDataService.savePricing(pricingList);
+            }
             if (typeof renderPricingTable === 'function') await renderPricingTable();
         } else if (category === 'inventory') {
             const inventoryList = await SupabaseDataService.getInventory();
