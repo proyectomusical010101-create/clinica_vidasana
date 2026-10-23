@@ -5,15 +5,15 @@
    Logos, Digital Signatures, Appointments and Inventory across Desktop & Mobile.
    ========================================================================== */
 
-const SUPABASE_URL = (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.url) || 'https://uviibezuosjcgwjonzxe.supabase.co';
-const SUPABASE_ANON_KEY = (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.key) || 'sb_publishable_ZBSbkm72KsBIdhQtk3eZpg_IkGsx1MM';
+const SUPABASE_URL = (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.url) || 'https://wmocrtmflpeyfckbimfh.supabase.co';
+const SUPABASE_ANON_KEY = (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.key) || 'sb_publishable_6tB17KtPIh4cmESFE16qTA_SgjyoAXE';
 
 let supabaseClient = null;
 
 if (typeof supabase !== 'undefined') {
     try {
         supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        console.log('✅ Supabase Universal Cloud Database Connected! Project: uviibezuosjcgwjonzxe (Clínica Vidasana)');
+        console.log('✅ Supabase Universal Cloud Database Connected! Project: wmocrtmflpeyfckbimfh (Clínica Vidasana 2)');
     } catch (e) {
         console.warn('⚠️ Supabase connection warning:', e);
     }
@@ -3543,12 +3543,12 @@ class SupabaseDataService {
             });
         }
 
-        // 4. Background Sync Heartbeat (Smart Polling every 12 seconds)
+        // 4. Background Sync Heartbeat (Smart Polling every 2 minutes to protect egress quota)
         setInterval(() => {
             if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
                 this.refreshActiveViews(false);
             }
-        }, 12000);
+        }, 120000);
     }
 }
 
