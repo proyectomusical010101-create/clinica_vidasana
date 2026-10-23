@@ -4134,11 +4134,13 @@ async function renderOdontogramView() {
             }
 
             let flags = [];
-            if (patient.allergies && patient.allergies.length > 0) {
-                flags.push(`⚠️ Alergias: ${patient.allergies.join(', ')}`);
+            const safePatAllergies = Array.isArray(patient.allergies) ? patient.allergies : (typeof patient.allergies === 'string' && patient.allergies.trim() ? (() => { try { const r = JSON.parse(patient.allergies); return Array.isArray(r) ? r : [patient.allergies]; } catch(e) { return [patient.allergies]; } })() : []);
+            if (safePatAllergies.length > 0) {
+                flags.push(`⚠️ Alergias: ${safePatAllergies.join(', ')}`);
             }
-            if (patient.systemic && patient.systemic.length > 0) {
-                flags.push(`🩺 Sistémica: ${patient.systemic.join(', ')}`);
+            const safePatSystemic = Array.isArray(patient.systemic) ? patient.systemic : (typeof patient.systemic === 'string' && patient.systemic.trim() ? (() => { try { const r = JSON.parse(patient.systemic); return Array.isArray(r) ? r : [patient.systemic]; } catch(e) { return [patient.systemic]; } })() : []);
+            if (safePatSystemic.length > 0) {
+                flags.push(`🩺 Sistémica: ${safePatSystemic.join(', ')}`);
             }
             if (patient.medication) {
                 flags.push(`💊 Medicación: ${patient.medication}`);
@@ -5357,8 +5359,9 @@ async function renderPatientsTable(filter = null, searchQuery = null, highlightP
     }
 
     patients.forEach(p => {
+        try {
         const age = calculateAge(p.birthdate);
-        const initials = p.fullname.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+        const initials = (p.fullname || 'P').trim().split(/\s+/).map(n => n ? n[0] : '').join('').substring(0, 2).toUpperCase() || 'P';
         
         // Etiqueta / Convenio badge
         const tagId = p.tagId || (p.metadata && p.metadata.tagId);
@@ -5377,13 +5380,15 @@ async function renderPatientsTable(filter = null, searchQuery = null, highlightP
         }
 
         const allAlerts = [];
-        if (p.allergies && p.allergies.length > 0) {
-            p.allergies.forEach(a => {
+        const safeAllergies = Array.isArray(p.allergies) ? p.allergies : (typeof p.allergies === 'string' && p.allergies.trim() ? (() => { try { const r = JSON.parse(p.allergies); return Array.isArray(r) ? r : [p.allergies]; } catch(e) { return [p.allergies]; } })() : []);
+        if (safeAllergies.length > 0) {
+            safeAllergies.forEach(a => {
                 allAlerts.push({ type: 'allergy', text: a, label: `Alergia: ${a}`, icon: 'fa-triangle-exclamation', colorClass: 'red' });
             });
         }
-        if (p.systemic && p.systemic.length > 0) {
-            p.systemic.forEach(s => {
+        const safeSystemic = Array.isArray(p.systemic) ? p.systemic : (typeof p.systemic === 'string' && p.systemic.trim() ? (() => { try { const r = JSON.parse(p.systemic); return Array.isArray(r) ? r : [p.systemic]; } catch(e) { return [p.systemic]; } })() : []);
+        if (safeSystemic.length > 0) {
+            safeSystemic.forEach(s => {
                 allAlerts.push({ type: 'systemic', text: s, label: s, icon: 'fa-heart-pulse', colorClass: 'amber' });
             });
         }
@@ -5434,7 +5439,7 @@ async function renderPatientsTable(filter = null, searchQuery = null, highlightP
                 <small class="text-muted" style="display:block;">${p.birthdate}</small>
             </td>
             <td>
-                <a href="https://wa.me/${p.phone.replace(/[^0-9]/g,'')}" target="_blank" class="whatsapp-pill-link">
+                <a href="https://wa.me/${(p.phone ? p.phone.replace(/[^0-9]/g,'') : '')}" target="_blank" class="whatsapp-pill-link">
                     <i class="fa-brands fa-whatsapp"></i> ${p.phone}
                 </a>
             </td>
@@ -5461,6 +5466,9 @@ async function renderPatientsTable(filter = null, searchQuery = null, highlightP
             </td>
         `;
         tbody.appendChild(tr);
+        } catch(rowErr) {
+            console.error('Error rendering patient row:', p, rowErr);
+        }
     });
 
     if (highlightPatientId) {
@@ -10070,8 +10078,10 @@ async function exportEHRToPDF() {
 
     const nowStr = new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
-    let allergiesText = (patient.allergies && patient.allergies.length > 0) ? patient.allergies.join(', ') : 'Ninguna conocida';
-    let systemicText = (patient.systemic && patient.systemic.length > 0) ? patient.systemic.join(', ') : 'Ninguna declarada';
+    const sumAllergies = Array.isArray(patient.allergies) ? patient.allergies : (typeof patient.allergies === 'string' && patient.allergies.trim() ? (() => { try { const r = JSON.parse(patient.allergies); return Array.isArray(r) ? r : [patient.allergies]; } catch(e) { return [patient.allergies]; } })() : []);
+    const sumSystemic = Array.isArray(patient.systemic) ? patient.systemic : (typeof patient.systemic === 'string' && patient.systemic.trim() ? (() => { try { const r = JSON.parse(patient.systemic); return Array.isArray(r) ? r : [patient.systemic]; } catch(e) { return [patient.systemic]; } })() : []);
+    let allergiesText = sumAllergies.length > 0 ? sumAllergies.join(', ') : 'Ninguna conocida';
+    let systemicText = sumSystemic.length > 0 ? sumSystemic.join(', ') : 'Ninguna declarada';
     let medText = patient.medication || 'Sin medicación prescrita';
 
     let evolutionsHtml = '';

@@ -413,8 +413,30 @@ class SupabaseDataService {
                             phone: p.phone,
                             email: p.email || '',
                             occupation: p.occupation || '',
-                            allergies: p.allergies || [],
-                            systemic: p.systemic || [],
+                            allergies: (() => {
+                                if (Array.isArray(p.allergies)) return p.allergies;
+                                if (typeof p.allergies === 'string' && p.allergies.trim()) {
+                                    try {
+                                        const res = JSON.parse(p.allergies);
+                                        return Array.isArray(res) ? res : [p.allergies];
+                                    } catch(e) {
+                                        return [p.allergies];
+                                    }
+                                }
+                                return [];
+                            })(),
+                            systemic: (() => {
+                                if (Array.isArray(p.systemic)) return p.systemic;
+                                if (typeof p.systemic === 'string' && p.systemic.trim()) {
+                                    try {
+                                        const res = JSON.parse(p.systemic);
+                                        return Array.isArray(res) ? res : [p.systemic];
+                                    } catch(e) {
+                                        return [p.systemic];
+                                    }
+                                }
+                                return [];
+                            })(),
                             medication: p.medication || '',
                             emergencyContact: p.emergency_contact || '',
                             status: p.status || 'Activo',
