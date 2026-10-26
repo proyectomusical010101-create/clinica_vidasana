@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=355">
+    <link rel="stylesheet" href="styles.css?v=356">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -4242,12 +4242,12 @@
 
     <!-- MODAL: CREAR/EDITAR USUARIO DEL SISTEMA (AJUSTES) -->
     <div class="modal-overlay hidden" id="modal-system-user">
-        <div class="modal-dialog" style="max-width: 580px; width: 95vw;">
-            <div class="modal-header">
+        <div class="modal-dialog" style="max-width: 580px; width: 95vw; max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column; margin: auto; overflow: hidden; box-sizing: border-box;">
+            <div class="modal-header" style="flex-shrink: 0; padding: 16px 20px;">
                 <h3 id="modal-system-user-title"><i class="fa-solid fa-users-gear text-cyan"></i> Crear Cuenta de Usuario del Sistema</h3>
                 <button class="modal-close" data-close="modal-system-user">&times;</button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body" style="overflow-y: auto; flex: 1 1 auto; max-height: calc(90vh - 140px); max-height: calc(90dvh - 140px); padding: 18px 20px; -webkit-overflow-scrolling: touch; box-sizing: border-box;">
                 <form id="form-system-user" class="grid-form">
                     <input type="hidden" id="sys-user-id" value="">
                     <div class="form-group span-2">
@@ -4288,7 +4288,7 @@
                     </div>
                 </form>
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer" style="flex-shrink: 0; padding: 14px 20px;">
                 <button class="btn btn-outline" data-close="modal-system-user">Cancelar</button>
                 <button class="btn btn-primary" id="btn-save-system-user"><i class="fa-solid fa-floppy-disk"></i> Guardar Usuario</button>
             </div>
@@ -8168,14 +8168,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=355"></script>
-    <script src="supabaseClient.js?v=355"></script>
-    <script src="odontogram.js?v=355"></script>
-    <script src="signature.js?v=355"></script>
-    <script src="whatsapp.js?v=355"></script>
-    <script src="kardex.js?v=355"></script>
-    <script src="app.js?v=355"></script>
-    <script src="clinicalERP.js?v=355"></script>
-    <script src="tutorial.js?v=355"></script>
+    <script src="seededData.js?v=356"></script>
+    <script src="supabaseClient.js?v=356"></script>
+    <script src="odontogram.js?v=356"></script>
+    <script src="signature.js?v=356"></script>
+    <script src="whatsapp.js?v=356"></script>
+    <script src="kardex.js?v=356"></script>
+    <script src="app.js?v=356"></script>
+    <script src="clinicalERP.js?v=356"></script>
+    <script src="tutorial.js?v=356"></script>
 </body>
 </html>

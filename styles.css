@@ -7324,3 +7324,96 @@ select, .form-select, select.form-control {
     overflow: hidden !important;
 }
 
+
+/* =========================================================
+   SYSTEM USER MODAL RESPONSIVE FIX
+   ========================================================= */
+#modal-system-user .modal-dialog {
+    max-width: 580px;
+    width: 95vw;
+    max-height: 90vh;
+    max-height: 90dvh;
+    display: flex;
+    flex-direction: column;
+    margin: auto;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+#modal-system-user .modal-header {
+    flex-shrink: 0;
+    padding: 16px 20px;
+}
+
+#modal-system-user .modal-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    max-height: calc(90vh - 140px);
+    max-height: calc(90dvh - 140px);
+    padding: 18px 20px;
+    box-sizing: border-box;
+}
+
+#modal-system-user .modal-footer {
+    flex-shrink: 0;
+    padding: 14px 20px;
+}
+
+@media (max-width: 640px) {
+    #modal-system-user .modal-dialog {
+        width: 100% !important;
+        max-width: 100% !important;
+        max-height: 90vh !important;
+        max-height: 90dvh !important;
+        border-radius: 20px 20px 0 0 !important;
+    }
+    #modal-system-user .modal-body {
+        max-height: calc(90vh - 130px) !important;
+        padding: 14px 16px !important;
+    }
+}
+
+/* =========================================================
+   WEEKLY PLANNER: DOCTOR AVAILABILITY STYLES
+   ========================================================= */
+.weekly-day-col.is-unavailable-for-doctor {
+    background: repeating-linear-gradient(
+        -45deg,
+        rgba(248, 250, 252, 0.9),
+        rgba(248, 250, 252, 0.9) 10px,
+        rgba(241, 245, 249, 0.95) 10px,
+        rgba(241, 245, 249, 0.95) 20px
+    ) !important;
+    border-color: #cbd5e1 !important;
+    position: relative;
+}
+
+.weekly-day-col.is-unavailable-for-doctor .weekly-day-header {
+    background: #f8fafc !important;
+    border-bottom: 1px dashed #cbd5e1 !important;
+}
+
+.weekly-day-col.is-unavailable-for-doctor .weekly-day-name {
+    color: #64748b !important;
+}
+
+.weekly-day-col.is-unavailable-for-doctor .weekly-day-date {
+    color: #94a3b8 !important;
+}
+
+.weekly-day-col.is-available-for-doctor {
+    border-color: #99f6e4 !important;
+}
+
+.weekly-day-col.is-available-for-doctor .weekly-day-header {
+    background: linear-gradient(180deg, #f0fdfa 0%, #ffffff 100%) !important;
+}
+
+.doctor-unavailable-box {
+    transition: all 0.2s ease;
+}
+
+.doctor-unavailable-box:hover {
+    border-color: #94a3b8 !important;
+}

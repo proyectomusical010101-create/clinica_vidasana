@@ -1178,7 +1178,7 @@ function applyRolePermissionsUI(role) {
     const permissions = {
         admin: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll'],
         doctor: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'pricing', 'settings', 'help', 'specialties', 'rooms'],
-        assistant: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'settings', 'help']
+        assistant: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'billing', 'finance', 'settings', 'help']
     };
 
     const allowedTabs = permissions[roleType] || permissions.assistant;
@@ -1232,7 +1232,7 @@ function applyRolePermissionsUI(role) {
     // Additional UI restrictions for assistant
     const addSrvBtn = document.getElementById('btn-add-service');
     if (addSrvBtn) {
-        addSrvBtn.style.display = (roleType === 'assistant') ? 'none' : 'inline-flex';
+        addSrvBtn.style.display = 'inline-flex';
     }
 
     // Separation of duties: Allow register patient buttons
@@ -1671,7 +1671,7 @@ window.navigateToTab = async function(tabName) {
         const allowedTabs = {
             admin: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll'],
             doctor: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'pricing', 'settings', 'help', 'specialties', 'rooms'],
-            assistant: ['dashboard', 'patients', 'agenda', 'billing', 'finance', 'pricing', 'settings', 'help']
+            assistant: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'billing', 'finance', 'settings', 'help']
         }[roleType] || ['dashboard', 'help'];
 
         if (!allowedTabs.includes(tabName)) {
@@ -11073,7 +11073,105 @@ window.reactivateAppointment = async function(apptId) {
     }
 };
 
-function renderWeeklySchedulePlanner(container, appointments, weekInfo, searchQuery, isAssistant) {
+
+// ==========================================
+// DOCTOR SCHEDULE & AVAILABILITY ENGINE
+// ==========================================
+window.parseDoctorScheduleDaysAndShifts = function(scheduleStr, defaultShift = 'morning') {
+    const daysOrder = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+    const norm = (str) => (str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    const daysMap = {
+        'lunes': 'Lunes', 'lun': 'Lunes',
+        'martes': 'Martes', 'mar': 'Martes',
+        'miercoles': 'Miércoles', 'mie': 'Miércoles',
+        'jueves': 'Jueves', 'jue': 'Jueves',
+        'viernes': 'Viernes', 'vie': 'Viernes',
+        'sabado': 'Sábado', 'sab': 'Sábado',
+        'domingo': 'Domingo', 'dom': 'Domingo'
+    };
+
+    const result = {};
+    daysOrder.forEach(d => { result[d] = { active: false, shift: defaultShift, hours: '' }; });
+
+    const str = (scheduleStr || '').trim();
+    if (!str || norm(str).includes('previa cita')) {
+        return { isPreviaCita: true, hasSchedule: !!str, days: result, activeDaysCount: 0, activeDayNames: [] };
+    }
+
+    function activateRange(startDayName, endDayName, shift, hours) {
+        const sNorm = norm(startDayName);
+        const eNorm = norm(endDayName);
+        const sDay = daysMap[sNorm];
+        const eDay = daysMap[eNorm];
+        if (sDay && eDay) {
+            const sIdx = daysOrder.indexOf(sDay);
+            const eIdx = daysOrder.indexOf(eDay);
+            if (sIdx !== -1 && eIdx !== -1 && sIdx <= eIdx) {
+                for (let i = sIdx; i <= eIdx; i++) {
+                    result[daysOrder[i]] = { active: true, shift, hours };
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    const parts = str.split(/(?<=\))\s*,\s*|\s*;\s*/);
+    let anyActivated = false;
+
+    parts.forEach(part => {
+        let pNorm = norm(part);
+        let shift = defaultShift;
+        let hours = '';
+        const timeMatch = part.match(/\(([^)]+)\)/);
+        if (timeMatch) {
+            hours = timeMatch[1].trim();
+            if (hours.includes('14:00') || hours.toLowerCase().includes('tarde')) {
+                shift = (hours.includes('08:00') || hours.toLowerCase().includes('completo')) ? 'full' : 'afternoon';
+            } else if (hours.includes('08:00') || hours.toLowerCase().includes('mañana')) {
+                shift = 'morning';
+            }
+        }
+
+        const rangeMatch = pNorm.match(/(lunes|martes|miercoles|jueves|viernes|sabado|domingo|lun|mar|mie|jue|vie|sab|dom)\s+a\s+(lunes|martes|miercoles|jueves|viernes|sabado|domingo|lun|mar|mie|jue|vie|sab|dom)/);
+        if (rangeMatch) {
+            if (activateRange(rangeMatch[1], rangeMatch[2], shift, hours)) {
+                anyActivated = true;
+            }
+        }
+
+        daysOrder.forEach(d => {
+            const dNorm = norm(d);
+            const re = new RegExp('\\b' + dNorm + '\\b', 'i');
+            if (re.test(pNorm) && (!rangeMatch || !activateRange(rangeMatch[1], rangeMatch[2], shift, hours))) {
+                result[d] = { active: true, shift, hours };
+                anyActivated = true;
+            }
+        });
+    });
+
+    if (!anyActivated) {
+        const lower = norm(str);
+        daysOrder.forEach(d => {
+            const dNorm = norm(d);
+            if (lower.includes(dNorm)) {
+                result[d] = { active: true, shift: defaultShift, hours: '' };
+                anyActivated = true;
+            }
+        });
+    }
+
+    const activeCount = daysOrder.filter(d => result[d].active).length;
+    return {
+        isPreviaCita: false,
+        hasSchedule: anyActivated,
+        days: result,
+        activeDaysCount: activeCount,
+        activeDayNames: daysOrder.filter(d => result[d].active)
+    };
+};
+
+function renderWeeklySchedulePlanner(container, appointments, weekInfo, searchQuery, isAssistant, selectedDoctorId = 'all', doctorsList = []) {
     container.innerHTML = '';
 
     const totalWeek = appointments.length;
@@ -11082,10 +11180,56 @@ function renderWeeklySchedulePlanner(container, appointments, weekInfo, searchQu
     const cancelledCount = appointments.filter(a => a.status === 'Cancelada').length;
     const pendingCount = appointments.filter(a => a.status !== 'Completada' && a.status !== 'Atendida' && a.status !== 'Cancelada').length;
 
+    // Resolve doctor schedule filter if specific doctor selected
+    let selectedDocObj = null;
+    let docSchedule = null;
+    if (selectedDoctorId && selectedDoctorId !== 'all') {
+        const docsPool = (doctorsList && doctorsList.length > 0) ? doctorsList : (window._availableDoctorsCache || []);
+        selectedDocObj = docsPool.find(d => String(d.id) === String(selectedDoctorId));
+        if (selectedDocObj) {
+            const rawSch = selectedDocObj.doctorProfile?.schedule || selectedDocObj.doctor_profile?.schedule || selectedDocObj.schedule || '';
+            const defShift = selectedDocObj.doctorProfile?.shift || selectedDocObj.doctor_profile?.shift || 'morning';
+            docSchedule = window.parseDoctorScheduleDaysAndShifts(rawSch, defShift);
+        }
+    }
+
     const wrapper = document.createElement('div');
     wrapper.className = 'weekly-planner-wrapper';
 
+    let doctorBannerHtml = '';
+    if (selectedDocObj && docSchedule && docSchedule.hasSchedule && docSchedule.activeDaysCount > 0 && !docSchedule.isPreviaCita) {
+        doctorBannerHtml = `
+            <div class="doctor-schedule-summary-banner" style="margin-bottom: 14px; background: linear-gradient(135deg, #f0fdfa 0%, #e0f2fe 100%); border: 1px solid #7dd3fc; border-radius: 10px; padding: 12px 18px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; box-shadow: 0 2px 6px rgba(13,148,136,0.08);">
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <div style="width:40px; height:40px; border-radius:50%; background:#0d9488; color:#fff; display:flex; align-items:center; justify-content:center; font-size:1.15rem; flex-shrink:0; box-shadow: 0 2px 4px rgba(13,148,136,0.25);">
+                        <i class="fa-solid fa-user-doctor"></i>
+                    </div>
+                    <div>
+                        <div style="font-weight:700; color:#0f172a; font-size:0.95rem; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                            Agenda filtrada por médico: <span style="color:#0d9488;">${selectedDocObj.fullname || selectedDocObj.name}</span>
+                            ${(selectedDocObj.doctorProfile?.specialty || selectedDocObj.role) ? `<span class="badge-tag purple" style="font-size:0.72rem; padding:2px 8px;">${selectedDocObj.doctorProfile?.specialty || selectedDocObj.role}</span>` : ''}
+                        </div>
+                        <div style="font-size:0.82rem; color:#475569; margin-top:3px; display:flex; align-items:center; gap:6px;">
+                            <i class="fa-regular fa-clock" style="color:#0d9488;"></i> <strong>Horario de atención:</strong> ${selectedDocObj.doctorProfile?.schedule || selectedDocObj.doctor_profile?.schedule || selectedDocObj.schedule || 'Personalizado'}
+                            <span style="color:#94a3b8;">•</span>
+                            <span style="color:#0369a1; font-weight:600;"><i class="fa-solid fa-calendar-check" style="color:#0284c7;"></i> Días habilitados: ${docSchedule.activeDayNames.join(', ')}</span>
+                        </div>
+                    </div>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span class="badge-tag green" style="font-size:0.75rem; padding:5px 12px; font-weight:700; border-radius:20px;">
+                        <i class="fa-solid fa-shield-halved"></i> Filtro de disponibilidad activo
+                    </span>
+                    <button type="button" class="btn btn-xs btn-outline" onclick="const sel=document.getElementById('agenda-filter-doctor'); if(sel){ sel.value='all'; window.onAgendaFilterChange(); }" style="background:#fff; font-size:0.75rem; border-color:#cbd5e1; cursor:pointer;" title="Quitar filtro y ver todos los médicos">
+                        <i class="fa-solid fa-xmark"></i> Ver todos
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
     wrapper.innerHTML = `
+        ${doctorBannerHtml}
         <div class="weekly-planner-nav">
             <div class="weekly-nav-btn-group">
                 <button type="button" class="btn btn-sm btn-outline" onclick="window.navigateAgendaWeek(-1)" title="Semana Anterior">
@@ -11118,19 +11262,44 @@ function renderWeeklySchedulePlanner(container, appointments, weekInfo, searchQu
 
     weekInfo.weekDays.forEach(day => {
         const dayCol = document.createElement('div');
-        dayCol.className = `weekly-day-col ${day.isToday ? 'is-today' : ''}`;
+
+        // Check if selected doctor is available on this day
+        let isDocWorkingDay = true;
+        let dayShiftInfo = null;
+        if (selectedDocObj && docSchedule && docSchedule.hasSchedule && docSchedule.activeDaysCount > 0 && !docSchedule.isPreviaCita) {
+            isDocWorkingDay = Boolean(docSchedule.days[day.name]?.active);
+            dayShiftInfo = docSchedule.days[day.name] || null;
+        }
+
+        const colStatusClass = isDocWorkingDay ? (selectedDocObj ? 'is-available-for-doctor' : '') : 'is-unavailable-for-doctor';
+        dayCol.className = `weekly-day-col ${day.isToday ? 'is-today' : ''} ${colStatusClass}`;
 
         const dayAppts = appointments.filter(app => getNormalizedAppointmentDate(app) === day.isoDate);
         dayAppts.sort((a, b) => parseTimeToMinutes(a.time) - parseTimeToMinutes(b.time));
 
         let apptsHtml = '';
         if (dayAppts.length === 0) {
-            apptsHtml = `
-                <div style="text-align:center; padding:35px 10px; color:#94a3b8; font-size:0.8rem; display:flex; flex-direction:column; align-items:center; gap:6px;">
-                    <i class="fa-regular fa-calendar-check" style="font-size:1.6rem; color:#cbd5e1;"></i>
-                    <span>Sin citas para este día</span>
-                </div>
-            `;
+            if (!isDocWorkingDay && selectedDocObj) {
+                apptsHtml = `
+                    <div class="doctor-unavailable-box" style="text-align:center; padding:30px 10px; background: rgba(241, 245, 249, 0.7); border-radius: 8px; border: 1px dashed #cbd5e1; margin: 8px 0; color: #64748b; font-size: 0.8rem; display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                        <i class="fa-solid fa-calendar-xmark" style="font-size: 1.8rem; color: #94a3b8;"></i>
+                        <div>
+                            <strong style="display:block; color:#475569; font-size:0.86rem;">No atiende los ${day.name}s</strong>
+                            <span style="font-size:0.75rem; color:#64748b;">Dr(a). ${selectedDocObj.fullname || selectedDocObj.name} no tiene horario de atención este día.</span>
+                        </div>
+                        <div style="font-size:0.74rem; color:#0369a1; background:#e0f2fe; padding:2px 8px; border-radius:12px; font-weight:600; margin-top:2px;">
+                            Atiende: ${docSchedule.activeDayNames.join(', ')}
+                        </div>
+                    </div>
+                `;
+            } else {
+                apptsHtml = `
+                    <div style="text-align:center; padding:35px 10px; color:#94a3b8; font-size:0.8rem; display:flex; flex-direction:column; align-items:center; gap:6px;">
+                        <i class="fa-regular fa-calendar-check" style="font-size:1.6rem; color:#cbd5e1;"></i>
+                        <span>Sin citas para este día</span>
+                    </div>
+                `;
+            }
         } else {
             apptsHtml = dayAppts.map(app => {
                 const isAttended = (app.status === 'Completada' || app.status === 'Atendida');
@@ -11202,27 +11371,61 @@ function renderWeeklySchedulePlanner(container, appointments, weekInfo, searchQu
             }).join('');
         }
 
+        // Header availability badges and action buttons
+        let headerBadgeHtml = '';
+        let headerAddBtnHtml = '';
+        let bodyAddBtnHtml = '';
+
+        if (!isDocWorkingDay && selectedDocObj) {
+            headerBadgeHtml = `<span class="badge-tag" style="background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; font-size:0.65rem; padding:1px 6px; font-weight:700;"><i class="fa-solid fa-lock"></i> No atiende</span>`;
+            const alertSafeDoc = (selectedDocObj.fullname || selectedDocObj.name || '').replace(/'/g, "\\'");
+            const alertSafeDays = (docSchedule.activeDayNames || []).join(', ');
+            headerAddBtnHtml = `
+                <button type="button" class="weekly-day-add-btn disabled-blocked" style="opacity:0.35; cursor:not-allowed; background:#e2e8f0; color:#94a3b8;" title="Dr(a). ${alertSafeDoc} no atiende los ${day.name}s" onclick="Swal.fire({ icon: 'warning', title: 'Día No Disponible', html: 'El Dr(a). <strong>${alertSafeDoc}</strong> no atiende los días <strong>${day.name}</strong>.<br><br>📅 Días de atención configurados: <strong>${alertSafeDays}</strong><br>⏰ Horario: <strong>${selectedDocObj.doctorProfile?.schedule || selectedDocObj.doctor_profile?.schedule || selectedDocObj.schedule || ''}</strong>' })">
+                    <i class="fa-solid fa-ban"></i>
+                </button>
+            `;
+            bodyAddBtnHtml = `
+                <button type="button" class="weekly-add-slot-btn disabled-blocked" style="opacity:0.4; cursor:not-allowed; background:#f1f5f9; border-color:#e2e8f0; color:#94a3b8;" onclick="Swal.fire({ icon: 'warning', title: 'Día No Disponible', html: 'El Dr(a). <strong>${alertSafeDoc}</strong> no atiende los días <strong>${day.name}</strong>.<br><br>📅 Días de atención configurados: <strong>${alertSafeDays}</strong><br>⏰ Horario: <strong>${selectedDocObj.doctorProfile?.schedule || selectedDocObj.doctor_profile?.schedule || selectedDocObj.schedule || ''}</strong>' })">
+                    <i class="fa-solid fa-lock"></i> No disponible para este médico
+                </button>
+            `;
+        } else {
+            if (selectedDocObj && dayShiftInfo) {
+                const shiftLabel = dayShiftInfo.hours || (dayShiftInfo.shift === 'afternoon' ? 'Tarde' : (dayShiftInfo.shift === 'full' ? 'Completo' : 'Mañana'));
+                headerBadgeHtml = `<span class="badge-tag teal" style="font-size:0.65rem; padding:1px 6px; font-weight:700;"><i class="fa-solid fa-user-check"></i> ${shiftLabel}</span>`;
+            }
+            const prefillDocArg = selectedDocObj ? `, prefillDoctorId: '${selectedDocObj.id}'` : '';
+            headerAddBtnHtml = `
+                <button type="button" class="weekly-day-add-btn" onclick="window.openNewAppointmentModal({ prefillDate: '${day.isoDate}'${prefillDocArg} })" title="Asignar Cita el ${day.name} ${day.dayNum}">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+            `;
+            bodyAddBtnHtml = `
+                <button type="button" class="weekly-add-slot-btn" onclick="window.openNewAppointmentModal({ prefillDate: '${day.isoDate}'${prefillDocArg} })">
+                    <i class="fa-solid fa-plus"></i> Asignar en este día
+                </button>
+            `;
+        }
+
         dayCol.innerHTML = `
             <div class="weekly-day-header">
                 <div class="weekly-day-title-group">
                     <div class="weekly-day-name">
                         ${day.name}
                         ${day.isToday ? '<span class="badge-tag green" style="font-size:0.65rem; padding:1px 5px; font-weight:800; border-radius:4px;">HOY</span>' : ''}
+                        ${headerBadgeHtml}
                     </div>
                     <div class="weekly-day-date">${day.dayNum} de ${day.monthShort}</div>
                 </div>
                 <div class="weekly-day-actions">
                     <span class="weekly-day-badge-count" title="${dayAppts.length} citas">${dayAppts.length}</span>
-                    <button type="button" class="weekly-day-add-btn" onclick="window.openNewAppointmentModal({ prefillDate: '${day.isoDate}' })" title="Asignar Cita el ${day.name} ${day.dayNum}">
-                        <i class="fa-solid fa-plus"></i>
-                    </button>
+                    ${headerAddBtnHtml}
                 </div>
             </div>
             <div class="weekly-day-body">
                 ${apptsHtml}
-                <button type="button" class="weekly-add-slot-btn" onclick="window.openNewAppointmentModal({ prefillDate: '${day.isoDate}' })">
-                    <i class="fa-solid fa-plus"></i> Asignar en este día
-                </button>
+                ${bodyAddBtnHtml}
             </div>
         `;
 
@@ -11434,7 +11637,7 @@ async function renderAgendaView(filter = (window.currentAgendaFilter || 'pending
     // If weekly planner mode is active, render dedicated weekly planner grid
     if (filter === 'week' && window._agendaViewMode === 'planner') {
         if (!weekInfo) weekInfo = getWeekDaysRange(window._agendaWeeklyRefDate || new Date());
-        renderWeeklySchedulePlanner(agendaListMain, appointments, weekInfo, searchQuery, isAssistant);
+        renderWeeklySchedulePlanner(agendaListMain, appointments, weekInfo, searchQuery, isAssistant, selectedDoctor, doctors);
         return;
     }
 
@@ -16229,19 +16432,57 @@ function initGlobalEvents() {
         const box = document.getElementById('app-conflict-warning-box');
         if (!box) return;
 
-        const patientSelect = document.getElementById('app-patient-select');
+const patientSelect = document.getElementById('app-patient-select');
         const patientId = patientSelect ? patientSelect.value : '';
-        if (!patientId) {
-            box.innerHTML = '';
-            box.classList.add('hidden');
-            return;
-        }
 
         const dayTarget = document.getElementById('app-day-target')?.value || 'today';
         const customDate = document.getElementById('app-custom-date')?.value || '';
         const isTomorrow = dayTarget === 'tomorrow';
         const finalDate = (dayTarget === 'custom' && customDate) ? customDate : (isTomorrow ? 'tomorrow' : 'today');
         const targetDateStr = getNormalizedAppointmentDate({ date: finalDate, isTomorrow });
+
+        // Check Doctor Schedule Availability Live
+        const docSel = document.getElementById('app-doctor-select');
+        const docId = docSel ? docSel.value : '';
+        let doctorConflictHtml = '';
+
+        if (docId && targetDateStr) {
+            const docsPool = window._availableDoctorsCache || [];
+            const docObj = docsPool.find(d => String(d.id) === String(docId));
+            if (docObj) {
+                const docSchedule = window.parseDoctorScheduleDaysAndShifts(
+                    docObj.doctorProfile?.schedule || docObj.doctor_profile?.schedule || docObj.schedule,
+                    docObj.doctorProfile?.shift || docObj.doctor_profile?.shift || 'morning'
+                );
+                if (docSchedule && docSchedule.hasSchedule && docSchedule.activeDaysCount > 0 && !docSchedule.isPreviaCita) {
+                    const [y, m, d] = targetDateStr.split('-').map(Number);
+                    const targetDateObj = new Date(y, m - 1, d);
+                    const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+                    const dayOfWeekName = dayNames[targetDateObj.getDay()];
+
+                    if (!docSchedule.days[dayOfWeekName]?.active) {
+                        doctorConflictHtml = `
+                            <div style="display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; background: #fee2e2; border-left: 4px solid #ef4444; padding: 10px 12px; border-radius: 6px;">
+                                <i class="fa-solid fa-calendar-xmark" style="font-size: 1.15rem; color: #dc2626; margin-top: 2px;"></i>
+                                <div style="flex: 1;">
+                                    <strong style="color: #991b1b; font-size: 0.86rem;">Médico No Disponible los ${dayOfWeekName}s:</strong>
+                                    <div style="font-size: 0.8rem; color: #7f1d1d; margin-top: 2px;">
+                                        El/la Dr(a). <strong>${docObj.fullname || docObj.name}</strong> no atiende los días ${dayOfWeekName}.
+                                        <br>Días de consulta disponibles: <strong>${docSchedule.activeDayNames.join(', ')}</strong> (${docObj.doctorProfile?.schedule || docObj.doctor_profile?.schedule || docObj.schedule || ''}).
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                }
+            }
+        }
+
+        if (!patientId && !doctorConflictHtml) {
+            box.innerHTML = '';
+            box.classList.add('hidden');
+            return;
+        }
 
         const existingId = document.getElementById('app-id')?.value || '';
 
@@ -16256,13 +16497,18 @@ function initGlobalEvents() {
                 getNormalizedAppointmentDate(a) === targetDateStr
             );
 
-            if (patientSameDay.length === 0) {
-                box.innerHTML = '';
-                box.classList.add('hidden');
+if (patientSameDay.length === 0) {
+                if (doctorConflictHtml) {
+                    box.innerHTML = doctorConflictHtml;
+                    box.classList.remove('hidden');
+                } else {
+                    box.innerHTML = '';
+                    box.classList.add('hidden');
+                }
                 return;
             }
 
-            box.innerHTML = `
+            box.innerHTML = (doctorConflictHtml || '') + `
                 <div style="display: flex; align-items: flex-start; gap: 10px;">
                     <i class="fa-solid fa-triangle-exclamation" style="font-size: 1.2rem; color: #d97706; margin-top: 2px;"></i>
                     <div style="flex: 1;">
@@ -16366,6 +16612,7 @@ function initGlobalEvents() {
             document.getElementById('app-specialty-select')?.addEventListener('change', () => window.checkAppointmentConflictsLive());
         }
 
+        try { await window.checkAppointmentConflictsLive(); } catch(e) {}
         openModal('modal-appointment');
     };
 
@@ -16540,9 +16787,43 @@ function initGlobalEvents() {
             const roomId = selectedRoomOpt ? selectedRoomOpt.value : '';
             const roomName = selectedRoomOpt ? (selectedRoomOpt.dataset.name || selectedRoomOpt.text) : '';
 
-            // --- VALIDACIONES INTELIGENTES DE CONFLICTOS Y DUPLICADOS ---
+            // --- VALIDACIONES INTELIGENTES DE CONFLICTOS Y DISPONIBILIDAD ---
             const targetDateStr = getNormalizedAppointmentDate({ date: finalDate, isTomorrow });
             const targetMinutes = parseTimeToMinutes(time);
+
+            // NIVEL 0: Disponibilidad de Horario del Médico por Día de la Semana
+            if (doctorId || doctorName) {
+                const docsPool = window._availableDoctorsCache || [];
+                const docObj = docsPool.find(d => String(d.id) === String(doctorId) || (d.fullname && d.fullname.toLowerCase() === (doctorName || '').toLowerCase()));
+                if (docObj) {
+                    const rawSch = docObj.doctorProfile?.schedule || docObj.doctor_profile?.schedule || docObj.schedule;
+                    const defShift = docObj.doctorProfile?.shift || docObj.doctor_profile?.shift || 'morning';
+                    const docSchedule = window.parseDoctorScheduleDaysAndShifts(rawSch, defShift);
+
+                    if (docSchedule && docSchedule.hasSchedule && docSchedule.activeDaysCount > 0 && !docSchedule.isPreviaCita) {
+                        const [y, m, d] = targetDateStr.split('-').map(Number);
+                        const targetDateObj = new Date(y, m - 1, d);
+                        const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+                        const dayOfWeekName = dayNames[targetDateObj.getDay()];
+
+                        if (!docSchedule.days[dayOfWeekName]?.active) {
+                            await Swal.fire({
+                                icon: 'error',
+                                title: 'Médico No Disponible en esta Fecha',
+                                html: `El/la especialista <strong>${escapeApptText(doctorName || docObj.fullname)}</strong> no tiene jornada de atención los días <strong>${dayOfWeekName}</strong>.<br><br>
+                                       <div style="background: #fee2e2; border-left: 4px solid #ef4444; padding: 12px; text-align: left; border-radius: 6px; font-size: 0.88rem; color: #7f1d1d;">
+                                           <strong>📅 Días de atención configurados:</strong> ${docSchedule.activeDayNames.join(', ')}<br>
+                                           <strong>⏰ Horario establecido:</strong> ${escapeApptText(rawSch || 'Consultar perfil')}
+                                       </div><br>
+                                       <span style="font-size: 0.9rem; color: #475569;">Por favor elija una fecha correspondiente a los días de consulta del médico o seleccione otro profesional disponible.</span>`,
+                                confirmButtonColor: '#ef4444',
+                                confirmButtonText: 'Corregir fecha / médico'
+                            });
+                            return;
+                        }
+                    }
+                }
+            }
 
             try {
                 const allExistingAppts = (await SupabaseDataService.getAppointments()) || [];
