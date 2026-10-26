@@ -162,22 +162,28 @@ function isDoctorOrAssistantUser(user) {
 }
 window.isDoctorOrAssistantUser = isDoctorOrAssistantUser;
 
+function isAssistantRole(role) {
+    if (!role) return false;
+    const r = String(role).toLowerCase().trim();
+    return r.includes('asist') || r.includes('higien') || r.includes('recep') || r.includes('caja') || r.includes('auxiliar') || r.includes('enferm');
+}
+window.isAssistantRole = isAssistantRole;
+
+function isAssistantUser(user) {
+    if (!user) return false;
+    return isAssistantRole(user.role);
+}
+window.isAssistantUser = isAssistantUser;
+
 function isDoctorUser(user) {
     if (!isDoctorOrAssistantUser(user)) return false;
     const r = (user.role || '').toLowerCase().trim();
-    if (r.includes('asist') || r.includes('enferm') || r.includes('higien') || r.includes('auxiliar')) {
+    if (isAssistantRole(r)) {
         return false;
     }
     return true;
 }
 window.isDoctorUser = isDoctorUser;
-
-function isAssistantUser(user) {
-    if (!isDoctorOrAssistantUser(user)) return false;
-    const r = (user.role || '').toLowerCase().trim();
-    return r.includes('asist') || r.includes('enferm') || r.includes('higien') || r.includes('auxiliar');
-}
-window.isAssistantUser = isAssistantUser;
 
 document.addEventListener('DOMContentLoaded', async () => {
     // 1. Instant local storage seed & initial render setup
@@ -1144,9 +1150,9 @@ function checkAuthSession() {
 
 function applyRolePermissionsUI(role) {
     const r = (role || '').toLowerCase();
-    const isAdmin = r.includes('admin') || r.includes('super') || r.includes('director');
-    const isDoctor = r.includes('medico') || r.includes('odont') || r.includes('doctor') || r.includes('dentista') || r.includes('médico') || r.includes('cirujano') || r.includes('especialista');
-    const isAssistant = r.includes('asistente') || r.includes('recep') || r.includes('caja') || r.includes('auxiliar');
+    const isAdmin = r.includes('admin') || r.includes('super') || r.includes('director') || r.includes('gerente');
+    const isAssistant = !isAdmin && (typeof isAssistantRole === 'function' ? isAssistantRole(r) : (r.includes('asist') || r.includes('higien') || r.includes('recep') || r.includes('caja') || r.includes('auxiliar')));
+    const isDoctor = !isAdmin && !isAssistant && (r.includes('medico') || r.includes('odont') || r.includes('doctor') || r.includes('dentista') || r.includes('médico') || r.includes('cirujano') || r.includes('especialista'));
 
     const roleType = isAdmin ? 'admin' : (isDoctor ? 'doctor' : 'assistant');
 
@@ -1172,7 +1178,7 @@ function applyRolePermissionsUI(role) {
     const permissions = {
         admin: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll'],
         doctor: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'pricing', 'settings', 'help', 'specialties', 'rooms'],
-        assistant: ['dashboard', 'patients', 'agenda', 'billing', 'finance', 'pricing', 'settings', 'help']
+        assistant: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'settings', 'help']
     };
 
     const allowedTabs = permissions[roleType] || permissions.assistant;
@@ -1191,14 +1197,36 @@ function applyRolePermissionsUI(role) {
     // Adapt Mobile Navigation Bar & FAB based on role
     renderMobileNavigationForRole(roleType);
 
-    // Toggle business settings tab based on admin role
+    // Settings panes restriction:
+    // For assistant / hygienist: ONLY "Apariencia y Tema" and "Mi Perfil Personal"
     const paneBusBtn = document.getElementById('btn-pane-business');
-    if (paneBusBtn) {
-        if (roleType === 'admin') {
-            paneBusBtn.style.display = 'flex';
-        } else {
-            paneBusBtn.style.display = 'none';
-        }
+    const paneSysUsersBtn = document.getElementById('btn-pane-system-users');
+    const paneTrashBtn = document.getElementById('btn-pane-trash');
+    const paneAuditBtn = document.getElementById('btn-pane-audit');
+    const paneProfileBtn = document.querySelector('.settings-nav-btn[data-pane="profile"]');
+    const paneAppearanceBtn = document.getElementById('btn-pane-appearance');
+
+    if (roleType === 'assistant') {
+        if (paneBusBtn) paneBusBtn.style.display = 'none';
+        if (paneSysUsersBtn) paneSysUsersBtn.style.display = 'none';
+        if (paneTrashBtn) paneTrashBtn.style.display = 'none';
+        if (paneAuditBtn) paneAuditBtn.style.display = 'none';
+        if (paneProfileBtn) paneProfileBtn.style.display = 'flex';
+        if (paneAppearanceBtn) paneAppearanceBtn.style.display = 'flex';
+    } else if (roleType === 'doctor') {
+        if (paneBusBtn) paneBusBtn.style.display = 'none';
+        if (paneSysUsersBtn) paneSysUsersBtn.style.display = 'none';
+        if (paneTrashBtn) paneTrashBtn.style.display = 'flex';
+        if (paneAuditBtn) paneAuditBtn.style.display = 'none';
+        if (paneProfileBtn) paneProfileBtn.style.display = 'flex';
+        if (paneAppearanceBtn) paneAppearanceBtn.style.display = 'flex';
+    } else {
+        if (paneBusBtn) paneBusBtn.style.display = 'flex';
+        if (paneSysUsersBtn) paneSysUsersBtn.style.display = 'flex';
+        if (paneTrashBtn) paneTrashBtn.style.display = 'flex';
+        if (paneAuditBtn) paneAuditBtn.style.display = 'flex';
+        if (paneProfileBtn) paneProfileBtn.style.display = 'flex';
+        if (paneAppearanceBtn) paneAppearanceBtn.style.display = 'flex';
     }
 
     // Additional UI restrictions for assistant
@@ -1207,7 +1235,7 @@ function applyRolePermissionsUI(role) {
         addSrvBtn.style.display = (roleType === 'assistant') ? 'none' : 'inline-flex';
     }
 
-    // Separation of duties: Hide register patient buttons for doctors
+    // Separation of duties: Allow register patient buttons
     const quickPatientBtn = document.getElementById('btn-quick-patient');
     const newPatientModalBtn = document.getElementById('btn-new-patient-modal');
     const editClinicalWizardBtn = document.getElementById('btn-edit-clinical-wizard');
@@ -1218,8 +1246,8 @@ function applyRolePermissionsUI(role) {
         newPatientModalBtn.style.display = (roleType === 'doctor') ? 'none' : 'inline-flex';
     }
     if (editClinicalWizardBtn) {
-        // Only Doctors and Admins can complete or edit clinical history
-        editClinicalWizardBtn.style.display = (roleType === 'assistant') ? 'none' : 'inline-flex';
+        // Higienista / Asistente, Doctores y Admins pueden completar o editar la historia clínica y plan de tratamiento
+        editClinicalWizardBtn.style.display = 'inline-flex';
     }
 
     // Hide/show doctor signature pad in profile adjustments
@@ -1248,13 +1276,14 @@ function renderMobileNavigationForRole(roleType) {
             { tab: 'pricing', icon: 'fa-tags', label: 'Servicios' }
         ];
     } else if (roleType === 'assistant') {
-        // ASISTENTE: Enfoque de recepción, agenda y facturación
+        // HIGIENISTA / ASISTENTE: Pacientes, Agenda, Presupuesto, Historias, Insumos
         bottomButtons = [
             { tab: 'dashboard', icon: 'fa-house', label: 'Home' },
-            { tab: 'agenda', icon: 'fa-calendar-days', label: 'Agenda' },
             { tab: 'patients', icon: 'fa-hospital-user', label: 'Pacientes' },
-            { tab: 'billing', icon: 'fa-receipt', label: 'Facturación' },
-            { tab: 'pricing', icon: 'fa-tags', label: 'Servicios' }
+            { tab: 'agenda', icon: 'fa-calendar-days', label: 'Agenda' },
+            { tab: 'odontogram', icon: 'fa-file-invoice-dollar', label: 'Presupuesto' },
+            { tab: 'ehr', icon: 'fa-notes-medical', label: 'Historias' },
+            { tab: 'inventory', icon: 'fa-boxes-stacked', label: 'Insumos' }
         ];
     } else {
         // SUPER ADMIN: Acceso integral
@@ -2583,7 +2612,7 @@ async function renderBudgetListView(forceRefresh = false) {
                     <button class="btn btn-xs btn-outline" onclick="window.printDirectSaleReceipt('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer;" title="Reimprimir Comprobante"><i class="fa-solid fa-print"></i> Imprimir</button>
                     <button class="btn btn-xs btn-outline" onclick="window.downloadDirectSaleReceiptPDF('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; color: #0284c7; border-color: #bae6fd;" title="Descargar PDF"><i class="fa-solid fa-file-pdf"></i> PDF</button>
                     <button class="btn btn-xs btn-success" onclick="window.sendDirectSaleReceiptWhatsApp('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; background:#25D366; border:none; color:#fff;" title="Enviar por WhatsApp"><i class="fa-brands fa-whatsapp"></i> WhatsApp</button>
-                    <button class="btn btn-xs btn-outline text-red" onclick="window.deleteBudget('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; border-color: #ef4444; color: #ef4444;" title="Eliminar Venta"><i class="fa-solid fa-trash-can"></i></button>
+                    ${isAssistant ? '' : `<button class="btn btn-xs btn-outline text-red" onclick="window.deleteBudget('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; border-color: #ef4444; color: #ef4444;" title="Eliminar Venta"><i class="fa-solid fa-trash-can"></i></button>`}
                 `;
             } else {
                 actionButtons = `
@@ -2596,7 +2625,7 @@ async function renderBudgetListView(forceRefresh = false) {
                     }
                     <button class="btn btn-xs btn-success" onclick="${b.category && b.category !== 'Odontología' ? `window.sendMedicalBudgetWhatsApp('${b.id}')` : `window.sendBudgetWhatsApp('${b.id}')`}" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; background:#25D366; border:none; color:#fff;" title="Enviar Presupuesto por WhatsApp"><i class="fa-brands fa-whatsapp"></i> WhatsApp</button>
                     ${isApproved ? `<button class="btn btn-xs btn-success" onclick="window.finalizeBudgetDirect('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; background:#10b981; border:none; color:#fff;" title="Finalizar Tratamiento / Presupuesto"><i class="fa-solid fa-circle-check"></i> Finalizar</button>` : ''}
-                    <button class="btn btn-xs btn-outline text-red" onclick="window.deleteBudget('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; border-color: #ef4444; color: #ef4444;" title="Eliminar Presupuesto (Enviar a Papelera)"><i class="fa-solid fa-trash-can"></i></button>
+                    ${isAssistant ? '' : `<button class="btn btn-xs btn-outline text-red" onclick="window.deleteBudget('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; border-color: #ef4444; color: #ef4444;" title="Eliminar Presupuesto (Enviar a Papelera)"><i class="fa-solid fa-trash-can"></i></button>`}
                 `;
             }
 
@@ -2627,6 +2656,11 @@ async function renderBudgetListView(forceRefresh = false) {
 }
 
 window.deleteBudget = async function(budgetId) {
+    const user = getCurrentUser();
+    if (window.isAssistantUser && window.isAssistantUser(user)) {
+        Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Solo el Odontólogo Principal o Administrador puede eliminar presupuestos.' });
+        return;
+    }
     try {
         const invoices = await SupabaseDataService.getInvoices();
         const budget = invoices.find(inv => String(inv.id) === String(budgetId));
@@ -5311,7 +5345,7 @@ async function renderPatientsTable(filter = null, searchQuery = null, highlightP
 
     let patients = await SupabaseDataService.getPatients();
     const currentUser = getCurrentUser();
-    const isAssistant = currentUser && currentUser.role.toLowerCase().includes('asistente');
+    const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
 
     // Filter by status tab if specified
     if (filter !== 'all') {
@@ -5844,7 +5878,7 @@ window.copyUserContact = async function(userId, event) {
 
 window.deletePatient = async function(patientId) {
     const user = getCurrentUser();
-    if (user && user.role.toLowerCase().includes('asistente')) {
+    if (user && (typeof isAssistantUser === 'function' ? isAssistantUser(user) : (user.role && user.role.toLowerCase().includes('asistente')))) {
         Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Solo el Odontólogo o Administrador puede eliminar expedientes.' });
         return;
     }
@@ -8842,7 +8876,7 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
         setActivePatientId(activeId);
     }
     const currentUser = getCurrentUser();
-    const isAssistant = currentUser && currentUser.role.toLowerCase().includes('asistente');
+    const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
 
     // Apply Filter
     if (filter !== 'all') {
@@ -9764,9 +9798,7 @@ function renderEHRGallery(patient, filter = 'all') {
                     <button class="btn btn-xs btn-outline" style="font-size: 0.75rem; padding: 2px 8px;" onclick="window.openEHRPhotoLightbox('${p.url}', '${safeTitle}', '${safeCat}', '${safeDate}', '${safeNotes}')">
                         <i class="fa-solid fa-expand"></i> Ver
                     </button>
-                    <button class="btn btn-xs btn-outline text-red" style="font-size: 0.75rem; padding: 2px 6px;" onclick="window.deleteEHRPhoto('${p.id}')" title="Eliminar Imagen">
-                        <i class="fa-solid fa-trash"></i>
-                    </button>
+                    ${isAssistant ? '' : `<button class="btn btn-xs btn-outline text-red" style="font-size: 0.75rem; padding: 2px 6px;" onclick="window.deleteEHRPhoto('${p.id}')" title="Eliminar Imagen"><i class="fa-solid fa-trash"></i></button>`}
                 </div>
             </div>
         `;
@@ -9921,6 +9953,11 @@ window.openEHRPhotoLightbox = function(url, title, category, date, notes) {
 };
 
 window.deleteEHRPhoto = async function(photoId) {
+    const user = getCurrentUser();
+    if (window.isAssistantUser && window.isAssistantUser(user)) {
+        Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Solo el Odontólogo Principal puede eliminar imágenes clínicas.' });
+        return;
+    }
     Swal.fire({
         title: '¿Eliminar imagen clínica?',
         text: 'Esta fotografía o radiografía será eliminada del expediente del paciente en la nube.',
@@ -10028,7 +10065,7 @@ function setupSignaturePad(canvasId, clearBtnId) {
 
 window.deleteSessionFromPatient = async function(patientId, sessionNum) {
     const user = getCurrentUser();
-    if (user && user.role.toLowerCase().includes('asistente')) {
+    if (user && (typeof isAssistantUser === 'function' ? isAssistantUser(user) : (user.role && user.role.toLowerCase().includes('asistente')))) {
         Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Solo los Odontólogos o Administradores pueden eliminar sesiones.' });
         return;
     }
@@ -10437,7 +10474,7 @@ window.exportEHRToPDF = exportEHRToPDF;
 
 window.deleteClinicalNote = async function(noteId) {
     const user = getCurrentUser();
-    if (user && user.role.toLowerCase().includes('asistente')) {
+    if (user && (typeof isAssistantUser === 'function' ? isAssistantUser(user) : (user.role && user.role.toLowerCase().includes('asistente')))) {
         Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Solo el Odontólogo Principal puede eliminar notas de evolución clínica.' });
         return;
     }
@@ -10505,7 +10542,7 @@ async function renderDashboard() {
         agendaList.innerHTML = '';
         const appointments = await SupabaseDataService.getAppointments();
         const currentUser = getCurrentUser();
-        const isAssistant = currentUser && currentUser.role.toLowerCase().includes('asistente');
+        const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
 
         const todayISO = new Date().toISOString().split('T')[0];
         let todayCount = 0;
@@ -11197,7 +11234,7 @@ function renderWeeklySchedulePlanner(container, appointments, weekInfo, searchQu
 
 window.deleteAppointment = async function(apptId) {
     const user = getCurrentUser();
-    if (user && user.role.toLowerCase().includes('asistente')) {
+    if (user && (typeof isAssistantUser === 'function' ? isAssistantUser(user) : (user.role && user.role.toLowerCase().includes('asistente')))) {
         Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Solo el Odontólogo Principal tiene permisos para eliminar citas.' });
         return;
     }
@@ -11292,7 +11329,7 @@ async function renderAgendaView(filter = (window.currentAgendaFilter || 'pending
     agendaListMain.innerHTML = '';
     const allAppointments = await SupabaseDataService.getAppointments();
     const currentUser = getCurrentUser();
-    const isAssistant = currentUser && currentUser.role.toLowerCase().includes('asistente');
+    const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
 
     // Update Counts for Filter Badges
     const countPending = allAppointments.filter(a => a.status !== 'Completada' && a.status !== 'Atendida' && a.status !== 'Cancelada').length;
@@ -11995,7 +12032,7 @@ async function renderInventoryTable(filter = null, searchQuery = null, areaFilte
     tbody.innerHTML = '';
     let items = await SupabaseDataService.getInventory();
     const currentUser = getCurrentUser();
-    const isAssistant = currentUser && currentUser.role.toLowerCase().includes('asistente');
+    const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
 
     // Ensure each item has a clinical area (inference engine fallback)
     items.forEach(item => {
@@ -12248,7 +12285,7 @@ window.adjustStockPrompt = async function(code) {
 
 window.deleteInventoryItem = async function(code) {
     const user = getCurrentUser();
-    if (user && user.role.toLowerCase().includes('asistente')) {
+    if (user && (typeof isAssistantUser === 'function' ? isAssistantUser(user) : (user.role && user.role.toLowerCase().includes('asistente')))) {
         Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Solo el Odontólogo Principal puede eliminar insumos del Kardex.' });
         return;
     }
@@ -12405,7 +12442,7 @@ async function renderPricingTable(filter = 'all', searchQuery = '') {
     let baremo = await SupabaseDataService.getBaremo();
     const rate = getExchangeRate();
     const currentUser = getCurrentUser();
-    const isAssistant = currentUser && currentUser.role.toLowerCase().includes('asistente');
+    const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
     const isLabFilter = (filter && filter.toLowerCase() === 'laboratorio');
 
     // Ensure each service has an area assigned
@@ -12503,7 +12540,7 @@ async function renderPricingTable(filter = 'all', searchQuery = '') {
 
 window.deletePricingService = async function(code) {
     const user = getCurrentUser();
-    if (user && user.role.toLowerCase().includes('asistente')) {
+    if (user && (typeof isAssistantUser === 'function' ? isAssistantUser(user) : (user.role && user.role.toLowerCase().includes('asistente')))) {
         Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Solo el Odontólogo Principal puede modificar el Baremo de Precios maestro.' });
         return;
     }
@@ -13120,12 +13157,16 @@ function updateRoleScopeHint(role) {
     } else if (isAssistant) {
         hintEl.innerHTML = `
             <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px; font-weight:700; color:#16a34a;">
-                <i class="fa-solid fa-hand-holding-medical"></i> Asistente Clínico / Enfermero(a)
+                <i class="fa-solid fa-hand-holding-medical"></i> Higienista / Asistente Dental
             </div>
-            <p style="margin:0 0 6px 0; font-size:0.82rem;"><strong>Alcance:</strong> Apoyo asistencial en procedimientos clínicos e inventario.</p>
+            <p style="margin:0 0 6px 0; font-size:0.82rem;"><strong>Alcance:</strong> Admisión, historias clínicas, planes de tratamiento, agenda, presupuestos y control de insumos.</p>
             <ul style="margin:0; padding-left:18px; font-size:0.79rem; color:var(--text-color); line-height:1.4;">
-                <li>Apoyo en toma de signos, fichaje y preparación de materiales en sillón.</li>
-                <li>Descargo de insumos consumidos por procedimiento en el Kardex.</li>
+                <li>Registrar pacientes, fichaje y anamnesis médica.</li>
+                <li>Historias clínicas, evoluciones y planes de tratamiento.</li>
+                <li>Agendar citas en la agenda del consultorio.</li>
+                <li>Realizar y elaborar presupuestos de atención.</li>
+                <li>Insumos y Kardex: subir stock y descontar materiales por procedimiento.</li>
+                <li>Ajustes restringidos exclusivamente a Apariencia/Tema y Perfil Personal (sin permisos para eliminar registros).</li>
             </ul>
         `;
     } else {
@@ -13401,7 +13442,7 @@ window.editUser = async function(userId) {
 
 window.deleteUser = async function(userId) {
     const user = getCurrentUser();
-    if (user && user.role.toLowerCase().includes('asistente')) {
+    if (user && (typeof isAssistantUser === 'function' ? isAssistantUser(user) : (user.role && user.role.toLowerCase().includes('asistente')))) {
         Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Solo el Odontólogo Principal puede gestionar o eliminar cuentas de usuario.' });
         return;
     }
@@ -27451,6 +27492,11 @@ window.renderTrashPane = async function() {
 };
 
 window.restoreFromTrash = async function(category, trashId) {
+    const user = getCurrentUser();
+    if (window.isAssistantUser && window.isAssistantUser(user)) {
+        Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'No tiene permisos para restaurar elementos de la Papelera de Reciclaje.' });
+        return;
+    }
     let list = await SupabaseDataService.getTrashItems(category);
     const trashItem = list.find(t => t.trashId === trashId);
     if (!trashItem) return;
@@ -27509,6 +27555,11 @@ window.restoreFromTrash = async function(category, trashId) {
 };
 
 window.purgeFromTrash = async function(category, trashId) {
+    const user = getCurrentUser();
+    if (window.isAssistantUser && window.isAssistantUser(user)) {
+        Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'No tiene permisos para purgar elementos de la Papelera de Reciclaje.' });
+        return;
+    }
     const res = await Swal.fire({
         title: '¿Eliminar Definitivamente?',
         text: 'Esta acción purgará de forma permanente el elemento sin posibilidad de recuperación.',
@@ -27543,6 +27594,11 @@ window.purgeFromTrash = async function(category, trashId) {
 };
 
 window.emptyTrash = async function() {
+    const user = getCurrentUser();
+    if (window.isAssistantUser && window.isAssistantUser(user)) {
+        Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'No tiene permisos para vaciar la Papelera de Reciclaje.' });
+        return;
+    }
     const res = await Swal.fire({
         title: '¿Vaciar Toda la Papelera?',
         text: 'Se eliminarán para siempre todos los elementos almacenados en la papelera de reciclaje.',
