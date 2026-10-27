@@ -18976,6 +18976,11 @@ if (patientSameDay.length === 0) {
     };
 
     window.savePatientRecord = async function(redirectToBudget = false) {
+        const isReturnToDirectSale = Boolean(window.returnToDirectSaleAfterPatientCreated);
+        if (isReturnToDirectSale) {
+            redirectToBudget = false;
+        }
+        window._isSavingPatientRecord = true;
         const getVal = (id) => {
             const el = document.getElementById(id);
             return el ? el.value.trim() : '';
@@ -19365,8 +19370,9 @@ if (patientSameDay.length === 0) {
             await renderDashboard();
             await renderAgendaView();
 
-            if (window.returnToDirectSaleAfterPatientCreated) {
+            if (isReturnToDirectSale) {
                 window.returnToDirectSaleAfterPatientCreated = false;
+                window._isSavingPatientRecord = false;
                 await window.openDirectSaleModal(id);
                 Swal.fire({
                     icon: 'success',
@@ -20987,7 +20993,7 @@ async function closeModal(id, force = false) {
         el.classList.remove('modal-stacked-1', 'modal-stacked-2');
     } else if (id === 'modal-patient') {
         window.patientModalOpenedFromBudget = false;
-        if (window.returnToDirectSaleAfterPatientCreated) {
+        if (window.returnToDirectSaleAfterPatientCreated && !window._isSavingPatientRecord) {
             window.returnToDirectSaleAfterPatientCreated = false;
             const dsModal = document.getElementById('modal-direct-sale');
             if (dsModal) dsModal.classList.remove('hidden');
@@ -21878,18 +21884,19 @@ function initPatientStepperWizard() {
             }
         }
         if (btnSave) {
-            if (currentStep === totalSteps || window.editingPatientId) {
-                btnSave.classList.remove('hidden');
+            btnSave.classList.remove('hidden');
+            if (window.editingPatientId) {
+                btnSave.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Guardar Cambios';
             } else {
-                btnSave.classList.add('hidden');
+                btnSave.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Guardar';
             }
         }
         window.updatePatientStep4FooterButtons = function() {
             const btnSaveAndBudget = document.getElementById('btn-patient-save-and-budget');
             if (!btnSaveAndBudget) return;
 
-            // If patient modal was opened from inside an ongoing budget creation or editing an existing patient: HIDE
-            if (window.patientModalOpenedFromBudget || window.editingPatientId) {
+            // If patient modal was opened from inside an ongoing budget creation, editing an existing patient, OR from direct sale: HIDE
+            if (window.patientModalOpenedFromBudget || window.editingPatientId || window.returnToDirectSaleAfterPatientCreated) {
                 btnSaveAndBudget.classList.add('hidden');
                 return;
             }
@@ -22358,7 +22365,10 @@ function initPatientStepperWizard() {
             modalTitle.innerHTML = `<i class="fa-solid fa-user-plus text-cyan"></i> Registro de Paciente`;
         }
         const saveBtn = document.getElementById('btn-save-patient');
-        if (saveBtn) saveBtn.innerText = 'Guardar Paciente';
+        if (saveBtn) {
+            saveBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Guardar';
+            saveBtn.classList.remove('hidden');
+        }
 
         const pIdInput = document.getElementById('p-id');
         if (pIdInput) pIdInput.readOnly = false;
@@ -22396,7 +22406,7 @@ function initPatientStepperWizard() {
             }
             const saveBtn = document.getElementById('btn-save-patient');
             if (saveBtn) {
-                saveBtn.innerText = 'Guardar Cambios';
+                saveBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Guardar Cambios';
                 saveBtn.classList.remove('hidden');
             }
 
