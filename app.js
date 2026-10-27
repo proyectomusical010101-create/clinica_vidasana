@@ -12785,6 +12785,23 @@ window.openSessionModalForPatient = async function(patientId, sessionNum, proced
             return;
         }
 
+        // Ocupar automáticamente el consultorio y médico al atender la sesión
+        const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+        const docName = (curUser && (curUser.fullname || curUser.name)) || patient.assignedDoctor || '';
+        const docId = (curUser && curUser.id) || '';
+        window.activeAttendingAppointmentId = `session-${patient.id}-${sessionNum || 1}`;
+        if (typeof window.occupyRoomForAppointment === 'function') {
+            await window.occupyRoomForAppointment({
+                id: window.activeAttendingAppointmentId,
+                doctorId: docId,
+                doctorName: docName,
+                patientId: patient.id,
+                patientName: patient.fullname,
+                treatment: procedureName || `Sesión N° ${sessionNum || 1}`,
+                specialty: patient.specialty || patient.area || 'Odontología'
+            }, patient);
+        }
+
         populateSessionNumberSelect(patient, sessionNum);
         
         document.getElementById('s-datetime').value = new Date().toISOString().slice(0, 16);
@@ -12889,6 +12906,8 @@ window.occupyRoomForAppointment = async function(app, patient = null) {
         const docId = String(app.doctorId || app.doctor_id || '').trim();
         const docName = String(app.doctorName || app.doctor_name || app.doctor || '').trim();
         const cleanDocName = docName.toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+        const specName = String(app.specialty || '').toLowerCase().trim();
+        const treatmentName = String(app.treatment || '').toLowerCase().trim();
 
         // 1. Try finding by app.roomId
         let targetRoom = null;
@@ -12925,18 +12944,32 @@ window.occupyRoomForAppointment = async function(app, patient = null) {
             } catch(e) {}
         }
 
-        // 5. Fallback: first available room
+        // 5. Try finding by Department / Specialty match
+        if (!targetRoom && (specName || treatmentName)) {
+            targetRoom = rooms.find(r => {
+                const dept = (r.department || '').toLowerCase();
+                const rName = (r.name || '').toLowerCase();
+                if (specName && (dept.includes(specName) || rName.includes(specName))) return true;
+                if (treatmentName && (dept.includes(treatmentName) || rName.includes(treatmentName))) return true;
+                if (typeof isDentalSpecialtyOrArea === 'function' && (isDentalSpecialtyOrArea(specName) || isDentalSpecialtyOrArea(treatmentName))) {
+                    return isDentalSpecialtyOrArea(dept) || isDentalSpecialtyOrArea(rName);
+                }
+                return false;
+            });
+        }
+
+        // 6. Fallback: first available room, or first room in the list
         if (!targetRoom && rooms.length > 0) {
             targetRoom = rooms.find(r => (r.status || '').toLowerCase() === 'disponible') || rooms[0];
         }
 
         if (targetRoom) {
             targetRoom.status = 'ocupado';
-            targetRoom.active_doctor_name = docName;
-            targetRoom.active_doctor_id = docId;
-            targetRoom.active_patient_name = (patient && patient.fullname) || app.patientName || '';
+            targetRoom.active_doctor_name = docName || targetRoom.active_doctor_name || targetRoom.current_tenant || 'Médico en consulta';
+            targetRoom.active_doctor_id = docId || targetRoom.active_doctor_id || '';
+            targetRoom.active_patient_name = (patient && patient.fullname) || app.patientName || 'Paciente en consulta';
             targetRoom.active_patient_id = (patient && patient.id) || app.patientId || '';
-            targetRoom.active_appointment_id = app.id;
+            targetRoom.active_appointment_id = app.id || '';
             targetRoom.occupied_at = new Date().toISOString();
 
             await SupabaseDataService.saveClinicRoom(targetRoom);
@@ -12946,6 +12979,8 @@ window.occupyRoomForAppointment = async function(app, patient = null) {
                     const idx = window.ClinicalERP.rooms.findIndex(r => r.id === targetRoom.id);
                     if (idx >= 0) {
                         window.ClinicalERP.rooms[idx] = { ...window.ClinicalERP.rooms[idx], ...targetRoom };
+                    } else {
+                        window.ClinicalERP.rooms.push(targetRoom);
                     }
                 }
                 if (typeof window.ClinicalERP.renderRooms === 'function') window.ClinicalERP.renderRooms();
@@ -12957,11 +12992,15 @@ window.occupyRoomForAppointment = async function(app, patient = null) {
     }
 };
 
-window.freeRoomForAppointment = async function(apptId) {
-    if (!apptId) return;
+window.freeRoomForAppointment = async function(apptIdOrPatientId) {
+    if (!apptIdOrPatientId) return;
     try {
         const rooms = await SupabaseDataService.getClinicRooms();
-        const occupiedRooms = rooms.filter(r => r.active_appointment_id === apptId || (r.status === 'ocupado' && !r.active_appointment_id));
+        const occupiedRooms = rooms.filter(r => 
+            r.active_appointment_id === apptIdOrPatientId || 
+            r.active_patient_id === apptIdOrPatientId ||
+            (r.status === 'ocupado' && !r.active_appointment_id)
+        );
         for (const room of occupiedRooms) {
             room.status = (room.current_tenant || (Array.isArray(room.schedules) && room.schedules.length > 0)) ? 'alquilado' : 'disponible';
             room.active_doctor_name = null;

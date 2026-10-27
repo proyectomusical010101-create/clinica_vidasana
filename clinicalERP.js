@@ -608,6 +608,8 @@
                         const a = r.shifts && r.shifts.afternoon;
                         return a ? (a.status === 'disponible' || !a.doctor_name) : (r.status || '').toLowerCase() === 'disponible';
                     });
+                } else if (f === 'ocupado') {
+                    list = list.filter(r => (r.status || '').toLowerCase() === 'ocupado' || Boolean(r.active_appointment_id));
                 } else {
                     list = list.filter(r => (r.status || '').toLowerCase() === f);
                 }
@@ -706,8 +708,8 @@
 
             container.innerHTML = list.map(r => {
                 const stKey = (r.status || 'disponible').toLowerCase();
-                const isOccupied = stKey === 'ocupado';
-                const st = statusMap[stKey] || statusMap['disponible'];
+                const isOccupied = stKey === 'ocupado' || Boolean(r.active_appointment_id);
+                const st = isOccupied ? { cls: 'ocupado', text: 'OCUPADO', icon: 'fa-lock' } : (statusMap[stKey] || statusMap['disponible']);
                 const feeShift = r.rental_fee_shift ? ('$' + parseFloat(r.rental_fee_shift).toFixed(2)) : 'N/A';
                 const feeMonth = r.rental_fee_monthly ? ('$' + parseFloat(r.rental_fee_monthly).toFixed(2)) : 'N/A';
 
@@ -733,32 +735,38 @@
                 const afternoonDoc = afternoon.doctor_name ? afternoon.doctor_name : '<span style="color: #94a3b8; font-style: italic;">Sin asignar (Disponible)</span>';
 
                 return `
-                    <div class="erp-room-card ${isOccupied ? 'is-occupied' : ''}">
+                    <div class="erp-room-card-wrapper" style="position: relative; display: flex; flex-direction: column; padding-top: ${isOccupied ? '12px' : '0'};">
                         ${isOccupied ? `
-                            <div class="erp-room-occupied-banner">
-                                <span style="display: flex; align-items: center; gap: 6px;">
-                                    <i class="fa-solid fa-lock"></i> OCUPADO
-                                </span>
-                                <span style="font-size: 0.68rem; font-weight: 700; text-transform: none; letter-spacing: normal;">
-                                    ${r.active_doctor_name ? ('Dr(a). ' + r.active_doctor_name.replace(/^dr\.\s*|^dra\.\s*/i, '')) : 'Médico en consulta'}
-                                    ${r.active_patient_name ? (' • ' + r.active_patient_name) : ''}
-                                </span>
-                                <button type="button" class="btn btn-xs" onclick="event.stopPropagation(); window.freeClinicRoom && window.freeClinicRoom('${r.id}')" style="background: rgba(255,255,255,0.25); color: #ffffff; border: 1px solid rgba(255,255,255,0.6); padding: 1px 7px; font-size: 0.65rem; border-radius: 4px; cursor: pointer;" title="Liberar consultorio manualmente">
-                                    <i class="fa-solid fa-door-open"></i> Liberar
-                                </button>
+                            <div class="erp-room-top-etiqueta" title="Consultorio Ocupado en Consulta">
+                                <span style="width: 7px; height: 7px; border-radius: 50%; background: #ffffff; animation: pulse 1.2s infinite; display: inline-block;"></span>
+                                <i class="fa-solid fa-lock" style="font-size: 0.68rem;"></i> OCUPADO
                             </div>
                         ` : ''}
-                        <div class="erp-room-card-top-bar ${st.cls}"></div>
-                        <div class="erp-room-card-header">
-                            <div>
-                                <span style="font-size: 0.72rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Espacio #${r.room_number || 'N/A'}</span>
-                                <h3 style="margin: 4px 0 0 0; font-size: 1.05rem; color: #0f172a; font-family: 'Outfit', sans-serif;">${r.name}</h3>
+                        <div class="erp-room-card ${isOccupied ? 'is-occupied' : ''}">
+                            ${isOccupied ? `
+                                <div class="erp-room-occupied-banner">
+                                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex: 1;">
+                                        <span style="display: inline-flex; align-items: center; gap: 5px; font-weight: 800; font-size: 0.74rem;">
+                                            <i class="fa-solid fa-user-doctor"></i> ${r.active_doctor_name ? ('Dr(a). ' + r.active_doctor_name.replace(/^dr\.\s*|^dra\.\s*/i, '')) : 'Médico en Consulta'}
+                                        </span>
+                                        ${r.active_patient_name ? `<span style="background: rgba(255,255,255,0.22); padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 700;"><i class="fa-solid fa-hospital-user"></i> ${r.active_patient_name}</span>` : ''}
+                                    </div>
+                                    <button type="button" class="btn btn-xs" onclick="event.stopPropagation(); window.freeClinicRoom && window.freeClinicRoom('${r.id}')" style="background: rgba(255,255,255,0.25); color: #ffffff; border: 1px solid rgba(255,255,255,0.6); padding: 2px 9px; font-size: 0.68rem; font-weight: 700; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;" title="Liberar consultorio manualmente">
+                                        <i class="fa-solid fa-door-open"></i> Liberar
+                                    </button>
+                                </div>
+                            ` : ''}
+                            <div class="erp-room-card-top-bar ${st.cls}"></div>
+                            <div class="erp-room-card-header">
+                                <div>
+                                    <span style="font-size: 0.72rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Espacio #${r.room_number || 'N/A'}</span>
+                                    <h3 style="margin: 4px 0 0 0; font-size: 1.05rem; color: #0f172a; font-family: 'Outfit', sans-serif;">${r.name}</h3>
+                                </div>
+                                <span class="erp-room-badge-pill ${st.cls}">
+                                    <span class="pulse-dot"></span>
+                                    ${st.text}
+                                </span>
                             </div>
-                            <span class="erp-room-badge-pill ${st.cls}">
-                                <span class="pulse-dot"></span>
-                                ${st.text}
-                            </span>
-                        </div>
 
                         <div class="erp-room-card-body">
                             <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.82rem; color: #64748b;">
@@ -891,6 +899,7 @@
                             </button>
                         </div>
                     </div>
+                </div>
                 `;
             }).join('');
         },
@@ -4049,12 +4058,13 @@
 
             const renderRoomCard = (r) => {
                 const stKey = (r.status || 'disponible').toLowerCase();
-                const isOccupied = stKey === 'ocupado';
-                const st = statusColors[stKey] || statusColors['disponible'];
+                const isOccupied = stKey === 'ocupado' || Boolean(r.active_appointment_id);
+                const st = isOccupied ? { badge: 'red', text: 'Ocupado' } : (statusColors[stKey] || statusColors['disponible']);
                 return `
-                    <div class="badge-tag ${isOccupied ? 'red' : st.badge}" style="display: flex; flex-direction: column; align-items: center; padding: 8px; border-radius: 10px; text-align: center; ${isOccupied ? 'border: 1.5px solid #ef4444 !important; background: #fee2e2 !important; color: #b91c1c !important;' : ''}">
-                        <strong style="font-size: 0.82rem;">${r.room_number ? ('#' + r.room_number) : (r.name.substring(0, 14))}</strong>
-                        <small style="font-size: 0.68rem; margin-top: 2px; font-weight: 800;">${isOccupied ? 'OCUPADO' : st.text.toUpperCase()}</small>
+                    <div class="badge-tag ${isOccupied ? 'red' : st.badge}" style="display: flex; flex-direction: column; align-items: center; padding: 10px 8px; border-radius: 10px; text-align: center; position: relative; ${isOccupied ? 'border: 2px solid #ef4444 !important; background: #fff1f2 !important; color: #b91c1c !important; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.22) !important;' : ''}">
+                        ${isOccupied ? `<span style="position: absolute; top: -8px; background: #dc2626; color: #ffffff; font-size: 0.6rem; font-weight: 800; padding: 1px 7px; border-radius: 9999px; border: 1.5px solid #ffffff; letter-spacing: 0.5px;">OCUPADO</span>` : ''}
+                        <strong style="font-size: 0.82rem; margin-top: ${isOccupied ? '3px' : '0'};">${r.room_number ? ('#' + r.room_number) : (r.name.substring(0, 14))}</strong>
+                        <small style="font-size: 0.68rem; margin-top: 2px; font-weight: 800;">${isOccupied ? (r.active_doctor_name ? ('Dr. ' + r.active_doctor_name.replace(/^dr\.\s*|^dra\.\s*/i, '').split(' ')[0]) : 'OCUPADO') : st.text.toUpperCase()}</small>
                     </div>
                 `;
             };
