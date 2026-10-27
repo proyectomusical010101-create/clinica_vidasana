@@ -1296,6 +1296,26 @@ function checkAuthSession() {
 
             applyRolePermissionsUI(user.role);
             
+            // Check for post-login welcome notification
+            try {
+                const welcomeRaw = sessionStorage.getItem('dental_welcome_banner');
+                if (welcomeRaw) {
+                    sessionStorage.removeItem('dental_welcome_banner');
+                    const welcome = JSON.parse(welcomeRaw);
+                    setTimeout(() => {
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                icon: 'success',
+                                title: '¡Bienvenido(a)!',
+                                text: `Sesión iniciada como ${welcome.fullname} (${welcome.role})`,
+                                timer: 2000,
+                                showConfirmButton: false
+                            });
+                        }
+                    }, 350);
+                }
+            } catch(e) {}
+            
             // Background sync from Supabase Cloud to update signatures and profile across devices
             SupabaseDataService.getUsers(true).then(users => {
                 if (users && users.length > 0) {
@@ -1594,27 +1614,11 @@ async function login(email, password) {
         if (errorMsg) errorMsg.classList.add('hidden');
         sessionStorage.setItem('dental_current_user', JSON.stringify(match));
         localStorage.setItem('dental_current_user', JSON.stringify(match));
-        checkAuthSession();
+        localStorage.setItem('dental_active_tab', 'dashboard');
+        sessionStorage.setItem('dental_welcome_banner', JSON.stringify({ fullname: match.fullname, role: match.role }));
         
-        // Render initial views for the newly authenticated session
-        try { await loadClinicBranding(); } catch(e) { console.error(e); }
-        try { renderDashboard(); } catch(e) { console.error(e); }
-        try { renderPatientsTable(); } catch(e) { console.error(e); }
-        try { renderInventoryTable(); } catch(e) { console.error(e); }
-        try { renderPricingTable(); } catch(e) { console.error(e); }
-        try { renderEHRView(); } catch(e) { console.error(e); }
-        try { renderUsersTable(); } catch(e) { console.error(e); }
-
-        // Initialize inactivity tracker upon successful login
-        resetInactivityTimer();
-        
-        Swal.fire({
-            icon: 'success',
-            title: '¡Bienvenido(a)!',
-            text: `Sesión iniciada como ${match.fullname} (${match.role})`,
-            timer: 1800,
-            showConfirmButton: false
-        });
+        // Purgar vestigios y recargar limpiamente para inicialización 100% aislada
+        window.location.href = window.location.pathname;
     } else {
         if (errorMsg) errorMsg.classList.remove('hidden');
     }
@@ -1622,13 +1626,24 @@ async function login(email, password) {
 
 function logout() {
     sessionStorage.removeItem('dental_current_user');
+    sessionStorage.removeItem('dental_welcome_banner');
+    sessionStorage.removeItem('activePatientId');
+    sessionStorage.removeItem('activePatient');
     localStorage.removeItem('dental_current_user');
     localStorage.removeItem('dental_active_tab');
+    localStorage.removeItem('dental_active_patient_id');
+    localStorage.removeItem('dental_odontogram_subview');
+    document.body.classList.remove('is-doctor-role');
     document.documentElement.classList.remove('has-auth-session');
     document.documentElement.classList.add('no-auth-session');
-    const loginOverlay = document.getElementById('login-screen');
-    if (loginOverlay) loginOverlay.classList.remove('hidden');
-    checkAuthSession();
+    
+    if (inactivityTimer) {
+        clearTimeout(inactivityTimer);
+        inactivityTimer = null;
+    }
+
+    // Recargar limpiamente sin parámetros ni residuos de la sesión previa
+    window.location.href = window.location.pathname;
 }
 
 // ==========================================
@@ -1651,22 +1666,17 @@ function resetInactivityTimer() {
 function handleInactivityTimeout() {
     // Limpiar sesión por inactividad
     sessionStorage.removeItem('dental_current_user');
+    sessionStorage.removeItem('dental_welcome_banner');
+    sessionStorage.removeItem('activePatientId');
     localStorage.removeItem('dental_current_user');
     localStorage.removeItem('dental_active_tab');
-    checkAuthSession();
-    
-    // Ocultar modales activos
-    const openModals = document.querySelectorAll('.modal-overlay:not(.hidden)');
-    openModals.forEach(m => {
-        m.classList.add('hidden');
-    });
+    localStorage.removeItem('dental_active_patient_id');
+    localStorage.removeItem('dental_odontogram_subview');
+    document.body.classList.remove('is-doctor-role');
+    document.documentElement.classList.remove('has-auth-session');
+    document.documentElement.classList.add('no-auth-session');
 
-    Swal.fire({
-        icon: 'warning',
-        title: 'Sesión Expirada por Inactividad',
-        text: 'Tu sesión ha sido cerrada automáticamente tras 1 hora (60 min) de inactividad por seguridad.',
-        confirmButtonText: 'Iniciar Sesión'
-    });
+    window.location.href = window.location.pathname;
 }
 
 function initInactivityTracker() {

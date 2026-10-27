@@ -6728,15 +6728,21 @@
                         </div>
                     </div>
 
-                    <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                    <div class="form-row" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 12px;">
                         <div class="form-group">
                             <label>Método de Pago / Egreso *</label>
-                            <select id="settle-payment-method" class="form-control" required>
+                            <select id="settle-payment-method" class="form-control" required onchange="window.ClinicalERP && window.ClinicalERP.onSettlePaymentMethodChange && window.ClinicalERP.onSettlePaymentMethodChange(this.value)">
                                 <option value="Efectivo en Dólares ($)">Efectivo en Dólares ($)</option>
                                 <option value="Pago Móvil (Bs)">Pago Móvil (Bs)</option>
                                 <option value="Transferencia Bancaria">Transferencia Bancaria</option>
                                 <option value="Zelle">Zelle</option>
                                 <option value="Punto de Venta">Punto de Venta</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Cuenta Débito Clínica *</label>
+                            <select id="settle-debit-account" class="form-control" required>
+                                <!-- Dinámicamente poblado según el método seleccionado -->
                             </select>
                         </div>
                         <div class="form-group">
@@ -8638,14 +8644,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=375"></script>
-    <script src="supabaseClient.js?v=375"></script>
-    <script src="odontogram.js?v=375"></script>
-    <script src="signature.js?v=375"></script>
-    <script src="whatsapp.js?v=375"></script>
-    <script src="kardex.js?v=375"></script>
-    <script src="app.js?v=375"></script>
-    <script src="clinicalERP.js?v=375"></script>
-    <script src="tutorial.js?v=375"></script>
+    <script src="seededData.js?v=376"></script>
+    <script src="supabaseClient.js?v=376"></script>
+    <script src="odontogram.js?v=376"></script>
+    <script src="signature.js?v=376"></script>
+    <script src="whatsapp.js?v=376"></script>
+    <script src="kardex.js?v=376"></script>
+    <script src="app.js?v=376"></script>
+    <script src="clinicalERP.js?v=376"></script>
+    <script src="tutorial.js?v=376"></script>
 </body>
 </html>

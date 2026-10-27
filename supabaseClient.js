@@ -2924,7 +2924,7 @@ class SupabaseDataService {
         }
     }
 
-    static async settleDoctorBatchServices({ doctorName, serviceIds = [], paymentMethod = 'Transferencia', paymentRef = '', notes = '' }) {
+    static async settleDoctorBatchServices({ doctorName, serviceIds = [], paymentMethod = 'Transferencia', paymentRef = '', debitAccountId = '', debitAccountName = '', notes = '' }) {
         let list = await this.getServiceLiquidations(true);
         const nowStr = new Date().toISOString();
         let totalSettled = 0;
@@ -2945,6 +2945,8 @@ class SupabaseDataService {
                 item.doctor.paid_at = nowStr;
                 item.doctor.payment_method = paymentMethod || 'Transferencia';
                 item.doctor.payment_ref = paymentRef || '';
+                item.doctor.debit_account_id = debitAccountId || '';
+                item.doctor.debit_account_name = debitAccountName || '';
                 totalSettled += amt;
                 count++;
 
@@ -2963,6 +2965,8 @@ class SupabaseDataService {
                     amount: amt,
                     method: paymentMethod || 'Transferencia',
                     ref: paymentRef || '',
+                    debit_account_id: debitAccountId || '',
+                    debit_account_name: debitAccountName || '',
                     date: nowStr,
                     notes: notes || `Liquidación masiva por doctor: ${doctorName}`
                 });
@@ -2973,7 +2977,7 @@ class SupabaseDataService {
         return { count, totalSettled };
     }
 
-    static async settleServicePayment({ liquidationId, target, paymentMethod, paymentRef, notes, customDoctorAmount, customAssistantAmount, deductions }) {
+    static async settleServicePayment({ liquidationId, target, paymentMethod, paymentRef, debitAccountId = '', debitAccountName = '', notes, customDoctorAmount, customAssistantAmount, deductions }) {
         let list = await this.getServiceLiquidations(true);
         const item = list.find(l => l.id === liquidationId);
         if (!item) throw new Error('Registro de liquidación no encontrado');
@@ -2998,6 +3002,8 @@ class SupabaseDataService {
             item.doctor.paid_at = nowStr;
             item.doctor.payment_method = paymentMethod || 'Transferencia';
             item.doctor.payment_ref = paymentRef || '';
+            item.doctor.debit_account_id = debitAccountId || '';
+            item.doctor.debit_account_name = debitAccountName || '';
         }
 
         if (target === 'assistant' || target === 'both') {
@@ -3012,6 +3018,8 @@ class SupabaseDataService {
                 item.assistant.paid_at = nowStr;
                 item.assistant.payment_method = paymentMethod || 'Transferencia';
                 item.assistant.payment_ref = paymentRef || '';
+                item.assistant.debit_account_id = debitAccountId || '';
+                item.assistant.debit_account_name = debitAccountName || '';
             }
         }
 
@@ -3037,6 +3045,8 @@ class SupabaseDataService {
             amount: paidAmt,
             method: paymentMethod || 'Transferencia',
             ref: paymentRef || '',
+            debit_account_id: debitAccountId || '',
+            debit_account_name: debitAccountName || '',
             date: nowStr,
             notes: notes || '',
             deductions: (target === 'doctor' || target === 'both') ? (deductions || null) : null

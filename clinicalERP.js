@@ -1713,8 +1713,10 @@
 
             const patientsList = Object.values(g.patients).map(p => {
                 const pendCount = p.items.filter(x => x.doctor && x.doctor.status === 'Pendiente').length;
-                return `<li><strong>${p.patientName}</strong>: ${pendCount} servicio(s) pendiente(s) ($$${p.pendingDocFee.toFixed(2)})</li>`;
+                return `<li><strong>${p.patientName}</strong>: ${pendCount} servicio(s) pendiente(s) ($${p.pendingDocFee.toFixed(2)})</li>`;
             }).join('');
+
+            const debitAccountOptionsHtml = this.getDebitAccountOptionsHtml('Transferencia');
 
             const { value: formValues } = await Swal.fire({
                 title: `<div style="display:flex; align-items:center; justify-content:center; gap:10px; color:#0d9488;"><i class="fa-solid fa-receipt"></i> Liquidación Total: ${g.name}</div>`,
@@ -1735,8 +1737,8 @@
 
                         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:12px;">
                             <div>
-                                <label style="font-weight:700; font-size:0.78rem; color:#0f172a; display:block; margin-bottom:4px;">Método de Pago:</label>
-                                <select id="swal-settle-method" class="swal2-input" style="width:100%; margin:0; height:38px; font-size:0.85rem; padding:4px 8px;">
+                                <label style="font-weight:700; font-size:0.78rem; color:#0f172a; display:block; margin-bottom:4px;">Método de Pago / Egreso *:</label>
+                                <select id="swal-settle-method" class="swal2-input" style="width:100%; margin:0; height:38px; font-size:0.85rem; padding:4px 8px;" onchange="window.ClinicalERP && window.ClinicalERP.onSwalSettleMethodChange && window.ClinicalERP.onSwalSettleMethodChange(this.value)">
                                     <option value="Transferencia">Transferencia Bancaria</option>
                                     <option value="Pago Móvil">Pago Móvil</option>
                                     <option value="Efectivo USD">Efectivo USD ($)</option>
@@ -1745,14 +1747,22 @@
                                 </select>
                             </div>
                             <div>
-                                <label style="font-weight:700; font-size:0.78rem; color:#0f172a; display:block; margin-bottom:4px;">N° de Referencia / Comprobante:</label>
-                                <input type="text" id="swal-settle-ref" class="swal2-input" placeholder="ej: 984021 / Efectivo en caja" style="width:100%; margin:0; height:38px; font-size:0.85rem; padding:4px 8px;">
+                                <label style="font-weight:700; font-size:0.78rem; color:#0f172a; display:block; margin-bottom:4px;">Cuenta Débito Clínica *:</label>
+                                <select id="swal-settle-debit-account" class="swal2-input" style="width:100%; margin:0; height:38px; font-size:0.85rem; padding:4px 8px;">
+                                    ${debitAccountOptionsHtml}
+                                </select>
                             </div>
                         </div>
 
-                        <div>
-                            <label style="font-weight:700; font-size:0.78rem; color:#0f172a; display:block; margin-bottom:4px;">Notas / Observaciones de Liquidación:</label>
-                            <input type="text" id="swal-settle-notes" class="swal2-input" placeholder="ej: Liquidación de jornada del día. Todo conciliado." value="Liquidación global jornada - ${new Date().toLocaleDateString('es-ES')}" style="width:100%; margin:0; height:38px; font-size:0.85rem; padding:4px 8px;">
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:12px;">
+                            <div>
+                                <label style="font-weight:700; font-size:0.78rem; color:#0f172a; display:block; margin-bottom:4px;">N° de Referencia / Comprobante:</label>
+                                <input type="text" id="swal-settle-ref" class="swal2-input" placeholder="ej: 984021 / Efectivo en caja" style="width:100%; margin:0; height:38px; font-size:0.85rem; padding:4px 8px;">
+                            </div>
+                            <div>
+                                <label style="font-weight:700; font-size:0.78rem; color:#0f172a; display:block; margin-bottom:4px;">Notas / Observaciones:</label>
+                                <input type="text" id="swal-settle-notes" class="swal2-input" placeholder="ej: Liquidación de jornada del día. Todo conciliado." value="Liquidación global jornada - ${new Date().toLocaleDateString('es-ES')}" style="width:100%; margin:0; height:38px; font-size:0.85rem; padding:4px 8px;">
+                            </div>
                         </div>
                     </div>
                 `,
@@ -1764,9 +1774,12 @@
                 cancelButtonColor: '#94a3b8',
                 preConfirm: () => {
                     const method = document.getElementById('swal-settle-method')?.value || 'Transferencia';
+                    const debitSelect = document.getElementById('swal-settle-debit-account');
+                    const debitAccountId = debitSelect?.value || '';
+                    const debitAccountName = debitSelect?.selectedOptions[0]?.getAttribute('data-name') || debitSelect?.selectedOptions[0]?.text || '';
                     const ref = document.getElementById('swal-settle-ref')?.value?.trim() || '';
                     const notes = document.getElementById('swal-settle-notes')?.value?.trim() || '';
-                    return { method, ref, notes };
+                    return { method, debitAccountId, debitAccountName, ref, notes };
                 }
             });
 
@@ -1786,6 +1799,8 @@
                         serviceIds: pendingIds,
                         paymentMethod: formValues.method,
                         paymentRef: formValues.ref,
+                        debitAccountId: formValues.debitAccountId,
+                        debitAccountName: formValues.debitAccountName,
                         notes: formValues.notes
                     });
 
@@ -1796,7 +1811,7 @@
                     Swal.fire({
                         icon: 'success',
                         title: '¡Liquidación Exitosa!',
-                        html: `Se han liquidado exitosamente <strong>${result.count}</strong> servicio(s) de <strong>${g.name}</strong> por un total de <strong>$${result.totalSettled.toFixed(2)} USD</strong>.`,
+                        html: `Se han liquidado exitosamente <strong>${result.count}</strong> servicio(s) de <strong>${g.name}</strong> por un total de <strong>$${result.totalSettled.toFixed(2)} USD</strong>.<br><small style="color:#64748b; margin-top:6px; display:inline-block;"><i class="fa-solid fa-building-columns text-teal"></i> Cuenta debitada: <strong>${formValues.debitAccountName || 'Clínica'}</strong></small>`,
                         confirmButtonColor: '#0d9488'
                     });
                 }
@@ -2418,6 +2433,95 @@
             if (input) input.value = totalToSettle.toFixed(2);
         },
 
+        getDebitAccountsList() {
+            let accounts = [];
+            try {
+                if (typeof window.getFinancialAccounts === 'function') {
+                    accounts = window.getFinancialAccounts() || [];
+                }
+            } catch(e) {
+                console.warn('Error fetching financial accounts:', e);
+            }
+            if (!accounts || accounts.length === 0) {
+                accounts = [
+                    { id: 'acc_pm_banesco', name: 'Pago Móvil Banesco', type: 'pagomovil', bank: 'Banesco', currency: 'BS' },
+                    { id: 'acc_pm_mercantil', name: 'Pago Móvil Mercantil', type: 'pagomovil', bank: 'Mercantil', currency: 'BS' },
+                    { id: 'acc_transf_banesco', name: 'Transferencia Banesco Cta Corriente', type: 'transferencia', bank: 'Banesco', currency: 'BS' },
+                    { id: 'acc_cash_usd', name: 'Caja Chica Efectivo USD', type: 'cash', bank: 'Caja Principal', currency: 'USD' },
+                    { id: 'acc_zelle_principal', name: 'Zelle Principal (Oficina)', type: 'zelle', bank: 'Chase / BoA', currency: 'USD' }
+                ];
+            }
+            return accounts.filter(a => a.status !== 'inactive' && a.status !== 'archived');
+        },
+
+        getDebitAccountOptionsHtml(selectedMethod = 'Transferencia') {
+            const accounts = this.getDebitAccountsList();
+            const mLower = (selectedMethod || '').toLowerCase();
+
+            let targetType = '';
+            if (mLower.includes('móvil') || mLower.includes('movil')) targetType = 'pagomovil';
+            else if (mLower.includes('transf')) targetType = 'transferencia';
+            else if (mLower.includes('zelle')) targetType = 'zelle';
+            else if (mLower.includes('punto') || mLower.includes('pos')) targetType = 'pos';
+            else if (mLower.includes('efectivo') && (mLower.includes('bs') || mLower.includes('boliv'))) targetType = 'cash_bs';
+            else if (mLower.includes('efectivo')) targetType = 'cash';
+
+            const matchingAccounts = accounts.filter(a => {
+                if (targetType && a.type === targetType) return true;
+                if (targetType === 'pagomovil' && (a.name || '').toLowerCase().includes('pago m')) return true;
+                if (targetType === 'transferencia' && (a.name || '').toLowerCase().includes('transf')) return true;
+                if (targetType === 'zelle' && (a.name || '').toLowerCase().includes('zelle')) return true;
+                if (targetType === 'cash' && ((a.name || '').toLowerCase().includes('efectivo usd') || (a.name || '').toLowerCase().includes('caja chica'))) return true;
+                return false;
+            });
+
+            const otherAccounts = accounts.filter(a => !matchingAccounts.includes(a));
+            let html = '';
+            let hasPreselected = false;
+
+            if (matchingAccounts.length > 0) {
+                html += `<optgroup label="Cuentas para ${selectedMethod}">`;
+                matchingAccounts.forEach((acc, idx) => {
+                    const isSel = idx === 0 ? 'selected' : '';
+                    if (idx === 0) hasPreselected = true;
+                    html += `<option value="${acc.id}" data-name="${acc.name}" ${isSel}>${acc.name} (${acc.currency || 'USD'}) - ${acc.bank || 'Clínica'}</option>`;
+                });
+                html += `</optgroup>`;
+            }
+
+            if (otherAccounts.length > 0) {
+                html += `<optgroup label="Otras cuentas y cajas">`;
+                otherAccounts.forEach((acc, idx) => {
+                    const isSel = (!hasPreselected && idx === 0) ? 'selected' : '';
+                    html += `<option value="${acc.id}" data-name="${acc.name}" ${isSel}>${acc.name} (${acc.currency || 'USD'}) - ${acc.bank || 'Clínica'}</option>`;
+                });
+                html += `</optgroup>`;
+            }
+
+            return html;
+        },
+
+        populateSettleDebitAccounts(selectedMethod = null, targetSelectId = 'settle-debit-account') {
+            const select = document.getElementById(targetSelectId);
+            if (!select) return;
+            if (!selectedMethod) {
+                const methodEl = document.getElementById('settle-payment-method');
+                selectedMethod = methodEl ? methodEl.value : 'Efectivo en Dólares ($)';
+            }
+            select.innerHTML = this.getDebitAccountOptionsHtml(selectedMethod);
+        },
+
+        onSettlePaymentMethodChange(val) {
+            this.populateSettleDebitAccounts(val, 'settle-debit-account');
+        },
+
+        onSwalSettleMethodChange(newMethod) {
+            const sel = document.getElementById('swal-settle-debit-account');
+            if (sel) {
+                sel.innerHTML = this.getDebitAccountOptionsHtml(newMethod);
+            }
+        },
+
         openSettleModal(id, preselectedTarget = 'doctor') {
             const item = this.serviceLiquidations.find(x => x.id === id);
             if (!item) return;
@@ -2429,6 +2533,9 @@
             document.getElementById('settle-service-date').innerHTML = '<i class="fa-regular fa-calendar"></i> ' + (item.date || (item.created_at ? item.created_at.substring(0,10) : 'Hoy'));
             document.getElementById('settle-payment-ref').value = '';
             document.getElementById('settle-notes').value = '';
+
+            const curMethod = document.getElementById('settle-payment-method')?.value || 'Efectivo en Dólares ($)';
+            this.populateSettleDebitAccounts(curMethod, 'settle-debit-account');
 
             const docAmt = (item.doctor && item.doctor.status === 'Pendiente') ? parseFloat(item.doctor.amount || 0) : 0;
             const astAmt = (item.assistant && item.assistant.status === 'Pendiente') ? parseFloat(item.assistant.amount || 0) : 0;
@@ -2482,6 +2589,9 @@
             const targetRadio = document.querySelector('input[name="settle_target"]:checked');
             const target = targetRadio ? targetRadio.value : 'doctor';
             const paymentMethod = document.getElementById('settle-payment-method').value;
+            const debitAccSelect = document.getElementById('settle-debit-account');
+            const debitAccountId = debitAccSelect ? debitAccSelect.value : '';
+            const debitAccountName = debitAccSelect && debitAccSelect.selectedOptions[0] ? (debitAccSelect.selectedOptions[0].getAttribute('data-name') || debitAccSelect.selectedOptions[0].text) : '';
             const paymentRef = document.getElementById('settle-payment-ref').value.trim();
             const notes = document.getElementById('settle-notes').value.trim();
             const amountVal = parseFloat(document.getElementById('settle-amount-input').value) || 0;
@@ -2542,6 +2652,8 @@
                         target: target,
                         paymentMethod: paymentMethod,
                         paymentRef: paymentRef,
+                        debitAccountId: debitAccountId,
+                        debitAccountName: debitAccountName,
                         notes: notes,
                         customDoctorAmount: customDocAmt,
                         customAssistantAmount: customAstAmt,
@@ -2565,8 +2677,8 @@
                     Swal.fire({
                         icon: 'success',
                         title: '¡Honorarios Liquidados!',
-                        text: 'El pago ha sido registrado y conciliado con éxito en la base de datos.',
-                        timer: 2000,
+                        html: `El pago ha sido registrado y conciliado con éxito en la base de datos.<br><small style="color:#64748b; margin-top:6px; display:inline-block;"><i class="fa-solid fa-building-columns text-teal"></i> Cuenta debitada: <strong>${debitAccountName || 'Clínica'}</strong></small>`,
+                        timer: 2200,
                         showConfirmButton: false
                     });
                 }
