@@ -11296,81 +11296,70 @@ window.parseDoctorScheduleDaysAndShifts = function(scheduleStr, defaultShift = '
     const result = {};
     daysOrder.forEach(d => { result[d] = { active: false, shift: defaultShift, hours: '' }; });
 
-    const str = (scheduleStr || '').trim();
-    if (!str || norm(str).includes('previa cita')) {
-        return { isPreviaCita: true, hasSchedule: !!str, days: result, activeDaysCount: 0, activeDayNames: [] };
+    const raw = (scheduleStr || '').trim();
+    if (!raw || norm(raw).includes('previa cita')) {
+        return { isPreviaCita: true, hasSchedule: !!raw, days: result, activeDaysCount: 0, activeDayNames: [], shift: defaultShift, hours: 'Previa Cita' };
     }
 
-    function activateRange(startDayName, endDayName, shift, hours) {
-        const sNorm = norm(startDayName);
-        const eNorm = norm(endDayName);
-        const sDay = daysMap[sNorm];
-        const eDay = daysMap[eNorm];
+    const nRaw = norm(raw);
+    let detectedShift = defaultShift;
+    let detectedHours = '';
+
+    if (nRaw.includes('tarde') || nRaw.includes('14:00') || nRaw.includes('pm')) {
+        detectedShift = (nRaw.includes('mañana') || nRaw.includes('08:00') || nRaw.includes('completo')) ? 'full' : 'afternoon';
+    } else if (nRaw.includes('mañana') || nRaw.includes('08:00') || nRaw.includes('am')) {
+        detectedShift = 'morning';
+    }
+
+    const timeMatch = raw.match(/\(([^)]+)\)/);
+    if (timeMatch) {
+        detectedHours = timeMatch[1].trim();
+    } else if (detectedShift === 'morning') {
+        detectedHours = '08:00 - 13:00 (Mañana)';
+    } else if (detectedShift === 'afternoon') {
+        detectedHours = '14:00 - 19:00 (Tarde)';
+    } else if (detectedShift === 'full') {
+        detectedHours = '08:00 - 18:00 (Completo)';
+    }
+
+    let anyActivated = false;
+
+    // Check ranges like 'Lunes a Jueves'
+    const rangeMatch = nRaw.match(/(lunes|martes|miercoles|jueves|viernes|sabado|domingo|lun|mar|mie|jue|vie|sab|dom)\s+a\s+(lunes|martes|miercoles|jueves|viernes|sabado|domingo|lun|mar|mie|jue|vie|sab|dom)/);
+    if (rangeMatch) {
+        const sDay = daysMap[rangeMatch[1]];
+        const eDay = daysMap[rangeMatch[2]];
         if (sDay && eDay) {
             const sIdx = daysOrder.indexOf(sDay);
             const eIdx = daysOrder.indexOf(eDay);
             if (sIdx !== -1 && eIdx !== -1 && sIdx <= eIdx) {
                 for (let i = sIdx; i <= eIdx; i++) {
-                    result[daysOrder[i]] = { active: true, shift, hours };
+                    result[daysOrder[i]] = { active: true, shift: detectedShift, hours: detectedHours };
+                    anyActivated = true;
                 }
-                return true;
             }
         }
-        return false;
     }
 
-    const parts = str.split(/(?<=\))\s*,\s*|\s*;\s*/);
-    let anyActivated = false;
-
-    parts.forEach(part => {
-        let pNorm = norm(part);
-        let shift = defaultShift;
-        let hours = '';
-        const timeMatch = part.match(/\(([^)]+)\)/);
-        if (timeMatch) {
-            hours = timeMatch[1].trim();
-            if (hours.includes('14:00') || hours.toLowerCase().includes('tarde')) {
-                shift = (hours.includes('08:00') || hours.toLowerCase().includes('completo')) ? 'full' : 'afternoon';
-            } else if (hours.includes('08:00') || hours.toLowerCase().includes('mañana')) {
-                shift = 'morning';
-            }
+    // Check individual day mentions (singular and plural, e.g. 'lunes', 'jueves', 'sabados')
+    daysOrder.forEach(d => {
+        const dNorm = norm(d);
+        const re = new RegExp('\\b' + dNorm + '(?:s|es)?\\b', 'i');
+        if (re.test(nRaw)) {
+            result[d] = { active: true, shift: detectedShift, hours: detectedHours };
+            anyActivated = true;
         }
-
-        const rangeMatch = pNorm.match(/(lunes|martes|miercoles|jueves|viernes|sabado|domingo|lun|mar|mie|jue|vie|sab|dom)\s+a\s+(lunes|martes|miercoles|jueves|viernes|sabado|domingo|lun|mar|mie|jue|vie|sab|dom)/);
-        if (rangeMatch) {
-            if (activateRange(rangeMatch[1], rangeMatch[2], shift, hours)) {
-                anyActivated = true;
-            }
-        }
-
-        daysOrder.forEach(d => {
-            const dNorm = norm(d);
-            const re = new RegExp('\\b' + dNorm + '\\b', 'i');
-            if (re.test(pNorm) && (!rangeMatch || !activateRange(rangeMatch[1], rangeMatch[2], shift, hours))) {
-                result[d] = { active: true, shift, hours };
-                anyActivated = true;
-            }
-        });
     });
 
-    if (!anyActivated) {
-        const lower = norm(str);
-        daysOrder.forEach(d => {
-            const dNorm = norm(d);
-            if (lower.includes(dNorm)) {
-                result[d] = { active: true, shift: defaultShift, hours: '' };
-                anyActivated = true;
-            }
-        });
-    }
-
-    const activeCount = daysOrder.filter(d => result[d].active).length;
+    const activeDayNames = daysOrder.filter(d => result[d].active);
     return {
         isPreviaCita: false,
         hasSchedule: anyActivated,
         days: result,
-        activeDaysCount: activeCount,
-        activeDayNames: daysOrder.filter(d => result[d].active)
+        activeDaysCount: activeDayNames.length,
+        activeDayNames: activeDayNames,
+        shift: detectedShift,
+        hours: detectedHours
     };
 };
 
@@ -11388,7 +11377,7 @@ function renderWeeklySchedulePlanner(container, appointments, weekInfo, searchQu
     let docSchedule = null;
     if (selectedDoctorId && selectedDoctorId !== 'all') {
         const docsPool = (doctorsList && doctorsList.length > 0) ? doctorsList : (window._availableDoctorsCache || []);
-        selectedDocObj = docsPool.find(d => String(d.id) === String(selectedDoctorId));
+        selectedDocObj = docsPool.find(d => String(d.id) === String(selectedDoctorId) || (d.fullname && d.fullname.trim().toLowerCase() === String(selectedDoctorId).trim().toLowerCase()));
         if (selectedDocObj) {
             const rawSch = selectedDocObj.doctorProfile?.schedule || selectedDocObj.doctor_profile?.schedule || selectedDocObj.schedule || '';
             const defShift = selectedDocObj.doctorProfile?.shift || selectedDocObj.doctor_profile?.shift || 'morning';
@@ -11792,6 +11781,11 @@ async function renderAgendaView(filter = (window.currentAgendaFilter || 'pending
     }
 
     // Populate dynamic filters if needed
+    let users = [];
+    try { users = await SupabaseDataService.getUsers(); } catch(e) {}
+    const doctors = users.filter(u => window.isDoctorOrAssistantUser(u));
+    window._availableDoctorsCache = doctors;
+
     const filterSpecSel = document.getElementById('agenda-filter-specialty');
     if (filterSpecSel && filterSpecSel.options.length <= 1) {
         let dynamicSpecs = [];
@@ -11819,9 +11813,6 @@ async function renderAgendaView(filter = (window.currentAgendaFilter || 'pending
             filterDocSel.disabled = true;
         }
     } else if (filterDocSel && filterDocSel.options.length <= 1) {
-        let users = [];
-        try { users = await SupabaseDataService.getUsers(); } catch(e) {}
-        const doctors = users.filter(u => window.isDoctorOrAssistantUser(u));
         const currVal = filterDocSel.value;
         filterDocSel.innerHTML = '<option value="all">👨‍⚕️ Todos los Médicos</option>' + 
             doctors.map(d => `<option value="${d.id}">${d.fullname || d.name}</option>`).join('');
@@ -11837,7 +11828,16 @@ async function renderAgendaView(filter = (window.currentAgendaFilter || 'pending
         appointments = appointments.filter(app => (app.specialty || '').toLowerCase() === selectedSpecialty.toLowerCase());
     }
     if (selectedDoctor !== 'all') {
-        appointments = appointments.filter(app => String(app.doctorId || app.doctor_id) === String(selectedDoctor));
+        const selectedDocObj = doctors.find(d => String(d.id) === String(selectedDoctor) || (d.fullname && d.fullname.trim().toLowerCase() === String(selectedDoctor).trim().toLowerCase()));
+        const cleanDocName = (selectedDocObj?.fullname || selectedDocObj?.name || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '');
+        appointments = appointments.filter(app => {
+            if (String(app.doctorId || app.doctor_id) === String(selectedDoctor)) return true;
+            if (cleanDocName) {
+                const aName = (app.doctorName || app.doctor_name || app.doctor || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '');
+                if (aName && (aName === cleanDocName || aName.includes(cleanDocName) || cleanDocName.includes(aName))) return true;
+            }
+            return false;
+        });
     }
     if (selectedShift !== 'all') {
         appointments = appointments.filter(app => {
@@ -11983,11 +11983,28 @@ async function renderAgendaView(filter = (window.currentAgendaFilter || 'pending
 }
 window.renderAgendaView = renderAgendaView;
 
-window.onAgendaFilterChange = function() {
-    const activeBtn = document.querySelector('#view-agenda .filter-card .filter-btn.active');
-    const filter = activeBtn ? activeBtn.dataset.filter : 'pending';
+window.onAgendaFilterChange = async function() {
+    const docSelect = document.getElementById('agenda-filter-doctor');
+    const selectedDoctor = docSelect ? docSelect.value : 'all';
+
+    // Si se selecciona un médico específico, adecuamos la agenda directamente al calendario semanal (semana + planificador)
+    if (selectedDoctor && selectedDoctor !== 'all') {
+        window.currentAgendaFilter = 'week';
+        window._agendaViewMode = 'planner';
+        document.querySelectorAll('#view-agenda .filter-card .filter-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.filter === 'week');
+        });
+        const toggleEl = document.getElementById('agenda-weekly-view-toggle');
+        if (toggleEl) {
+            toggleEl.classList.remove('hidden');
+            document.getElementById('btn-toggle-view-planner')?.classList.add('active');
+            document.getElementById('btn-toggle-view-list')?.classList.remove('active');
+        }
+    }
+
+    const filter = window.currentAgendaFilter || 'week';
     const searchQuery = document.getElementById('agenda-table-search')?.value || '';
-    renderAgendaView(filter, searchQuery);
+    await renderAgendaView(filter, searchQuery);
 };
 
 window.toggleApptConfirmation = async function(apptId) {
