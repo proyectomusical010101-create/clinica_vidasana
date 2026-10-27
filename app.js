@@ -116,6 +116,101 @@ window.universalPrintHTML = function(htmlContent, title = 'Documento Clínico') 
 };
 
 // ==========================================================================
+// VALIDACIÓN INTELIGENTE DE CAMPOS REQUERIDOS (MENSAJES CLAROS Y ENFOQUE VISUAL)
+// Informa con precisión y sencillez cuál campo falta e interactúa con el usuario
+// ==========================================================================
+
+window.validateRequiredFormFields = function(fieldsToCheck) {
+    if (!Array.isArray(fieldsToCheck)) return true;
+
+    for (const field of fieldsToCheck) {
+        if (!field) continue;
+        
+        let el = null;
+        let isMissing = false;
+
+        if (field.id) {
+            el = document.getElementById(field.id);
+        } else if (field.element) {
+            el = field.element;
+        }
+
+        if (typeof field.customCheck === 'function') {
+            isMissing = field.customCheck();
+        } else if (typeof field.getValue === 'function') {
+            const val = field.getValue();
+            isMissing = field.condition ? field.condition(val) : (!val || (typeof val === 'string' && !val.trim()));
+        } else if (el) {
+            if (el.tagName === 'SELECT') {
+                const val = el.value;
+                isMissing = (!val || val === '' || val === '__none__' || val === 'null');
+            } else if (el.type === 'checkbox' || el.type === 'radio') {
+                isMissing = !el.checked;
+            } else if (field.minPositive || el.type === 'number') {
+                const num = parseFloat(el.value);
+                if (field.minPositive) {
+                    isMissing = isNaN(num) || num <= 0;
+                } else {
+                    isMissing = el.value.trim() === '' || isNaN(num);
+                }
+            } else {
+                const val = el.value !== undefined ? el.value.trim() : '';
+                isMissing = val === '';
+            }
+        }
+
+        if (isMissing) {
+            const label = field.label || 'Campo Requerido';
+            const cleanLabel = label.replace(/\s*\*.*$/, '').trim();
+
+            if (field.step && typeof window.setPatientStepperStep === 'function') {
+                window.setPatientStepperStep(field.step);
+            }
+
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Campo Requerido Faltante',
+                    html: `
+                        <div style="font-size: 0.98rem; color: #475569; line-height: 1.5; margin-top: 4px;">
+                            Por favor complete el siguiente campo obligatorio para continuar:
+                        </div>
+                        <div style="margin-top: 14px; padding: 10px 16px; background: #fef2f2; border: 1.5px solid #fecaca; border-radius: 8px; color: #b91c1c; font-weight: 700; font-size: 1.05rem; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            <i class="fa-solid fa-circle-exclamation text-rose-500"></i> ${cleanLabel}
+                        </div>
+                    `,
+                    confirmButtonColor: '#0d9488',
+                    confirmButtonText: '<i class="fa-solid fa-arrow-right"></i> Completar Campo',
+                    focusConfirm: true
+                }).then(() => {
+                    if (el) {
+                        try {
+                            if (field.step && typeof window.setPatientStepperStep === 'function') {
+                                window.setPatientStepperStep(field.step);
+                            }
+                            el.focus();
+                            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            el.classList.add('field-highlight-error');
+                            setTimeout(() => {
+                                try { el.classList.remove('field-highlight-error'); } catch(e) {}
+                            }, 4000);
+                        } catch(err) {}
+                    }
+                });
+            } else {
+                alert(`Por favor complete el campo obligatorio: ${cleanLabel}`);
+                if (el) el.focus();
+            }
+
+            return false;
+        }
+    }
+
+    return true;
+};
+
+
+// ==========================================================================
 // FILTRADO ESTRICTO DE ROLES CLÍNICOS (MÉDICOS, ESPECIALISTAS Y ASISTENTES)
 // Excluye rigurosamente roles administrativos internos (Super Admin, Admin, Gerente, Caja, Recepción)
 // ==========================================================================
@@ -16088,8 +16183,12 @@ function initGlobalEvents() {
                 unit = `${unit} (${portionsPerUnit} porciones)`;
             }
 
-            if (!code || !name) {
-                Swal.fire({ icon: 'warning', title: 'Campos requeridos', text: 'Por favor complete los campos obligatorios (*)' });
+            const matRequired = [
+                { id: 'mat-code', label: 'Código del Insumo / Material' },
+                { id: 'mat-name', label: 'Nombre del Insumo' },
+                { id: 'mat-category', label: 'Categoría del Material' }
+            ];
+            if (!window.validateRequiredFormFields(matRequired)) {
                 return;
             }
 
@@ -16422,8 +16521,12 @@ function initGlobalEvents() {
             const chairTimeMin = timeUnit === 'dias' ? timeVal * 1440 : (timeUnit === 'horas' ? timeVal * 60 : timeVal);
             const timeDisplay = `${timeVal} ${timeUnit === 'dias' ? 'día(s)' : (timeUnit === 'horas' ? 'hora(s)' : 'min')}`;
 
-            if (!code || !name || priceUSD <= 0) {
-                Swal.fire({ icon: 'warning', title: 'Campos requeridos', text: 'Por favor complete los campos obligatorios (*)' });
+            const srvRequired = [
+                { id: 'srv-code', label: 'Código del Procedimiento / Servicio' },
+                { id: 'srv-name', label: 'Nombre del Procedimiento / Servicio' },
+                { id: 'srv-price', label: 'Precio Base en Dólares ($ USD)', minPositive: true }
+            ];
+            if (!window.validateRequiredFormFields(srvRequired)) {
                 return;
             }
 
@@ -18099,8 +18202,12 @@ if (patientSameDay.length === 0) {
             const statusVal = document.getElementById('app-status') ? document.getElementById('app-status').value : 'Programada';
             const existingId = document.getElementById('app-id') ? document.getElementById('app-id').value : '';
 
-            if (!patientSelect || !time || !treatment) {
-                Swal.fire({ icon: 'warning', title: 'Campos requeridos', text: 'Por favor complete los campos obligatorios (*)' });
+            const appRequired = [
+                { id: 'app-patient-select', label: 'Paciente de la Cita' },
+                { id: 'app-time', label: 'Hora de la Cita' },
+                { id: 'app-treatment', label: 'Motivo de Consulta o Tratamiento' }
+            ];
+            if (!window.validateRequiredFormFields(appRequired)) {
                 return;
             }
 
@@ -18575,13 +18682,14 @@ if (patientSameDay.length === 0) {
             const role = document.getElementById('u-role').value;
             const rawLicense = document.getElementById('u-license').value.trim();
 
-            if (!fullname || !email) {
-                Swal.fire({ icon: 'warning', title: 'Campos requeridos', text: 'Por favor ingrese el Nombre Completo y el Correo Electrónico.' });
-                return;
+            const userRequired = [
+                { id: 'u-fullname', label: 'Nombre Completo del Usuario / Especialista' },
+                { id: 'u-email', label: 'Correo Electrónico' }
+            ];
+            if (!existingUserId) {
+                userRequired.push({ id: 'u-password', label: 'Contraseña de Acceso Inicial' });
             }
-
-            if (!existingUserId && !password) {
-                Swal.fire({ icon: 'warning', title: 'Contraseña requerida', text: 'Por favor ingrese una contraseña para el nuevo usuario.' });
+            if (!window.validateRequiredFormFields(userRequired)) {
                 return;
             }
 
@@ -18739,13 +18847,14 @@ if (patientSameDay.length === 0) {
         const role = document.getElementById('sys-user-role').value;
         const status = document.getElementById('sys-user-status').value || 'Activo';
 
-        if (!fullname || !email) {
-            Swal.fire({ icon: 'warning', title: 'Campos requeridos', text: 'Por favor ingrese el Nombre Completo y el Correo Electrónico.' });
-            return;
+        const sysUserRequired = [
+            { id: 'sys-user-fullname', label: 'Nombre Completo del Usuario' },
+            { id: 'sys-user-email', label: 'Correo Electrónico' }
+        ];
+        if (!existingId) {
+            sysUserRequired.push({ id: 'sys-user-password', label: 'Contraseña de Acceso Inicial' });
         }
-
-        if (!existingId && !password) {
-            Swal.fire({ icon: 'warning', title: 'Contraseña requerida', text: 'Por favor asigne una contraseña de acceso inicial.' });
+        if (!window.validateRequiredFormFields(sysUserRequired)) {
             return;
         }
 
@@ -18886,31 +18995,27 @@ if (patientSameDay.length === 0) {
         const type = getVal('p-type') || 'Adulto';
         const age = parseInt(getVal('p-age')) || 0;
 
-        if (!id || !firstname || !lastname || !birthdate || !phone || !address) {
-            Swal.fire({ 
-                icon: 'warning', 
-                title: 'Campos Requeridos Incompletos', 
-                text: 'Por favor complete todos los campos obligatorios del Paso 1 (Cédula, Nombres, Apellidos, Fecha de Nacimiento, WhatsApp y Dirección) para continuar.' 
-            });
-            if (typeof window.setPatientStepperStep === 'function') window.setPatientStepperStep(1);
-            return false;
-        }
+        const patientRequiredFields = [
+            { id: 'p-id', label: 'Cédula / Documento de Identidad', step: 1 },
+            { id: 'p-firstname', label: 'Primer Nombre', step: 1 },
+            { id: 'p-lastname', label: 'Primer Apellido', step: 1 },
+            { id: 'p-birthdate', label: 'Fecha de Nacimiento', step: 1 },
+            { id: 'p-mobile-phone', label: 'Teléfono Móvil (WhatsApp)', step: 1 },
+            { id: 'p-address', label: 'Dirección de Habitación', step: 1 }
+        ];
 
         if (type === 'Infantil' || (age > 0 && age < 18)) {
-            const repName = getVal('p-rep-name');
-            const repId = getVal('p-rep-id');
-            const repPhone = getVal('p-rep-phone');
-            const repRelation = getVal('p-rep-relation');
+            patientRequiredFields.push(
+                { id: 'p-rep-name', label: 'Nombre Completo del Representante Legal', step: 1 },
+                { id: 'p-rep-id', label: 'Cédula del Representante Legal', step: 1 },
+                { id: 'p-rep-phone', label: 'Teléfono del Representante Legal', step: 1 },
+                { id: 'p-rep-relation', label: 'Parentesco con el Menor', step: 1 }
+            );
+        }
 
-            if (!repName || !repId || !repPhone || !repRelation) {
-                Swal.fire({ 
-                    icon: 'warning', 
-                    title: 'Representante Obligatorio', 
-                    text: 'El paciente es menor de edad. Por favor complete los datos del representante legal en el Paso 1 (Nombre, Cédula, Teléfono y Parentesco).' 
-                });
-                if (typeof window.setPatientStepperStep === 'function') window.setPatientStepperStep(1);
-                return false;
-            }
+        if (!window.validateRequiredFormFields(patientRequiredFields)) {
+            if (typeof window.setPatientStepperStep === 'function') window.setPatientStepperStep(1);
+            return false;
         }
 
         const allergies = Array.from(document.querySelectorAll('input[name="p-allergies"]:checked')).map(cb => cb.value);
@@ -21822,30 +21927,30 @@ function initPatientStepperWizard() {
 
             // If navigating forward from Step 1, validate required patient fields
             if (currentStep === 1 && targetStep > 1) {
-                const firstname = document.getElementById('p-firstname') ? document.getElementById('p-firstname').value.trim() : '';
-                const lastname = document.getElementById('p-lastname') ? document.getElementById('p-lastname').value.trim() : '';
-                const id = document.getElementById('p-id') ? document.getElementById('p-id').value.trim() : '';
                 const birthdate = document.getElementById('p-birthdate') ? document.getElementById('p-birthdate').value : '';
-                const phone = document.getElementById('p-mobile-phone') ? document.getElementById('p-mobile-phone').value.trim() : '';
-
-                if (!firstname || !lastname || !id || !birthdate || !phone) {
-                    Swal.fire({ icon: 'warning', title: 'Campos Incompletos', text: 'Por favor complete los campos obligatorios del Paso 1 (Filiación) antes de avanzar.' });
-                    return;
-                }
-
-                // Check for representative fields if child
                 const pTypeValNav = document.getElementById('p-type') ? document.getElementById('p-type').value : 'Adulto';
                 const ageNav = birthdate ? calculateAge(birthdate) : (parseInt(document.getElementById('p-age')?.value, 10) || 0);
-                if (pTypeValNav === 'Infantil' || (ageNav > 0 && ageNav < 18)) {
-                    const repName = document.getElementById('p-rep-name') ? document.getElementById('p-rep-name').value.trim() : '';
-                    const repId = document.getElementById('p-rep-id') ? document.getElementById('p-rep-id').value.trim() : '';
-                    const repPhone = document.getElementById('p-rep-phone') ? document.getElementById('p-rep-phone').value.trim() : '';
-                    const repRelation = document.getElementById('p-rep-relation') ? document.getElementById('p-rep-relation').value.trim() : '';
 
-                    if (!repName || !repId || !repPhone || !repRelation) {
-                        Swal.fire({ icon: 'warning', title: 'Representante Obligatorio', text: 'El paciente es menor de edad. Por favor complete los datos del representante legal en el Paso 1.' });
-                        return;
-                    }
+                const step1Fields = [
+                    { id: 'p-firstname', label: 'Primer Nombre' },
+                    { id: 'p-lastname', label: 'Primer Apellido' },
+                    { id: 'p-id', label: 'Cédula / Documento de Identidad' },
+                    { id: 'p-birthdate', label: 'Fecha de Nacimiento' },
+                    { id: 'p-mobile-phone', label: 'Teléfono Móvil (WhatsApp)' },
+                    { id: 'p-address', label: 'Dirección de Habitación' }
+                ];
+
+                if (pTypeValNav === 'Infantil' || (ageNav > 0 && ageNav < 18)) {
+                    step1Fields.push(
+                        { id: 'p-rep-name', label: 'Nombre Completo del Representante Legal' },
+                        { id: 'p-rep-id', label: 'Cédula del Representante Legal' },
+                        { id: 'p-rep-phone', label: 'Teléfono del Representante Legal' },
+                        { id: 'p-rep-relation', label: 'Parentesco con el Menor' }
+                    );
+                }
+
+                if (!window.validateRequiredFormFields(step1Fields)) {
+                    return;
                 }
             }
 
@@ -21868,30 +21973,30 @@ function initPatientStepperWizard() {
             
             // Validation for Step 1
             if (currentStep === 1) {
-                const firstname = document.getElementById('p-firstname') ? document.getElementById('p-firstname').value.trim() : '';
-                const lastname = document.getElementById('p-lastname') ? document.getElementById('p-lastname').value.trim() : '';
-                const id = document.getElementById('p-id').value.trim();
-                const birthdate = document.getElementById('p-birthdate').value;
-                const phone = document.getElementById('p-mobile-phone').value.trim();
-
-                if (!firstname || !lastname || !id || !birthdate || !phone) {
-                    Swal.fire({ icon: 'warning', title: 'Campos Incompletos', text: 'Por favor complete todos los campos obligatorios del Paso 1.' });
-                    return;
-                }
-
-                // Check for representative fields if child
+                const birthdate = document.getElementById('p-birthdate') ? document.getElementById('p-birthdate').value : '';
                 const pTypeValNext = document.getElementById('p-type') ? document.getElementById('p-type').value : 'Adulto';
                 const ageNext = birthdate ? calculateAge(birthdate) : (parseInt(document.getElementById('p-age')?.value, 10) || 0);
-                if (pTypeValNext === 'Infantil' || (ageNext > 0 && ageNext < 18)) {
-                    const repName = document.getElementById('p-rep-name').value.trim();
-                    const repId = document.getElementById('p-rep-id').value.trim();
-                    const repPhone = document.getElementById('p-rep-phone').value.trim();
-                    const repRelation = document.getElementById('p-rep-relation').value.trim();
 
-                    if (!repName || !repId || !repPhone || !repRelation) {
-                        Swal.fire({ icon: 'warning', title: 'Representante Obligatorio', text: 'El paciente es menor de edad. Por favor complete los datos del representante legal en el Paso 1.' });
-                        return;
-                    }
+                const step1Fields = [
+                    { id: 'p-firstname', label: 'Primer Nombre' },
+                    { id: 'p-lastname', label: 'Primer Apellido' },
+                    { id: 'p-id', label: 'Cédula / Documento de Identidad' },
+                    { id: 'p-birthdate', label: 'Fecha de Nacimiento' },
+                    { id: 'p-mobile-phone', label: 'Teléfono Móvil (WhatsApp)' },
+                    { id: 'p-address', label: 'Dirección de Habitación' }
+                ];
+
+                if (pTypeValNext === 'Infantil' || (ageNext > 0 && ageNext < 18)) {
+                    step1Fields.push(
+                        { id: 'p-rep-name', label: 'Nombre Completo del Representante Legal' },
+                        { id: 'p-rep-id', label: 'Cédula del Representante Legal' },
+                        { id: 'p-rep-phone', label: 'Teléfono del Representante Legal' },
+                        { id: 'p-rep-relation', label: 'Parentesco con el Menor' }
+                    );
+                }
+
+                if (!window.validateRequiredFormFields(step1Fields)) {
+                    return;
                 }
             }
 
@@ -24549,8 +24654,13 @@ async function renderFinanceView() {
         const paidDate = document.getElementById('pay-paid-date')?.value || (status === 'Pagado' ? (dueDate || new Date().toISOString().split('T')[0]) : null);
         const paymentRef = document.getElementById('pay-ref')?.value?.trim() || '';
 
-        if (!providerName || !serviceName || amount <= 0 || !dueDate) {
-            Swal.fire({ icon: 'warning', text: 'Por favor, complete todos los campos obligatorios.' });
+        const payableRequired = [
+            { id: 'pay-provider', label: 'Nombre del Proveedor' },
+            { id: 'pay-service', label: 'Concepto o Servicio del Gasto' },
+            { id: 'pay-amount', label: 'Monto de la Factura ($ USD)', minPositive: true },
+            { id: 'pay-due-date', label: 'Fecha de Vencimiento' }
+        ];
+        if (!window.validateRequiredFormFields(payableRequired)) {
             return;
         }
 
@@ -31023,12 +31133,11 @@ window.saveConsumableFromModal = async function() {
     const code = (inCode?.value || '').trim();
     const priceUSD = parseFloat(inPrice?.value) || 0;
 
-    if (!name) {
-        Swal.fire({ icon: 'warning', title: 'Nombre requerido', text: 'Indique el nombre del producto consumible.' });
-        return;
-    }
-    if (priceUSD <= 0) {
-        Swal.fire({ icon: 'warning', title: 'Precio requerido', text: 'Indique un precio de venta mayor a 0.' });
+    const consumableRequired = [
+        { id: inName ? inName.id : 'cons-name', label: 'Nombre del Producto Consumible' },
+        { id: inPrice ? inPrice.id : 'cons-price', label: 'Precio de Venta ($ USD)', minPositive: true }
+    ];
+    if (!window.validateRequiredFormFields(consumableRequired)) {
         return;
     }
 

@@ -333,6 +333,12 @@
 
         async saveSpecialty(e) {
             if (e) e.preventDefault();
+            const specRequired = [
+                { id: 'specialty-name', label: 'Nombre de la Especialidad Médica' }
+            ];
+            if (window.validateRequiredFormFields && !window.validateRequiredFormFields(specRequired)) {
+                return;
+            }
             const id = document.getElementById('specialty-id').value;
             const docPct = parseFloat(document.getElementById('specialty-doc-pct').value) || 0;
             const cliPct = parseFloat(document.getElementById('specialty-cli-pct').value) || 0;
@@ -1482,6 +1488,13 @@
 
         async saveRoom(e) {
             if (e) e.preventDefault();
+            const roomRequired = [
+                { id: 'room-code', label: 'Código o Número del Consultorio' },
+                { id: 'room-name', label: 'Nombre del Consultorio / Área Física' }
+            ];
+            if (window.validateRequiredFormFields && !window.validateRequiredFormFields(roomRequired)) {
+                return;
+            }
             const id = document.getElementById('room-id').value;
             const canonVal = parseFloat(document.getElementById('room-rental-canon').value) || 0;
 
@@ -3226,6 +3239,14 @@
 
         async savePayrollStaff(e) {
             if (e) e.preventDefault();
+            const staffRequired = [
+                { id: 'payroll-staff-name', label: 'Nombre Completo del Colaborador' },
+                { id: 'payroll-staff-dni', label: 'Cédula / DNI del Colaborador' },
+                { id: 'payroll-staff-role', label: 'Cargo o Especialidad' }
+            ];
+            if (window.validateRequiredFormFields && !window.validateRequiredFormFields(staffRequired)) {
+                return;
+            }
             const id = document.getElementById('payroll-staff-id').value;
             const staffObj = {
                 id: id || ('pstaff-' + Date.now()),
