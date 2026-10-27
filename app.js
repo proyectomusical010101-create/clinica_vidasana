@@ -13436,6 +13436,16 @@ window.populateUserModalSelects = async function(docProf = {}) {
         window.initDoctorSchedulePlanner(docProf.schedule || '');
     }
 
+    const uCommInput = document.getElementById('u-commission');
+    if (uCommInput && !uCommInput._hasDynamicCommListener) {
+        uCommInput._hasDynamicCommListener = true;
+        uCommInput.addEventListener('input', () => {
+            if (typeof window.renderDoctorServicesVisualList === 'function') {
+                window.renderDoctorServicesVisualList();
+            }
+        });
+    }
+
     if (specSel) {
         specSel.onchange = () => {
             const newPrimary = specSel.value;
@@ -13541,7 +13551,8 @@ window.openCreateUserModal = async function() {
     const igInputNew = document.getElementById('u-instagram');
     if (igInputNew) igInputNew.value = '';
 
-    await populateDoctorServicesSelect([]);
+    window._doctorCustomServiceCommissions = {};
+    await populateDoctorServicesSelect([], {});
     await window.populateUserModalSelects({});
 
     const roleSelect = document.getElementById('u-role');
@@ -13615,7 +13626,8 @@ window.editUser = async function(userId) {
         else b.classList.remove('active-category-pill');
     });
 
-    await populateDoctorServicesSelect(docProf.assignedServices || []);
+    window._doctorCustomServiceCommissions = { ...(docProf.customServiceCommissions || docProf.serviceCommissions || {}) };
+    await populateDoctorServicesSelect(docProf.assignedServices || [], window._doctorCustomServiceCommissions);
 
     if (roleSelect) {
         roleSelect.dispatchEvent(new Event('change'));
@@ -14139,10 +14151,35 @@ window.isServiceInCategory = function(proc, category) {
 
 window._allDoctorBaremoServices = [];
 window._doctorServicesCategoryFilter = 'all';
+window._doctorCustomServiceCommissions = {};
 
-async function populateDoctorServicesSelect(preSelectedCodes = null) {
+window.updateDoctorServiceCustomRate = function(code, val) {
+    if (!window._doctorCustomServiceCommissions) window._doctorCustomServiceCommissions = {};
+    const trimmed = String(val).trim();
+    if (trimmed !== '' && !isNaN(trimmed)) {
+        window._doctorCustomServiceCommissions[code] = parseFloat(trimmed);
+    } else {
+        delete window._doctorCustomServiceCommissions[code];
+    }
+};
+
+window.clearDoctorServiceCustomRate = function(code, e) {
+    if (e) e.stopPropagation();
+    if (window._doctorCustomServiceCommissions) {
+        delete window._doctorCustomServiceCommissions[code];
+    }
+    window.renderDoctorServicesVisualList();
+};
+
+async function populateDoctorServicesSelect(preSelectedCodes = null, customCommissions = null) {
     const select = document.getElementById('u-services');
     if (!select) return;
+
+    if (customCommissions && typeof customCommissions === 'object') {
+        window._doctorCustomServiceCommissions = { ...customCommissions };
+    } else if (!preSelectedCodes || preSelectedCodes.length === 0) {
+        window._doctorCustomServiceCommissions = {};
+    }
 
     let currentlySelected = new Set();
     if (Array.isArray(preSelectedCodes)) {
@@ -14158,7 +14195,7 @@ async function populateDoctorServicesSelect(preSelectedCodes = null) {
     window._allDoctorBaremoServices.forEach(proc => {
         const opt = document.createElement('option');
         opt.value = proc.code;
-        opt.innerText = `${proc.name} ($${proc.priceUSD})`;
+        opt.innerText = `${proc.name} (${proc.priceUSD})`;
         if (currentlySelected.has(String(proc.code))) {
             opt.selected = true;
         }
@@ -14181,11 +14218,14 @@ window.renderDoctorServicesVisualList = function() {
     const categoryFilter = window._doctorServicesCategoryFilter || 'all';
 
     const selectedSet = new Set(Array.from(select.selectedOptions).map(o => o.value));
+    const genCommission = document.getElementById('u-commission')?.value || '70';
 
     // Update live counter badge
     if (counterEl) {
         const count = selectedSet.size;
-        counterEl.innerHTML = `<i class="fa-solid fa-check"></i> ${count} ${count === 1 ? 'servicio asignado' : 'servicios asignados'}`;
+        const customCount = Object.keys(window._doctorCustomServiceCommissions || {}).filter(k => selectedSet.has(k)).length;
+        const customBadge = customCount > 0 ? ` • <span style="color:#0f766e;">(${customCount} con % especial)</span>` : '';
+        counterEl.innerHTML = `<i class="fa-solid fa-check"></i> ${count} ${count === 1 ? 'servicio asignado' : 'servicios asignados'}${customBadge}`;
         if (count > 0) {
             counterEl.className = 'badge-tag green';
         } else {
@@ -14231,22 +14271,54 @@ window.renderDoctorServicesVisualList = function() {
         item.className = `u-service-item ${isSelected ? 'selected' : ''}`;
         item.dataset.code = proc.code;
 
+        // Custom Commission per service for this doctor
+        const customRate = window._doctorCustomServiceCommissions ? window._doctorCustomServiceCommissions[proc.code] : undefined;
+        const hasCustomRate = (customRate !== undefined && customRate !== null && customRate !== '');
+
+        let customCommHtml = '';
+        if (isSelected) {
+            customCommHtml = `
+                <div class="u-service-custom-comm" style="display: flex; align-items: center; gap: 4px; margin-left: 8px; flex-shrink: 0;" onclick="event.stopPropagation();">
+                    <span style="font-size: 0.72rem; color: ${hasCustomRate ? '#0f766e' : '#64748b'}; font-weight: 700;">% Médico:</span>
+                    <input type="number" 
+                           class="u-service-custom-rate-input" 
+                           data-code="${proc.code}" 
+                           value="${hasCustomRate ? customRate : ''}" 
+                           placeholder="${genCommission}%" 
+                           min="0" max="100" step="0.5" 
+                           style="width: 58px; height: 26px; padding: 2px 4px; font-size: 0.76rem; font-weight: 700; text-align: center; border-radius: 4px; border: 1px solid ${hasCustomRate ? '#0d9488' : '#cbd5e1'}; background: ${hasCustomRate ? '#f0fdfa' : '#ffffff'}; color: ${hasCustomRate ? '#0f766e' : '#334155'};" 
+                           title="Porcentaje especial para este médico en este servicio. Dejar vacío para aplicar la comisión general (${genCommission}%)."
+                           oninput="window.updateDoctorServiceCustomRate('${proc.code}', this.value)"
+                    >
+                    <span style="font-size: 0.72rem; color: #64748b; font-weight: 600;">%</span>
+                    ${hasCustomRate ? `<button type="button" class="btn btn-xs btn-outline" onclick="window.clearDoctorServiceCustomRate('${proc.code}', event)" style="padding: 1px 4px; font-size: 0.65rem; color: #ef4444; border-color: #fca5a5; border-radius: 3px;" title="Restablecer a comisión general (${genCommission}%)"><i class="fa-solid fa-rotate-left"></i></button>` : ''}
+                </div>
+            `;
+        }
+
         item.innerHTML = `
             <div style="display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0;">
                 <input type="checkbox" class="u-service-checkbox" ${isSelected ? 'checked' : ''} tabindex="-1">
                 <span class="badge-tag blue" style="font-size: 0.68rem; font-weight: 700; font-family: monospace; flex-shrink: 0;">${proc.code}</span>
                 <span style="font-size: 0.82rem; font-weight: 600; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${proc.name}">${proc.name}</span>
             </div>
-            <div style="font-size: 0.82rem; font-weight: 700; color: #059669; flex-shrink: 0; margin-left: 8px;">
-                $${parseFloat(proc.priceUSD || 0).toFixed(2)}
+            <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+                ${customCommHtml}
+                <div style="font-size: 0.82rem; font-weight: 700; color: #059669; margin-left: 6px;">
+                    ${parseFloat(proc.priceUSD || 0).toFixed(2)}
+                </div>
             </div>
         `;
 
         item.onclick = (e) => {
+            if (e.target.closest('.u-service-custom-comm')) return;
             e.preventDefault();
             const opt = select.querySelector(`option[value="${proc.code}"]`);
             if (opt) {
                 opt.selected = !opt.selected;
+                if (!opt.selected && window._doctorCustomServiceCommissions) {
+                    delete window._doctorCustomServiceCommissions[proc.code];
+                }
             }
             window.renderDoctorServicesVisualList();
         };
@@ -14633,7 +14705,7 @@ function initGlobalEvents() {
                 }
             }
 
-            closeModal('modal-session');
+            closeModal('modal-session', true);
             await SupabaseDataService.getInvoices(true);
             await renderEHRView();
             await renderInventoryTable();
@@ -14996,7 +15068,7 @@ function initGlobalEvents() {
                 }
 
                 await SupabaseDataService.savePatient(p);
-                closeModal('modal-payment');
+                closeModal('modal-payment', true);
                 await SupabaseDataService.getInvoices(true);
                 await renderEHRView();
                 await renderDashboard();
@@ -15130,7 +15202,7 @@ function initGlobalEvents() {
             }
 
             await SupabaseDataService.saveInventoryItem({ code, name, area, category, unit, currentStock: stock, minStock, expiryDate });
-            closeModal('modal-material');
+            closeModal('modal-material', true);
 
             // Force refresh inventory cache immediately so no F5/cache clearing is required
             await SupabaseDataService.getInventory(true);
@@ -15235,7 +15307,7 @@ function initGlobalEvents() {
 
             await SupabaseDataService.saveBaremoService({ code, name, area, category, priceUSD, chairTimeMin, timeUnit, timeValue: timeVal, timeDisplay, materials: [], hygienistBonus });
 
-            closeModal('modal-service');
+            closeModal('modal-service', true);
             await renderPricingTable();
             Swal.fire({ icon: 'success', title: '¡Servicio Agregado!', text: `Registrado en ${area} exitosamente.`, timer: 2000, showConfirmButton: false });
         };
@@ -16964,7 +17036,7 @@ if (patientSameDay.length === 0) {
 
             await SupabaseDataService.saveAppointment(appointmentObj);
 
-            closeModal('modal-appointment');
+            closeModal('modal-appointment', true);
             await renderDashboard();
             await renderAgendaView();
 
@@ -17053,12 +17125,27 @@ if (patientSameDay.length === 0) {
         };
     }
 
+    // Global User Interaction Listener on Open Modals (Sets _hasUserInteracted = true)
+    document.addEventListener('input', (e) => {
+        const modal = e.target.closest('.modal-overlay:not(.hidden)');
+        if (modal && !e.target.id?.includes('-search') && !e.target.id?.includes('search-input') && !e.target.dataset?.ignoreDirty) {
+            modal._hasUserInteracted = true;
+        }
+    }, true);
+
+    document.addEventListener('change', (e) => {
+        const modal = e.target.closest('.modal-overlay:not(.hidden)');
+        if (modal && !e.target.id?.includes('-search') && !e.target.id?.includes('search-input') && !e.target.dataset?.ignoreDirty) {
+            modal._hasUserInteracted = true;
+        }
+    }, true);
+
     // Global Modal Close Handlers (Buttons, Backdrop Click & Escape Key)
     document.addEventListener('click', async (e) => {
-        // 1. Close button clicked ([data-close] or .modal-close or .btn-close-sheet)
-        const closeBtn = e.target.closest('[data-close], .modal-close, .btn-close-sheet');
+        // 1. Close button clicked ([data-close] or .modal-close or .btn-close-sheet or [data-close-erp])
+        const closeBtn = e.target.closest('[data-close], .modal-close, .btn-close-sheet, [data-close-erp]');
         if (closeBtn) {
-            const targetId = closeBtn.dataset.close || closeBtn.getAttribute('data-close');
+            const targetId = closeBtn.dataset.close || closeBtn.dataset.closeErp || closeBtn.getAttribute('data-close') || closeBtn.getAttribute('data-close-erp');
             if (targetId) {
                 await closeModal(targetId);
             } else {
@@ -17250,6 +17337,15 @@ if (patientSameDay.length === 0) {
                 const additionalSpecialties = window._doctorSelectedSpecialties ? Array.from(window._doctorSelectedSpecialties).filter(Boolean) : [];
                 const allSpecialties = Array.from(new Set([specialty, ...additionalSpecialties].filter(Boolean)));
 
+                // Clean and persist customServiceCommissions for currently assigned services
+                const cleanCustomComms = {};
+                const rawCustom = window._doctorCustomServiceCommissions || {};
+                assignedServices.forEach(code => {
+                    if (rawCustom[code] !== undefined && rawCustom[code] !== null && rawCustom[code] !== '' && !isNaN(rawCustom[code])) {
+                        cleanCustomComms[code] = parseFloat(rawCustom[code]);
+                    }
+                });
+
                 doctorProfile = {
                     specialty,
                     additionalSpecialties,
@@ -17260,6 +17356,8 @@ if (patientSameDay.length === 0) {
                     roomId,
                     roomName,
                     assignedServices,
+                    customServiceCommissions: cleanCustomComms,
+                    serviceCommissions: cleanCustomComms,
                     schedule,
                     commission,
                     availability,
@@ -17336,7 +17434,7 @@ if (patientSameDay.length === 0) {
                     window.populateAppointmentDropdowns();
                 }
 
-                closeModal('modal-user');
+                closeModal('modal-user', true);
                 await renderUsersTable();
                 Swal.fire({
                     icon: 'success',
@@ -17418,7 +17516,7 @@ if (patientSameDay.length === 0) {
                     `Cuenta: ${fullname} (${role}) - Estado: ${status}`
                 );
             }
-            closeModal('modal-system-user');
+            closeModal('modal-system-user', true);
             await window.renderSystemUsersTable();
             Swal.fire({
                 icon: 'success',
@@ -19041,7 +19139,7 @@ if (patientSameDay.length === 0) {
                 }
 
                 await SupabaseDataService.savePatient(p);
-                closeModal('note-modal');
+                closeModal('note-modal', true);
                 await renderEHRView();
                 Swal.fire({ icon: 'success', title: '¡Evolución Registrada!', text: 'Guardada exitosamente en la base de datos.', timer: 2000, showConfirmButton: false });
             }
@@ -19128,7 +19226,7 @@ if (patientSameDay.length === 0) {
             transfers.unshift(transferObj);
             localStorage.setItem('dental_account_transfers', JSON.stringify(transfers));
 
-            closeModal('modal-account-transfer');
+            closeModal('modal-account-transfer', true);
             await renderCashFlow();
             Swal.fire({
                 icon: 'success',
@@ -19361,34 +19459,127 @@ window.openAppointmentModalForNextSession = async (patientId, nextSessionNum) =>
     openModal('modal-appointment');
 };
 
+// ==========================================
+// DIRTY STATE TRACKER & UNSAVED CHANGES GUARD
+// ==========================================
+window.captureModalInitialState = function(modalEl) {
+    if (!modalEl) return;
+    const inputs = modalEl.querySelectorAll('input:not([type="hidden"]):not([data-ignore-dirty="true"]), select:not([data-ignore-dirty="true"]), textarea:not([data-ignore-dirty="true"])');
+    const snapshot = {};
+    inputs.forEach((inp, idx) => {
+        if (inp.id && (inp.id.includes('-search') || inp.id.includes('search-input') || inp.id.includes('filter'))) return;
+        const key = inp.id || inp.name || ('inp_' + idx);
+        if (inp.type === 'checkbox' || inp.type === 'radio') {
+            snapshot[key] = inp.checked;
+        } else {
+            snapshot[key] = inp.value;
+        }
+    });
+    modalEl._initialFormSnapshot = snapshot;
+    modalEl._hasUserInteracted = false;
+};
+
+window.isModalDirty = function(modalEl) {
+    if (!modalEl) return false;
+    // Only check if user has actually interacted with input/change inside the modal
+    if (!modalEl._hasUserInteracted) return false;
+    if (!modalEl._initialFormSnapshot) return false;
+
+    const inputs = modalEl.querySelectorAll('input:not([type="hidden"]):not([data-ignore-dirty="true"]), select:not([data-ignore-dirty="true"]), textarea:not([data-ignore-dirty="true"])');
+    for (let i = 0; i < inputs.length; i++) {
+        const inp = inputs[i];
+        if (inp.id && (inp.id.includes('-search') || inp.id.includes('search-input') || inp.id.includes('filter'))) continue;
+        const key = inp.id || inp.name || ('inp_' + i);
+        const initialVal = modalEl._initialFormSnapshot[key];
+
+        if (inp.type === 'checkbox' || inp.type === 'radio') {
+            if (inp.checked !== (initialVal !== undefined ? initialVal : false)) {
+                return true;
+            }
+        } else {
+            const currentVal = inp.value !== undefined && inp.value !== null ? String(inp.value).trim() : '';
+            const initVal = initialVal !== undefined && initialVal !== null ? String(initialVal).trim() : '';
+            if (currentVal !== initVal) {
+                return true;
+            }
+        }
+    }
+    return false;
+};
+
+window.markModalClean = function(id) {
+    const el = typeof id === 'string' ? document.getElementById(id) : id;
+    if (el) {
+        el._initialFormSnapshot = null;
+        el._hasUserInteracted = false;
+    }
+};
+
 function openModal(id) {
     const el = document.getElementById(id);
-    if (el) el.classList.remove('hidden');
+    if (el) {
+        el.classList.remove('hidden');
+        // Snapshot initial form state after micro-delay to allow prefill/reset scripts to finish
+        setTimeout(() => {
+            if (typeof window.captureModalInitialState === 'function') {
+                window.captureModalInitialState(el);
+            }
+        }, 100);
+    }
 }
+window.openModal = openModal;
 
 async function closeModal(id, force = false) {
     const el = document.getElementById(id);
     if (!el) return true;
 
-    if (id === 'modal-patient' && !force && !el.classList.contains('hidden')) {
-        const result = await Swal.fire({
-            title: '¿Deseas salir sin guardar?',
-            html: 'Los cambios o datos ingresados en la ficha, historia clínica o plan de tratamiento no se guardarán.<br><br>Para conservar los cambios que acabas de realizar, debes hacer clic en el botón <strong>"Guardar Cambios"</strong>.<br><br>¿Estás seguro de que deseas salir?',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#e11d48',
-            cancelButtonColor: '#0891b2',
-            confirmButtonText: '<i class="fa-solid fa-arrow-right-from-bracket"></i> Sí, salir sin guardar',
-            cancelButtonText: '<i class="fa-solid fa-pen"></i> Continuar editando',
-            reverseButtons: true
-        });
+    if (!force && !el.classList.contains('hidden')) {
+        const isDirty = (typeof window.isModalDirty === 'function') 
+            ? window.isModalDirty(el) 
+            : (id === 'modal-patient');
 
-        if (!result.isConfirmed) {
-            return false;
+        if (isDirty) {
+            const result = await Swal.fire({
+                title: '¿Deseas salir sin guardar los cambios?',
+                html: 'Has ingresado o modificado información en este formulario.<br><br>¿Estás seguro de que deseas salir sin guardar los cambios?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#0d9488',
+                cancelButtonColor: '#e11d48',
+                confirmButtonText: '<i class="fa-solid fa-floppy-disk"></i> Guardar cambios',
+                cancelButtonText: '<i class="fa-solid fa-arrow-right-from-bracket"></i> Sí, deseo salir',
+                reverseButtons: true,
+                focusConfirm: true,
+                allowOutsideClick: false,
+                allowEscapeKey: true
+            });
+
+            if (result.isConfirmed) {
+                // User chose "Guardar cambios": attempt to trigger primary save action inside this modal
+                const saveBtn = el.querySelector(
+                    '#btn-save-patient, #btn-save-appointment, #btn-save-user, #btn-save-system-user, ' +
+                    '#btn-save-service, #btn-save-material, #btn-save-payment, #btn-save-session, ' +
+                    '#btn-save-note, #btn-save-specialty, #btn-save-room, #btn-save-payroll, ' +
+                    '#btn-save-direct-sale, #btn-confirm-liquidation, ' +
+                    'button[type="submit"], .btn-primary:not([data-close]):not([data-close-erp])'
+                );
+                if (saveBtn) {
+                    saveBtn.click();
+                }
+                return false; // Modal remains open so user doesn't lose work
+            } else if (result.dismiss === Swal.DismissReason.cancel) {
+                // User confirmed "Sí, deseo salir": discard dirty state and proceed with closure
+                window.markModalClean(el);
+            } else {
+                // Dismissed via Esc: remain in modal
+                return false;
+            }
         }
     }
 
     el.classList.add('hidden');
+    window.markModalClean(el);
+
     if (id === 'modal-patient') {
         window.patientModalOpenedFromBudget = false;
         if (window.returnToDirectSaleAfterPatientCreated) {
@@ -19403,6 +19594,7 @@ async function closeModal(id, force = false) {
     }
     return true;
 }
+window.closeModal = closeModal;
 
 async function renderSettingsView() {
     const user = getCurrentUser();
@@ -22463,7 +22655,7 @@ async function renderBillingView() {
                 qty: qty
             });
         }
-        closeModal('modal-add-item-billing');
+        closeModal('modal-add-item-billing', true);
         renderBillingItemsTable();
         Swal.fire({
             toast: true,
@@ -27273,7 +27465,7 @@ window.saveInterconsultationFull = async function() {
         p.metadata.interconsultations.unshift(record);
         await SupabaseDataService.savePatient(p);
 
-        closeModal('modal-interconsultation');
+        closeModal('modal-interconsultation', true);
         localStorage.setItem('dental_ehr_subtab', 'interconsultation');
         window.currentEHRSubtab = 'interconsultation';
         await renderEHRView();
@@ -27358,7 +27550,7 @@ window.saveRecipeAndIndicationsFinal = async function() {
         p.metadata.recipes.unshift(recipeRecord);
         await SupabaseDataService.savePatient(p);
 
-        closeModal('modal-recipe-and-indications');
+        closeModal('modal-recipe-and-indications', true);
         if (document.getElementById('modal-interconsultation')) closeModal('modal-interconsultation');
         localStorage.setItem('dental_ehr_subtab', 'interconsultation');
         window.currentEHRSubtab = 'interconsultation';

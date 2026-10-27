@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=356">
+    <link rel="stylesheet" href="styles.css?v=357">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -4187,7 +4187,7 @@
                             </div>
                             <select id="u-services" multiple style="display: none !important;"></select>
                             <small class="text-muted" style="font-size: 0.72rem; display: block; margin-top: 5px;">
-                                <i class="fa-solid fa-circle-info text-cyan"></i> Al cambiar de categoría, los servicios se listan automáticamente. Puedes hacer clic en cualquiera para activarlo o desactivarlo.
+                                <i class="fa-solid fa-circle-info text-cyan"></i> <strong>Porcentaje de ganancia por servicio:</strong> Todos los servicios asignados aplican la <em>Comisión General</em> del médico. Si un servicio específico (ej: Ecos) tiene un porcentaje especial (ej: 50%), ingresa el valor individual en su casilla <strong>% Médico</strong> y ese servicio aplicará su tarifa personalizada exclusiva.
                             </small>
                         </div>
 
@@ -4222,7 +4222,7 @@
                         <!-- Comisión y Observaciones -->
                         <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 12px;">
                             <div class="form-group" style="margin: 0;">
-                                <label style="font-size: 0.78rem; font-weight: 700; margin-bottom: 4px;">Comisión Médica (%) *</label>
+                                <label style="font-size: 0.78rem; font-weight: 700; margin-bottom: 4px;">Comisión Médica General (%) *</label>
                                 <input type="number" id="u-commission" class="form-control" min="0" max="100" placeholder="ej: 60" step="0.5" style="height: 38px;">
                             </div>
                             <div class="form-group" style="margin: 0;">
@@ -8168,14 +8168,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=356"></script>
-    <script src="supabaseClient.js?v=356"></script>
-    <script src="odontogram.js?v=356"></script>
-    <script src="signature.js?v=356"></script>
-    <script src="whatsapp.js?v=356"></script>
-    <script src="kardex.js?v=356"></script>
-    <script src="app.js?v=356"></script>
-    <script src="clinicalERP.js?v=356"></script>
-    <script src="tutorial.js?v=356"></script>
+    <script src="seededData.js?v=357"></script>
+    <script src="supabaseClient.js?v=357"></script>
+    <script src="odontogram.js?v=357"></script>
+    <script src="signature.js?v=357"></script>
+    <script src="whatsapp.js?v=357"></script>
+    <script src="kardex.js?v=357"></script>
+    <script src="app.js?v=357"></script>
+    <script src="clinicalERP.js?v=357"></script>
+    <script src="tutorial.js?v=357"></script>
 </body>
 </html>

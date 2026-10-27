@@ -2933,7 +2933,7 @@ class SupabaseDataService {
         const baremo = await this.getBaremo();
         const baremoItem = baremo.find(b => b.code === serviceCode || (b.name && serviceName && b.name.toLowerCase() === serviceName.toLowerCase()));
 
-        // 1. Calculate Doctor Gain
+        // 1. Calculate Doctor Gain (with Individual Service Commission Override support)
         let docCalcType = 'percentage';
         let docRate = 40.0; // Default 40% if not configured
         let docUser = null;
@@ -2943,12 +2943,28 @@ class SupabaseDataService {
             docUser = users.find(u => u.fullname && u.fullname.toLowerCase() === doctorName.toLowerCase());
         }
 
-        if (docUser && docUser.doctorProfile) {
-            if (docUser.doctorProfile.commission !== undefined && docUser.doctorProfile.commission !== null && docUser.doctorProfile.commission !== '') {
-                docRate = parseFloat(docUser.doctorProfile.commission) || 40.0;
+        if (docUser) {
+            const prof = docUser.doctorProfile || docUser.doctor_profile || {};
+            const customComms = prof.customServiceCommissions || prof.serviceCommissions || {};
+            let matchedCustomRate = null;
+
+            // Check if this doctor has an individual customized rate for this specific service
+            if (serviceCode && customComms[serviceCode] !== undefined && customComms[serviceCode] !== null && customComms[serviceCode] !== '') {
+                matchedCustomRate = customComms[serviceCode];
+            } else if (baremoItem && baremoItem.code && customComms[baremoItem.code] !== undefined && customComms[baremoItem.code] !== null && customComms[baremoItem.code] !== '') {
+                matchedCustomRate = customComms[baremoItem.code];
+            }
+
+            if (matchedCustomRate !== null && !isNaN(matchedCustomRate)) {
+                // Apply specific customized rate for this service (e.g. 50/50 instead of general 70/30)
+                docRate = parseFloat(matchedCustomRate);
                 docCalcType = 'percentage';
-            } else if (docUser.doctorProfile.fixedFee) {
-                docRate = parseFloat(docUser.doctorProfile.fixedFee) || 0;
+            } else if (prof.commission !== undefined && prof.commission !== null && prof.commission !== '') {
+                // Apply doctor's general commission
+                docRate = parseFloat(prof.commission) || 40.0;
+                docCalcType = 'percentage';
+            } else if (prof.fixedFee) {
+                docRate = parseFloat(prof.fixedFee) || 0;
                 docCalcType = 'fixed';
             }
         }

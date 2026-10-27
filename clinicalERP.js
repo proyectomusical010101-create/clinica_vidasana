@@ -2126,8 +2126,12 @@
                         return (r.includes('asist') || r.includes('higien') || r.includes('enferm')) && !r.includes('admin');
                     });
 
+                    this._cachedDoctors = doctors;
                     if (doctors.length > 0) {
-                        docSelect.innerHTML = doctors.map(d => `<option value="${d.id}" data-name="${d.fullname || d.name}" data-rate="${d.commissionRate || 40}">${d.fullname || d.name} (${d.role})</option>`).join('');
+                        docSelect.innerHTML = doctors.map(d => {
+                            const genRate = (d.doctorProfile?.commission !== undefined && d.doctorProfile?.commission !== null && d.doctorProfile?.commission !== '') ? d.doctorProfile.commission : (d.commissionRate || 40);
+                            return `<option value="${d.id}" data-name="${d.fullname || d.name}" data-rate="${genRate}">${d.fullname || d.name} (${d.role || 'Médico'}) - Base: ${genRate}%</option>`;
+                        }).join('');
                     } else {
                         docSelect.innerHTML = '<option value="doc-1" data-name="Médico Tratante" data-rate="40">Médico Tratante (40%)</option>';
                     }
@@ -2284,7 +2288,22 @@
             const price = parseFloat(document.getElementById('man-liq-price')?.value) || 0;
             const docSelect = document.getElementById('man-liq-doctor-select');
             const docOpt = docSelect ? docSelect.options[docSelect.selectedIndex] : null;
-            const docRate = docOpt ? (parseFloat(docOpt.getAttribute('data-rate')) || 40) : 40;
+            let docRate = docOpt ? (parseFloat(docOpt.getAttribute('data-rate')) || 40) : 40;
+
+            const srvSelect = document.getElementById('man-liq-service-select');
+            const srvCode = srvSelect ? srvSelect.value : '';
+
+            // Check if selected doctor has custom commission for this service
+            if (docSelect && docSelect.value && srvCode && this._cachedDoctors) {
+                const docObj = this._cachedDoctors.find(d => String(d.id) === String(docSelect.value));
+                if (docObj) {
+                    const prof = docObj.doctorProfile || docObj.doctor_profile || {};
+                    const customComms = prof.customServiceCommissions || prof.serviceCommissions || {};
+                    if (customComms[srvCode] !== undefined && customComms[srvCode] !== null && customComms[srvCode] !== '') {
+                        docRate = parseFloat(customComms[srvCode]);
+                    }
+                }
+            }
             const docAmt = (price * docRate) / 100;
 
             const astSelect = document.getElementById('man-liq-assistant-select');
