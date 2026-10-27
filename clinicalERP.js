@@ -389,9 +389,71 @@
                     window.populateAllSpecialtySelects(data.name);
                 }
 
-                // If opened from or user modal is active, synchronize doctor modal
+                // If opened from service modal (or service modal is active)
+                const srvModal = document.getElementById('modal-service');
+                const isSrvModalActive = srvModal && !srvModal.classList.contains('hidden');
                 const userModal = document.getElementById('modal-user');
                 const isUserModalActive = userModal && !userModal.classList.contains('hidden');
+
+                if (window._specialtyModalOpenedFromServiceModal || (isSrvModalActive && window._serviceModalOpenedFromDoctorModal) || (isSrvModalActive && !isUserModalActive)) {
+                    window._specialtyModalOpenedFromServiceModal = false;
+                    const srvArea = document.getElementById('srv-area');
+                    if (srvArea) {
+                        let exists = false;
+                        for (let i = 0; i < srvArea.options.length; i++) {
+                            if (srvArea.options[i].value.toLowerCase() === data.name.toLowerCase()) {
+                                srvArea.selectedIndex = i;
+                                exists = true;
+                                break;
+                            }
+                        }
+                        if (!exists) {
+                            const opt = document.createElement('option');
+                            opt.value = data.name;
+                            opt.textContent = data.name;
+                            srvArea.appendChild(opt);
+                            opt.selected = true;
+                        }
+                        if (typeof updateServiceModalTimeLabel === 'function') {
+                            updateServiceModalTimeLabel();
+                        }
+                    }
+                    const specModal = document.getElementById('modal-specialty');
+                    if (specModal) specModal.classList.remove('modal-stacked-1', 'modal-stacked-2');
+
+                    // If user modal was also active in background, also register specialty in doctor modal
+                    if (isUserModalActive) {
+                        const uSpecSel = document.getElementById('u-specialty');
+                        if (uSpecSel) {
+                            let exists = false;
+                            for (let i = 0; i < uSpecSel.options.length; i++) {
+                                if (uSpecSel.options[i].value.toLowerCase() === data.name.toLowerCase()) {
+                                    exists = true;
+                                    break;
+                                }
+                            }
+                            if (!exists) {
+                                const opt = document.createElement('option');
+                                opt.value = data.name;
+                                opt.textContent = data.name;
+                                uSpecSel.appendChild(opt);
+                            }
+                        }
+                    }
+
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '¡Especialidad Creada!',
+                            text: `"${data.name}" se guardó en el catálogo y se seleccionó para este servicio.`,
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                    }
+                    return;
+                }
+
+                // If opened from or user modal is active, synchronize doctor modal
                 if (window._specialtyModalOpenedFromDoctorModal || isUserModalActive) {
                     window._specialtyModalOpenedFromDoctorModal = false;
                     const uSpecSel = document.getElementById('u-specialty');

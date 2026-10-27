@@ -2596,6 +2596,15 @@ html, body {
     z-index: 100000 !important;
 }
 
+/* Modal Stacking Hierarchy for Nested Popups */
+.modal-overlay.modal-stacked-1 {
+    z-index: 105000 !important;
+}
+
+.modal-overlay.modal-stacked-2 {
+    z-index: 110000 !important;
+}
+
 /* 2. LAPTOP, TABLET & MOBILE (max-width: 1024px) */
 @media (max-width: 1024px) {
     .app-container {

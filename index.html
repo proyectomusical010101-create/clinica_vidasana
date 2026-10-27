@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=363">
+    <link rel="stylesheet" href="styles.css?v=364">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -3983,8 +3983,13 @@
                         <input type="text" id="srv-name" required placeholder="ej: Blanqueamiento Dental LED / Electrocardiograma">
                     </div>
                     <div class="form-group">
-                        <label>Área / Especialidad Clínica *</label>
-                        <select id="srv-area">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <label style="margin: 0; font-size: 0.78rem; font-weight: 700;">Área / Especialidad Clínica *</label>
+                            <button type="button" class="btn btn-xs btn-outline" id="btn-quick-add-specialty-from-service" onclick="window.quickAddNewSpecialtyFromService()" style="font-size: 0.7rem; padding: 1px 6px; color: var(--primary-cyan); border-color: var(--primary-cyan);" title="Registrar nueva especialidad médica">
+                                <i class="fa-solid fa-plus"></i> Nueva
+                            </button>
+                        </div>
+                        <select id="srv-area" class="form-control">
                             <option value="Odontología">Odontología</option>
                             <option value="Medicina General">Medicina General</option>
                             <option value="Laboratorio">Laboratorio</option>
@@ -3996,19 +4001,27 @@
                         </select>
                     </div>
                     <div class="form-group">
-                        <label>Categoría / Subespecialidad *</label>
-                        <input type="text" id="srv-category" placeholder="ej: Endodoncia, Perfil 20, EKG, Cirugía" list="srv-category-list">
-                        <datalist id="srv-category-list">
-                            <option value="Consulta y Diagnóstico">
-                            <option value="Operatoria y Restauración">
-                            <option value="Endodoncia">
-                            <option value="Ortodoncia">
-                            <option value="Cirugía Bucal">
-                            <option value="Estética Dental">
-                            <option value="Laboratorio y Exámenes">
-                            <option value="Imagenología y Rayos X">
-                            <option value="Cardiología y EKG">
-                        </datalist>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <label style="margin: 0; font-size: 0.78rem; font-weight: 700;">Categoría / Subespecialidad *</label>
+                            <button type="button" class="btn btn-xs btn-outline" id="btn-quick-add-category" onclick="window.quickAddNewCategory()" style="font-size: 0.7rem; padding: 1px 6px; color: var(--primary-cyan); border-color: var(--primary-cyan);" title="Crear nueva categoría o subespecialidad">
+                                <i class="fa-solid fa-plus"></i> Nueva
+                            </button>
+                        </div>
+                        <div style="display: flex; gap: 6px;">
+                            <select id="srv-category-select" class="form-control" onchange="window.onServiceCategorySelectChange(this)" style="flex: 1;">
+                                <option value="Consulta y Diagnóstico">Consulta y Diagnóstico</option>
+                                <option value="Operatoria y Restauración">Operatoria y Restauración</option>
+                                <option value="Endodoncia">Endodoncia</option>
+                                <option value="Ortodoncia">Ortodoncia</option>
+                                <option value="Cirugía Bucal">Cirugía Bucal</option>
+                                <option value="Estética Dental">Estética Dental</option>
+                                <option value="Laboratorio y Exámenes">Laboratorio y Exámenes</option>
+                                <option value="Imagenología y Rayos X">Imagenología y Rayos X</option>
+                                <option value="Cardiología y EKG">Cardiología y EKG</option>
+                                <option value="__new_category__">➕ Otra Categoría / Nueva...</option>
+                            </select>
+                            <input type="text" id="srv-category" class="form-control hidden" placeholder="Escriba la subespecialidad..." style="flex: 1;">
+                        </div>
                     </div>
                     <div class="form-group">
                         <label>Precio Base ($ USD) *</label>
@@ -4314,6 +4327,9 @@
                                     <button type="button" class="btn btn-xs btn-outline" data-category="selected" onclick="window.setDoctorServiceCategoryFilter('selected', this)" style="font-size: 0.72rem; padding: 3px 9px; border-radius: 12px; border-color: #0284c7; color: #0284c7;"><i class="fa-solid fa-star text-amber"></i> Solo Asignados</button>
                                 </div>
                                 <div style="display: flex; gap: 5px;">
+                                    <button type="button" class="btn btn-xs btn-primary" onclick="window.openCreateServiceFromDoctorModal()" style="font-size: 0.72rem; padding: 3px 9px; font-weight: 700; background: var(--primary-cyan); border: none; border-radius: 6px; color: #fff;" title="Crear un nuevo servicio en el baremo y asignarlo de inmediato a este médico">
+                                        <i class="fa-solid fa-plus"></i> Crear Nuevo Servicio
+                                    </button>
                                     <button type="button" class="btn btn-xs btn-outline" onclick="window.toggleAllDoctorServices(true)" style="font-size: 0.72rem; padding: 3px 8px; font-weight: 600;" title="Marcar todos los servicios visibles">
                                         <i class="fa-solid fa-check-double text-cyan"></i> Marcar Visibles
                                     </button>
@@ -8418,14 +8434,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=363"></script>
-    <script src="supabaseClient.js?v=363"></script>
-    <script src="odontogram.js?v=363"></script>
-    <script src="signature.js?v=363"></script>
-    <script src="whatsapp.js?v=363"></script>
-    <script src="kardex.js?v=363"></script>
-    <script src="app.js?v=363"></script>
-    <script src="clinicalERP.js?v=363"></script>
-    <script src="tutorial.js?v=363"></script>
+    <script src="seededData.js?v=364"></script>
+    <script src="supabaseClient.js?v=364"></script>
+    <script src="odontogram.js?v=364"></script>
+    <script src="signature.js?v=364"></script>
+    <script src="whatsapp.js?v=364"></script>
+    <script src="kardex.js?v=364"></script>
+    <script src="app.js?v=364"></script>
+    <script src="clinicalERP.js?v=364"></script>
+    <script src="tutorial.js?v=364"></script>
 </body>
 </html>

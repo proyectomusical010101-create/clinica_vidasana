@@ -13764,6 +13764,29 @@ window.populateUserModalSelects = async function(docProf = {}) {
 
 window.quickAddNewSpecialty = function() {
     window._specialtyModalOpenedFromDoctorModal = true;
+    const specModal = document.getElementById('modal-specialty');
+    if (specModal) specModal.classList.add('modal-stacked-1');
+
+    if (window.ClinicalERP && typeof window.ClinicalERP.openAddSpecialty === 'function') {
+        window.ClinicalERP.openAddSpecialty();
+    } else {
+        const modal = document.getElementById('modal-specialty');
+        if (modal) {
+            document.getElementById('form-specialty')?.reset();
+            const idInput = document.getElementById('specialty-id');
+            if (idInput) idInput.value = '';
+            const titleEl = document.getElementById('modal-specialty-title');
+            if (titleEl) titleEl.innerHTML = '<i class="fa-solid fa-stethoscope text-teal"></i> Nueva Especialidad Médica';
+            modal.classList.remove('hidden');
+        }
+    }
+};
+
+window.quickAddNewSpecialtyFromService = function() {
+    window._specialtyModalOpenedFromServiceModal = true;
+    const specModal = document.getElementById('modal-specialty');
+    if (specModal) specModal.classList.add('modal-stacked-2');
+
     if (window.ClinicalERP && typeof window.ClinicalERP.openAddSpecialty === 'function') {
         window.ClinicalERP.openAddSpecialty();
     } else {
@@ -15624,7 +15647,7 @@ function initGlobalEvents() {
         };
     }
 
-    // Modal Servicio Baremo Handler
+    // Modal Servicio Baremo Handler & Superposicion de Popups
     function updateServiceModalTimeLabel() {
         const srvArea = document.getElementById('srv-area');
         const srvCategory = document.getElementById('srv-category');
@@ -15649,6 +15672,213 @@ function initGlobalEvents() {
             }
         }
     }
+    window.updateServiceModalTimeLabel = updateServiceModalTimeLabel;
+
+    window.populateServiceAreaSelect = async function(selectedVal = null) {
+        const srvArea = document.getElementById('srv-area');
+        if (!srvArea) return;
+
+        let specialties = [];
+        if (window.ClinicalERP && Array.isArray(window.ClinicalERP.specialties) && window.ClinicalERP.specialties.length > 0) {
+            specialties = window.ClinicalERP.specialties.map(s => s.name);
+        } else if (window.SupabaseDataService && typeof window.SupabaseDataService.getSpecialties === 'function') {
+            try {
+                const list = await window.SupabaseDataService.getSpecialties();
+                specialties = (list || []).map(s => s.name);
+            } catch(e) {}
+        }
+
+        const defaultAreas = [
+            'Odontología',
+            'Medicina General',
+            'Laboratorio',
+            'Rayos X e Imagen',
+            'Cardiología',
+            'Ginecología',
+            'Pediatría',
+            'Cirugía Bucal',
+            'General'
+        ];
+
+        const uniqueSet = new Set([...defaultAreas, ...specialties].filter(Boolean));
+        const sortedAreas = Array.from(uniqueSet).sort((a, b) => a.localeCompare(b));
+
+        const currentVal = selectedVal || srvArea.value || 'Odontología';
+        srvArea.innerHTML = '';
+        sortedAreas.forEach(area => {
+            const opt = document.createElement('option');
+            opt.value = area;
+            opt.textContent = area;
+            if (area.toLowerCase() === currentVal.toLowerCase()) {
+                opt.selected = true;
+            }
+            srvArea.appendChild(opt);
+        });
+    };
+
+    window.populateServiceCategorySelect = async function(selectedCategory = null) {
+        const catSel = document.getElementById('srv-category-select');
+        const catInp = document.getElementById('srv-category');
+        if (!catSel) return;
+
+        let baremo = [];
+        if (window.SupabaseDataService && typeof window.SupabaseDataService.getBaremoServices === 'function') {
+            try {
+                baremo = await window.SupabaseDataService.getBaremoServices();
+            } catch(e) {}
+        }
+        if (!baremo || baremo.length === 0) {
+            baremo = JSON.parse(localStorage.getItem('dental_baremo')) || [];
+        }
+
+        const defaultCats = [
+            'Consulta y Diagnóstico',
+            'Operatoria y Restauración',
+            'Endodoncia',
+            'Ortodoncia',
+            'Cirugía Bucal',
+            'Estética Dental',
+            'Laboratorio y Exámenes',
+            'Imagenología y Rayos X',
+            'Cardiología y EKG',
+            'Ginecología y Obstetricia',
+            'Pediatría',
+            'Medicina General',
+            'General'
+        ];
+
+        const existingCats = baremo.map(b => b.category).filter(Boolean);
+        const uniqueCats = Array.from(new Set([...defaultCats, ...existingCats])).sort((a, b) => a.localeCompare(b));
+
+        const currentVal = selectedCategory || catInp?.value || catSel.value || uniqueCats[0];
+        catSel.innerHTML = '';
+        uniqueCats.forEach(cat => {
+            const opt = document.createElement('option');
+            opt.value = cat;
+            opt.textContent = cat;
+            if (cat.toLowerCase() === currentVal.toLowerCase()) {
+                opt.selected = true;
+            }
+            catSel.appendChild(opt);
+        });
+
+        // Add special item for new category
+        const otherOpt = document.createElement('option');
+        otherOpt.value = '__new_category__';
+        otherOpt.textContent = '➕ Otra Categoría / Nueva...';
+        catSel.appendChild(otherOpt);
+
+        if (catInp) {
+            catInp.value = catSel.value !== '__new_category__' ? catSel.value : '';
+            catInp.classList.add('hidden');
+        }
+    };
+
+    window.quickAddNewCategory = async function() {
+        const { value: newCat } = await Swal.fire({
+            title: 'Nueva Categoría o Subespecialidad',
+            input: 'text',
+            inputLabel: 'Nombre de la categoría / subespecialidad clínica',
+            inputPlaceholder: 'Ej: Ecocardiografía, Dermatología, Endoscopia...',
+            showCancelButton: true,
+            confirmButtonText: '<i class="fa-solid fa-plus"></i> Agregar Categoría',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#0d9488',
+            inputValidator: (val) => {
+                if (!val || !val.trim()) {
+                    return '¡Debes escribir un nombre para la categoría!';
+                }
+            }
+        });
+
+        if (newCat && newCat.trim()) {
+            const trimmed = newCat.trim();
+            const catSel = document.getElementById('srv-category-select');
+            const catInp = document.getElementById('srv-category');
+            if (catSel) {
+                let found = false;
+                for (let i = 0; i < catSel.options.length; i++) {
+                    if (catSel.options[i].value.toLowerCase() === trimmed.toLowerCase()) {
+                        catSel.selectedIndex = i;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    const opt = document.createElement('option');
+                    opt.value = trimmed;
+                    opt.textContent = trimmed;
+                    const lastIdx = Math.max(0, catSel.options.length - 1);
+                    catSel.insertBefore(opt, catSel.options[lastIdx]);
+                    opt.selected = true;
+                }
+            }
+            if (catInp) {
+                catInp.value = trimmed;
+                catInp.classList.add('hidden');
+            }
+            if (typeof updateServiceModalTimeLabel === 'function') {
+                updateServiceModalTimeLabel();
+            }
+            Swal.fire({
+                icon: 'success',
+                title: '¡Categoría Agregada!',
+                text: `La categoría "${trimmed}" fue creada y seleccionada para este servicio.`,
+                timer: 1600,
+                showConfirmButton: false
+            });
+        } else {
+            const catSel = document.getElementById('srv-category-select');
+            if (catSel && catSel.value === '__new_category__') {
+                catSel.selectedIndex = 0;
+                const catInp = document.getElementById('srv-category');
+                if (catInp) catInp.value = catSel.value;
+            }
+        }
+    };
+
+    window.onServiceCategorySelectChange = function(sel) {
+        const catInp = document.getElementById('srv-category');
+        if (!catInp) return;
+        if (sel.value === '__new_category__') {
+            catInp.classList.remove('hidden');
+            catInp.value = '';
+            catInp.focus();
+            window.quickAddNewCategory();
+        } else {
+            catInp.classList.add('hidden');
+            catInp.value = sel.value;
+            if (typeof updateServiceModalTimeLabel === 'function') {
+                updateServiceModalTimeLabel();
+            }
+        }
+    };
+
+    window.openCreateServiceModal = async function(preselectedArea = null, fromDoctor = false) {
+        if (fromDoctor) {
+            window._serviceModalOpenedFromDoctorModal = true;
+        }
+        const form = document.getElementById('form-service');
+        if (form) form.reset();
+
+        const srvModal = document.getElementById('modal-service');
+        if (srvModal) {
+            if (fromDoctor) srvModal.classList.add('modal-stacked-1');
+            else srvModal.classList.remove('modal-stacked-1');
+        }
+
+        // Initialize areas and categories
+        await window.populateServiceAreaSelect(preselectedArea);
+        await window.populateServiceCategorySelect();
+
+        updateServiceModalTimeLabel();
+        openModal('modal-service');
+    };
+
+    window.openCreateServiceFromDoctorModal = async function() {
+        const docSpec = document.getElementById('u-specialty')?.value || null;
+        await window.openCreateServiceModal(docSpec, true);
+    };
 
     const srvAreaSelect = document.getElementById('srv-area');
     if (srvAreaSelect) {
@@ -15661,16 +15891,10 @@ function initGlobalEvents() {
 
     const btnAddSrv = document.getElementById('btn-add-service');
     if (btnAddSrv) {
-        btnAddSrv.onclick = () => {
+        btnAddSrv.onclick = async () => {
             const activeFilterBtn = document.querySelector('#view-pricing .filter-btn.active');
             const activeFilter = activeFilterBtn ? activeFilterBtn.dataset.filter : 'all';
-            const srvArea = document.getElementById('srv-area');
-            if (srvArea && activeFilter && activeFilter !== 'all') {
-                const opt = Array.from(srvArea.options).find(o => o.value.toLowerCase() === activeFilter.toLowerCase());
-                if (opt) srvArea.value = opt.value;
-            }
-            updateServiceModalTimeLabel();
-            openModal('modal-service');
+            await window.openCreateServiceModal(activeFilter !== 'all' ? activeFilter : null, false);
         };
     }
 
@@ -15681,7 +15905,12 @@ function initGlobalEvents() {
             const code = document.getElementById('srv-code').value.trim();
             const name = document.getElementById('srv-name').value.trim();
             const area = document.getElementById('srv-area') ? document.getElementById('srv-area').value : 'Odontología';
-            const category = document.getElementById('srv-category').value.trim() || 'General';
+            
+            // Read category from input or select
+            const catInp = document.getElementById('srv-category');
+            const catSel = document.getElementById('srv-category-select');
+            const category = (catInp && catInp.value.trim()) ? catInp.value.trim() : (catSel ? catSel.value.trim() : 'General');
+            
             const priceUSD = parseFloat(document.getElementById('srv-price').value) || 0;
             const hygienistBonus = parseFloat(document.getElementById('srv-hygienist-bonus').value) || 0;
             const timeVal = parseFloat(document.getElementById('srv-time').value) || 30;
@@ -15696,8 +15925,37 @@ function initGlobalEvents() {
 
             await SupabaseDataService.saveBaremoService({ code, name, area, category, priceUSD, chairTimeMin, timeUnit, timeValue: timeVal, timeDisplay, materials: [], hygienistBonus });
 
+            const srvModal = document.getElementById('modal-service');
+            if (srvModal) srvModal.classList.remove('modal-stacked-1');
             closeModal('modal-service', true);
             await renderPricingTable();
+
+            // Sincronización automática si se abrió desde el registro de un médico
+            const userModal = document.getElementById('modal-user');
+            const isUserModalActive = userModal && !userModal.classList.contains('hidden');
+            if (window._serviceModalOpenedFromDoctorModal || isUserModalActive) {
+                window._serviceModalOpenedFromDoctorModal = false;
+                const srvSelect = document.getElementById('u-services');
+                if (srvSelect) {
+                    const currentSelected = new Set(Array.from(srvSelect.selectedOptions).map(o => o.value));
+                    currentSelected.add(code);
+                    if (typeof populateDoctorServicesSelect === 'function') {
+                        await populateDoctorServicesSelect(Array.from(currentSelected), window._doctorCustomServiceCommissions || {});
+                    }
+                    if (typeof window.renderDoctorServicesVisualList === 'function') {
+                        window.renderDoctorServicesVisualList();
+                    }
+                }
+                Swal.fire({
+                    icon: 'success',
+                    title: '¡Servicio Creado y Asignado!',
+                    text: `El servicio "${name}" (${code}) se agregó al baremo y quedó asignado al médico en curso.`,
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+                return;
+            }
+
             Swal.fire({ icon: 'success', title: '¡Servicio Agregado!', text: `Registrado en ${area} exitosamente.`, timer: 2000, showConfirmButton: false });
         };
     }
@@ -20111,7 +20369,14 @@ async function closeModal(id, force = false) {
     el.classList.add('hidden');
     window.markModalClean(el);
 
-    if (id === 'modal-patient') {
+    if (id === 'modal-service') {
+        window._serviceModalOpenedFromDoctorModal = false;
+        el.classList.remove('modal-stacked-1');
+    } else if (id === 'modal-specialty') {
+        window._specialtyModalOpenedFromDoctorModal = false;
+        window._specialtyModalOpenedFromServiceModal = false;
+        el.classList.remove('modal-stacked-1', 'modal-stacked-2');
+    } else if (id === 'modal-patient') {
         window.patientModalOpenedFromBudget = false;
         if (window.returnToDirectSaleAfterPatientCreated) {
             window.returnToDirectSaleAfterPatientCreated = false;
