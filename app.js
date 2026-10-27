@@ -185,6 +185,81 @@ function isDoctorUser(user) {
 }
 window.isDoctorUser = isDoctorUser;
 
+function canCurrentUserDelete(user = null) {
+    const u = user || (typeof getCurrentUser === 'function' ? getCurrentUser() : null);
+    if (!u) return false;
+    if (typeof isSystemAdminRole === 'function' && isSystemAdminRole(u.role)) return true;
+    if (typeof isAssistantUser === 'function' && isAssistantUser(u)) return false;
+    if (typeof isDoctorUser === 'function' && isDoctorUser(u)) return false;
+    const r = (u.role || '').toLowerCase();
+    if (r.includes('admin') || r.includes('super') || r.includes('director') || r.includes('gerente')) return true;
+    return false;
+}
+window.canCurrentUserDelete = canCurrentUserDelete;
+
+function isPatientAssignedToDoctor(patient, doctorUser, appointments = null, budgets = null) {
+    if (!patient || !doctorUser) return false;
+    const docId = String(doctorUser.id || '').trim();
+    const docName = String(doctorUser.fullname || doctorUser.name || '').trim().toLowerCase();
+    const cleanDocName = docName.replace(/^dr.s*|^dra.s*/i, '').trim();
+
+    // 1. Direct field on patient
+    const pDocId = String(patient.doctorId || patient.assignedDoctorId || (patient.metadata && (patient.metadata.doctorId || patient.metadata.assignedDoctorId)) || '').trim();
+    if (docId && pDocId && pDocId === docId) return true;
+
+    const pDocName = String(patient.assignedDoctor || (patient.metadata && patient.metadata.assignedDoctor) || '').trim().toLowerCase();
+    const cleanPDocName = pDocName.replace(/^dr.s*|^dra.s*/i, '').trim();
+    if (cleanDocName && cleanPDocName && (cleanPDocName === cleanDocName || cleanPDocName.includes(cleanDocName) || cleanDocName.includes(cleanPDocName))) {
+        return true;
+    }
+
+    const createdBy = String(patient.createdBy || (patient.metadata && patient.metadata.createdBy) || '').trim();
+    if (docId && createdBy && createdBy === docId) return true;
+
+    // 2. Check clinical notes
+    if (Array.isArray(patient.clinicalNotes) && patient.clinicalNotes.length > 0) {
+        const hasNote = patient.clinicalNotes.some(n => {
+            const nDocId = String(n.doctorId || n.authorId || '').trim();
+            if (docId && nDocId && nDocId === docId) return true;
+            const nDocName = String(n.doctor || n.doctorName || n.author || '').trim().toLowerCase().replace(/^dr.s*|^dra.s*/i, '').trim();
+            return cleanDocName && nDocName && (nDocName === cleanDocName || nDocName.includes(cleanDocName));
+        });
+        if (hasNote) return true;
+    }
+
+    // 3. Check appointments if available
+    if (Array.isArray(appointments) && appointments.length > 0) {
+        const patId = String(patient.id || '').trim();
+        const patName = String(patient.fullname || '').trim().toLowerCase();
+        const hasAppt = appointments.some(a => {
+            const matchesPat = (patId && String(a.patientId || a.patient_id) === patId) || 
+                               (patName && String(a.patientName || a.patient_name || '').toLowerCase() === patName);
+            if (!matchesPat) return false;
+            const aDocId = String(a.doctorId || a.doctor_id || '').trim();
+            if (docId && aDocId && aDocId === docId) return true;
+            const aDocName = String(a.doctorName || a.doctor_name || a.doctor || '').trim().toLowerCase().replace(/^dr.s*|^dra.s*/i, '').trim();
+            return cleanDocName && aDocName && (aDocName === cleanDocName || aDocName.includes(cleanDocName));
+        });
+        if (hasAppt) return true;
+    }
+
+    // 4. Check budgets if available
+    if (Array.isArray(budgets) && budgets.length > 0) {
+        const patId = String(patient.id || '').trim();
+        const hasBudget = budgets.some(b => {
+            if (patId && String(b.patientId) !== patId) return false;
+            const bDocId = String(b.doctorId || '').trim();
+            if (docId && bDocId && bDocId === docId) return true;
+            const bDocName = String(b.doctor || b.doctorName || b.specialist || '').trim().toLowerCase().replace(/^dr.s*|^dra.s*/i, '').trim();
+            return cleanDocName && bDocName && (bDocName === cleanDocName || bDocName.includes(cleanDocName));
+        });
+        if (hasBudget) return true;
+    }
+
+    return false;
+}
+window.isPatientAssignedToDoctor = isPatientAssignedToDoctor;
+
 document.addEventListener('DOMContentLoaded', async () => {
     // 1. Instant local storage seed & initial render setup
     initStorage();
@@ -1177,7 +1252,7 @@ function applyRolePermissionsUI(role) {
 
     const permissions = {
         admin: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll'],
-        doctor: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'pricing', 'settings', 'help', 'specialties', 'rooms'],
+        doctor: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'pricing', 'settings', 'help'],
         assistant: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'billing', 'finance', 'settings', 'help']
     };
 
@@ -1216,7 +1291,7 @@ function applyRolePermissionsUI(role) {
     } else if (roleType === 'doctor') {
         if (paneBusBtn) paneBusBtn.style.display = 'none';
         if (paneSysUsersBtn) paneSysUsersBtn.style.display = 'none';
-        if (paneTrashBtn) paneTrashBtn.style.display = 'flex';
+        if (paneTrashBtn) paneTrashBtn.style.display = 'none';
         if (paneAuditBtn) paneAuditBtn.style.display = 'none';
         if (paneProfileBtn) paneProfileBtn.style.display = 'flex';
         if (paneAppearanceBtn) paneAppearanceBtn.style.display = 'flex';
@@ -1267,9 +1342,10 @@ function renderMobileNavigationForRole(roleType) {
 
     let bottomButtons = [];
     if (roleType === 'doctor') {
-        // DOCTOR: Enfoque clínico prioritario
+        // DOCTOR: Enfoque clínico prioritario (Pacientes, Agenda, Presupuesto, Historias, Servicios)
         bottomButtons = [
             { tab: 'dashboard', icon: 'fa-house', label: 'Home' },
+            { tab: 'patients', icon: 'fa-hospital-user', label: 'Pacientes' },
             { tab: 'agenda', icon: 'fa-calendar-days', label: 'Agenda' },
             { tab: 'odontogram', icon: 'fa-file-invoice-dollar', label: 'Presupuesto' },
             { tab: 'ehr', icon: 'fa-notes-medical', label: 'Historias' },
@@ -1670,7 +1746,7 @@ window.navigateToTab = async function(tabName) {
         const roleType = isAdmin ? 'admin' : (isDoctor ? 'doctor' : 'assistant');
         const allowedTabs = {
             admin: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll'],
-            doctor: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'pricing', 'settings', 'help', 'specialties', 'rooms'],
+            doctor: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'pricing', 'settings', 'help'],
             assistant: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'billing', 'finance', 'settings', 'help']
         }[roleType] || ['dashboard', 'help'];
 
@@ -2466,6 +2542,38 @@ async function renderBudgetListView(forceRefresh = false) {
     const invoices = await SupabaseDataService.getInvoices(forceRefresh);
     let budgets = invoices.filter(inv => inv.id && (inv.id.startsWith('PRE-') || inv.id.startsWith('FAC-') || inv.id.startsWith('REC-') || inv.isDirectSale));
 
+    const currentUser = getCurrentUser();
+    const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
+    const isDoctor = currentUser && (typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false);
+    const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor);
+
+    // If logged in as Doctor: ONLY show his assigned budgets
+    if (isDoctor) {
+        const docId = String(currentUser.id || '').trim();
+        const docName = String(currentUser.fullname || currentUser.name || '').trim().toLowerCase();
+        const cleanDocName = docName.replace(/^dr.s*|^dra.s*/i, '').trim();
+
+        budgets = budgets.filter(b => {
+            const bDocId = String(b.doctorId || (b.metadata && b.metadata.doctorId) || '').trim();
+            if (docId && bDocId && bDocId === docId) return true;
+
+            const bDocName = String(b.doctor || b.doctorName || b.specialist || (b.metadata && b.metadata.doctorName) || '').trim().toLowerCase().replace(/^dr.s*|^dra.s*/i, '').trim();
+            if (cleanDocName && bDocName && (bDocName === cleanDocName || bDocName.includes(cleanDocName) || cleanDocName.includes(bDocName))) return true;
+
+            if (Array.isArray(b.items) && b.items.length > 0) {
+                const hasMatchingItem = b.items.some(item => {
+                    const iDocId = String(item.doctorId || '').trim();
+                    if (docId && iDocId && iDocId === docId) return true;
+                    const iDoc = String(item.specialist || item.doctor || '').trim().toLowerCase().replace(/^dr.s*|^dra.s*/i, '').trim();
+                    return cleanDocName && iDoc && (iDoc === cleanDocName || iDoc.includes(cleanDocName));
+                });
+                if (hasMatchingItem) return true;
+            }
+
+            return false;
+        });
+    }
+
     // Calcular contadores por área clínica
     let countAll = budgets.length;
     let countDental = 0;
@@ -2612,7 +2720,7 @@ async function renderBudgetListView(forceRefresh = false) {
                     <button class="btn btn-xs btn-outline" onclick="window.printDirectSaleReceipt('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer;" title="Reimprimir Comprobante"><i class="fa-solid fa-print"></i> Imprimir</button>
                     <button class="btn btn-xs btn-outline" onclick="window.downloadDirectSaleReceiptPDF('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; color: #0284c7; border-color: #bae6fd;" title="Descargar PDF"><i class="fa-solid fa-file-pdf"></i> PDF</button>
                     <button class="btn btn-xs btn-success" onclick="window.sendDirectSaleReceiptWhatsApp('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; background:#25D366; border:none; color:#fff;" title="Enviar por WhatsApp"><i class="fa-brands fa-whatsapp"></i> WhatsApp</button>
-                    ${isAssistant ? '' : `<button class="btn btn-xs btn-outline text-red" onclick="window.deleteBudget('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; border-color: #ef4444; color: #ef4444;" title="Eliminar Venta"><i class="fa-solid fa-trash-can"></i></button>`}
+                    ${canDelete ? `<button class="btn btn-xs btn-outline text-red" onclick="window.deleteBudget('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; border-color: #ef4444; color: #ef4444;" title="Eliminar Venta"><i class="fa-solid fa-trash-can"></i></button>` : ''}
                 `;
             } else {
                 actionButtons = `
@@ -2625,7 +2733,7 @@ async function renderBudgetListView(forceRefresh = false) {
                     }
                     <button class="btn btn-xs btn-success" onclick="${b.category && b.category !== 'Odontología' ? `window.sendMedicalBudgetWhatsApp('${b.id}')` : `window.sendBudgetWhatsApp('${b.id}')`}" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; background:#25D366; border:none; color:#fff;" title="Enviar Presupuesto por WhatsApp"><i class="fa-brands fa-whatsapp"></i> WhatsApp</button>
                     ${isApproved ? `<button class="btn btn-xs btn-success" onclick="window.finalizeBudgetDirect('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; background:#10b981; border:none; color:#fff;" title="Finalizar Tratamiento / Presupuesto"><i class="fa-solid fa-circle-check"></i> Finalizar</button>` : ''}
-                    ${isAssistant ? '' : `<button class="btn btn-xs btn-outline text-red" onclick="window.deleteBudget('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; border-color: #ef4444; color: #ef4444;" title="Eliminar Presupuesto (Enviar a Papelera)"><i class="fa-solid fa-trash-can"></i></button>`}
+                    ${canDelete ? `<button class="btn btn-xs btn-outline text-red" onclick="window.deleteBudget('${b.id}')" style="padding: 4px 8px; font-weight:600; border-radius:4px; cursor: pointer; border-color: #ef4444; color: #ef4444;" title="Eliminar Presupuesto (Enviar a Papelera)"><i class="fa-solid fa-trash-can"></i></button>` : ''}
                 `;
             }
 
@@ -2657,8 +2765,8 @@ async function renderBudgetListView(forceRefresh = false) {
 
 window.deleteBudget = async function(budgetId) {
     const user = getCurrentUser();
-    if (window.isAssistantUser && window.isAssistantUser(user)) {
-        Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Solo el Odontólogo Principal o Administrador puede eliminar presupuestos.' });
+    if (!canCurrentUserDelete(user)) {
+        Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Su rol no cuenta con permisos para eliminar presupuestos o comprobantes.' });
         return;
     }
     try {
@@ -5154,6 +5262,11 @@ window.editTagModal = async function(tagId) {
 };
 
 window.deleteTag = async function(tagId) {
+    const user = getCurrentUser();
+    if (!canCurrentUserDelete(user)) {
+        Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Su rol no cuenta con permisos para eliminar convenios o etiquetas.' });
+        return;
+    }
     const tags = await SupabaseDataService.getPatientTags();
     const tag = tags.find(t => t.id === tagId);
     if (!tag) return;
@@ -5346,6 +5459,17 @@ async function renderPatientsTable(filter = null, searchQuery = null, highlightP
     let patients = await SupabaseDataService.getPatients();
     const currentUser = getCurrentUser();
     const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
+    const isDoctor = currentUser && (typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false);
+    const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor);
+
+    // If logged in as Doctor: ONLY show his assigned patients
+    if (isDoctor) {
+        let [allAppts, allBudgets] = await Promise.all([
+            (typeof SupabaseDataService !== 'undefined' && SupabaseDataService.getAppointments) ? SupabaseDataService.getAppointments().catch(() => []) : [],
+            (typeof SupabaseDataService !== 'undefined' && SupabaseDataService.getBudgets) ? SupabaseDataService.getBudgets().catch(() => []) : []
+        ]);
+        patients = patients.filter(p => isPatientAssignedToDoctor(p, currentUser, allAppts, allBudgets));
+    }
 
     // Filter by status tab if specified
     if (filter !== 'all') {
@@ -5452,7 +5576,7 @@ async function renderPatientsTable(filter = null, searchQuery = null, highlightP
         if (p.status === 'En Tratamiento') statusClass = 'blue';
         if (p.status === 'Presupuesto Pendiente') statusClass = 'amber';
 
-        const deleteBtnHtml = isAssistant ? '' : `<button class="btn btn-xs btn-outline text-red" onclick="deletePatient('${p.id}')" title="Eliminar Paciente"><i class="fa-solid fa-trash"></i></button>`;
+        const deleteBtnHtml = canDelete ? `<button class="btn btn-xs btn-outline text-red" onclick="deletePatient('${p.id}')" title="Eliminar Paciente"><i class="fa-solid fa-trash"></i></button>` : '';
 
         const isHighlighted = highlightPatientId && (p.id === highlightPatientId);
         const tr = document.createElement('tr');
@@ -5493,7 +5617,7 @@ async function renderPatientsTable(filter = null, searchQuery = null, highlightP
                     <button class="btn btn-xs btn-outline btn-act-editar" onclick="window.editPatient('${p.id}')" title="Editar Ficha / Historia">
                         <i class="fa-solid fa-pen-to-square"></i> <span>Editar</span>
                     </button>
-                    <button class="btn btn-xs btn-outline btn-act-more" onclick="window.openPatientRowActionsMenu('${p.id}', this, event, ${isAssistant})" title="Más opciones para este paciente">
+                    <button class="btn btn-xs btn-outline btn-act-more" onclick="window.openPatientRowActionsMenu('${p.id}', this, event, ${!canDelete})" title="Más opciones para este paciente">
                         <i class="fa-solid fa-ellipsis-vertical"></i>
                     </button>
                 </div>
@@ -5582,6 +5706,8 @@ window.showPatientAlertsModal = async function(patientId) {
 };
 
 window.openPatientRowActionsMenu = function(patientId, btnEl, event, isAssistant) {
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const hideDeleteOption = Boolean(isAssistant) || (typeof canCurrentUserDelete === 'function' && !canCurrentUserDelete(curUser));
     if (event) {
         event.preventDefault();
         event.stopPropagation();
@@ -5613,7 +5739,7 @@ window.openPatientRowActionsMenu = function(patientId, btnEl, event, isAssistant
 
     menu.dataset.activePatientId = String(patientId);
 
-    const deleteOption = isAssistant ? '' : `
+    const deleteOption = hideDeleteOption ? '' : `
         <div class="patient-menu-divider"></div>
         <a href="javascript:void(0)" class="patient-menu-item text-red" onclick="window.closePatientRowActionsMenu(); window.deletePatient('${patientId}')">
             <i class="fa-solid fa-trash"></i> <span>Eliminar Paciente</span>
@@ -5878,8 +6004,8 @@ window.copyUserContact = async function(userId, event) {
 
 window.deletePatient = async function(patientId) {
     const user = getCurrentUser();
-    if (user && (typeof isAssistantUser === 'function' ? isAssistantUser(user) : (user.role && user.role.toLowerCase().includes('asistente')))) {
-        Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Solo el Odontólogo o Administrador puede eliminar expedientes.' });
+    if (!canCurrentUserDelete(user)) {
+        Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Su rol no cuenta con permisos para eliminar expedientes de pacientes.' });
         return;
     }
 
@@ -8120,6 +8246,11 @@ window.toggleFinancialAccountStatus = function(id) {
 };
 
 window.deleteFinancialAccount = function(id) {
+    const user = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (typeof canCurrentUserDelete === 'function' && !canCurrentUserDelete(user)) {
+        Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Su rol no cuenta con permisos para eliminar cuentas financieras.' });
+        return;
+    }
     const accounts = window.getFinancialAccounts();
     const acc = accounts.find(a => a.id === id);
     if (!acc) return;
@@ -8870,13 +9001,28 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
     listGroup.innerHTML = '';
     const allPatients = await SupabaseDataService.getPatients();
     let patients = [...allPatients];
+    const currentUser = getCurrentUser();
+    const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
+    const isDoctor = currentUser && (typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false);
+    const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor);
+
+    // If logged in as Doctor: ONLY show his assigned patients
+    if (isDoctor) {
+        let [allAppts, allBudgets] = await Promise.all([
+            (typeof SupabaseDataService !== 'undefined' && SupabaseDataService.getAppointments) ? SupabaseDataService.getAppointments().catch(() => []) : [],
+            (typeof SupabaseDataService !== 'undefined' && SupabaseDataService.getBudgets) ? SupabaseDataService.getBudgets().catch(() => []) : []
+        ]);
+        patients = patients.filter(p => isPatientAssignedToDoctor(p, currentUser, allAppts, allBudgets));
+    }
+
     let activeId = getActivePatientId();
-    if (!activeId && patients.length > 0) {
+    if (activeId && !patients.some(p => p.id === activeId)) {
+        activeId = patients.length > 0 ? patients[0].id : null;
+        setActivePatientId(activeId);
+    } else if (!activeId && patients.length > 0) {
         activeId = patients[0].id;
         setActivePatientId(activeId);
     }
-    const currentUser = getCurrentUser();
-    const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
 
     // Apply Filter
     if (filter !== 'all') {
@@ -9278,7 +9424,7 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
                             matsHtml += '</div>';
                         }
 
-                        const deleteSessionBtn = isAssistant ? '' : `<button class="btn btn-xs btn-outline text-red" style="margin-left:4px;" onclick="deleteSessionFromPatient('${activePatient.id}', ${s.sessionNum})" title="Eliminar Sesión"><i class="fa-solid fa-trash"></i></button>`;
+                        const deleteSessionBtn = canDelete ? `<button class="btn btn-xs btn-outline text-red" style="margin-left:4px;" onclick="deleteSessionFromPatient('${activePatient.id}', ${s.sessionNum})" title="Eliminar Sesión"><i class="fa-solid fa-trash"></i></button>` : '';
 
                         let payInfoHtml = '';
                         if (s.paymentUSD > 0) {
@@ -9798,7 +9944,7 @@ function renderEHRGallery(patient, filter = 'all') {
                     <button class="btn btn-xs btn-outline" style="font-size: 0.75rem; padding: 2px 8px;" onclick="window.openEHRPhotoLightbox('${p.url}', '${safeTitle}', '${safeCat}', '${safeDate}', '${safeNotes}')">
                         <i class="fa-solid fa-expand"></i> Ver
                     </button>
-                    ${isAssistant ? '' : `<button class="btn btn-xs btn-outline text-red" style="font-size: 0.75rem; padding: 2px 6px;" onclick="window.deleteEHRPhoto('${p.id}')" title="Eliminar Imagen"><i class="fa-solid fa-trash"></i></button>`}
+                    ${canDelete ? `<button class="btn btn-xs btn-outline text-red" style="font-size: 0.75rem; padding: 2px 6px;" onclick="window.deleteEHRPhoto('${p.id}')" title="Eliminar Imagen"><i class="fa-solid fa-trash"></i></button>` : ''}
                 </div>
             </div>
         `;
@@ -9954,8 +10100,8 @@ window.openEHRPhotoLightbox = function(url, title, category, date, notes) {
 
 window.deleteEHRPhoto = async function(photoId) {
     const user = getCurrentUser();
-    if (window.isAssistantUser && window.isAssistantUser(user)) {
-        Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Solo el Odontólogo Principal puede eliminar imágenes clínicas.' });
+    if (!canCurrentUserDelete(user)) {
+        Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Su rol no cuenta con permisos para eliminar imágenes clínicas.' });
         return;
     }
     Swal.fire({
@@ -10065,8 +10211,8 @@ function setupSignaturePad(canvasId, clearBtnId) {
 
 window.deleteSessionFromPatient = async function(patientId, sessionNum) {
     const user = getCurrentUser();
-    if (user && (typeof isAssistantUser === 'function' ? isAssistantUser(user) : (user.role && user.role.toLowerCase().includes('asistente')))) {
-        Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Solo los Odontólogos o Administradores pueden eliminar sesiones.' });
+    if (!canCurrentUserDelete(user)) {
+        Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Su rol no cuenta con permisos para eliminar sesiones del plan de tratamiento.' });
         return;
     }
 
@@ -10474,8 +10620,8 @@ window.exportEHRToPDF = exportEHRToPDF;
 
 window.deleteClinicalNote = async function(noteId) {
     const user = getCurrentUser();
-    if (user && (typeof isAssistantUser === 'function' ? isAssistantUser(user) : (user.role && user.role.toLowerCase().includes('asistente')))) {
-        Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Solo el Odontólogo Principal puede eliminar notas de evolución clínica.' });
+    if (!canCurrentUserDelete(user)) {
+        Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Su rol no cuenta con permisos para eliminar notas de evolución clínica.' });
         return;
     }
 
@@ -10540,9 +10686,23 @@ async function renderDashboard() {
     const agendaList = document.getElementById('dashboard-agenda-list');
     if (agendaList) {
         agendaList.innerHTML = '';
-        const appointments = await SupabaseDataService.getAppointments();
+        let appointments = await SupabaseDataService.getAppointments();
         const currentUser = getCurrentUser();
         const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
+        const isDoctor = currentUser && (typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false);
+        const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor);
+
+        if (isDoctor) {
+            const docId = String(currentUser.id || '').trim();
+            const cleanDocName = String(currentUser.fullname || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+
+            appointments = appointments.filter(app => {
+                const aDocId = String(app.doctorId || app.doctor_id || '').trim();
+                if (docId && aDocId && aDocId === docId) return true;
+                const aDocName = String(app.doctorName || app.doctor_name || app.doctor || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+                return cleanDocName && aDocName && (aDocName === cleanDocName || aDocName.includes(cleanDocName) || cleanDocName.includes(aDocName));
+            });
+        }
 
         const todayISO = new Date().toISOString().split('T')[0];
         let todayCount = 0;
@@ -10600,7 +10760,7 @@ async function renderDashboard() {
                 `;
 
                 const editApptBtn = `<button class="btn btn-xs btn-outline btn-appt-edit" style="border-color: #0891b2; color: #0891b2;" onclick="window.editAppointment('${app.id}')" title="Editar Cita"><i class="fa-solid fa-pen-to-square"></i> <span class="btn-text-full">Editar</span></button>`;
-                const deleteApptBtn = isAssistant ? '' : `<button class="btn btn-xs btn-outline text-red" onclick="deleteAppointment('${app.id}')" title="Eliminar Cita"><i class="fa-solid fa-trash"></i></button>`;
+                const deleteApptBtn = canDelete ? `<button class="btn btn-xs btn-outline text-red" onclick="deleteAppointment('${app.id}')" title="Eliminar Cita"><i class="fa-solid fa-trash"></i></button>` : '';
 
                 let actionAttendOrViewHtml = '';
                 let statusBadgeHtml = `<span class="badge-tag blue">${app.status || 'Programada'}</span>`;
@@ -10682,8 +10842,37 @@ async function renderDashboard() {
     }
 
     try {
-        const allPatients = await SupabaseDataService.getPatients();
-        const allInvoices = await SupabaseDataService.getInvoices();
+        let allPatients = await SupabaseDataService.getPatients();
+        let allInvoices = await SupabaseDataService.getInvoices();
+
+        if (isDoctor) {
+            const docId = String(currentUser.id || '').trim();
+            const cleanDocName = String(currentUser.fullname || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+
+            allPatients = allPatients.filter(p => isPatientAssignedToDoctor(p, currentUser, appointments, allInvoices));
+
+            allInvoices = (allInvoices || []).filter(inv => {
+                const iDocId = String(inv.doctorId || (inv.metadata && inv.metadata.doctorId) || '').trim();
+                if (docId && iDocId && iDocId === docId) return true;
+
+                const iDocName = String(inv.doctor || inv.doctorName || inv.specialist || (inv.metadata && inv.metadata.doctorName) || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+                if (cleanDocName && iDocName && (iDocName === cleanDocName || iDocName.includes(cleanDocName) || cleanDocName.includes(iDocName))) return true;
+
+                if (Array.isArray(inv.items) && inv.items.length > 0) {
+                    const hasItem = inv.items.some(item => {
+                        const itDocId = String(item.doctorId || '').trim();
+                        if (docId && itDocId && itDocId === docId) return true;
+                        const itDoc = String(item.specialist || item.doctor || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+                        return cleanDocName && itDoc && (itDoc === cleanDocName || itDoc.includes(cleanDocName));
+                    });
+                    if (hasItem) return true;
+                }
+
+                if (inv.patientId && allPatients.some(p => p.id === inv.patientId)) return true;
+
+                return false;
+            });
+        }
         const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local format
         const monthStr = todayStr.substring(0, 7); // YYYY-MM
 
@@ -10811,7 +11000,21 @@ async function renderDashboard() {
 
         // 6. Rendimiento de Médicos y Especialidades en Dashboard
         try {
-            if (window.getClinicPerformanceSummary) {
+            if (isDoctor) {
+                const docNameEl = document.getElementById('metric-top-doctor-name');
+                const docSubEl = document.getElementById('metric-top-doctor-sub');
+                if (docNameEl) {
+                    docNameEl.textContent = currentUser.fullname;
+                    if (docSubEl) docSubEl.innerHTML = `<i class="fa-solid fa-crown text-amber"></i> ${curSymbol}${monthIncome.toFixed(2)} mes (${attendedCount} aten.)`;
+                }
+                const specNameEl = document.getElementById('metric-top-specialty-name');
+                const specSubEl = document.getElementById('metric-top-specialty-sub');
+                if (specNameEl) {
+                    const mySpec = (currentUser.doctorProfile && currentUser.doctorProfile.specialty) || 'Especialista';
+                    specNameEl.textContent = mySpec;
+                    if (specSubEl) specSubEl.innerHTML = `<i class="fa-solid fa-stethoscope text-cyan"></i> Mi Especialidad`;
+                }
+            } else if (window.getClinicPerformanceSummary) {
                 const perf = await window.getClinicPerformanceSummary();
                 const docNameEl = document.getElementById('metric-top-doctor-name');
                 const docSubEl = document.getElementById('metric-top-doctor-sub');
@@ -11329,7 +11532,9 @@ function renderWeeklySchedulePlanner(container, appointments, weekInfo, searchQu
                     actionsHtml += `<button type="button" class="weekly-act-btn btn-act-cancel" onclick="window.cancelAppointment('${app.id}')" title="Cancelar Cita"><i class="fa-solid fa-ban"></i></button>`;
                 }
 
-                if (!isAssistant) {
+                const uWeekly = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+                const canDelWeekly = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(uWeekly) : !isAssistant;
+                if (canDelWeekly) {
                     actionsHtml += `<button type="button" class="weekly-act-btn btn-act-delete" onclick="deleteAppointment('${app.id}')" title="Mover a la Papelera"><i class="fa-solid fa-trash-can"></i></button>`;
                 }
 
@@ -11437,8 +11642,8 @@ function renderWeeklySchedulePlanner(container, appointments, weekInfo, searchQu
 
 window.deleteAppointment = async function(apptId) {
     const user = getCurrentUser();
-    if (user && (typeof isAssistantUser === 'function' ? isAssistantUser(user) : (user.role && user.role.toLowerCase().includes('asistente')))) {
-        Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Solo el Odontólogo Principal tiene permisos para eliminar citas.' });
+    if (!canCurrentUserDelete(user)) {
+        Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Su rol no cuenta con permisos para eliminar citas del sistema.' });
         return;
     }
 
@@ -11530,9 +11735,24 @@ async function renderAgendaView(filter = (window.currentAgendaFilter || 'pending
     }
 
     agendaListMain.innerHTML = '';
-    const allAppointments = await SupabaseDataService.getAppointments();
+    let allAppointments = await SupabaseDataService.getAppointments();
     const currentUser = getCurrentUser();
     const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
+    const isDoctor = currentUser && (typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false);
+    const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor);
+
+    // If logged in as Doctor: ONLY show his assigned appointments
+    if (isDoctor) {
+        const docId = String(currentUser.id || '').trim();
+        const cleanDocName = String(currentUser.fullname || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+
+        allAppointments = allAppointments.filter(app => {
+            const aDocId = String(app.doctorId || app.doctor_id || '').trim();
+            if (docId && aDocId && aDocId === docId) return true;
+            const aDocName = String(app.doctorName || app.doctor_name || app.doctor || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+            return cleanDocName && aDocName && (aDocName === cleanDocName || aDocName.includes(cleanDocName) || cleanDocName.includes(aDocName));
+        });
+    }
 
     // Update Counts for Filter Badges
     const countPending = allAppointments.filter(a => a.status !== 'Completada' && a.status !== 'Atendida' && a.status !== 'Cancelada').length;
@@ -11592,7 +11812,13 @@ async function renderAgendaView(filter = (window.currentAgendaFilter || 'pending
     }
 
     const filterDocSel = document.getElementById('agenda-filter-doctor');
-    if (filterDocSel && filterDocSel.options.length <= 1) {
+    if (isDoctor) {
+        if (filterDocSel) {
+            filterDocSel.innerHTML = `<option value="${currentUser.id}">👨‍⚕️ ${currentUser.fullname}</option>`;
+            filterDocSel.value = currentUser.id;
+            filterDocSel.disabled = true;
+        }
+    } else if (filterDocSel && filterDocSel.options.length <= 1) {
         let users = [];
         try { users = await SupabaseDataService.getUsers(); } catch(e) {}
         const doctors = users.filter(u => window.isDoctorOrAssistantUser(u));
@@ -11685,7 +11911,7 @@ async function renderAgendaView(filter = (window.currentAgendaFilter || 'pending
             cancelApptBtn = `<button class="btn btn-xs btn-outline text-red" style="border-color: #f87171; color: #ef4444;" onclick="window.cancelAppointment('${app.id}')" title="Cancelar Cita"><i class="fa-solid fa-ban"></i> <span class="btn-text-full">Cancelar</span></button>`;
         }
 
-        const deleteApptBtn = isAssistant ? '' : `<button class="btn btn-xs btn-outline text-red" onclick="deleteAppointment('${app.id}')" title="Eliminar Cita"><i class="fa-solid fa-trash"></i></button>`;
+        const deleteApptBtn = canDelete ? `<button class="btn btn-xs btn-outline text-red" onclick="deleteAppointment('${app.id}')" title="Eliminar Cita"><i class="fa-solid fa-trash"></i></button>` : '';
 
         const gCalBtn = (isAttended || isCancelled) ? '' : `
             <button class="btn btn-xs btn-outline btn-appt-gcal" style="border-color: #2563eb; color: #2563eb;" onclick="addApptToGoogleCalendarDirect('${app.id}')" title="Añadir a Google Calendar">
@@ -12488,8 +12714,8 @@ window.adjustStockPrompt = async function(code) {
 
 window.deleteInventoryItem = async function(code) {
     const user = getCurrentUser();
-    if (user && (typeof isAssistantUser === 'function' ? isAssistantUser(user) : (user.role && user.role.toLowerCase().includes('asistente')))) {
-        Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Solo el Odontólogo Principal puede eliminar insumos del Kardex.' });
+    if (!canCurrentUserDelete(user)) {
+        Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Su rol no cuenta con permisos para eliminar insumos del inventario.' });
         return;
     }
 
@@ -12646,7 +12872,25 @@ async function renderPricingTable(filter = 'all', searchQuery = '') {
     const rate = getExchangeRate();
     const currentUser = getCurrentUser();
     const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
+    const isDoctor = currentUser && (typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false);
+    const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor);
     const isLabFilter = (filter && filter.toLowerCase() === 'laboratorio');
+
+    // If logged in as Doctor: ONLY show services offered by him
+    if (isDoctor) {
+        const docProf = currentUser.doctorProfile || currentUser.doctor_profile || {};
+        const assignedServices = Array.isArray(docProf.assignedServices) ? docProf.assignedServices : [];
+        if (assignedServices.length > 0) {
+            baremo = baremo.filter(p => assignedServices.includes(p.code) || assignedServices.includes(p.name));
+        } else if (docProf.specialty) {
+            const specLower = docProf.specialty.toLowerCase();
+            baremo = baremo.filter(p => 
+                (p.specialty && p.specialty.toLowerCase().includes(specLower)) ||
+                (p.area && p.area.toLowerCase().includes(specLower)) ||
+                (p.category && p.category.toLowerCase().includes(specLower))
+            );
+        }
+    }
 
     // Ensure each service has an area assigned
     baremo.forEach(p => {
@@ -12686,7 +12930,7 @@ async function renderPricingTable(filter = 'all', searchQuery = '') {
             const pUSD = parseFloat(p.priceUSD !== undefined && p.priceUSD !== null ? p.priceUSD : (p.price || 0)) || 0;
             const priceVES = (pUSD * rate).toFixed(2);
             const safeCode = (p.code || '').replace(/'/g, "\\'");
-            const deleteSrvBtn = isAssistant ? '' : `<button class="btn btn-xs btn-outline text-red" onclick="window.deletePricingService('${safeCode}')" title="Eliminar Servicio"><i class="fa-solid fa-trash"></i></button>`;
+            const deleteSrvBtn = canDelete ? `<button class="btn btn-xs btn-outline text-red" onclick="window.deletePricingService('${safeCode}')" title="Eliminar Servicio"><i class="fa-solid fa-trash"></i></button>` : '';
             const areaInfo = typeof getAreaIconInfo === 'function' ? getAreaIconInfo(p.area) : { icon: 'fa-hospital', color: '#64748b', bg: 'rgba(100,116,139,0.1)' };
 
             const isLabService = (p.area && p.area.toLowerCase() === 'laboratorio') || (p.category && p.category.toLowerCase().includes('lab')) || isLabFilter;
@@ -12743,8 +12987,8 @@ async function renderPricingTable(filter = 'all', searchQuery = '') {
 
 window.deletePricingService = async function(code) {
     const user = getCurrentUser();
-    if (user && (typeof isAssistantUser === 'function' ? isAssistantUser(user) : (user.role && user.role.toLowerCase().includes('asistente')))) {
-        Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Solo el Odontólogo Principal puede modificar el Baremo de Precios maestro.' });
+    if (!canCurrentUserDelete(user)) {
+        Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Su rol no cuenta con permisos para eliminar servicios del catálogo.' });
         return;
     }
 
@@ -13307,6 +13551,10 @@ window.editSystemUser = async function(userId) {
 
 window.deleteSystemUser = async function(userId) {
     const currentUser = getCurrentUser();
+    if (!canCurrentUserDelete(currentUser)) {
+        Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Su rol no cuenta con permisos para eliminar usuarios del sistema.' });
+        return;
+    }
     if (currentUser && String(currentUser.id) === String(userId)) {
         Swal.fire({ icon: 'warning', title: 'Acción inválida', text: 'No puede eliminar su propia cuenta de sesión actual.' });
         return;
@@ -16197,6 +16445,20 @@ function initGlobalEvents() {
     window.updateAppointmentDoctorOptions = function(selectedSpec, preselectVal) {
         const docSel = document.getElementById('app-doctor-select');
         if (!docSel) return;
+        const curUser = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+        const isDoc = curUser && (typeof isDoctorUser === 'function' ? isDoctorUser(curUser) : false);
+
+        if (isDoc) {
+            const docProf = curUser.doctorProfile || curUser.doctor_profile || {};
+            const spec = docProf.specialty || curUser.role || 'Especialista';
+            const shift = docProf.shift === 'afternoon' ? 'Tarde' : (docProf.shift === 'both' ? 'Completo' : 'Mañana');
+            docSel.innerHTML = `<option value="${curUser.id}" data-name="${curUser.fullname}" data-specialty="${spec}" data-shift="${docProf.shift || ''}" selected>${curUser.fullname} (${spec} • Turno ${shift})</option>`;
+            docSel.disabled = true;
+            window.onAppointmentDoctorChange(curUser.id);
+            return;
+        }
+
+        docSel.disabled = false;
         const docs = window._availableDoctorsCache || [];
         
         const specLower = (selectedSpec || '').toLowerCase();
@@ -16292,17 +16554,27 @@ function initGlobalEvents() {
     }
 
     window.getAppointmentPatientsCache = function() {
+        let pool = [];
         if (window.SupabaseDataService && window.SupabaseDataService._patientsCache && window.SupabaseDataService._patientsCache.length > 0) {
-            return window.SupabaseDataService._patientsCache;
+            pool = window.SupabaseDataService._patientsCache;
+        } else {
+            try {
+                const cached = localStorage.getItem('dental_patients');
+                if (cached) {
+                    const parsed = JSON.parse(cached);
+                    if (Array.isArray(parsed) && parsed.length > 0) pool = parsed;
+                }
+            } catch(e) {}
         }
-        try {
-            const cached = localStorage.getItem('dental_patients');
-            if (cached) {
-                const parsed = JSON.parse(cached);
-                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-            }
-        } catch(e) {}
-        return [];
+
+        const curDoc = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+        if (curDoc && (typeof isDoctorUser === 'function' ? isDoctorUser(curDoc) : false)) {
+            const apptsCache = (window.SupabaseDataService && window.SupabaseDataService._appointmentsCache) || [];
+            const budgetsCache = (window.SupabaseDataService && window.SupabaseDataService._invoicesCache) || [];
+            return pool.filter(p => isPatientAssignedToDoctor(p, curDoc, apptsCache, budgetsCache));
+        }
+
+        return pool;
     };
 
     window.setAppointmentPatient = function(patientOrId, fallbackName = '') {
@@ -17912,6 +18184,20 @@ if (patientSameDay.length === 0) {
                 };
             }
 
+            const curDoctorUser = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+            if (curDoctorUser && (typeof isDoctorUser === 'function' ? isDoctorUser(curDoctorUser) : false)) {
+                if (!patientToSave.assignedDoctor) patientToSave.assignedDoctor = curDoctorUser.fullname;
+                if (!patientToSave.assignedDoctorId) patientToSave.assignedDoctorId = curDoctorUser.id;
+                if (!patientToSave.doctorId) patientToSave.doctorId = curDoctorUser.id;
+                if (!patientToSave.createdBy) patientToSave.createdBy = curDoctorUser.id;
+                if (patientToSave.metadata) {
+                    if (!patientToSave.metadata.assignedDoctor) patientToSave.metadata.assignedDoctor = curDoctorUser.fullname;
+                    if (!patientToSave.metadata.assignedDoctorId) patientToSave.metadata.assignedDoctorId = curDoctorUser.id;
+                    if (!patientToSave.metadata.doctorId) patientToSave.metadata.doctorId = curDoctorUser.id;
+                    if (!patientToSave.metadata.createdBy) patientToSave.metadata.createdBy = curDoctorUser.id;
+                }
+            }
+
             await SupabaseDataService.savePatient(patientToSave);
             window.editingPatientId = null;
             
@@ -18232,9 +18518,15 @@ if (patientSameDay.length === 0) {
                 const invoiceId = activeEditingBudgetId || `PRE-${Date.now().toString().slice(-6)}`;
                 const approvedOdData = (window.odontogram ? window.odontogram.getData() : {});
 
+                const curDocForBudget = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+                const isDocRoleForBudget = curDocForBudget && (typeof isDoctorUser === 'function' ? isDoctorUser(curDocForBudget) : false);
+
                 const invoiceObj = {
                     id: invoiceId,
                     patientId: patient.id,
+                    doctorId: isDocRoleForBudget ? curDocForBudget.id : '',
+                    doctor: isDocRoleForBudget ? curDocForBudget.fullname : '',
+                    doctorName: isDocRoleForBudget ? curDocForBudget.fullname : '',
                     invoiceDate: new Date().toISOString().split('T')[0],
                     paymentMethod: paymentMethod,
                     paymentTerms: paymentModeText,
@@ -23598,6 +23890,11 @@ window.editProviderBill = async function(id) {
 };
 
 window.deleteProviderBill = async function(id) {
+    const uBill = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (typeof canCurrentUserDelete === 'function' && !canCurrentUserDelete(uBill)) {
+        Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Su rol no cuenta con permisos para eliminar facturas de proveedores.' });
+        return;
+    }
     Swal.fire({
         title: '¿Eliminar registro?',
         text: '¿Está seguro de que desea eliminar esta cuenta por pagar?',
@@ -25371,6 +25668,11 @@ window.printDailyClosingDept = function() {
 };
 
 window.deleteAccountTransfer = async function(transferId) {
+    const uTrans = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (typeof canCurrentUserDelete === 'function' && !canCurrentUserDelete(uTrans)) {
+        Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Su rol no cuenta con permisos para eliminar transferencias.' });
+        return;
+    }
     const { value: confirm } = await Swal.fire({
         title: '¿Revertir traslado?',
         text: '¿Desea eliminar este registro de traslado entre cuentas?',
@@ -27064,6 +27366,11 @@ window.saveInterconsultaStudyFromModal = async function() {
 };
 
 window.deleteInterconsultaStudy = async function(studyId) {
+    const uStudy = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (typeof canCurrentUserDelete === 'function' && !canCurrentUserDelete(uStudy)) {
+        Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Su rol no cuenta con permisos para eliminar estudios.' });
+        return;
+    }
     const studies = await SupabaseDataService.getInterconsultaStudies();
     const study = studies.find(s => s.id === studyId);
     if (!study) return;
@@ -27966,7 +28273,7 @@ window.renderTrashPane = async function() {
 
 window.restoreFromTrash = async function(category, trashId) {
     const user = getCurrentUser();
-    if (window.isAssistantUser && window.isAssistantUser(user)) {
+    if (!canCurrentUserDelete(user)) {
         Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'No tiene permisos para restaurar elementos de la Papelera de Reciclaje.' });
         return;
     }
@@ -28029,7 +28336,7 @@ window.restoreFromTrash = async function(category, trashId) {
 
 window.purgeFromTrash = async function(category, trashId) {
     const user = getCurrentUser();
-    if (window.isAssistantUser && window.isAssistantUser(user)) {
+    if (!canCurrentUserDelete(user)) {
         Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'No tiene permisos para purgar elementos de la Papelera de Reciclaje.' });
         return;
     }
@@ -28068,7 +28375,7 @@ window.purgeFromTrash = async function(category, trashId) {
 
 window.emptyTrash = async function() {
     const user = getCurrentUser();
-    if (window.isAssistantUser && window.isAssistantUser(user)) {
+    if (!canCurrentUserDelete(user)) {
         Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'No tiene permisos para vaciar la Papelera de Reciclaje.' });
         return;
     }
