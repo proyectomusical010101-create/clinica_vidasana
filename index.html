@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=380">
+    <link rel="stylesheet" href="styles.css?v=381">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -3854,6 +3854,36 @@
                             </div>
                         </div>
 
+                        <!-- Filtro de Fecha a Fecha con Calendario (Punto a Punto para Nómina) -->
+                        <div class="card mb-15" style="border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff; padding: 12px 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
+                            <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: space-between;">
+                                <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <span style="font-size: 0.82rem; font-weight: 700; color: #0d9488; text-transform: uppercase; letter-spacing: 0.3px;">
+                                            <i class="fa-regular fa-calendar-days text-teal"></i> Período (Desde - Hasta):
+                                        </span>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <label for="srv-liq-date-from" style="font-size: 0.8rem; font-weight: 600; color: #64748b; margin: 0;">Desde:</label>
+                                        <input type="date" id="srv-liq-date-from" class="form-control" style="width: auto; height: 34px; font-size: 0.82rem; border-radius: 6px; padding: 4px 8px; border: 1px solid #cbd5e1; background: #fff;" onchange="window.ClinicalERP.onServiceDateFilterChange()">
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <label for="srv-liq-date-to" style="font-size: 0.8rem; font-weight: 600; color: #64748b; margin: 0;">Hasta:</label>
+                                        <input type="date" id="srv-liq-date-to" class="form-control" style="width: auto; height: 34px; font-size: 0.82rem; border-radius: 6px; padding: 4px 8px; border: 1px solid #cbd5e1; background: #fff;" onchange="window.ClinicalERP.onServiceDateFilterChange()">
+                                    </div>
+                                    <div style="display: flex; gap: 5px; align-items: center; flex-wrap: wrap;">
+                                        <button type="button" class="btn btn-xs btn-outline" onclick="window.ClinicalERP.setServiceDatePreset('today')" style="font-size: 0.76rem; border-color: #cbd5e1; color: #475569; padding: 4px 10px; border-radius: 6px; font-weight: 600;">Hoy</button>
+                                        <button type="button" class="btn btn-xs btn-outline" onclick="window.ClinicalERP.setServiceDatePreset('week')" style="font-size: 0.76rem; border-color: #cbd5e1; color: #475569; padding: 4px 10px; border-radius: 6px; font-weight: 600;">Esta Semana</button>
+                                        <button type="button" class="btn btn-xs btn-outline" onclick="window.ClinicalERP.setServiceDatePreset('month')" style="font-size: 0.76rem; border-color: #cbd5e1; color: #475569; padding: 4px 10px; border-radius: 6px; font-weight: 600;">Este Mes</button>
+                                        <button type="button" class="btn btn-xs btn-outline" onclick="window.ClinicalERP.clearServiceDateFilter()" style="font-size: 0.76rem; border-color: #fca5a5; color: #dc2626; padding: 4px 10px; border-radius: 6px; font-weight: 600;" title="Restablecer fechas"><i class="fa-solid fa-rotate-left"></i> Limpiar</button>
+                                    </div>
+                                </div>
+                                <div id="srv-liq-date-indicator" style="font-size: 0.8rem; font-weight: 700; color: #0d9488; background: #ccfbf1; padding: 4px 10px; border-radius: 6px; border: 1px solid #99f6e4; display: none;">
+                                    <i class="fa-solid fa-filter"></i> <span id="srv-liq-date-indicator-text"></span>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Contenedor Prioritario: Agrupado por Doctor y Pacientes Atendidos -->
                         <div id="service-liquidations-by-doctor-container" style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 25px;">
                             <!-- Populated dynamically with doctor cards, patients attended, and total settlement -->
@@ -5040,23 +5070,23 @@
                                 <label>Profesión / Ocupación</label>
                                 <input type="text" id="p-profession" placeholder="ej: Ingeniero / Estudiante">
                             </div>
-                            <div class="form-group">
+                            <div class="form-group patient-contact-field">
                                 <label>WhatsApp *</label>
                                 <input type="tel" id="p-mobile-phone" required placeholder="+584141234567">
                             </div>
-                            <div class="form-group">
+                            <div class="form-group patient-contact-field">
                                 <label>Teléfono</label>
                                 <input type="tel" id="p-local-phone" placeholder="0212-1234567">
                             </div>
-                            <div class="form-group">
+                            <div class="form-group patient-contact-field">
                                 <label>Correo Electrónico</label>
                                 <input type="email" id="p-email" placeholder="paciente@gmail.com">
                             </div>
-                            <div class="form-group">
+                            <div class="form-group patient-contact-field">
                                 <label><i class="fa-brands fa-instagram text-pink"></i> Instagram (Opcional)</label>
                                 <input type="text" id="p-instagram" placeholder="@usuario_paciente">
                             </div>
-                            <div class="form-group">
+                            <div class="form-group patient-contact-field">
                                 <label>Dirección Habitación *</label>
                                 <input type="text" id="p-address" required placeholder="Av. Principal, Edificio X, Apto Y">
                             </div>
@@ -5093,7 +5123,7 @@
                                     <label>C.I. del Representante *</label>
                                     <input type="text" id="p-rep-id" placeholder="ej: V-12345678">
                                 </div>
-                                <div class="form-group">
+                                <div class="form-group patient-contact-field">
                                     <label>Teléfono del Representante *</label>
                                     <input type="text" id="p-rep-phone" placeholder="ej: +584121234567">
                                 </div>
@@ -8790,14 +8820,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=380"></script>
-    <script src="supabaseClient.js?v=380"></script>
-    <script src="odontogram.js?v=380"></script>
-    <script src="signature.js?v=380"></script>
-    <script src="whatsapp.js?v=380"></script>
-    <script src="kardex.js?v=380"></script>
-    <script src="app.js?v=380"></script>
-    <script src="clinicalERP.js?v=380"></script>
-    <script src="tutorial.js?v=380"></script>
+    <script src="seededData.js?v=381"></script>
+    <script src="supabaseClient.js?v=381"></script>
+    <script src="odontogram.js?v=381"></script>
+    <script src="signature.js?v=381"></script>
+    <script src="whatsapp.js?v=381"></script>
+    <script src="kardex.js?v=381"></script>
+    <script src="app.js?v=381"></script>
+    <script src="clinicalERP.js?v=381"></script>
+    <script src="tutorial.js?v=381"></script>
 </body>
 </html>

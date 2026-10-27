@@ -7876,3 +7876,36 @@ body.is-hygienist-role .dashboard-birthdays-card {
 .doctor-payroll-header:hover {
     background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%) !important;
 }
+
+/* ==========================================================================
+   HYGIENIST PERSONAL FINANCES & COMMISSIONS MODULE
+   ========================================================================== */
+#view-hygienist-finances .card {
+    transition: all 0.2s ease;
+}
+#view-hygienist-finances .card:hover {
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.04);
+}
+#hygienist-finances-table-body tr:hover {
+    background-color: #f8fafc;
+}
+
+/* ==========================================================================
+   DOCTOR & DENTIST STRICT ROLE ISOLATION & PATIENT PRIVACY LOCKDOWN
+   ========================================================================== */
+body.is-doctor-role .nav-item[data-tab="patients"],
+body.is-doctor-role [data-tab="patients"],
+body.is-doctor-role #view-patients,
+body.is-doctor-role .mobile-bottom-nav-btn[data-tab="patients"],
+body.is-doctor-role #btn-quick-patient,
+body.is-doctor-role #btn-new-patient-modal,
+body.is-doctor-role .patient-contact-sensitive,
+body.is-doctor-role .btn-appt-reminder,
+body.is-doctor-role .btn-whatsapp-patient {
+    display: none !important;
+}
+
+body.is-doctor-role #step-content-1 .patient-contact-field {
+    display: none !important;
+}
+

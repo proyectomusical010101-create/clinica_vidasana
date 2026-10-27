@@ -24,6 +24,8 @@
         payrollSubtab: 'services', // 'services' (Honorarios por Servicio), 'general' (Nómina General), or 'staff' (Personal)
         serviceLiquidationsFilter: 'all',
         serviceLiquidationsSearch: '',
+        serviceDateFrom: '',
+        serviceDateTo: '',
         specialtiesFilter: 'all',
         specialtiesSearch: '',
         roomsFilter: 'all',
@@ -1690,6 +1692,80 @@
             this.renderServiceLiquidations();
         },
 
+        getItemDateStr(item) {
+            const raw = item.date || item.created_at || item.service_date || item.settlement_date || '';
+            if (!raw) return '';
+            if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}/.test(raw)) {
+                return raw.substring(0, 10);
+            }
+            const ddmmyyyy = String(raw).match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+            if (ddmmyyyy) {
+                const d = ddmmyyyy[1].padStart(2, '0');
+                const m = ddmmyyyy[2].padStart(2, '0');
+                const y = ddmmyyyy[3];
+                return `${y}-${m}-${d}`;
+            }
+            try {
+                const dt = new Date(raw);
+                if (!isNaN(dt.getTime())) {
+                    return dt.toISOString().substring(0, 10);
+                }
+            } catch(e) {}
+            return '';
+        },
+
+        onServiceDateFilterChange() {
+            const elFrom = document.getElementById('srv-liq-date-from');
+            const elTo = document.getElementById('srv-liq-date-to');
+            this.serviceDateFrom = elFrom ? elFrom.value.trim() : '';
+            this.serviceDateTo = elTo ? elTo.value.trim() : '';
+            this.renderServiceLiquidations();
+        },
+
+        setServiceDatePreset(preset) {
+            const elFrom = document.getElementById('srv-liq-date-from');
+            const elTo = document.getElementById('srv-liq-date-to');
+            if (!elFrom || !elTo) return;
+
+            const now = new Date();
+            const formatISO = (d) => {
+                const y = d.getFullYear();
+                const m = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                return `${y}-${m}-${day}`;
+            };
+
+            if (preset === 'today') {
+                const todayStr = formatISO(now);
+                elFrom.value = todayStr;
+                elTo.value = todayStr;
+            } else if (preset === 'week') {
+                const day = now.getDay() || 7; // 1 = Monday, 7 = Sunday
+                const monday = new Date(now);
+                monday.setDate(now.getDate() - day + 1);
+                const sunday = new Date(monday);
+                sunday.setDate(monday.getDate() + 6);
+                elFrom.value = formatISO(monday);
+                elTo.value = formatISO(sunday);
+            } else if (preset === 'month') {
+                const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+                const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+                elFrom.value = formatISO(firstDay);
+                elTo.value = formatISO(lastDay);
+            }
+            this.onServiceDateFilterChange();
+        },
+
+        clearServiceDateFilter() {
+            const elFrom = document.getElementById('srv-liq-date-from');
+            const elTo = document.getElementById('srv-liq-date-to');
+            if (elFrom) elFrom.value = '';
+            if (elTo) elTo.value = '';
+            this.serviceDateFrom = '';
+            this.serviceDateTo = '';
+            this.renderServiceLiquidations();
+        },
+
         setServiceViewMode(mode, btn) {
             this.serviceViewMode = mode;
             const btnDoc = document.getElementById('btn-srv-view-by-doctor');
@@ -1858,12 +1934,41 @@
             const tableCard = document.getElementById('service-liquidations-table-card') || (document.getElementById('service-liquidations-table')?.closest('.card'));
             if (!container && !docContainer) return;
 
+            // 1. Initial pool of liquidations
+            let list = [...this.serviceLiquidations];
+
+            // 2. Date Range Filter (Desde - Hasta punto a punto)
+            if (this.serviceDateFrom || this.serviceDateTo) {
+                list = list.filter(item => {
+                    const itemDate = this.getItemDateStr(item);
+                    if (!itemDate) return true;
+                    if (this.serviceDateFrom && itemDate < this.serviceDateFrom) return false;
+                    if (this.serviceDateTo && itemDate > this.serviceDateTo) return false;
+                    return true;
+                });
+            }
+
+            // Update Date Indicator
+            const dateIndicator = document.getElementById('srv-liq-date-indicator');
+            const dateIndicatorText = document.getElementById('srv-liq-date-indicator-text');
+            if (dateIndicator && dateIndicatorText) {
+                if (this.serviceDateFrom || this.serviceDateTo) {
+                    dateIndicator.style.display = 'inline-flex';
+                    const fromStr = this.serviceDateFrom || 'Inicio';
+                    const toStr = this.serviceDateTo || 'Hoy';
+                    dateIndicatorText.innerText = `${fromStr} al ${toStr} (${list.length} registros)`;
+                } else {
+                    dateIndicator.style.display = 'none';
+                }
+            }
+
+            // 3. Compute stats based on the date-filtered period
             let docPending = 0;
             let astPending = 0;
             let countPending = 0;
             let totalSettled = 0;
 
-            this.serviceLiquidations.forEach(item => {
+            list.forEach(item => {
                 const docAmt = parseFloat(item.doctor?.amount || 0);
                 const astAmt = parseFloat(item.assistant?.amount || 0);
                 const isDocPend = item.doctor?.status === 'Pendiente';
@@ -1892,9 +1997,7 @@
             const elSettled = document.getElementById('stat-srv-total-settled');
             if (elSettled) elSettled.innerText = '$' + totalSettled.toFixed(2);
 
-            let list = [...this.serviceLiquidations];
-
-            // Filter
+            // 4. Status Filter
             if (this.serviceLiquidationsFilter === 'pendiente') {
                 list = list.filter(x => x.overall_status === 'Pendiente');
             } else if (this.serviceLiquidationsFilter === 'parcial') {
@@ -1903,7 +2006,7 @@
                 list = list.filter(x => x.overall_status === 'Liquidado Total');
             }
 
-            // Search
+            // 5. Search
             if (this.serviceLiquidationsSearch) {
                 const q = this.serviceLiquidationsSearch;
                 list = list.filter(x => 

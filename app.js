@@ -339,6 +339,16 @@ function isDoctorUser(user) {
 }
 window.isDoctorUser = isDoctorUser;
 
+function shouldHidePatientContact(user = null) {
+    const u = user || (typeof getCurrentUser === 'function' ? getCurrentUser() : null);
+    if (!u) return false;
+    const r = (u.role || '').toLowerCase();
+    const isAdmin = r.includes('admin') || r.includes('super') || r.includes('director') || r.includes('gerente');
+    if (isAdmin) return false;
+    return typeof isDoctorUser === 'function' ? isDoctorUser(u) : false;
+}
+window.shouldHidePatientContact = shouldHidePatientContact;
+
 function isDentalDoctor(user) {
     if (!user) return false;
     if (!isDoctorUser(user)) return false;
@@ -416,6 +426,17 @@ function isPatientAssignedToDoctor(patient, doctorUser, appointments = null, bud
             return cleanDocName && bDocName && (bDocName === cleanDocName || bDocName.includes(cleanDocName));
         });
         if (hasBudget) return true;
+    }
+
+    // 5. Check completed or scheduled sessions on the patient
+    if (Array.isArray(patient.sessions) && patient.sessions.length > 0) {
+        const hasSession = patient.sessions.some(s => {
+            const sDocId = String(s.doctorId || '').trim();
+            if (docId && sDocId && sDocId === docId) return true;
+            const sDoc = String(s.doctor || s.doctorName || s.specialist || '').trim().toLowerCase().replace(/^dr\.s*|^dra\.s*/i, '').trim();
+            return cleanDocName && sDoc && (sDoc === cleanDocName || sDoc.includes(cleanDocName) || cleanDocName.includes(sDoc));
+        });
+        if (hasSession) return true;
     }
 
     return false;
@@ -1437,7 +1458,7 @@ function applyRolePermissionsUI(role) {
 
     const permissions = {
         admin: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll', 'consumables', 'hygienist_finances'],
-        doctor: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'pricing', 'settings', 'help'],
+        doctor: ['dashboard', 'agenda', 'odontogram', 'ehr', 'pricing', 'settings', 'help'],
         hygienist: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'consumables', 'settings', 'help', 'hygienist_finances'],
         assistant: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'consumables', 'settings', 'help', 'hygienist_finances']
     };
@@ -1611,10 +1632,9 @@ function renderMobileNavigationForRole(roleType) {
 
     let bottomButtons = [];
     if (roleType === 'doctor') {
-        // DOCTOR: Enfoque clínico prioritario (Pacientes, Agenda, Presupuesto, Historias, Servicios)
+        // DOCTOR: Enfoque clínico prioritario (Agenda, Presupuesto, Historias, Servicios) - Módulo Pacientes eliminado
         bottomButtons = [
             { tab: 'dashboard', icon: 'fa-house', label: 'Home' },
-            { tab: 'patients', icon: 'fa-hospital-user', label: 'Pacientes' },
             { tab: 'agenda', icon: 'fa-calendar-days', label: 'Agenda' },
             { tab: 'odontogram', icon: 'fa-file-invoice-dollar', label: 'Presupuesto' },
             { tab: 'ehr', icon: 'fa-notes-medical', label: 'Historias' },
@@ -2025,8 +2045,8 @@ window.navigateToTab = async function(tabName) {
         const isDoctor = r.includes('medico') || r.includes('odont') || r.includes('doctor') || r.includes('dentista') || r.includes('médico');
         const roleType = isAdmin ? 'admin' : (isDoctor ? 'doctor' : 'assistant');
         const allowedTabs = {
-            admin: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll', 'consumables'],
-            doctor: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'pricing', 'settings', 'help'],
+            admin: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll', 'consumables', 'hygienist-finances'],
+            doctor: ['dashboard', 'agenda', 'odontogram', 'ehr', 'pricing', 'settings', 'help'],
             assistant: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'billing', 'finance', 'settings', 'help', 'consumables']
         }[roleType] || ['dashboard', 'help'];
 
@@ -2036,6 +2056,9 @@ window.navigateToTab = async function(tabName) {
                 title: 'Acceso Denegado',
                 text: 'Su rol no cuenta con permisos para ver este módulo.'
             });
+            if (roleType === 'doctor') {
+                return window.navigateToTab('ehr');
+            }
             return;
         }
     }
@@ -2839,6 +2862,7 @@ async function renderBudgetListView(forceRefresh = false) {
     const isDoctor = currentUser && (typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false);
     const isHygienist = currentUser && (typeof isHygienistRole === 'function' ? isHygienistRole(currentUser.role) : (currentUser.role && currentUser.role.toLowerCase().includes('higien')));
     const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor && !isHygienist);
+    const hideContact = typeof shouldHidePatientContact === 'function' && shouldHidePatientContact(currentUser);
 
     // If logged in as Doctor: ONLY show his assigned budgets & scoped by specialty
     if (isDoctor) {
@@ -3771,13 +3795,14 @@ window.onMedicalBudgetPatientChange = async function(patientId) {
                 tagBadgeHtml = `<span class="badge-tag" style="background:${tagColor}18; color:${tagColor}; border:1px solid ${tagColor}50; font-weight:700; font-size:0.75rem; margin-left:8px; display:inline-flex; align-items:center; gap:4px;"><i class="fa-solid fa-tags"></i> ${tagName}${ruleText}</span>`;
             }
 
+            const hideContact = typeof shouldHidePatientContact === 'function' && shouldHidePatientContact();
             infoBox.innerHTML = `
                 <div style="line-height: 1.35; flex: 1;">
                     <div style="display: flex; align-items: center; flex-wrap: wrap; margin-bottom: 2px;">
                         <strong style="color: #0f172a; font-size: 0.92rem;">${p.fullname}</strong>
                         ${tagBadgeHtml}
                     </div>
-                    <span style="color: #64748b; font-size: 0.82rem;">Cédula: <strong>${p.cedula || p.id || 'N/A'}</strong> • Edad: <strong>${p.age ? p.age + ' años' : 'N/A'}</strong> • Teléfono: <strong>${p.phone || 'N/A'}</strong></span>
+                    <span style="color: #64748b; font-size: 0.82rem;">Cédula: <strong>${p.cedula || p.id || 'N/A'}</strong> • Edad: <strong>${p.age ? p.age + ' años' : 'N/A'}</strong>${hideContact ? '' : ` • Teléfono: <strong>${p.phone || 'N/A'}</strong>`}</span>
                 </div>
             `;
 
@@ -5881,6 +5906,7 @@ async function renderPatientsTable(filter = null, searchQuery = null, highlightP
     const isDoctor = currentUser && (typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false);
     const isHygienist = currentUser && (typeof isHygienistRole === 'function' ? isHygienistRole(currentUser.role) : (currentUser.role && currentUser.role.toLowerCase().includes('higien')));
     const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor && !isHygienist);
+    const hideContact = typeof shouldHidePatientContact === 'function' && shouldHidePatientContact(currentUser);
 
     // If logged in as Doctor: ONLY show his assigned patients
     if (isDoctor) {
@@ -9243,7 +9269,7 @@ window.printDirectSaleReceipt = async function(docId = null) {
             <div style="border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; margin-bottom: 16px; font-size: 10.5pt; background: #f8fafc;">
                 <strong>Datos del Paciente:</strong><br>
                 Nombre Completo: <strong>${p ? p.fullname : (doc.patientName || doc.patientId)}</strong><br>
-                Cédula / ID: <strong>${doc.patientId}</strong> • Teléfono: <strong>${p ? p.phone : 'N/A'}</strong><br>
+                Cédula / ID: <strong>${doc.patientId}</strong>${(typeof shouldHidePatientContact === 'function' && shouldHidePatientContact()) ? '' : ` • Teléfono: <strong>${p ? p.phone : 'N/A'}</strong>`}<br>
                 Médico / Especialista: <strong>${doc.doctor || 'Dr. Médico Tratante'}</strong>
             </div>
 
@@ -9358,7 +9384,7 @@ window.downloadDirectSaleReceiptPDF = async function(docId = null) {
             <div style="border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; margin-bottom: 16px; font-size: 10.5pt; background: #f8fafc;">
                 <strong>Datos del Paciente:</strong><br>
                 Nombre Completo: <strong>${p ? p.fullname : (doc.patientName || doc.patientId)}</strong><br>
-                Cédula / ID: <strong>${doc.patientId}</strong> • Teléfono: <strong>${p ? p.phone : 'N/A'}</strong><br>
+                Cédula / ID: <strong>${doc.patientId}</strong>${(typeof shouldHidePatientContact === 'function' && shouldHidePatientContact()) ? '' : ` • Teléfono: <strong>${p ? p.phone : 'N/A'}</strong>`}<br>
                 Médico / Especialista: <strong>${doc.doctor || 'Dr. Médico Tratante'}</strong>
             </div>
 
@@ -9628,6 +9654,7 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
     const isDoctor = currentUser && (typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false);
     const isHygienist = currentUser && (typeof isHygienistRole === 'function' ? isHygienistRole(currentUser.role) : (currentUser.role && currentUser.role.toLowerCase().includes('higien')));
     const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor && !isHygienist);
+    const hideContact = typeof shouldHidePatientContact === 'function' && shouldHidePatientContact(currentUser);
 
     // If logged in as Doctor: ONLY show his assigned patients
     if (isDoctor) {
@@ -9667,7 +9694,7 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
         patients = patients.filter(p => 
             (p.fullname && p.fullname.toLowerCase().includes(q)) || 
             (p.id && p.id.toLowerCase().includes(q)) || 
-            (p.phone && p.phone.includes(q))
+            (!hideContact && p.phone && p.phone.includes(q))
         );
     }
 
@@ -9682,7 +9709,7 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
             item.innerHTML = `
                 <div>
                     <strong>${p.fullname}</strong><br>
-                    <small class="text-muted">${p.id} • Tel: ${p.phone}</small>
+                    <small class="text-muted">${p.id}${hideContact ? '' : ` • Tel: ${p.phone || 'S/N'}`}</small>
                 </div>
             `;
             item.onclick = async (e) => {
@@ -9702,7 +9729,9 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
         const activePatient = allPatients.find(p => p.id === activeId);
         if (activePatient) {
             document.getElementById('ehr-patient-fullname').innerText = activePatient.fullname;
-            document.getElementById('ehr-patient-subinfo').innerText = `Cédula: ${activePatient.id} | Edad: ${calculateAge(activePatient.birthdate)} años | Tel: ${activePatient.phone}`;
+            document.getElementById('ehr-patient-subinfo').innerText = hideContact 
+                ? `Cédula: ${activePatient.id} | Edad: ${calculateAge(activePatient.birthdate)} años`
+                : `Cédula: ${activePatient.id} | Edad: ${calculateAge(activePatient.birthdate)} años | Tel: ${activePatient.phone || 'S/N'}`;
             
             const meta = activePatient.metadata || {};
 
@@ -9717,21 +9746,29 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
                             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px; font-size:0.8rem; margin-top:4px;">
                                 <div><strong>Nombre:</strong> ${meta.repName || 'N/A'}</div>
                                 <div><strong>Cédula:</strong> ${meta.repId || 'N/A'}</div>
-                                <div><strong>Teléfono:</strong> ${meta.repPhone || 'N/A'}</div>
+                                ${hideContact ? '' : `<div><strong>Teléfono:</strong> ${meta.repPhone || 'N/A'}</div>`}
                                 <div><strong>Parentesco:</strong> ${meta.repRelation || 'N/A'}</div>
                             </div>
                         </div>
                     `;
                 }
 
+                const contactRowsHtml = hideContact ? `
+                    <div style="grid-column: span 2; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 10px 14px; color: #475569; font-size: 0.82rem; display: flex; align-items: center; gap: 8px;">
+                        <i class="fa-solid fa-user-shield text-teal"></i> <span><strong>Privacidad Clínica:</strong> Teléfono, Correo y Dirección protegidos confidencialmente para el personal médico.</span>
+                    </div>
+                ` : `
+                    <div><strong>Teléfono Principal:</strong> ${activePatient.phone || 'N/A'}</div>
+                    <div><strong>Correo Electrónico:</strong> ${activePatient.email || 'N/A'}</div>
+                    <div style="grid-column: span 2;"><strong>Dirección Habitación:</strong> ${meta.address || 'N/A'}</div>
+                `;
+
                 summaryFiliation.innerHTML = `
                     <div><strong>Tipo de Paciente:</strong> ${meta.type || 'Adulto'}</div>
                     <div><strong>Edad:</strong> ${meta.age || calculateAge(activePatient.birthdate)} años</div>
                     <div><strong>Sexo:</strong> ${meta.gender || 'N/A'}</div>
                     <div><strong>Profesión / Ocupación:</strong> ${activePatient.occupation || meta.profession || 'N/A'}</div>
-                    <div><strong>Teléfono Principal:</strong> ${activePatient.phone || 'N/A'}</div>
-                    <div><strong>Correo Electrónico:</strong> ${activePatient.email || 'N/A'}</div>
-                    <div style="grid-column: span 2;"><strong>Dirección Habitación:</strong> ${meta.address || 'N/A'}</div>
+                    ${contactRowsHtml}
                     <div style="grid-column: span 2;"><strong>Motivo de Consulta:</strong> ${meta.consultReason || 'N/A'}</div>
                     <div><strong>Contacto Emergencia:</strong> ${activePatient.emergencyContact || 'Sin registrar'}</div>
                     <div><strong>Medicación Actual:</strong> ${activePatient.medication || 'Sin registrar'}</div>
@@ -10070,7 +10107,7 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
                                 <span><strong style="color:#10b981;"><i class="fa-solid fa-circle-check"></i> Sesión N° ${s.sessionNum}</strong> — <i class="fa-solid fa-clock"></i> ${s.datetime}</span>
                                 <div style="display: flex; gap: 4px; align-items: center;">
                                     <button class="btn btn-xs btn-outline" style="border-color:#10b981; color:#10b981; font-weight:600;" onclick="window.openRecipesModalForSession('${activePatient.id}', ${s.sessionNum}, '${s.procedure}')" title="Ver / Crear Récipe e Indicaciones"><i class="fa-solid fa-pills"></i> Récipes</button>
-                                    <button class="btn btn-xs btn-outline" style="color: #15803d; border-color: #22c55e;" onclick="sendSessionReceiptWhatsApp('${activePatient.id}', ${s.sessionNum})" title="Enviar Recibo por WhatsApp"><i class="fa-brands fa-whatsapp"></i> Recibo</button>
+                                    ${hideContact ? '' : `<button class="btn btn-xs btn-outline" style="color: #15803d; border-color: #22c55e;" onclick="sendSessionReceiptWhatsApp('${activePatient.id}', ${s.sessionNum})" title="Enviar Recibo por WhatsApp"><i class="fa-brands fa-whatsapp"></i> Recibo</button>`}
                                     <button class="btn btn-xs btn-outline" onclick="downloadSessionReceiptPDFById('${activePatient.id}', ${s.sessionNum})" title="Descargar Recibo en PDF"><i class="fa-solid fa-file-pdf text-blue"></i> PDF</button>
                                     <span class="badge-tag green">✓ Realizada</span>
                                     ${deleteSessionBtn}
@@ -10377,7 +10414,7 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
                                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(16, 185, 129, 0.3); padding-bottom: 8px; margin-bottom: 10px;">
                                     <span style="font-weight: 700; color: #059669;"><i class="fa-solid fa-prescription"></i> Récipe Médico & Indicaciones ${rc.id}</span>
                                     <div style="display:flex; gap:6px; align-items:center;">
-                                        <button class="btn btn-xs btn-outline" style="border-color:#22c55e; color:#15803d; font-weight:600;" onclick="window.sendRecipeWhatsApp('${activePatient.id}', '${rc.id}')" title="Enviar Récipe por WhatsApp"><i class="fa-brands fa-whatsapp"></i> WhatsApp</button>
+                                        ${hideContact ? '' : `<button class="btn btn-xs btn-outline" style="border-color:#22c55e; color:#15803d; font-weight:600;" onclick="window.sendRecipeWhatsApp('${activePatient.id}', '${rc.id}')" title="Enviar Récipe por WhatsApp"><i class="fa-brands fa-whatsapp"></i> WhatsApp</button>`}
                                         <button class="btn btn-xs btn-outline" onclick="window.printSingleRecipePDF('${activePatient.id}', '${rc.id}')" title="Imprimir PDF"><i class="fa-solid fa-file-pdf text-red"></i> PDF</button>
                                         <small class="text-muted"><i class="fa-regular fa-calendar"></i> ${rc.date}</small>
                                     </div>
@@ -11151,10 +11188,16 @@ async function exportEHRToPDF() {
                 <div><strong>Nombre y Apellido:</strong> ${patient.fullname}</div>
                 <div><strong>Cédula / ID:</strong> ${patient.id}</div>
                 <div><strong>Fecha Nacimiento:</strong> ${patient.birthdate} (${calculateAge(patient.birthdate)} años)</div>
-                <div><strong>Teléfono:</strong> ${patient.phone}</div>
-                <div><strong>Ocupación / Profesión:</strong> ${patient.occupation || (patient.metadata && patient.metadata.profession) || 'N/A'}</div>
-                <div><strong>Correo Electrónico:</strong> ${patient.email || 'N/A'}</div>
-                <div style="grid-column: span 2;"><strong>Dirección de Habitación:</strong> ${(patient.metadata && patient.metadata.address) || patient.address || 'N/A'}</div>
+                ${(typeof shouldHidePatientContact === 'function' && shouldHidePatientContact()) ? `
+                    <div style="grid-column: span 2; font-style: italic; color: #64748b;">
+                        <strong>Privacidad Clínica:</strong> Teléfono, Correo y Dirección protegidos por confidencialidad para personal médico.
+                    </div>
+                ` : `
+                    <div><strong>Teléfono:</strong> ${patient.phone}</div>
+                    <div><strong>Ocupación / Profesión:</strong> ${patient.occupation || (patient.metadata && patient.metadata.profession) || 'N/A'}</div>
+                    <div><strong>Correo Electrónico:</strong> ${patient.email || 'N/A'}</div>
+                    <div style="grid-column: span 2;"><strong>Dirección de Habitación:</strong> ${(patient.metadata && patient.metadata.address) || patient.address || 'N/A'}</div>
+                `}
                 ${repInfo}
             </div>
         </div>
@@ -12372,6 +12415,7 @@ async function renderAgendaView(filter = (window.currentAgendaFilter || 'pending
     const isDoctor = currentUser && (typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false);
     const isHygienist = currentUser && (typeof isHygienistRole === 'function' ? isHygienistRole(currentUser.role) : (currentUser.role && currentUser.role.toLowerCase().includes('higien')));
     const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor && !isHygienist);
+    const hideContact = typeof shouldHidePatientContact === 'function' && shouldHidePatientContact(currentUser);
 
     // If logged in as Doctor: ONLY show his assigned appointments
     if (isDoctor) {
@@ -12543,7 +12587,7 @@ async function renderAgendaView(filter = (window.currentAgendaFilter || 'pending
         const isTomorrowAppt = app.isTomorrow === true || app.date === 'tomorrow';
         
         let whatsappBtnHtml = '';
-        if (!isAttended && !isCancelled) {
+        if (!isAttended && !isCancelled && !hideContact) {
             whatsappBtnHtml = `
                 <button class="btn btn-xs btn-success btn-appt-reminder" style="background-color: #22c55e !important; color: white !important; border: none !important; padding: 4px 8px; border-radius: 6px;" onclick="sendWhatsAppReminderForAppt('${app.id}')" title="Notificar por WhatsApp">
                     <i class="fa-brands fa-whatsapp" style="font-size: 0.95rem;"></i>
@@ -13743,6 +13787,7 @@ async function renderPricingTable(filter = 'all', searchQuery = '') {
     const isDoctor = currentUser && (typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false);
     const isHygienist = currentUser && (typeof isHygienistRole === 'function' ? isHygienistRole(currentUser.role) : (currentUser.role && currentUser.role.toLowerCase().includes('higien')));
     const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor && !isHygienist);
+    const hideContact = typeof shouldHidePatientContact === 'function' && shouldHidePatientContact(currentUser);
     const isLabFilter = (filter && filter.toLowerCase() === 'laboratorio');
 
     // If logged in as Doctor: ONLY show services offered by him
@@ -18351,9 +18396,10 @@ function initGlobalEvents() {
 
         if (nameEl) nameEl.textContent = patientObj.fullname || 'Paciente sin nombre';
         if (infoEl) {
+            const hideContactAppt = typeof shouldHidePatientContact === 'function' && shouldHidePatientContact();
             const parts = [];
             if (patientObj.cedula) parts.push(`Cédula: ${patientObj.cedula}`);
-            if (patientObj.phone) parts.push(`Tel: ${patientObj.phone}`);
+            if (!hideContactAppt && patientObj.phone) parts.push(`Tel: ${patientObj.phone}`);
             if (parts.length === 0 && patientObj.id) parts.push(`ID: ${patientObj.id}`);
             infoEl.textContent = parts.join(' | ') || 'Paciente Registrado';
         }
@@ -18413,14 +18459,15 @@ function initGlobalEvents() {
         const allPatients = window.getAppointmentPatientsCache();
         const query = (term || '').trim().toLowerCase();
 
+        const hideContactAppt = typeof shouldHidePatientContact === 'function' && shouldHidePatientContact();
         let matched = allPatients;
         if (query) {
             matched = allPatients.filter(p => {
                 const name = (p.fullname || '').toLowerCase();
                 const id = (p.id || '').toLowerCase();
                 const ced = (p.cedula || '').toLowerCase();
-                const ph = (p.phone || '').toLowerCase();
-                return name.includes(query) || id.includes(query) || ced.includes(query) || ph.includes(query);
+                const ph = hideContactAppt ? '' : (p.phone || '').toLowerCase();
+                return name.includes(query) || id.includes(query) || ced.includes(query) || (ph && ph.includes(query));
             });
         }
 
@@ -18446,7 +18493,7 @@ function initGlobalEvents() {
             
             const infoParts = [];
             if (p.cedula) infoParts.push(`CI: ${p.cedula}`);
-            if (p.phone) infoParts.push(`Tel: ${p.phone}`);
+            if (!hideContactAppt && p.phone) infoParts.push(`Tel: ${p.phone}`);
             if (infoParts.length === 0) infoParts.push(`ID: ${p.id}`);
 
             item.innerHTML = `
@@ -19608,6 +19655,7 @@ if (patientSameDay.length === 0) {
     window.savePatientRecord = async function(redirectToBudget = false) {
         const currentUser = getCurrentUser();
         const isHyg = currentUser && (typeof isHygienistRole === 'function' ? isHygienistRole(currentUser.role) : (currentUser.role && currentUser.role.toLowerCase().includes('higien')));
+        const isDoctor = currentUser && (typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false);
 
         // El rol de higienista NO puede registrar nuevos pacientes
         if (isHyg && !window.editingPatientId) {
@@ -19663,8 +19711,8 @@ if (patientSameDay.length === 0) {
             );
         }
 
-        // Si es Higienista editando paciente existente, no se exige validar filiación porque está en solo lectura
-        if (!isHyg) {
+        // Si es Higienista o Médico editando paciente existente, no se exige validar filiación porque está protegida
+        if (!isHyg && (!isDoctor || !window.editingPatientId)) {
             if (!window.validateRequiredFormFields(patientRequiredFields)) {
                 if (typeof window.setPatientStepperStep === 'function') window.setPatientStepperStep(1);
                 return false;
@@ -19765,8 +19813,8 @@ if (patientSameDay.length === 0) {
             const existing = patients.find(p => p.id === id || (window.editingPatientId && p.id === window.editingPatientId));
 
             if (existing) {
-                if (isHyg) {
-                    // MODO HIGIENISTA: Preservar estrictamente los datos de filiación del paciente,
+                if (isHyg || isDoctor) {
+                    // MODO HIGIENISTA / MÉDICO: Preservar estrictamente los datos de contacto y filiación del paciente,
                     // permitiendo registrar y actualizar únicamente Anamnesis y Examen clínico
                     patientToSave = {
                         ...existing,
@@ -23168,6 +23216,7 @@ function initPatientStepperWizard() {
 
             const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
             const isHyg = curUser && (typeof isHygienistRole === 'function' ? isHygienistRole(curUser.role) : (curUser.role && curUser.role.toLowerCase().includes('higien')));
+            const hideContact = typeof shouldHidePatientContact === 'function' && shouldHidePatientContact(curUser);
 
             const modalTitle = document.getElementById('modal-patient-title');
             if (modalTitle) {
@@ -23184,7 +23233,7 @@ function initPatientStepperWizard() {
             const pIdInput = document.getElementById('p-id');
             if (pIdInput) pIdInput.readOnly = true;
 
-            // Protection of filiation data for hygienist
+            // Protection of filiation data for hygienist and doctor
             const step1 = document.getElementById('step-content-1');
             let hygNotice = document.getElementById('hyg-filiacion-notice');
             if (step1) {
@@ -23204,6 +23253,21 @@ function initPatientStepperWizard() {
                     } else {
                         hygNotice.style.display = 'flex';
                     }
+                } else if (hideContact) {
+                    inputs.forEach(el => {
+                        el.disabled = false;
+                        el.style.backgroundColor = '';
+                        el.style.cursor = '';
+                    });
+                    if (hygNotice) hygNotice.style.display = 'none';
+                    // Protect contact fields strictly for doctor
+                    const contactFields = step1.querySelectorAll('.patient-contact-field input, #p-mobile-phone, #p-local-phone, #p-email, #p-instagram, #p-address, #p-rep-phone');
+                    contactFields.forEach(el => {
+                        el.value = '';
+                        el.disabled = true;
+                        el.readOnly = true;
+                        el.placeholder = '[Dato Confidencial / Solo Administración]';
+                    });
                 } else {
                     inputs.forEach(el => {
                         el.disabled = false;
@@ -23288,6 +23352,7 @@ function loadPatientDataIntoForm(p) {
         }
     };
 
+    const hideContact = typeof shouldHidePatientContact === 'function' && shouldHidePatientContact();
     setVal('p-id', p.id);
     if (p.fullname) {
         const parts = p.fullname.split(' ');
@@ -23297,13 +23362,13 @@ function loadPatientDataIntoForm(p) {
     setVal('p-birthdate', p.birthdate || '');
     const age = calculateAge(p.birthdate);
     setVal('p-age', (p.metadata && p.metadata.age) || age || '');
-    setVal('p-mobile-phone', p.phone || (p.metadata && p.metadata.mobilePhone) || '');
-    setVal('p-local-phone', p.metadata?.localPhone || '');
-    setVal('p-email', p.email || '');
-    setVal('p-instagram', p.instagram || p.metadata?.instagram || '');
+    setVal('p-mobile-phone', hideContact ? '' : (p.phone || (p.metadata && p.metadata.mobilePhone) || ''));
+    setVal('p-local-phone', hideContact ? '' : (p.metadata?.localPhone || ''));
+    setVal('p-email', hideContact ? '' : (p.email || ''));
+    setVal('p-instagram', hideContact ? '' : (p.instagram || p.metadata?.instagram || ''));
     setVal('p-profession', p.occupation || p.metadata?.profession || '');
     setVal('p-gender', p.metadata?.gender || 'Femenino');
-    setVal('p-address', p.address || p.metadata?.address || '');
+    setVal('p-address', hideContact ? '' : (p.address || p.metadata?.address || ''));
     setVal('p-consult-reason', p.metadata?.consultReason || '');
 
     const pType = p.metadata?.type || (age < 18 ? 'Infantil' : 'Adulto');
@@ -23325,7 +23390,7 @@ function loadPatientDataIntoForm(p) {
 
     setVal('p-rep-name', p.metadata?.repName || '');
     setVal('p-rep-id', p.metadata?.repId || '');
-    setVal('p-rep-phone', p.metadata?.repPhone || '');
+    setVal('p-rep-phone', hideContact ? '' : (p.metadata?.repPhone || ''));
     setVal('p-rep-relation', p.metadata?.repRelation || '');
 
     // Set Tag / Convenio in Step 1
@@ -29471,8 +29536,12 @@ async function renderPublicSessionReceiptView() {
                     </div>
                     <div style="text-align: right;">
                         <span style="font-size: 0.72rem; color: #64748b; font-weight: 800; text-transform: uppercase;">Contacto:</span>
-                        <span style="display: block; color: #475569;">Teléfono: <strong>${patient.phone}</strong></span>
-                        <span style="color: #475569;">Email: ${patient.email || 'N/A'}</span>
+                        ${(typeof shouldHidePatientContact === 'function' && shouldHidePatientContact()) ? `
+                            <span style="display: block; color: #64748b; font-style: italic;">[Protegido]</span>
+                        ` : `
+                            <span style="display: block; color: #475569;">Teléfono: <strong>${patient.phone}</strong></span>
+                            <span style="color: #475569;">Email: ${patient.email || 'N/A'}</span>
+                        `}
                     </div>
                 </div>
 
@@ -30062,8 +30131,9 @@ window.selectRecipePatient = async function(patientId) {
     const searchContainer = document.getElementById('recipe-patient-search-container');
     const resultsContainer = document.getElementById('recipe-patient-search-results');
 
+    const hideContact = typeof shouldHidePatientContact === 'function' && shouldHidePatientContact();
     if (nameEl) nameEl.innerText = p.fullname || 'Paciente';
-    if (metaEl) metaEl.innerText = `C.I.: ${p.id} | Tel: ${p.phone || 'S/N'}`;
+    if (metaEl) metaEl.innerText = hideContact ? `C.I.: ${p.id}` : `C.I.: ${p.id} | Tel: ${p.phone || 'S/N'}`;
     if (searchContainer) searchContainer.classList.add('hidden');
     if (resultsContainer) resultsContainer.style.display = 'none';
 
@@ -30107,6 +30177,7 @@ window.renderRecipePatientSearchResults = async function(query) {
     const allPatients = await SupabaseDataService.getPatients();
     let patients = allPatients;
     const cur = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const hideContact = typeof shouldHidePatientContact === 'function' && shouldHidePatientContact(cur);
     if (cur && typeof isDoctorUser === 'function' && isDoctorUser(cur)) {
         patients = allPatients.filter(p => typeof isPatientAssignedToDoctor === 'function' ? isPatientAssignedToDoctor(p, cur) : true);
     }
@@ -30117,8 +30188,8 @@ window.renderRecipePatientSearchResults = async function(query) {
         matches = patients.filter(p => {
             const fn = normalizeStr(p.fullname);
             const id = normalizeStr(p.id);
-            const ph = normalizeStr(p.phone);
-            return fn.includes(term) || id.includes(term) || ph.includes(term);
+            const ph = hideContact ? '' : normalizeStr(p.phone);
+            return fn.includes(term) || id.includes(term) || (ph && ph.includes(term));
         }).slice(0, 30);
     }
 
@@ -30131,10 +30202,11 @@ window.renderRecipePatientSearchResults = async function(query) {
     resultsContainer.innerHTML = matches.map(p => {
         const safeId = String(p.id || '').replace(/'/g, "\\'");
         const safeName = (p.fullname || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const contactTag = hideContact ? '' : ` | Tel: ${p.phone || 'S/N'}`;
         return `
             <div class="recipe-patient-search-item" onclick="window.selectRecipePatient('${safeId}')" style="padding: 8px 12px; border-bottom: 1px solid #f1f5f9; cursor: pointer; transition: background 0.15s ease;">
                 <div style="font-weight: 700; color: #0f172a; font-size: 0.88rem;"><i class="fa-solid fa-user text-cyan" style="margin-right: 6px;"></i> ${safeName}</div>
-                <div style="font-size: 0.75rem; color: #64748b; margin-top: 2px;">Cédula: <strong>${p.id}</strong> | Tel: ${p.phone || 'S/N'}</div>
+                <div style="font-size: 0.75rem; color: #64748b; margin-top: 2px;">Cédula: <strong>${p.id}</strong>${contactTag}</div>
             </div>
         `;
     }).join('');
@@ -30146,6 +30218,7 @@ window.openRecipeModal = async function(sessionNum = null, sessionTitle = '') {
 
     const patients = await SupabaseDataService.getPatients();
     const p = activeId ? patients.find(pt => pt.id === activeId) : null;
+    const hideContactModal = typeof shouldHidePatientContact === 'function' && shouldHidePatientContact();
 
     const nameEl = document.getElementById('recipe-patient-name');
     const metaEl = document.getElementById('recipe-patient-meta');
@@ -30155,7 +30228,7 @@ window.openRecipeModal = async function(sessionNum = null, sessionTitle = '') {
     if (p) {
         window._recipeSelectedPatientId = p.id;
         if (nameEl) nameEl.innerText = p.fullname || 'Paciente';
-        if (metaEl) metaEl.innerText = `C.I.: ${p.id} | Tel: ${p.phone || 'S/N'}`;
+        if (metaEl) metaEl.innerText = hideContactModal ? `C.I.: ${p.id}` : `C.I.: ${p.id} | Tel: ${p.phone || 'S/N'}`;
         if (searchContainer) searchContainer.classList.add('hidden');
     } else {
         window.clearRecipePatient();
