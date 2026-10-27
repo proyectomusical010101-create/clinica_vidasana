@@ -13639,8 +13639,8 @@ window.getClinicPerformanceSummary = async function(forceRefresh = false) {
     clinicalDocs.sort((a, b) => b.totalUSD - a.totalUSD);
     const topDoctor = clinicalDocs.length > 0 ? clinicalDocs[0] : null;
 
-    // Determine Top Specialty
-    const allSpecs = Object.values(specialtyStats);
+    // Determine Top Specialty (only with revenue > 0)
+    const allSpecs = Object.values(specialtyStats).filter(s => (s.totalUSD || 0) > 0);
     allSpecs.sort((a, b) => b.totalUSD - a.totalUSD);
     const topSpecialty = allSpecs.length > 0 ? allSpecs[0] : null;
 
