@@ -365,6 +365,89 @@ class SupabaseDataService {
         return await this.deleteBaremoService(code);
     }
 
+    // ==========================================
+    // CONSUMIBLES & CAFETERÍA METHODS
+    // ==========================================
+    static async getConsumables(forceRefresh = false) {
+        let local = [];
+        try { local = JSON.parse(localStorage.getItem('clinic_consumables')) || []; } catch(e) {}
+
+        const defaultConsumables = [
+            { code: "BEB-01", name: "Agua Mineral sin Gas 500ml", category: "Bebidas Frías", priceUSD: 1.00, costUSD: 0.40, currentStock: 36, minStock: 12, unit: "Botella" },
+            { code: "BEB-02", name: "Agua Mineral con Gas 500ml", category: "Bebidas Frías", priceUSD: 1.25, costUSD: 0.50, currentStock: 24, minStock: 8, unit: "Botella" },
+            { code: "BEB-03", name: "Jugo Natural de Naranja 300ml", category: "Bebidas Frías", priceUSD: 1.50, costUSD: 0.70, currentStock: 18, minStock: 6, unit: "Botella" },
+            { code: "BEB-04", name: "Jugo Pasteurizado Manzana / Pera", category: "Bebidas Frías", priceUSD: 1.50, costUSD: 0.75, currentStock: 15, minStock: 6, unit: "Envase" },
+            { code: "CAF-01", name: "Café Espresso / Negro", category: "Cafetería e Infusiones", priceUSD: 1.00, costUSD: 0.25, currentStock: 50, minStock: 15, unit: "Taza" },
+            { code: "CAF-02", name: "Café con Leche / Capuchino", category: "Cafetería e Infusiones", priceUSD: 1.50, costUSD: 0.45, currentStock: 40, minStock: 15, unit: "Taza" },
+            { code: "CAF-03", name: "Té Caliente / Infusión Aromática", category: "Cafetería e Infusiones", priceUSD: 1.00, costUSD: 0.20, currentStock: 30, minStock: 10, unit: "Taza" },
+            { code: "SNK-01", name: "Galletas Dulces / Wafer", category: "Snacks y Galletas", priceUSD: 1.00, costUSD: 0.50, currentStock: 25, minStock: 10, unit: "Paquete" },
+            { code: "SNK-02", name: "Galletas de Soda / Crackers", category: "Snacks y Galletas", priceUSD: 0.75, costUSD: 0.35, currentStock: 30, minStock: 10, unit: "Paquete" },
+            { code: "SNK-03", name: "Barra Nutritiva de Cereal y Avena", category: "Snacks y Galletas", priceUSD: 1.25, costUSD: 0.60, currentStock: 20, minStock: 8, unit: "Unidad" },
+            { code: "GOL-01", name: "Caramelos y Menta Refrescante", category: "Golosinas y Dulces", priceUSD: 0.50, costUSD: 0.20, currentStock: 40, minStock: 15, unit: "Paquete" },
+            { code: "GOL-02", name: "Chocolate con Leche 40g", category: "Golosinas y Dulces", priceUSD: 1.50, costUSD: 0.80, currentStock: 16, minStock: 6, unit: "Barra" }
+        ];
+
+        if (this.isCloudConnected()) {
+            try {
+                const { data, error } = await supabaseClient.from('patients').select('*').eq('id', 'SYS-CONSUMABLES-CONFIG');
+                if (!error && data && data.length > 0 && data[0].odontogram_data && data[0].odontogram_data._consumables) {
+                    const cloudList = data[0].odontogram_data._consumables;
+                    localStorage.setItem('clinic_consumables', JSON.stringify(cloudList));
+                    return cloudList;
+                } else if (!local || local.length === 0) {
+                    await this.syncConsumablesCloud(defaultConsumables);
+                    localStorage.setItem('clinic_consumables', JSON.stringify(defaultConsumables));
+                    return defaultConsumables;
+                }
+            } catch(e) {
+                console.warn('Error fetching consumables from cloud:', e);
+            }
+        }
+
+        if (!local || local.length === 0) {
+            localStorage.setItem('clinic_consumables', JSON.stringify(defaultConsumables));
+            return defaultConsumables;
+        }
+        return local;
+    }
+
+    static async syncConsumablesCloud(list) {
+        if (!this.isCloudConnected()) return;
+        try {
+            await supabaseClient.from('patients').upsert({
+                id: 'SYS-CONSUMABLES-CONFIG',
+                fullname: 'Configuración Consumibles Maestro',
+                birthdate: '2026-01-01',
+                phone: 'SYS',
+                status: 'Sistema',
+                odontogram_data: {
+                    _is_consumables_config: true,
+                    _consumables: list
+                }
+            });
+        } catch(e) {
+            console.error('Error syncing consumables cloud:', e);
+        }
+    }
+
+    static async saveConsumable(item) {
+        let list = await this.getConsumables();
+        const idx = list.findIndex(x => x.code === item.code);
+        if (idx >= 0) list[idx] = { ...list[idx], ...item };
+        else list.push(item);
+
+        localStorage.setItem('clinic_consumables', JSON.stringify(list));
+        await this.syncConsumablesCloud(list);
+        return item;
+    }
+
+    static async deleteConsumable(code) {
+        let list = await this.getConsumables();
+        list = list.filter(x => x.code !== code);
+        localStorage.setItem('clinic_consumables', JSON.stringify(list));
+        await this.syncConsumablesCloud(list);
+    }
+
     static async saveInventory(items) {
         if (Array.isArray(items)) {
             return await this.saveInventoryBatch(items);

@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=366">
+    <link rel="stylesheet" href="styles.css?v=367">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -62,6 +62,7 @@
         html[data-active-tab="rooms"] .tab-view:not(#view-rooms),
         html[data-active-tab="payroll"] .tab-view:not(#view-payroll),
         html[data-active-tab="stationery"] .tab-view:not(#view-stationery),
+        html[data-active-tab="consumables"] .tab-view:not(#view-consumables),
         html[data-active-tab="settings"] .tab-view:not(#view-settings),
         html[data-active-tab="help"] .tab-view:not(#view-help) {
             display: none !important;
@@ -80,6 +81,7 @@
         html[data-active-tab="rooms"] #view-rooms,
         html[data-active-tab="payroll"] #view-payroll,
         html[data-active-tab="stationery"] #view-stationery,
+        html[data-active-tab="consumables"] #view-consumables,
         html[data-active-tab="settings"] #view-settings,
         html[data-active-tab="help"] #view-help {
             display: block !important;
@@ -218,6 +220,10 @@
                     <i class="fa-solid fa-boxes-stacked"></i>
                     <span>Insumos</span>
                     <span class="badge-tag red hidden" id="nav-stock-alert-badge" style="position: absolute; right: 12px; font-size: 0.68rem; padding: 2px 6px; border-radius: 10px; font-weight: 700;">0</span>
+                </a>
+                <a href="#consumables" class="nav-item" data-tab="consumables" data-tooltip="Consumibles & Cafetería">
+                    <i class="fa-solid fa-mug-saucer"></i>
+                    <span>Consumibles</span>
                 </a>
                 <a href="#finance" class="nav-item mobile-sidebar-hide" data-tab="finance" data-tooltip="Finanzas">
                     <i class="fa-solid fa-wallet"></i>
@@ -1758,6 +1764,113 @@
                                     </tr>
                                 </thead>
                                 <tbody id="pricing-table-body">
+                                    <!-- Populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- VIEW: CONSUMIBLES & CAFETERÍA -->
+                <section id="view-consumables" class="tab-view">
+                    <div class="view-header">
+                        <div>
+                            <h1><i class="fa-solid fa-mug-saucer text-cyan"></i> Consumibles & Cafetería</h1>
+                            <p class="subtitle">Gestión comercial y venta de aguas, jugos, cafés, snacks y golosinas para pacientes y visitantes.</p>
+                        </div>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <button class="btn btn-outline" id="btn-export-consumables-excel" title="Exportar todo el Catálogo a Excel" style="border-color: #10b981; color: #059669; font-weight: 600;">
+                                <i class="fa-solid fa-file-excel text-green"></i> Exportar
+                            </button>
+                            <button class="btn btn-outline" id="btn-download-consumables-template" title="Descargar Plantilla Excel">
+                                <i class="fa-solid fa-file-excel text-green"></i> Plantilla
+                            </button>
+                            <button class="btn btn-outline" id="btn-import-consumables" title="Importar desde Excel">
+                                <i class="fa-solid fa-file-import text-cyan"></i> Importar
+                            </button>
+                            <input type="file" id="import-consumables-file" accept=".xlsx, .xls" style="display: none;">
+                            <button class="btn btn-primary" id="btn-add-consumable" onclick="window.openCreateConsumableModal()">
+                                <i class="fa-solid fa-plus"></i> + Nuevo Producto
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Métricas Rápidas de Consumibles -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 16px;">
+                        <div class="card" style="padding: 14px 18px; margin: 0; display: flex; align-items: center; gap: 14px; border-left: 4px solid var(--primary-cyan);">
+                            <div style="width: 42px; height: 42px; border-radius: 10px; background: rgba(13, 148, 136, 0.1); color: var(--primary-cyan); display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                                <i class="fa-solid fa-boxes-stacked"></i>
+                            </div>
+                            <div>
+                                <span style="font-size: 0.75rem; color: #64748b; font-weight: 700; text-transform: uppercase;">Total Productos</span>
+                                <h3 id="stat-con-total-items" style="margin: 2px 0 0 0; font-size: 1.35rem; color: #0f172a;">0</h3>
+                            </div>
+                        </div>
+                        <div class="card" style="padding: 14px 18px; margin: 0; display: flex; align-items: center; gap: 14px; border-left: 4px solid #10b981;">
+                            <div style="width: 42px; height: 42px; border-radius: 10px; background: rgba(16, 185, 129, 0.1); color: #059669; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                                <i class="fa-solid fa-cubes"></i>
+                            </div>
+                            <div>
+                                <span style="font-size: 0.75rem; color: #64748b; font-weight: 700; text-transform: uppercase;">Unidades en Stock</span>
+                                <h3 id="stat-con-total-stock" style="margin: 2px 0 0 0; font-size: 1.35rem; color: #059669;">0</h3>
+                            </div>
+                        </div>
+                        <div class="card" style="padding: 14px 18px; margin: 0; display: flex; align-items: center; gap: 14px; border-left: 4px solid #0284c7;">
+                            <div style="width: 42px; height: 42px; border-radius: 10px; background: rgba(2, 132, 199, 0.1); color: #0284c7; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                                <i class="fa-solid fa-sack-dollar"></i>
+                            </div>
+                            <div>
+                                <span style="font-size: 0.75rem; color: #64748b; font-weight: 700; text-transform: uppercase;">Valor en Venta (USD)</span>
+                                <h3 id="stat-con-total-value" style="margin: 2px 0 0 0; font-size: 1.35rem; color: #0284c7;">$0.00</h3>
+                            </div>
+                        </div>
+                        <div class="card" style="padding: 14px 18px; margin: 0; display: flex; align-items: center; gap: 14px; border-left: 4px solid #f59e0b;">
+                            <div style="width: 42px; height: 42px; border-radius: 10px; background: rgba(245, 158, 11, 0.1); color: #d97706; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                                <i class="fa-solid fa-triangle-exclamation"></i>
+                            </div>
+                            <div>
+                                <span style="font-size: 0.75rem; color: #64748b; font-weight: 700; text-transform: uppercase;">Stock Bajo / Crítico</span>
+                                <h3 id="stat-con-low-stock" style="margin: 2px 0 0 0; font-size: 1.35rem; color: #d97706;">0</h3>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Barra de Filtros y Búsqueda -->
+                    <div class="card filter-card" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                            <div class="filter-group" id="consumables-category-filters" style="display: flex; flex-wrap: wrap; gap: 6px;">
+                                <button type="button" class="filter-btn active" data-category="all" onclick="window.setConsumableCategoryFilter('all', this)"><i class="fa-solid fa-layer-group"></i> Todos los Productos</button>
+                                <button type="button" class="filter-btn" data-category="Bebidas Frías" onclick="window.setConsumableCategoryFilter('Bebidas Frías', this)"><i class="fa-solid fa-bottle-water text-cyan"></i> Bebidas Frías</button>
+                                <button type="button" class="filter-btn" data-category="Cafetería e Infusiones" onclick="window.setConsumableCategoryFilter('Cafetería e Infusiones', this)"><i class="fa-solid fa-mug-hot text-amber"></i> Cafetería & Té</button>
+                                <button type="button" class="filter-btn" data-category="Snacks y Galletas" onclick="window.setConsumableCategoryFilter('Snacks y Galletas', this)"><i class="fa-solid fa-cookie text-emerald"></i> Snacks & Galletas</button>
+                                <button type="button" class="filter-btn" data-category="Golosinas y Dulces" onclick="window.setConsumableCategoryFilter('Golosinas y Dulces', this)"><i class="fa-solid fa-candy-cane text-pink"></i> Golosinas & Dulces</button>
+                            </div>
+                            <div class="search-box" style="min-width: 260px;">
+                                <input type="text" id="consumables-table-search" placeholder="🔍 Buscar por nombre o código..." oninput="window.filterConsumablesList()">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tabla de Productos Consumibles -->
+                    <div class="card" style="margin-top: 0;">
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Código</th>
+                                        <th>Categoría</th>
+                                        <th>Nombre del Producto</th>
+                                        <th>Unidad</th>
+                                        <th class="text-right">Precio Venta (USD)</th>
+                                        <th class="text-right">Precio (Bs.)</th>
+                                        <th class="text-right">Costo (USD)</th>
+                                        <th class="text-center">Stock Actual</th>
+                                        <th class="text-center">Mínimo</th>
+                                        <th class="text-center">Estado</th>
+                                        <th class="text-right">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="consumables-table-body">
                                     <!-- Populated dynamically -->
                                 </tbody>
                             </table>
@@ -4048,6 +4161,62 @@
             <div class="modal-footer">
                 <button class="btn btn-outline" data-close="modal-service">Cancelar</button>
                 <button class="btn btn-primary" id="btn-save-service">Guardar Servicio</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: CREAR / EDITAR PRODUCTO CONSUMIBLE -->
+    <div class="modal-overlay hidden" id="modal-consumable" style="z-index: 10500;">
+        <div class="modal-dialog" style="max-width: 650px; width: 95vw;">
+            <div class="modal-header">
+                <h3 id="modal-consumable-title"><i class="fa-solid fa-mug-saucer text-cyan"></i> Registrar Nuevo Producto Consumible</h3>
+                <button class="modal-close" data-close="modal-consumable">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="form-consumable" class="grid-form">
+                    <div class="form-group">
+                        <label>Código del Producto *</label>
+                        <input type="text" id="con-code" class="form-control" required placeholder="BEB-01">
+                    </div>
+                    <div class="form-group">
+                        <label>Nombre del Producto *</label>
+                        <input type="text" id="con-name" class="form-control" required placeholder="ej: Agua Mineral sin Gas 500ml">
+                    </div>
+                    <div class="form-group">
+                        <label>Categoría *</label>
+                        <select id="con-category" class="form-control">
+                            <option value="Bebidas Frías">Bebidas Frías (Agua, Jugos, Refrescos)</option>
+                            <option value="Cafetería e Infusiones">Cafetería e Infusiones (Café, Té)</option>
+                            <option value="Snacks y Galletas">Snacks y Galletas</option>
+                            <option value="Golosinas y Dulces">Golosinas y Dulces</option>
+                            <option value="Otros Consumibles">Otros Consumibles</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Unidad de Venta *</label>
+                        <input type="text" id="con-unit" class="form-control" placeholder="Botella, Lata, Paquete, Taza..." value="Botella">
+                    </div>
+                    <div class="form-group">
+                        <label>Precio de Venta ($ USD) *</label>
+                        <input type="number" id="con-price" class="form-control" step="0.01" min="0" required placeholder="1.00">
+                    </div>
+                    <div class="form-group">
+                        <label>Costo de Compra ($ USD)</label>
+                        <input type="number" id="con-cost" class="form-control" step="0.01" min="0" placeholder="0.50" value="0.50">
+                    </div>
+                    <div class="form-group">
+                        <label>Stock Inicial / Actual *</label>
+                        <input type="number" id="con-stock" class="form-control" required value="24" min="0" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Stock Mínimo de Alerta *</label>
+                        <input type="number" id="con-min-stock" class="form-control" required value="6" min="1" step="1">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" data-close="modal-consumable">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btn-save-consumable" onclick="window.saveConsumableFromModal()"><i class="fa-solid fa-floppy-disk"></i> Guardar Producto</button>
             </div>
         </div>
     </div>
@@ -7348,6 +7517,7 @@
                                     <option value="Rayos X & Imagenología">Rayos X & Imagenología</option>
                                     <option value="Laboratorio Clínico">Laboratorio Clínico</option>
                                     <option value="Procedimientos Ambulatorios">Procedimientos Ambulatorios</option>
+                                    <option value="consumables">🥤 Consumibles & Cafetería (Bebidas, Snacks, Golosinas)</option>
                                 </select>
                             </div>
 
@@ -8449,14 +8619,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=366"></script>
-    <script src="supabaseClient.js?v=366"></script>
-    <script src="odontogram.js?v=366"></script>
-    <script src="signature.js?v=366"></script>
-    <script src="whatsapp.js?v=366"></script>
-    <script src="kardex.js?v=366"></script>
-    <script src="app.js?v=366"></script>
-    <script src="clinicalERP.js?v=366"></script>
-    <script src="tutorial.js?v=366"></script>
+    <script src="seededData.js?v=367"></script>
+    <script src="supabaseClient.js?v=367"></script>
+    <script src="odontogram.js?v=367"></script>
+    <script src="signature.js?v=367"></script>
+    <script src="whatsapp.js?v=367"></script>
+    <script src="kardex.js?v=367"></script>
+    <script src="app.js?v=367"></script>
+    <script src="clinicalERP.js?v=367"></script>
+    <script src="tutorial.js?v=367"></script>
 </body>
 </html>
