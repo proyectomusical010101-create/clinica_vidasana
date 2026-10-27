@@ -280,6 +280,14 @@ function isDoctorUser(user) {
 }
 window.isDoctorUser = isDoctorUser;
 
+function isDentalDoctor(user) {
+    if (!user) return false;
+    if (!isDoctorUser(user)) return false;
+    const roleOrSpec = (user.doctorProfile?.specialty || user.doctor_profile?.specialty || user.role || '');
+    return isOdontologyRole(roleOrSpec);
+}
+window.isDentalDoctor = isDentalDoctor;
+
 function canCurrentUserDelete(user = null) {
     const u = user || (typeof getCurrentUser === 'function' ? getCurrentUser() : null);
     if (!u) return false;
@@ -1430,6 +1438,44 @@ function applyRolePermissionsUI(role) {
             docSigSection.classList.add('hidden');
         }
     }
+
+    // Doctor role global isolation: body flag & feature lockdown
+    if (typeof document !== 'undefined' && document.body) {
+        const isDoc = (roleType === 'doctor');
+        document.body.classList.toggle('is-doctor-role', isDoc);
+
+        if (isDoc) {
+            // Lock down Cashea
+            const casheaBtn = document.getElementById('btn-header-cashea');
+            if (casheaBtn) casheaBtn.style.display = 'none';
+
+            // Lock down Birthdays
+            const bdayHubBtn = document.getElementById('btn-birthday-hub');
+            if (bdayHubBtn) bdayHubBtn.style.display = 'none';
+            const bdayCard = document.querySelector('.dashboard-birthdays-card');
+            if (bdayCard) bdayCard.style.display = 'none';
+
+            // Lock down Stock / Inventory
+            const stockCard = document.querySelector('.dashboard-stock-alerts-card');
+            if (stockCard) stockCard.style.display = 'none';
+            const navStockBadge = document.getElementById('nav-stock-alerts-badge');
+            if (navStockBadge) navStockBadge.style.display = 'none';
+
+            // Lock down Charging / Cobrar
+            const directSaleBtn = document.getElementById('btn-header-direct-sale');
+            if (directSaleBtn) directSaleBtn.style.display = 'none';
+            const ehrAbonoBtn = document.getElementById('btn-ehr-add-abono');
+            if (ehrAbonoBtn) ehrAbonoBtn.style.display = 'none';
+
+            // Lock down Import / Export / Templates
+            const exportBtns = document.querySelectorAll('.btn-export-excel, .btn-import, .btn-download-template, #btn-export-patients-excel, #btn-import-patients, #btn-export-services-excel, #btn-import-services, #btn-export-inventory-excel, #btn-import-inventory');
+            exportBtns.forEach(b => { b.style.display = 'none'; });
+
+            // Lock down Reminders
+            const remindersBtn = document.getElementById('btn-agenda-reminders');
+            if (remindersBtn) remindersBtn.style.display = 'none';
+        }
+    }
 }
 
 function renderMobileNavigationForRole(roleType) {
@@ -2394,6 +2440,14 @@ async function saveCurrentBudgetAsDraft(patientIdToSave) {
 }
 
 window.selectPatientAndLoadApprovedBudget = async function(patientId) {
+    const cur = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (cur && typeof isDoctorUser === 'function' && isDoctorUser(cur) && typeof isDentalDoctor === 'function' && !isDentalDoctor(cur)) {
+        const spec = cur.doctorProfile?.specialty || cur.doctor_profile?.specialty || cur.role || 'Consultas Médicas';
+        if (typeof window.openMedicalBudgetEditor === 'function') {
+            await window.openMedicalBudgetEditor({ specialtyCategory: spec, patientId: patientId });
+            return;
+        }
+    }
     const currentActiveId = getActivePatientId();
 
     // Check if there are unsaved budget items for the currently active patient before switching
@@ -2645,13 +2699,19 @@ async function renderBudgetListView(forceRefresh = false) {
     const isDoctor = currentUser && (typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false);
     const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor);
 
-    // If logged in as Doctor: ONLY show his assigned budgets
+    // If logged in as Doctor: ONLY show his assigned budgets & scoped by specialty
     if (isDoctor) {
+        const isDental = typeof isDentalDoctor === 'function' && isDentalDoctor(currentUser);
         const docId = String(currentUser.id || '').trim();
         const docName = String(currentUser.fullname || currentUser.name || '').trim().toLowerCase();
         const cleanDocName = docName.replace(/^dr.s*|^dra.s*/i, '').trim();
 
         budgets = budgets.filter(b => {
+            const cat = String(b.category || 'Odontología').toLowerCase();
+            const isDentalBudget = cat.includes('odont') || cat.includes('dental');
+            if (isDental && !isDentalBudget) return false;
+            if (!isDental && isDentalBudget) return false;
+
             const bDocId = String(b.doctorId || (b.metadata && b.metadata.doctorId) || '').trim();
             if (docId && bDocId && bDocId === docId) return true;
 
@@ -2670,6 +2730,26 @@ async function renderBudgetListView(forceRefresh = false) {
 
             return false;
         });
+
+        // Hide non-relevant category filter pills for doctor
+        const filterDental = document.getElementById('filter-cat-dental');
+        const filterMed = document.getElementById('filter-cat-med');
+        const filterXray = document.getElementById('filter-cat-xray');
+        const filterLab = document.getElementById('filter-cat-lab');
+        const filterProc = document.getElementById('filter-cat-proc');
+        if (isDental) {
+            if (filterMed) filterMed.style.display = 'none';
+            if (filterXray) filterXray.style.display = 'none';
+            if (filterLab) filterLab.style.display = 'none';
+            if (filterProc) filterProc.style.display = 'none';
+            if (filterDental) filterDental.style.display = 'inline-block';
+        } else {
+            if (filterDental) filterDental.style.display = 'none';
+            if (filterMed) filterMed.style.display = 'inline-block';
+            if (filterXray) filterXray.style.display = 'inline-block';
+            if (filterLab) filterLab.style.display = 'inline-block';
+            if (filterProc) filterProc.style.display = 'inline-block';
+        }
     }
 
     // Calcular contadores por área clínica
@@ -3212,6 +3292,33 @@ window.currentMedicalBudgetItems = [];
 window.activeEditingMedicalBudgetId = null;
 window.activeMedicalSpecialtyCategory = 'Consultas Médicas';
 
+window.openSelectBudgetTypeModal = async function(patientId = null) {
+    const cur = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (cur && typeof isDoctorUser === 'function' && isDoctorUser(cur)) {
+        if (typeof isDentalDoctor === 'function' && isDentalDoctor(cur)) {
+            // Dental doctor -> route to Odontología
+            if (typeof window.startBudgetCreation === 'function') {
+                await window.startBudgetCreation('Odontología');
+            }
+            if (patientId && typeof window.selectPatientForOdontogram === 'function') {
+                await window.selectPatientForOdontogram(patientId);
+            }
+            return;
+        } else {
+            // Non-dental physician -> route to Medical Budget Editor with their specialty
+            const spec = cur.doctorProfile?.specialty || cur.doctor_profile?.specialty || cur.role || 'Consultas Médicas';
+            if (typeof window.openMedicalBudgetEditor === 'function') {
+                await window.openMedicalBudgetEditor({ specialtyCategory: spec, patientId: patientId });
+            }
+            return;
+        }
+    }
+    // Non-doctor (Admin/Assistant) -> open modal selector
+    if (typeof openModal === 'function') {
+        openModal('modal-select-budget-type');
+    }
+};
+
 window.startBudgetCreation = async function(category) {
     closeModal('modal-select-budget-type');
     if (typeof window.navigateToTab === 'function') {
@@ -3224,7 +3331,7 @@ window.startBudgetCreation = async function(category) {
     }
 };
 
-window.openMedicalBudgetEditor = async function({ budgetId = null, specialtyCategory = 'Consultas Médicas' } = {}) {
+window.openMedicalBudgetEditor = async function({ budgetId = null, specialtyCategory = 'Consultas Médicas', patientId = null } = {}) {
     localStorage.setItem('dental_odontogram_subview', 'medical-editor');
     document.documentElement.setAttribute('data-odontogram-subview', 'medical-editor');
 
@@ -3254,9 +3361,20 @@ window.openMedicalBudgetEditor = async function({ budgetId = null, specialtyCate
     if (patientSelect) {
         patientSelect.innerHTML = '<option value="">Cargando pacientes...</option>';
         try {
-            const patients = await SupabaseDataService.getPatients();
+            const allPatients = await SupabaseDataService.getPatients();
+            let patients = allPatients;
+            const cur = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+            if (cur && typeof isDoctorUser === 'function' && isDoctorUser(cur)) {
+                patients = allPatients.filter(p => typeof isPatientAssignedToDoctor === 'function' ? isPatientAssignedToDoctor(p, cur) : true);
+            }
             patientSelect.innerHTML = '<option value="">-- Seleccionar Paciente --</option>' +
                 patients.map(p => `<option value="${p.id}">${p.fullname} ${p.cedula ? `(${p.cedula})` : ''}</option>`).join('');
+            if (patientId) {
+                patientSelect.value = patientId;
+                if (typeof window.onMedicalBudgetPatientChange === 'function') {
+                    window.onMedicalBudgetPatientChange(patientId);
+                }
+            }
         } catch(e) {
             patientSelect.innerHTML = '<option value="">-- Error cargando pacientes --</option>';
         }
@@ -3268,10 +3386,21 @@ window.openMedicalBudgetEditor = async function({ budgetId = null, specialtyCate
         try {
             const users = await SupabaseDataService.getUsers();
             const doctors = users.filter(u => window.isDoctorOrAssistantUser(u));
-            if (doctors.length > 0) {
-                doctorSelect.innerHTML = doctors.map(d => `<option value="${d.fullname || d.name}" data-id="${d.id}">${d.fullname || d.name} (${d.role || 'Médico'})</option>`).join('');
+            const cur = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+            const isDoc = cur && typeof isDoctorUser === 'function' && isDoctorUser(cur);
+            if (isDoc) {
+                doctorSelect.innerHTML = `<option value="${cur.fullname || cur.name}" data-id="${cur.id}">${cur.fullname || cur.name} (${cur.role || 'Médico'})</option>`;
+                doctorSelect.value = cur.fullname || cur.name;
+                doctorSelect.disabled = true;
+                doctorSelect.title = "Médico tratante bloqueado a su propio usuario";
             } else {
-                doctorSelect.innerHTML = '<option value="Médico Tratante">Médico Tratante</option>';
+                doctorSelect.disabled = false;
+                doctorSelect.title = "";
+                if (doctors.length > 0) {
+                    doctorSelect.innerHTML = doctors.map(d => `<option value="${d.fullname || d.name}" data-id="${d.id}">${d.fullname || d.name} (${d.role || 'Médico'})</option>`).join('');
+                } else {
+                    doctorSelect.innerHTML = '<option value="Médico Tratante">Médico Tratante</option>';
+                }
             }
         } catch(e) {
             doctorSelect.innerHTML = '<option value="Médico Tratante">Médico Tratante</option>';
@@ -3533,7 +3662,20 @@ window.setupMedicalBaremoSearch = function() {
             const rate = getExchangeRate();
 
             let filtered = baremo;
-            if (!showAll) {
+            const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+            const isDocUser = curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser);
+            const isDental = isDocUser && typeof isDentalDoctor === 'function' && isDentalDoctor(curUser);
+
+            if (isDocUser) {
+                // Doctor isolation: strictly limit baremo by specialty, completely disallow cross-specialty procedures
+                filtered = baremo.filter(b => {
+                    const text = ((b.category || '') + ' ' + (b.department || '') + ' ' + (b.name || '')).toLowerCase();
+                    const isDentalSrv = text.includes('odont') || text.includes('dental') || text.includes('endodon') || text.includes('periodon') || text.includes('ortodon') || text.includes('protesis dental');
+                    if (isDental) return isDentalSrv;
+                    if (isDentalSrv) return false;
+                    return true;
+                });
+            } else if (!showAll) {
                 const deptLow = currentDept.toLowerCase();
                 filtered = baremo.filter(b => {
                     const cat = (b.category || '').toLowerCase();
@@ -5706,9 +5848,9 @@ async function renderPatientsTable(filter = null, searchQuery = null, highlightP
                     <button class="btn btn-xs btn-outline btn-act-contact" onclick="window.copyPatientContact('${p.id}', event)" title="Ver y Copiar Datos de Contacto (Teléfono, Correo, Instagram)" style="color: #0284c7; border-color: #bae6fd;">
                         <i class="fa-solid fa-address-card"></i> <span>Contacto</span>
                     </button>
-                    <button class="btn btn-xs btn-outline btn-act-cobrar" onclick="window.openDirectSaleModal('${p.id}')" title="Venta Directa / Cobro Rápido">
+                    ${!isDoctor ? `<button class="btn btn-xs btn-outline btn-act-cobrar" onclick="window.openDirectSaleModal('${p.id}')" title="Venta Directa / Cobro Rápido">
                         <i class="fa-solid fa-bolt"></i> <span>Cobrar</span>
-                    </button>
+                    </button>` : ''}
                     <button class="btn btn-xs btn-primary btn-act-presupuesto" onclick="selectPatientForOdontogram('${p.id}')" title="Emitir Presupuesto">
                         <i class="fa-solid fa-tooth"></i> <span>Presupuesto</span>
                     </button>
@@ -6666,6 +6808,14 @@ function calculateAge(birthdateStr) {
 }
 
 window.selectPatientForOdontogram = async function(patientId) {
+    const cur = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (cur && typeof isDoctorUser === 'function' && isDoctorUser(cur) && typeof isDentalDoctor === 'function' && !isDentalDoctor(cur)) {
+        const spec = cur.doctorProfile?.specialty || cur.doctor_profile?.specialty || cur.role || 'Consultas Médicas';
+        if (typeof window.openMedicalBudgetEditor === 'function') {
+            await window.openMedicalBudgetEditor({ specialtyCategory: spec, patientId: patientId });
+            return;
+        }
+    }
     const navOdontogram = document.querySelector('.nav-item[data-tab="odontogram"]') || document.getElementById('mob-nav-odontogram');
     if (navOdontogram) navOdontogram.click();
     await window.selectPatientAndLoadApprovedBudget(patientId);
@@ -6728,7 +6878,9 @@ window.triggerHeaderNewAction = async function(action) {
             openModal('modal-appointment');
         }
     } else if (action === 'new-budget') {
-        if (typeof openModal === 'function') {
+        if (typeof window.openSelectBudgetTypeModal === 'function') {
+            window.openSelectBudgetTypeModal();
+        } else if (typeof openModal === 'function') {
             openModal('modal-select-budget-type');
         }
     }
@@ -11034,8 +11186,8 @@ async function renderDashboard() {
                     `;
                 }
 
-                const abonoBtn = isAttended ? '' : `
-                    <button class="btn btn-xs btn-outline" style="border-color: #10b981; color: #059669; font-weight: 600;" onclick="window.openPaymentModalForAppointment('${app.patientId}', '${app.patientName}', '${app.treatment}')" title="Registrar Abono Anticipado">
+                const abonoBtn = (isAttended || isDoctor) ? '' : `
+                    <button class="btn btn-xs btn-outline btn-appt-pay" style="border-color: #10b981; color: #059669; font-weight: 600;" onclick="window.openPaymentModalForAppointment('${app.patientId}', '${app.patientName}', '${app.treatment}')" title="Registrar Abono Anticipado">
                         <i class="fa-solid fa-hand-holding-dollar"></i> <span class="btn-text-full">Abonar</span>
                     </button>
                 `;
@@ -11818,7 +11970,7 @@ function renderWeeklySchedulePlanner(container, appointments, weekInfo, searchQu
                     }
                 }
 
-                if (!isAttended && !isCancelled) {
+                if (!isAttended && !isCancelled && !isDoctor) {
                     actionsHtml += `<button type="button" class="weekly-act-btn btn-act-wa" onclick="sendWhatsAppReminderForAppt('${app.id}')" title="Enviar recordatorio WhatsApp"><i class="fa-brands fa-whatsapp"></i></button>`;
                 }
 
@@ -12179,8 +12331,8 @@ async function renderAgendaView(filter = (window.currentAgendaFilter || 'pending
             `;
         }
 
-        const abonoBtn = (isAttended || isCancelled) ? '' : `
-            <button class="btn btn-xs btn-outline" style="border-color: #10b981; color: #059669; font-weight: 600;" onclick="window.openPaymentModalForAppointment('${app.patientId}', '${app.patientName}', '${app.treatment}')" title="Registrar Abono Anticipado">
+        const abonoBtn = (isAttended || isCancelled || isDoctor) ? '' : `
+            <button class="btn btn-xs btn-outline btn-appt-pay" style="border-color: #10b981; color: #059669; font-weight: 600;" onclick="window.openPaymentModalForAppointment('${app.patientId}', '${app.patientName}', '${app.treatment}')" title="Registrar Abono Anticipado">
                 <i class="fa-solid fa-hand-holding-dollar"></i> <span class="btn-text-full">Abonar</span>
             </button>
         `;
@@ -12608,6 +12760,13 @@ window.addApptToGoogleCalendarDirect = async function(apptId) {
 };
 
 window.sendWhatsAppReminderForAppt = async function(apptId, bypassScheduleWarning = false) {
+    const cur = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (cur && typeof isDoctorUser === 'function' && isDoctorUser(cur)) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({ icon: 'info', title: 'Acción Restringida', text: 'El rol médico no tiene permisos para enviar recordatorios por WhatsApp.' });
+        }
+        return;
+    }
     if (!bypassScheduleWarning && typeof WhatsAppService !== 'undefined' && !WhatsAppService.isNotificationTimeAllowed()) {
         const curTime = WhatsAppService.getFormattedLocalHour();
         const conf = await Swal.fire({
@@ -19949,7 +20108,11 @@ if (patientSameDay.length === 0) {
     const btnNewBudget = document.getElementById('btn-new-budget');
     if (btnNewBudget) {
         btnNewBudget.onclick = () => {
-            openModal('modal-select-budget-type');
+            if (typeof window.openSelectBudgetTypeModal === 'function') {
+                window.openSelectBudgetTypeModal();
+            } else {
+                openModal('modal-select-budget-type');
+            }
         };
     }
 
@@ -29310,7 +29473,12 @@ window.renderRecipePatientSearchResults = async function(query) {
     const normalizeStr = (s) => (s || '').toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
     const term = normalizeStr(query).trim();
 
-    const patients = await SupabaseDataService.getPatients();
+    const allPatients = await SupabaseDataService.getPatients();
+    let patients = allPatients;
+    const cur = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (cur && typeof isDoctorUser === 'function' && isDoctorUser(cur)) {
+        patients = allPatients.filter(p => typeof isPatientAssignedToDoctor === 'function' ? isPatientAssignedToDoctor(p, cur) : true);
+    }
     let matches = [];
     if (!term) {
         matches = patients.slice(0, 15);
@@ -29413,6 +29581,13 @@ window.openRecipeModal = async function(sessionNum = null, sessionTitle = '') {
 
     // Populate Doctor Selector with doctors list and licenses
     const doctorSelect = document.getElementById('recipe-doctor-select');
+    let fixedBadge = document.getElementById('recipe-doctor-fixed-badge');
+    if (!fixedBadge && doctorSelect && doctorSelect.parentElement) {
+        fixedBadge = document.createElement('div');
+        fixedBadge.id = 'recipe-doctor-fixed-badge';
+        doctorSelect.parentElement.insertBefore(fixedBadge, doctorSelect);
+    }
+
     if (doctorSelect) {
         doctorSelect.innerHTML = '';
         try {
@@ -29421,22 +29596,56 @@ window.openRecipeModal = async function(sessionNum = null, sessionTitle = '') {
             const targetDoctors = (doctors.length > 0) ? doctors : [];
             const currentUser = getCurrentUser();
 
-            targetDoctors.forEach(doc => {
+            if (currentUser && typeof isDoctorUser === 'function' && isDoctorUser(currentUser)) {
+                // Doctor mode: Lock strictly to logged in doctor, hide selector, show fixed readonly badge
                 const opt = document.createElement('option');
-                opt.value = doc.id;
-                const lic = (doc.license && doc.license !== 'N/A') ? ` (${doc.license})` : '';
-                opt.innerText = `${doc.fullname} - ${doc.role || 'Médico'}${lic}`;
-                opt.dataset.doctorName = doc.fullname;
-                opt.dataset.doctorRole = doc.role || 'Médico Tratante';
-                opt.dataset.doctorLicense = (doc.license && doc.license !== 'N/A') ? doc.license : '';
-                const docSig = (doc.doctorProfile && doc.doctorProfile.signature) || (doc.doctor_profile && doc.doctor_profile.signature) || '';
+                opt.value = currentUser.id;
+                const lic = (currentUser.license && currentUser.license !== 'N/A') ? ` (MPPS: ${currentUser.license})` : '';
+                opt.innerText = `${currentUser.fullname} - ${currentUser.role || 'Médico'}${lic}`;
+                opt.dataset.doctorName = currentUser.fullname;
+                opt.dataset.doctorRole = currentUser.role || 'Médico Tratante';
+                opt.dataset.doctorLicense = (currentUser.license && currentUser.license !== 'N/A') ? currentUser.license : '';
+                const docSig = (currentUser.doctorProfile && currentUser.doctorProfile.signature) || (currentUser.doctor_profile && currentUser.doctor_profile.signature) || '';
                 opt.dataset.doctorSignature = docSig;
-
-                if (currentUser && (currentUser.id === doc.id || currentUser.fullname === doc.fullname)) {
-                    opt.selected = true;
-                }
+                opt.selected = true;
                 doctorSelect.appendChild(opt);
-            });
+
+                doctorSelect.style.display = 'none';
+                if (fixedBadge) {
+                    fixedBadge.style.display = 'flex';
+                    fixedBadge.style.alignItems = 'center';
+                    fixedBadge.style.gap = '8px';
+                    fixedBadge.style.padding = '8px 12px';
+                    fixedBadge.style.background = '#f0fdf4';
+                    fixedBadge.style.border = '1px solid #86efac';
+                    fixedBadge.style.borderRadius = '8px';
+                    fixedBadge.style.fontWeight = '600';
+                    fixedBadge.style.color = '#166534';
+                    fixedBadge.style.fontSize = '0.88rem';
+                    fixedBadge.innerHTML = `<i class="fa-solid fa-user-doctor" style="color: #059669; font-size: 1.1rem;"></i> <span><strong>${currentUser.fullname}</strong> &bull; ${currentUser.role || 'Médico'}${lic ? ` &bull; <strong>${lic.replace(/[()]/g, '')}</strong>` : ''}</span>`;
+                }
+            } else {
+                // Admin / Assistant mode: Show selector dropdown, hide fixed badge
+                doctorSelect.style.display = 'block';
+                if (fixedBadge) fixedBadge.style.display = 'none';
+
+                targetDoctors.forEach(doc => {
+                    const opt = document.createElement('option');
+                    opt.value = doc.id;
+                    const lic = (doc.license && doc.license !== 'N/A') ? ` (${doc.license})` : '';
+                    opt.innerText = `${doc.fullname} - ${doc.role || 'Médico'}${lic}`;
+                    opt.dataset.doctorName = doc.fullname;
+                    opt.dataset.doctorRole = doc.role || 'Médico Tratante';
+                    opt.dataset.doctorLicense = (doc.license && doc.license !== 'N/A') ? doc.license : '';
+                    const docSig = (doc.doctorProfile && doc.doctorProfile.signature) || (doc.doctor_profile && doc.doctor_profile.signature) || '';
+                    opt.dataset.doctorSignature = docSig;
+
+                    if (currentUser && (currentUser.id === doc.id || currentUser.fullname === doc.fullname)) {
+                        opt.selected = true;
+                    }
+                    doctorSelect.appendChild(opt);
+                });
+            }
         } catch(e) {
             console.warn("Error loading doctors in recipe modal:", e);
         }

@@ -7702,3 +7702,50 @@ body.dark-theme textarea:focus {
     border-color: #ef4444 !important;
     animation: fieldRequiredPulse 1.2s infinite ease-in-out !important;
 }
+
+
+/* ========================================================
+   RESTRICCIONES Y AISLAMIENTO ESTRICTO PARA ROL MÉDICO
+   ======================================================== */
+body.is-doctor-role #dashboard-birthdays-widget,
+body.is-doctor-role .dashboard-birthdays-card,
+body.is-doctor-role #btn-birthdays-hub,
+body.is-doctor-role #birthday-notifications-badge,
+body.is-doctor-role #dashboard-stock-alerts,
+body.is-doctor-role .dashboard-stock-alerts-card,
+body.is-doctor-role #nav-stock-alert-badge,
+body.is-doctor-role .nav-item[data-tab="inventory"],
+body.is-doctor-role .nav-item[data-tab="consumables"],
+body.is-doctor-role .nav-item[data-tab="billing"],
+body.is-doctor-role .nav-item[data-tab="finance"],
+body.is-doctor-role .nav-item[data-tab="cashea"],
+body.is-doctor-role #mob-nav-inventory,
+body.is-doctor-role #mob-nav-consumables,
+body.is-doctor-role #btn-direct-sale-top,
+body.is-doctor-role #btn-direct-sale-top-main,
+body.is-doctor-role #fab-act-direct-sale,
+body.is-doctor-role .btn-act-cobrar,
+body.is-doctor-role .btn-appt-pay,
+body.is-doctor-role button[onclick*="openEhrPaymentModal"],
+body.is-doctor-role button[onclick*="openDirectSaleModal"],
+body.is-doctor-role button[onclick*="openCasheaModal"],
+body.is-doctor-role #modal-cashea-tracker,
+body.is-doctor-role #modal-cashea-reconciliation,
+body.is-doctor-role [id*="whatsapp"],
+body.is-doctor-role .btn-act-wa,
+body.is-doctor-role .btn-appt-wa,
+body.is-doctor-role button[onclick*="WhatsApp"],
+body.is-doctor-role button[onclick*="whatsapp"],
+body.is-doctor-role #btn-send-reminders-all,
+body.is-doctor-role #btn-export-patients-excel,
+body.is-doctor-role #btn-download-patients-template,
+body.is-doctor-role #btn-import-patients,
+body.is-doctor-role .btn-import,
+body.is-doctor-role .btn-export,
+body.is-doctor-role [id*="import-preview"] {
+    display: none !important;
+}
+
+body.is-doctor-role .dashboard-extra-widgets-grid {
+    grid-template-columns: 1fr !important;
+}

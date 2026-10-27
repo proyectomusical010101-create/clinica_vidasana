@@ -180,6 +180,17 @@ class WhatsAppService {
 
     static sendToPatient(phone, message) {
         if (!phone) return;
+        const curUser = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+        if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Acción no permitida',
+                    text: 'El rol médico no cuenta con permisos para realizar envíos de mensajería por WhatsApp.'
+                });
+            }
+            return;
+        }
         const cleanPhone = phone.replace(/[^0-9]/g, '');
         const url = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(message)}`;
         if (typeof window.safeOpenExternalUrl === 'function') {
