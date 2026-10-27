@@ -12562,8 +12562,13 @@ async function renderInventoryTable(filter = null, searchQuery = null, areaFilte
             <td>${item.expiryDate || 'N/A'}</td>
             <td>${statusBadge}</td>
             <td>
-                <div class="actions-cell-group">
-                    <button class="btn btn-xs btn-outline" onclick="adjustStockPrompt('${item.code}')">+ / - Ajustar</button>
+                <div class="actions-cell-group" style="display: flex; gap: 4px; align-items: center; justify-content: flex-end;">
+                    <button type="button" class="btn btn-xs btn-outline" onclick="window.restockInventoryMaterial('${item.code}')" style="color: #059669; border-color: #a7f3d0; background: #ecfdf5; font-weight: 700; padding: 2px 7px;" title="Surtir / Aumentar Stock de este insumo">
+                        <i class="fa-solid fa-boxes-packing"></i> Surtir
+                    </button>
+                    <button type="button" class="btn btn-xs btn-outline" onclick="window.editInventoryMaterial('${item.code}')" title="Editar Insumo" style="padding: 2px 6px;">
+                        <i class="fa-solid fa-pen-to-square"></i>
+                    </button>
                     ${deleteMatBtn}
                 </div>
             </td>
@@ -12947,7 +12952,8 @@ async function renderPricingTable(filter = 'all', searchQuery = '') {
             const pUSD = parseFloat(p.priceUSD !== undefined && p.priceUSD !== null ? p.priceUSD : (p.price || 0)) || 0;
             const priceVES = (pUSD * rate).toFixed(2);
             const safeCode = (p.code || '').replace(/'/g, "\\'");
-            const deleteSrvBtn = canDelete ? `<button class="btn btn-xs btn-outline text-red" onclick="window.deletePricingService('${safeCode}')" title="Eliminar Servicio"><i class="fa-solid fa-trash"></i></button>` : '';
+            const deleteSrvBtn = canDelete ? `<button class="btn btn-xs btn-outline text-red" onclick="window.deletePricingService('${safeCode}')" title="Eliminar Servicio" style="padding: 2px 6px;"><i class="fa-solid fa-trash"></i></button>` : '';
+            const editSrvBtn = canDelete ? `<button class="btn btn-xs btn-outline" onclick="window.editPricingService('${safeCode}')" title="Editar Servicio" style="padding: 2px 6px;"><i class="fa-solid fa-pen-to-square"></i></button>` : '';
             const areaInfo = typeof getAreaIconInfo === 'function' ? getAreaIconInfo(p.area) : { icon: 'fa-hospital', color: '#64748b', bg: 'rgba(100,116,139,0.1)' };
 
             const isLabService = (p.area && p.area.toLowerCase() === 'laboratorio') || (p.category && p.category.toLowerCase().includes('lab')) || isLabFilter;
@@ -12990,7 +12996,8 @@ async function renderPricingTable(filter = 'all', searchQuery = '') {
                 <td>${timeDisplay}</td>
                 <td>${p.materials ? p.materials.length : 0} insumos</td>
                 <td>
-                    <div class="actions-cell-group">
+                    <div class="actions-cell-group" style="display: flex; gap: 4px; align-items: center; justify-content: flex-end;">
+                        ${editSrvBtn}
                         ${deleteSrvBtn}
                     </div>
                 </td>
@@ -13001,6 +13008,279 @@ async function renderPricingTable(filter = 'all', searchQuery = '') {
         }
     });
 }
+
+
+window.editPricingService = async function(code) {
+    if (!code) return;
+    let services = [];
+    if (window.SupabaseDataService && typeof window.SupabaseDataService.getBaremo === 'function') {
+        services = await window.SupabaseDataService.getBaremo();
+    } else {
+        services = JSON.parse(localStorage.getItem('dental_baremo')) || [];
+    }
+    const s = services.find(x => x.code === code || x.id === code || (x.name && x.name.toLowerCase() === String(code).toLowerCase()));
+    if (!s) {
+        Swal.fire({ icon: 'error', title: 'Error', text: 'No se encontró el servicio seleccionado.' });
+        return;
+    }
+
+    const form = document.getElementById('form-service');
+    if (form) form.reset();
+
+    const codeInput = document.getElementById('srv-code');
+    if (codeInput) {
+        codeInput.value = s.code || '';
+        codeInput.readOnly = true;
+    }
+
+    const nameInput = document.getElementById('srv-name');
+    if (nameInput) nameInput.value = s.name || '';
+
+    if (typeof window.populateServiceAreaSelect === 'function') {
+        await window.populateServiceAreaSelect(s.area || 'Odontología');
+    }
+
+    if (typeof window.populateServiceCategorySelect === 'function') {
+        await window.populateServiceCategorySelect(s.category || 'General');
+    }
+
+    const priceInput = document.getElementById('srv-price');
+    if (priceInput) priceInput.value = s.price_usd !== undefined && s.price_usd !== null ? s.price_usd : (s.priceUSD !== undefined && s.priceUSD !== null ? s.priceUSD : (s.price || 0));
+
+    const bonusInput = document.getElementById('srv-hygienist-bonus');
+    if (bonusInput) bonusInput.value = s.hygienist_bonus !== undefined && s.hygienist_bonus !== null ? s.hygienist_bonus : (s.hygienistBonus || 0);
+
+    const chairMin = Number(s.chair_time_min !== undefined ? s.chair_time_min : (s.chairTimeMin || 30));
+    const tUnit = s.time_unit || s.timeUnit || (chairMin >= 1440 && chairMin % 1440 === 0 ? 'dias' : (chairMin >= 60 && chairMin % 60 === 0 ? 'horas' : 'min'));
+    const tVal = s.time_value !== undefined && s.time_value !== null ? Number(s.time_value) : (
+        s.timeValue !== undefined && s.timeValue !== null ? Number(s.timeValue) : (
+            tUnit === 'dias' ? Math.round(chairMin / 1440) : (tUnit === 'horas' ? Math.round(chairMin / 60) : chairMin)
+        )
+    );
+
+    const timeInput = document.getElementById('srv-time');
+    if (timeInput) timeInput.value = tVal || 30;
+
+    const timeUnitSelect = document.getElementById('srv-time-unit');
+    if (timeUnitSelect) timeUnitSelect.value = tUnit || 'min';
+
+    if (typeof updateServiceModalTimeLabel === 'function') {
+        updateServiceModalTimeLabel();
+    }
+
+    const modalTitle = document.querySelector('#modal-service .modal-header h3');
+    if (modalTitle) {
+        modalTitle.innerHTML = '<i class="fa-solid fa-pen-to-square text-cyan"></i> Editar Servicio en Baremo';
+    }
+
+    const saveBtn = document.getElementById('btn-save-service');
+    if (saveBtn) {
+        saveBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Guardar Cambios';
+    }
+
+    openModal('modal-service');
+};
+
+window.editInventoryMaterial = async function(code) {
+    if (!code) return;
+    let items = [];
+    if (window.SupabaseDataService && typeof window.SupabaseDataService.getInventory === 'function') {
+        items = await window.SupabaseDataService.getInventory();
+    } else {
+        items = JSON.parse(localStorage.getItem('dental_inventory')) || [];
+    }
+    const item = items.find(i => i.code === code || i.id === code || (i.name && i.name.toLowerCase() === String(code).toLowerCase()));
+    if (!item) {
+        Swal.fire({ icon: 'error', title: 'Error', text: 'No se encontró el insumo seleccionado.' });
+        return;
+    }
+
+    const form = document.getElementById('form-material');
+    if (form) form.reset();
+
+    const codeInput = document.getElementById('mat-code');
+    if (codeInput) {
+        codeInput.value = item.code || '';
+        codeInput.readOnly = true;
+    }
+
+    const nameInput = document.getElementById('mat-name');
+    if (nameInput) nameInput.value = item.name || '';
+
+    const areaSelect = document.getElementById('mat-area');
+    if (areaSelect) {
+        let optFound = Array.from(areaSelect.options).find(o => o.value.toLowerCase() === (item.area || '').toLowerCase());
+        if (!optFound && item.area) {
+            const opt = document.createElement('option');
+            opt.value = item.area;
+            opt.textContent = item.area;
+            areaSelect.appendChild(opt);
+            opt.selected = true;
+        } else if (optFound) {
+            optFound.selected = true;
+        }
+    }
+
+    const catInput = document.getElementById('mat-category');
+    if (catInput) catInput.value = item.category || 'General';
+
+    const rawUnit = item.unit || 'Unidades';
+    const portionsPerUnit = typeof parsePortions === 'function' ? parsePortions(rawUnit) : null;
+    const baseUnit = rawUnit.replace(/\s*\(\d+\s*porciones\)/i, '').trim();
+
+    const unitInput = document.getElementById('mat-unit');
+    if (unitInput) unitInput.value = baseUnit || 'Unidades';
+
+    const hasPortionsChk = document.getElementById('mat-has-portions');
+    const portionsContainer = document.getElementById('mat-portions-container');
+    const portionsInput = document.getElementById('mat-portions-per-unit');
+
+    if (portionsPerUnit) {
+        if (hasPortionsChk) hasPortionsChk.checked = true;
+        if (portionsContainer) portionsContainer.classList.remove('hidden');
+        if (portionsInput) portionsInput.value = portionsPerUnit;
+    } else {
+        if (hasPortionsChk) hasPortionsChk.checked = false;
+        if (portionsContainer) portionsContainer.classList.add('hidden');
+        if (portionsInput) portionsInput.value = '30';
+    }
+
+    const stockInput = document.getElementById('mat-stock');
+    if (stockInput) stockInput.value = item.currentStock !== undefined ? item.currentStock : (item.stock || 0);
+
+    const minStockInput = document.getElementById('mat-min-stock');
+    if (minStockInput) minStockInput.value = item.minStock || 5;
+
+    const expiryInput = document.getElementById('mat-expiry');
+    if (expiryInput) expiryInput.value = item.expiryDate || '';
+
+    const modalTitle = document.querySelector('#modal-material .modal-header h3');
+    if (modalTitle) {
+        modalTitle.innerHTML = '<i class="fa-solid fa-pen-to-square text-cyan"></i> Editar Insumo en Inventario';
+    }
+
+    const saveBtn = document.getElementById('btn-save-material');
+    if (saveBtn) {
+        saveBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Guardar Cambios';
+    }
+
+    openModal('modal-material');
+};
+
+window.restockInventoryMaterial = async function(code) {
+    if (!code) return;
+    let item = null;
+    if (window.kardex) {
+        item = window.kardex.getItem(code);
+    }
+    if (!item && window.SupabaseDataService) {
+        const items = await SupabaseDataService.getInventory();
+        item = items.find(i => i.code === code || i.id === code || (i.name && i.name.toLowerCase() === String(code).toLowerCase()));
+    }
+    if (!item) {
+        Swal.fire({ icon: 'error', title: 'Error', text: 'No se encontró el insumo en el inventario.' });
+        return;
+    }
+
+    const itemName = item.name || code;
+    const currStock = item.currentStock !== undefined ? Number(item.currentStock) : (Number(item.stock) || 0);
+    const minStock = Number(item.minStock) || 5;
+    const unit = item.unit || 'Unidades';
+
+    const { value: formValues } = await Swal.fire({
+        title: `<i class="fa-solid fa-boxes-packing text-emerald"></i> Surtir Insumo`,
+        html: `
+            <div style="text-align: left; padding: 4px; font-size: 0.9rem;">
+                <div style="padding: 12px 14px; background: #ecfdf5; border: 1.5px solid #6ee7b7; border-radius: 10px; margin-bottom: 14px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                        <strong style="font-size: 1.05rem; color: #065f46;">${window.escapeApptText(itemName)}</strong>
+                        <span class="badge-tag green" style="font-size: 0.72rem; font-weight: 700;">${item.area || 'General'}</span>
+                    </div>
+                    <div style="font-size: 0.8rem; color: #64748b; margin-bottom: 6px;">
+                        Código: <strong style="color: #1e293b;">${window.escapeApptText(item.code || code)}</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.85rem; padding-top: 6px; border-top: 1px dashed #a7f3d0;">
+                        <span>Stock Actual: <strong style="color: #059669; font-size: 1.05rem;">${currStock}</strong> ${window.escapeApptText(unit)}</span>
+                        <span>Mínimo: <strong>${minStock}</strong> ${window.escapeApptText(unit)}</span>
+                    </div>
+                </div>
+
+                <label style="display: block; font-weight: 700; color: #0f172a; margin-bottom: 6px; font-size: 0.88rem;">
+                    <i class="fa-solid fa-circle-plus text-emerald"></i> Cantidad de Unidades a Surtir (+):
+                </label>
+                <input type="number" id="swal-restock-qty" class="swal2-input" value="10" min="1" step="1" style="width: 100%; margin: 0 0 10px 0; font-size: 1.2rem; font-weight: 700; text-align: center; color: #065f46;" placeholder="Ej: 10">
+
+                <div style="display: flex; gap: 6px; justify-content: center; margin-bottom: 12px; flex-wrap: wrap;">
+                    <button type="button" class="btn btn-xs btn-outline" onclick="document.getElementById('swal-restock-qty').value = 5" style="padding: 3px 9px; font-size: 0.75rem; font-weight: 700;">+5</button>
+                    <button type="button" class="btn btn-xs btn-outline" onclick="document.getElementById('swal-restock-qty').value = 10" style="padding: 3px 9px; font-size: 0.75rem; font-weight: 700;">+10</button>
+                    <button type="button" class="btn btn-xs btn-outline" onclick="document.getElementById('swal-restock-qty').value = 20" style="padding: 3px 9px; font-size: 0.75rem; font-weight: 700;">+20</button>
+                    <button type="button" class="btn btn-xs btn-outline" onclick="document.getElementById('swal-restock-qty').value = 50" style="padding: 3px 9px; font-size: 0.75rem; font-weight: 700;">+50</button>
+                    <button type="button" class="btn btn-xs btn-outline" onclick="document.getElementById('swal-restock-qty').value = 100" style="padding: 3px 9px; font-size: 0.75rem; font-weight: 700;">+100</button>
+                </div>
+
+                <label style="display: block; font-weight: 600; color: #475569; margin-bottom: 4px; font-size: 0.82rem;">
+                    <i class="fa-solid fa-file-invoice text-muted"></i> Motivo / Referencia (Opcional):
+                </label>
+                <input type="text" id="swal-restock-reason" class="swal2-input" value="Surtido de Inventario / Reposición" style="width: 100%; margin: 0; font-size: 0.85rem;" placeholder="Ej: Factura Proveedor, Compra Mensual...">
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonColor: '#059669',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: '<i class="fa-solid fa-plus"></i> Confirmar Surtido',
+        cancelButtonText: 'Cancelar',
+        preConfirm: () => {
+            const qtyVal = parseFloat(document.getElementById('swal-restock-qty')?.value);
+            const reasonVal = document.getElementById('swal-restock-reason')?.value.trim() || 'Surtido de Inventario / Reposición';
+            if (isNaN(qtyVal) || qtyVal <= 0) {
+                Swal.showValidationMessage('Por favor ingrese una cantidad válida mayor a 0');
+                return false;
+            }
+            return { qty: qtyVal, reason: reasonVal };
+        }
+    });
+
+    if (formValues && formValues.qty > 0) {
+        const addedQty = formValues.qty;
+        const newTotalStock = currStock + addedQty;
+
+        if (window.kardex && typeof window.kardex.recordMovement === 'function') {
+            try {
+                window.kardex.recordMovement(item.code || code, addedQty, 'ENTRADA', formValues.reason, 0);
+            } catch(e) {
+                console.warn('Kardex recordMovement warning:', e);
+            }
+        }
+
+        const updatedItem = {
+            ...item,
+            currentStock: newTotalStock,
+            stock: newTotalStock
+        };
+
+        if (window.SupabaseDataService && typeof window.SupabaseDataService.saveInventoryItem === 'function') {
+            await window.SupabaseDataService.saveInventoryItem(updatedItem);
+            await window.SupabaseDataService.getInventory(true);
+        } else {
+            let local = JSON.parse(localStorage.getItem('dental_inventory')) || [];
+            const idx = local.findIndex(x => x.code === item.code);
+            if (idx >= 0) local[idx] = updatedItem;
+            else local.push(updatedItem);
+            localStorage.setItem('dental_inventory', JSON.stringify(local));
+        }
+
+        await renderInventoryTable(null, null, item.area);
+        if (typeof renderDashboard === 'function') await renderDashboard();
+
+        Swal.fire({
+            icon: 'success',
+            title: '¡Stock Surtido Exitosamente!',
+            html: `Se sumaron <strong>+${addedQty} ${window.escapeApptText(unit)}</strong> a <strong>${window.escapeApptText(itemName)}</strong>.<br><br>Nuevo stock disponible: <strong style="color:#059669; font-size:1.1rem;">${newTotalStock} ${window.escapeApptText(unit)}</strong>.`,
+            timer: 2500,
+            showConfirmButton: false
+        });
+    }
+};
 
 window.deletePricingService = async function(code) {
     const user = getCurrentUser();
@@ -15586,7 +15866,21 @@ function initGlobalEvents() {
 
     // Modal Insumo Handler
     const btnAddMat = document.getElementById('btn-add-material');
-    if (btnAddMat) btnAddMat.onclick = () => openModal('modal-material');
+    if (btnAddMat) {
+        btnAddMat.onclick = () => {
+            const form = document.getElementById('form-material');
+            if (form) form.reset();
+            const codeInput = document.getElementById('mat-code');
+            if (codeInput) codeInput.readOnly = false;
+            const modalTitle = document.querySelector('#modal-material .modal-header h3');
+            if (modalTitle) modalTitle.innerHTML = '<i class="fa-solid fa-box-archive"></i> Registrar Nuevo Insumo en Inventario';
+            const saveBtn = document.getElementById('btn-save-material');
+            if (saveBtn) saveBtn.innerHTML = 'Guardar Insumo';
+            const portionsContainer = document.getElementById('mat-portions-container');
+            if (portionsContainer) portionsContainer.classList.add('hidden');
+            openModal('modal-material');
+        };
+    }
 
     const saveMatBtn = document.getElementById('btn-save-material');
     if (saveMatBtn) {
@@ -15613,7 +15907,24 @@ function initGlobalEvents() {
                 return;
             }
 
-            await SupabaseDataService.saveInventoryItem({ code, name, area, category, unit, currentStock: stock, minStock, expiryDate });
+            let existingItem = null;
+            if (window.SupabaseDataService) {
+                const items = await SupabaseDataService.getInventory();
+                existingItem = items.find(i => i.code === code);
+            }
+            const itemToSave = {
+                ...(existingItem || {}),
+                code,
+                name,
+                area,
+                category,
+                unit,
+                currentStock: stock,
+                stock,
+                minStock,
+                expiryDate
+            };
+            await SupabaseDataService.saveInventoryItem(itemToSave);
             closeModal('modal-material', true);
 
             // Force refresh inventory cache immediately so no F5/cache clearing is required
@@ -15860,6 +16171,13 @@ function initGlobalEvents() {
         }
         const form = document.getElementById('form-service');
         if (form) form.reset();
+
+        const codeInput = document.getElementById('srv-code');
+        if (codeInput) codeInput.readOnly = false;
+        const modalTitle = document.querySelector('#modal-service .modal-header h3');
+        if (modalTitle) modalTitle.innerHTML = '<i class="fa-solid fa-tags"></i> Registrar Nuevo Servicio en Baremo';
+        const saveBtn = document.getElementById('btn-save-service');
+        if (saveBtn) saveBtn.innerHTML = 'Guardar Servicio';
 
         const srvModal = document.getElementById('modal-service');
         if (srvModal) {
