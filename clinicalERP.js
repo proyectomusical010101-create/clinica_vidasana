@@ -1181,6 +1181,130 @@
             }
         },
 
+        populateRoomTypeSelect(selectedDepartment = null) {
+            const typeSel = document.getElementById('room-type');
+            if (!typeSel) return;
+
+            const baseTypes = [
+                'Consultorio Médico',
+                'Sillón Odontológico',
+                'Quirófano Menor',
+                'Área de Laboratorio',
+                'Sala de Ecosonografía',
+                'Sala de Rayos X',
+                'Sala de Curaciones',
+                'Área de Fisioterapia / Rehabilitación',
+                'Sala de Espera y Triaje'
+            ];
+
+            let customTypes = [];
+            try {
+                customTypes = JSON.parse(localStorage.getItem('clinic_custom_room_types')) || [];
+            } catch(e) {}
+
+            const existingInRooms = (this.rooms || []).map(r => r.department).filter(Boolean);
+            const allTypes = Array.from(new Set([...baseTypes, ...customTypes, ...existingInRooms])).filter(Boolean);
+
+            typeSel.innerHTML = '';
+            let hasMatch = false;
+            const targetVal = String(selectedDepartment || '').trim();
+
+            allTypes.forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t;
+                opt.textContent = t;
+                if (targetVal && (t.toLowerCase() === targetVal.toLowerCase() || (targetVal === 'consultorio' && t === 'Consultorio Médico') || (targetVal === 'odontologia' && t === 'Sillón Odontológico') || (targetVal === 'quirofano_menor' && t === 'Quirófano Menor') || (targetVal === 'laboratorio' && t === 'Área de Laboratorio') || (targetVal === 'ecosonografia' && t === 'Sala de Ecosonografía') || (targetVal === 'rayos_x' && t === 'Sala de Rayos X'))) {
+                    opt.selected = true;
+                    hasMatch = true;
+                }
+                typeSel.appendChild(opt);
+            });
+
+            if (targetVal && !hasMatch && targetVal !== '__new_room_type__') {
+                const opt = document.createElement('option');
+                opt.value = targetVal;
+                opt.textContent = targetVal;
+                opt.selected = true;
+                typeSel.appendChild(opt);
+                hasMatch = true;
+            }
+
+            const otherOpt = document.createElement('option');
+            otherOpt.value = '__new_room_type__';
+            otherOpt.textContent = '➕ Otro Tipo de Área / Nuevo...';
+            typeSel.appendChild(otherOpt);
+
+            if (!hasMatch && typeSel.options.length > 0) {
+                typeSel.selectedIndex = 0;
+            }
+
+            const customContainer = document.getElementById('room-custom-type-container');
+            if (customContainer) customContainer.classList.add('hidden');
+        },
+
+        async quickAddNewRoomType() {
+            const { value: newType } = await Swal.fire({
+                title: 'Nuevo Tipo de Área / Espacio',
+                input: 'text',
+                inputLabel: 'Nombre del tipo de área o departamento físico',
+                inputPlaceholder: 'Ej: Sala de Curaciones, Terapia Física, Vacunación...',
+                showCancelButton: true,
+                confirmButtonText: '<i class="fa-solid fa-plus"></i> Crear Tipo de Área',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#0d9488',
+                inputValidator: (val) => {
+                    if (!val || !val.trim()) {
+                        return '¡Debes escribir un nombre para el tipo de área!';
+                    }
+                }
+            });
+
+            if (newType && newType.trim()) {
+                const trimmed = newType.trim();
+                let customTypes = [];
+                try {
+                    customTypes = JSON.parse(localStorage.getItem('clinic_custom_room_types')) || [];
+                } catch(e) {}
+                if (!customTypes.some(t => t.toLowerCase() === trimmed.toLowerCase())) {
+                    customTypes.push(trimmed);
+                    localStorage.setItem('clinic_custom_room_types', JSON.stringify(customTypes));
+                }
+
+                this.populateRoomTypeSelect(trimmed);
+
+                Swal.fire({
+                    icon: 'success',
+                    title: '¡Tipo de Área Creado!',
+                    text: `"${trimmed}" se agregó y quedó seleccionado para este consultorio.`,
+                    timer: 1700,
+                    showConfirmButton: false
+                });
+            } else {
+                const typeSel = document.getElementById('room-type');
+                if (typeSel && typeSel.value === '__new_room_type__') {
+                    typeSel.selectedIndex = 0;
+                    const customContainer = document.getElementById('room-custom-type-container');
+                    if (customContainer) customContainer.classList.add('hidden');
+                }
+            }
+        },
+
+        onRoomTypeChange(sel) {
+            const customContainer = document.getElementById('room-custom-type-container');
+            const customInput = document.getElementById('room-custom-type');
+            if (sel.value === '__new_room_type__') {
+                if (customContainer) customContainer.classList.remove('hidden');
+                if (customInput) {
+                    customInput.value = '';
+                    customInput.focus();
+                }
+                this.quickAddNewRoomType();
+            } else {
+                if (customContainer) customContainer.classList.add('hidden');
+                if (customInput) customInput.value = '';
+            }
+        },
+
         removeScheduleFromRoom(idx) {
             if (!this.currentRoomSchedules || !this.currentRoomSchedules[idx]) return;
             this.currentRoomSchedules.splice(idx, 1);
@@ -1193,6 +1317,7 @@
             document.getElementById('modal-room-title').innerText = 'Nuevo Consultorio / Área Física';
             
             await this.populateRoomDoctorSelects();
+            this.populateRoomTypeSelect();
 
             // Schedules reset
             this.currentRoomSchedules = [];
@@ -1231,7 +1356,7 @@
             document.getElementById('room-id').value = r.id;
             document.getElementById('room-code').value = r.room_number || '';
             document.getElementById('room-name').value = r.name || '';
-            document.getElementById('room-type').value = r.department || 'consultorio';
+            this.populateRoomTypeSelect(r.department || 'Consultorio Médico');
             document.getElementById('room-status').value = (r.status || 'disponible').toLowerCase();
             document.getElementById('room-rental-mode').value = r.rental_mode || 'por_turno';
             document.getElementById('room-rental-canon').value = r.rental_fee_monthly || 0;
@@ -1417,7 +1542,22 @@
                 id: id || ('room-' + Date.now()),
                 room_number: document.getElementById('room-code').value.trim(),
                 name: document.getElementById('room-name').value.trim(),
-                department: document.getElementById('room-type').value,
+                department: (() => {
+                    let d = document.getElementById('room-type').value;
+                    if (d === '__new_room_type__') {
+                        const cust = document.getElementById('room-custom-type')?.value.trim();
+                        d = cust || 'Consultorio Médico';
+                        if (cust) {
+                            let ct = [];
+                            try { ct = JSON.parse(localStorage.getItem('clinic_custom_room_types')) || []; } catch(e) {}
+                            if (!ct.includes(cust)) {
+                                ct.push(cust);
+                                localStorage.setItem('clinic_custom_room_types', JSON.stringify(ct));
+                            }
+                        }
+                    }
+                    return d;
+                })(),
                 status: generalStatus,
                 rental_mode: rentalModeVal,
                 rental_fee_monthly: canonVal,

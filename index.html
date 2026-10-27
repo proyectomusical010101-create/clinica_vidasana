@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=364">
+    <link rel="stylesheet" href="styles.css?v=365">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -5974,15 +5974,30 @@
                     </div>
                     <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                         <div class="form-group">
-                            <label>Tipo de Área</label>
-                            <select id="room-type" class="form-control">
-                                <option value="consultorio">Consultorio Médico</option>
-                                <option value="odontologia">Sillón Odontológico</option>
-                                <option value="quirofano_menor">Quirófano Menor</option>
-                                <option value="laboratorio">Área de Laboratorio</option>
-                                <option value="ecosonografia">Sala de Ecosonografía</option>
-                                <option value="rayos_x">Sala de Rayos X</option>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                <label style="margin: 0; font-size: 0.78rem; font-weight: 700;">Tipo de Área *</label>
+                                <button type="button" class="btn btn-xs btn-outline" id="btn-quick-add-room-type" onclick="window.ClinicalERP.quickAddNewRoomType()" style="font-size: 0.7rem; padding: 1px 6px; color: var(--primary-cyan); border-color: var(--primary-cyan);" title="Crear un nuevo tipo de área o espacio">
+                                    <i class="fa-solid fa-plus"></i> Nuevo Tipo
+                                </button>
+                            </div>
+                            <select id="room-type" class="form-control" onchange="window.ClinicalERP.onRoomTypeChange(this)">
+                                <option value="Consultorio Médico">Consultorio Médico</option>
+                                <option value="Sillón Odontológico">Sillón Odontológico</option>
+                                <option value="Quirófano Menor">Quirófano Menor</option>
+                                <option value="Área de Laboratorio">Área de Laboratorio</option>
+                                <option value="Sala de Ecosonografía">Sala de Ecosonografía</option>
+                                <option value="Sala de Rayos X">Sala de Rayos X</option>
+                                <option value="__new_room_type__">➕ Otro Tipo de Área / Nuevo...</option>
                             </select>
+                            <div style="margin-top: 4px; display: flex; justify-content: space-between; align-items: center;">
+                                <small class="text-muted" style="font-size: 0.72rem;">Clasificación física o asistencial del espacio.</small>
+                                <a href="javascript:void(0)" onclick="window.ClinicalERP.quickAddNewRoomType()" style="font-size: 0.74rem; font-weight: 600; color: #0d9488; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">
+                                    <i class="fa-solid fa-circle-plus"></i> Crear nuevo tipo
+                                </a>
+                            </div>
+                            <div id="room-custom-type-container" class="hidden" style="margin-top: 6px;">
+                                <input type="text" id="room-custom-type" class="form-control" placeholder="Escriba el nuevo tipo de área (ej: Terapia Física, Vacunación)...">
+                            </div>
                         </div>
                         <div class="form-group">
                             <label>Estado General</label>
@@ -8434,14 +8449,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=364"></script>
-    <script src="supabaseClient.js?v=364"></script>
-    <script src="odontogram.js?v=364"></script>
-    <script src="signature.js?v=364"></script>
-    <script src="whatsapp.js?v=364"></script>
-    <script src="kardex.js?v=364"></script>
-    <script src="app.js?v=364"></script>
-    <script src="clinicalERP.js?v=364"></script>
-    <script src="tutorial.js?v=364"></script>
+    <script src="seededData.js?v=365"></script>
+    <script src="supabaseClient.js?v=365"></script>
+    <script src="odontogram.js?v=365"></script>
+    <script src="signature.js?v=365"></script>
+    <script src="whatsapp.js?v=365"></script>
+    <script src="kardex.js?v=365"></script>
+    <script src="app.js?v=365"></script>
+    <script src="clinicalERP.js?v=365"></script>
+    <script src="tutorial.js?v=365"></script>
 </body>
 </html>
