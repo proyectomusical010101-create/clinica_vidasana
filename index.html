@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=374">
+    <link rel="stylesheet" href="styles.css?v=375">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -3706,6 +3706,18 @@
 
                         <!-- Filtros y Buscador para Servicios -->
                         <div class="card filter-card" style="margin-bottom: 20px;">
+                            <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0; width: 100%; justify-content: space-between; align-items: center;">
+                                <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                                    <span style="font-size: 0.78rem; font-weight: 700; color: #64748b; text-transform: uppercase; margin-right: 4px;"><i class="fa-solid fa-layer-group text-teal"></i> Vista Nómina:</span>
+                                    <button type="button" class="filter-btn active" id="btn-srv-view-by-doctor" onclick="window.ClinicalERP.setServiceViewMode('by-doctor', this)" style="font-weight: 700; border-radius: 8px; padding: 6px 14px;">
+                                        <i class="fa-solid fa-user-doctor text-cyan"></i> Agrupado por Doctor (Prioritario)
+                                    </button>
+                                    <button type="button" class="filter-btn" id="btn-srv-view-by-service" onclick="window.ClinicalERP.setServiceViewMode('by-service', this)" style="font-weight: 600; border-radius: 8px; padding: 6px 14px;">
+                                        <i class="fa-solid fa-list-ul"></i> Detalle Fila por Fila
+                                    </button>
+                                </div>
+                            </div>
+
                             <div class="filter-group" id="service-liquidations-filter-group">
                                 <button type="button" class="filter-btn active" onclick="window.ClinicalERP.filterServiceLiquidations('all', this)">Todos</button>
                                 <button type="button" class="filter-btn" onclick="window.ClinicalERP.filterServiceLiquidations('pendiente', this)">Solo Pendientes</button>
@@ -3717,8 +3729,13 @@
                             </div>
                         </div>
 
-                        <!-- Tabla de Servicios Pendientes por Liquidar -->
-                        <div class="card" style="border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.03);">
+                        <!-- Contenedor Prioritario: Agrupado por Doctor y Pacientes Atendidos -->
+                        <div id="service-liquidations-by-doctor-container" style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 25px;">
+                            <!-- Populated dynamically with doctor cards, patients attended, and total settlement -->
+                        </div>
+
+                        <!-- Tabla Detallada de Servicios Individuales (Fila por fila) -->
+                        <div class="card hidden" id="service-liquidations-table-card" style="border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.03);">
                             <div class="table-responsive">
                                 <table class="table" id="service-liquidations-table">
                                     <thead>
@@ -8621,14 +8638,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=374"></script>
-    <script src="supabaseClient.js?v=374"></script>
-    <script src="odontogram.js?v=374"></script>
-    <script src="signature.js?v=374"></script>
-    <script src="whatsapp.js?v=374"></script>
-    <script src="kardex.js?v=374"></script>
-    <script src="app.js?v=374"></script>
-    <script src="clinicalERP.js?v=374"></script>
-    <script src="tutorial.js?v=374"></script>
+    <script src="seededData.js?v=375"></script>
+    <script src="supabaseClient.js?v=375"></script>
+    <script src="odontogram.js?v=375"></script>
+    <script src="signature.js?v=375"></script>
+    <script src="whatsapp.js?v=375"></script>
+    <script src="kardex.js?v=375"></script>
+    <script src="app.js?v=375"></script>
+    <script src="clinicalERP.js?v=375"></script>
+    <script src="tutorial.js?v=375"></script>
 </body>
 </html>

@@ -2924,6 +2924,55 @@ class SupabaseDataService {
         }
     }
 
+    static async settleDoctorBatchServices({ doctorName, serviceIds = [], paymentMethod = 'Transferencia', paymentRef = '', notes = '' }) {
+        let list = await this.getServiceLiquidations(true);
+        const nowStr = new Date().toISOString();
+        let totalSettled = 0;
+        let count = 0;
+        const norm = (str) => (str || '').toLowerCase().trim().replace(/^dr\.\s*|^dra\.\s*/i, '');
+        const targetDocNorm = norm(doctorName);
+
+        list.forEach(item => {
+            const itemDocName = norm(item.doctor?.name || '');
+            const itemDocId = String(item.doctor?.id || '').trim();
+            const matchesDoc = (itemDocName === targetDocNorm || itemDocId === String(doctorName).trim() || itemDocName.includes(targetDocNorm) || targetDocNorm.includes(itemDocName));
+            const matchesId = serviceIds.length === 0 || serviceIds.includes(item.id);
+
+            if (matchesDoc && matchesId && item.doctor && item.doctor.status === 'Pendiente') {
+                const amt = parseFloat(item.doctor.amount || 0);
+                item.doctor.status = 'Liquidado';
+                item.doctor.settled_amount = amt;
+                item.doctor.paid_at = nowStr;
+                item.doctor.payment_method = paymentMethod || 'Transferencia';
+                item.doctor.payment_ref = paymentRef || '';
+                totalSettled += amt;
+                count++;
+
+                const isDocPaid = true;
+                const isAstPaid = !item.assistant || !item.assistant.has_assistant || item.assistant.status === 'Liquidado' || item.assistant.status === 'No Aplica';
+
+                if (isDocPaid && isAstPaid) {
+                    item.overall_status = 'Liquidado Total';
+                } else {
+                    item.overall_status = 'Parcialmente Liquidado';
+                }
+
+                if (!item.settlement_log) item.settlement_log = [];
+                item.settlement_log.push({
+                    target: 'doctor',
+                    amount: amt,
+                    method: paymentMethod || 'Transferencia',
+                    ref: paymentRef || '',
+                    date: nowStr,
+                    notes: notes || `Liquidación masiva por doctor: ${doctorName}`
+                });
+            }
+        });
+
+        await this.saveServiceLiquidations(list);
+        return { count, totalSettled };
+    }
+
     static async settleServicePayment({ liquidationId, target, paymentMethod, paymentRef, notes, customDoctorAmount, customAssistantAmount, deductions }) {
         let list = await this.getServiceLiquidations(true);
         const item = list.find(l => l.id === liquidationId);

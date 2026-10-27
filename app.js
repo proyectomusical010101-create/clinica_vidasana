@@ -23214,7 +23214,7 @@ function getClinicBusData(config) {
         email: 'recepcion.vidasana@gmail.com',
         rif: 'J-50781755-5',
         address: 'Av. Libertador Con Calle Paraíso, Edif Torre Siclar Piso Local 1, Sector Libertador, Caracas',
-        logoUrl: '',
+        logoUrl: 'logo-vidasana.png',
         footer: 'Correo: recepcion.vidasana@gmail.com | Instagram: @Vidasanacmo | Gracias por su confianza.',
         recipeFooter: 'Indicaciones y récipe médico válido bajo supervisión del especialista tratante.',
         bankInfo: 'Banco Banesco / Pago Móvil: RIF J-50781755-5 | Teléfono: 0424-1894138'
@@ -23403,13 +23403,7 @@ function buildMedicalDocumentHTML(opts) {
             <!-- 1. Header (Logo left, Title & metadata right) -->
             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; padding-bottom: 4px; border-bottom: 1px solid #e2e8f0; gap: 12px;">
                 <div style="flex: 1; max-width: 320px; display: flex; align-items: center; justify-content: flex-start;">
-                    ${logoUrl ? `
-                        <img src="${logoUrl}" style="width: auto; max-width: 260px; height: auto; max-height: 55px; object-fit: contain; object-position: left top; display: block;" alt="Logo">
-                    ` : `
-                        <div style="border: 2px dashed #0284c7; border-radius: 6px; padding: 5px 16px; display: inline-block; color: #0284c7; font-weight: 800; font-size: 1.05rem; letter-spacing: 0.05em;">
-                            LOGO
-                        </div>
-                    `}
+                    <img src="${logoUrl || 'logo-vidasana.png'}" style="width: auto; max-width: 260px; height: auto; max-height: 55px; object-fit: contain; object-position: left top; display: block;" alt="VidaSana">
                 </div>
                 <div style="text-align: right; min-width: 190px; flex-shrink: 0;">
                     <h1 style="margin: 0 0 1px 0; font-size: 1.15rem; font-weight: 800; color: #0f172a; letter-spacing: -0.02em;">${docTitle}</h1>
@@ -23571,7 +23565,7 @@ function buildRecipeDocumentHTML(opts) {
         logoUrl = '',
 
         doctorName = '',
-        doctorSpecialty = 'Odontología General / Especializada',
+        doctorSpecialty = 'Medicina / Odontología Especializada',
         doctorLicense = '',
         doctorPhone = '',
         doctorSig = '',
@@ -23595,137 +23589,138 @@ function buildRecipeDocumentHTML(opts) {
     const finalClinicAddress = (clinicAddress && !clinicAddress.includes('Las Mercedes')) ? clinicAddress : (parsedFromClinicName.address || baseBus.address);
     const finalDoctorName = doctorName || (getCurrentUser() && getCurrentUser().fullname) || baseBus.doctor || 'Dirección Médica';
     const finalDoctorPhone = (doctorPhone && !doctorPhone.includes('123-4567') && !doctorPhone.includes('555-0192')) ? doctorPhone : (baseBus.phone || '');
+    const finalLogoUrl = logoUrl || 'logo-vidasana.png';
 
     let medsList = '';
     if (medicines && medicines.length > 0) {
         medicines.forEach((m, idx) => {
             medsList += `
                 <tr style="border-bottom: 1px solid #f1f5f9;">
-                    <td style="padding: 6px 8px; text-align: left; vertical-align: top;">
-                        <strong style="font-size: 0.82rem; color: #0f172a; display: block;">${idx + 1}. ${m.med}</strong>
+                    <td style="padding: 7px 10px; text-align: left; vertical-align: top;">
+                        <strong style="font-size: 0.84rem; color: #0f172a; display: block;">${idx + 1}. ${m.med}</strong>
                     </td>
-                    <td style="padding: 6px 6px; text-align: left; font-size: 0.80rem; color: #334155; vertical-align: top;">${m.dose}</td>
-                    <td style="padding: 6px 8px; text-align: right; font-size: 0.80rem; font-weight: 600; color: #0f172a; vertical-align: top;">${m.freq}</td>
+                    <td style="padding: 7px 8px; text-align: left; font-size: 0.82rem; color: #334155; vertical-align: top;">${m.dose || 'Según criterio'}</td>
+                    <td style="padding: 7px 10px; text-align: right; font-size: 0.82rem; font-weight: 700; color: #0d9488; vertical-align: top;">${m.freq || 'Continuo'}</td>
                 </tr>
             `;
         });
     } else {
         medsList = `
             <tr>
-                <td colspan="3" style="padding: 10px; text-align: center; color: #94a3b8; font-style: italic;">Sin medicamentos prescritos</td>
+                <td colspan="3" style="padding: 12px; text-align: center; color: #94a3b8; font-style: italic;">Sin medicamentos prescritos en este récipe</td>
             </tr>
         `;
     }
 
     return `
-        <div class="medical-doc-container" style="background: #ffffff; color: #1e293b; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 0.76rem; line-height: 1.25; width: 100%; max-width: 780px; margin: 0 auto; padding: 12px 18px; box-sizing: border-box;">
+        <div class="medical-doc-container" style="background: #ffffff; color: #1e293b; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 0.78rem; line-height: 1.3; width: 100%; max-width: 780px; margin: 0 auto; padding: 16px 22px; box-sizing: border-box;">
             
-            <!-- 1. Header (Logo left, Title & metadata right) -->
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0; gap: 15px;">
-                <div style="flex: 1; max-width: 360px; display: flex; align-items: center; justify-content: flex-start;">
-                    ${logoUrl ? `
-                        <img src="${logoUrl}" style="width: auto; max-width: 340px; height: auto; max-height: 120px; object-fit: contain; object-position: left top; display: block;" alt="Logo">
-                    ` : `
-                        <div style="border: 2px dashed #0284c7; border-radius: 6px; padding: 10px 22px; display: inline-block; color: #0284c7; font-weight: 800; font-size: 1.15rem; letter-spacing: 0.05em;">
-                            LOGO
-                        </div>
-                    `}
+            <!-- 1. Header Oficial VidaSana con Logo y Datos Institucionales -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 2px solid #0d9488; gap: 15px;">
+                <div style="flex: 1; max-width: 380px; display: flex; align-items: center; justify-content: flex-start;">
+                    <img src="${finalLogoUrl}" style="width: auto; max-width: 270px; height: auto; max-height: 68px; object-fit: contain; object-position: left center; display: block;" alt="VidaSana Centro Médico Odontológico">
                 </div>
-                <div style="text-align: right; min-width: 190px; flex-shrink: 0;">
-                    <h1 style="margin: 0 0 2px 0; font-size: 1.20rem; font-weight: 800; color: #0f172a; letter-spacing: -0.02em;">${docTitle}</h1>
-                    <div style="font-size: 0.74rem; color: #475569; display: flex; flex-direction: column; gap: 1px;">
+                <div style="text-align: right; min-width: 220px; flex-shrink: 0;">
+                    <h1 style="margin: 0 0 4px 0; font-size: 1.22rem; font-weight: 800; color: #0f766e; letter-spacing: -0.02em; text-transform: uppercase;">${docTitle}</h1>
+                    <div style="font-size: 0.74rem; color: #475569; display: flex; flex-direction: column; gap: 2px;">
                         <div><span style="color: #64748b;">Fecha de Emisión:</span> <strong style="color: #0f172a;">${emissionDate}</strong></div>
-                        <div><span style="color: #64748b;">N° de Récipe / Cód:</span> <strong style="color: #0f172a; letter-spacing: 0.03em;">${controlNumber}</strong></div>
-                        <div><span style="color: #64748b;">Tratamiento Vinculado:</span> <strong style="color: #0066f5;">${treatmentLinked}</strong></div>
+                        <div><span style="color: #64748b;">N° de Control:</span> <strong style="color: #0d9488; letter-spacing: 0.04em;">${controlNumber}</strong></div>
+                        <div><span style="color: #64748b;">Área / Especialidad:</span> <strong style="color: #0f766e;">${treatmentLinked}</strong></div>
                     </div>
                 </div>
             </div>
 
-            <!-- 2. 3-Column Info Cards (Horizontal Row) -->
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 8px; font-size: 0.74rem;">
-                <!-- Col 1: Consultorio / Centro Médico -->
-                <div>
-                    <div style="font-size: 0.64rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">CENTRO MÉDICO ODONTOLÓGICO</div>
-                    <strong style="font-size: 0.82rem; color: #0f172a; display: block; line-height: 1.25; margin-bottom: 2px;">${finalClinicName}</strong>
-                    ${finalClinicRif ? `<div style="color: #475569; font-weight: 600; font-size: 0.72rem;">RIF: ${finalClinicRif}</div>` : ''}
-                    ${finalClinicPhone ? `<div style="color: #475569; font-size: 0.72rem;">Tlf: ${finalClinicPhone}</div>` : ''}
-                    ${finalClinicEmail ? `<div style="color: #475569; font-size: 0.70rem;">${finalClinicEmail}</div>` : ''}
-                    ${finalClinicAddress ? `<div style="color: #64748b; font-size: 0.70rem; line-height: 1.2; margin-top: 1px;">${finalClinicAddress}</div>` : ''}
+            <!-- 2. 3 Tarjetas Clínicas de Identificación (Clínica, Paciente, Médico Tratante) -->
+            <div style="display: grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 10px; margin-bottom: 12px; font-size: 0.75rem;">
+                <!-- Col 1: Centro Médico VidaSana -->
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px;">
+                    <div style="font-size: 0.65rem; font-weight: 800; color: #0d9488; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">CENTRO CLÍNICO EMISOR</div>
+                    <strong style="font-size: 0.82rem; color: #0f172a; display: block; line-height: 1.2;">${finalClinicName}</strong>
+                    <div style="color: #475569; margin-top: 2px;">RIF: ${finalClinicRif}</div>
+                    <div style="color: #475569;">Tlf: ${finalClinicPhone}</div>
+                    <div style="color: #64748b; font-size: 0.69rem; line-height: 1.15; margin-top: 1px;">${finalClinicAddress}</div>
                 </div>
 
-                <!-- Col 2: Médico Tratante -->
-                <div>
-                    <div style="font-size: 0.64rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">MÉDICO TRATANTE</div>
-                    <strong style="font-size: 0.80rem; color: #0f172a; display: block; margin-bottom: 2px;">${finalDoctorName.startsWith('Dr') ? finalDoctorName : `Dr(a). ${finalDoctorName}`}</strong>
-                    <div style="color: #475569;">Especialidad: ${doctorSpecialty || 'Odontología General / Especializada'}</div>
-                    ${doctorLicense ? `<div style="color: #0066f5; font-weight: 600;">Colegiado/Lic: ${doctorLicense}</div>` : ''}
-                    ${finalDoctorPhone ? `<div style="color: #475569;">Tlf: ${finalDoctorPhone}</div>` : ''}
+                <!-- Col 2: Datos del Paciente -->
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px;">
+                    <div style="font-size: 0.65rem; font-weight: 800; color: #0d9488; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">PACIENTE BENEFICIARIO</div>
+                    <strong style="font-size: 0.84rem; color: #0f172a; display: block; margin-bottom: 2px;">${patientName}</strong>
+                    <div style="color: #475569;">Cédula / ID: <strong>${patientId}</strong></div>
+                    <div style="color: #475569;">Teléfono: ${patientPhone || 'S/N'}</div>
                 </div>
 
-                <!-- Col 3: Datos del Paciente -->
-                <div>
-                    <div style="font-size: 0.64rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">DATOS DEL PACIENTE</div>
-                    <strong style="font-size: 0.80rem; color: #0f172a; display: block; margin-bottom: 2px;">${patientName}</strong>
-                    <div style="color: #475569;">C.I.: ${patientId}</div>
-                    <div style="color: #475569;">Tlf: ${patientPhone}</div>
+                <!-- Col 3: Médico Tratante Responsable -->
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px;">
+                    <div style="font-size: 0.65rem; font-weight: 800; color: #0d9488; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">MÉDICO TRATANTE</div>
+                    <strong style="font-size: 0.84rem; color: #0f172a; display: block; margin-bottom: 2px;">${finalDoctorName.startsWith('Dr') ? finalDoctorName : `Dr(a). ${finalDoctorName}`}</strong>
+                    <div style="color: #0f766e; font-weight: 600;">${doctorSpecialty}</div>
+                    <div style="color: #475569; font-size: 0.72rem; margin-top: 1px;">M.P.P.S.: <strong>${doctorLicense || 'Certificado'}</strong></div>
                 </div>
             </div>
 
-            <!-- 3. Prescribed Medicines Table -->
-            <table style="width: 100%; border-collapse: collapse; margin-bottom: 8px;">
-                <thead>
-                    <tr>
-                        <th style="background: #0066f5; color: #ffffff; padding: 5px 8px; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.05em; text-align: left; text-transform: uppercase; border-top-left-radius: 4px; border-bottom-left-radius: 4px;">RX - MEDICAMENTO / FÁRMACO / PRESENTACIÓN</th>
-                        <th style="background: #0066f5; color: #ffffff; padding: 5px 6px; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.05em; text-align: left; text-transform: uppercase; width: 170px;">DOSIS</th>
-                        <th style="background: #0066f5; color: #ffffff; padding: 5px 8px; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.05em; text-align: right; text-transform: uppercase; width: 160px; border-top-right-radius: 4px; border-bottom-right-radius: 4px;">FRECUENCIA / DURACIÓN</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${medsList}
-                </tbody>
-            </table>
+            <!-- 3. Prescripción Farmacológica (Rp.) -->
+            <div style="margin-bottom: 12px; border: 1px solid #ccfbf1; border-radius: 8px; overflow: hidden;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr>
+                            <th style="background: #0d9488; color: #ffffff; padding: 6px 10px; font-size: 0.70rem; font-weight: 800; letter-spacing: 0.05em; text-align: left; text-transform: uppercase;">
+                                <i class="fa-solid fa-prescription"></i> RP. - MEDICAMENTO / FÁRMACO & PRESENTACIÓN
+                            </th>
+                            <th style="background: #0d9488; color: #ffffff; padding: 6px 8px; font-size: 0.70rem; font-weight: 800; letter-spacing: 0.05em; text-align: left; text-transform: uppercase; width: 170px;">
+                                DOSIFICACIÓN
+                            </th>
+                            <th style="background: #0d9488; color: #ffffff; padding: 6px 10px; font-size: 0.70rem; font-weight: 800; letter-spacing: 0.05em; text-align: right; text-transform: uppercase; width: 170px;">
+                                FRECUENCIA / DURACIÓN
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${medsList}
+                    </tbody>
+                </table>
+            </div>
 
-            <!-- 4. Notes / Instructions -->
+            <!-- 4. Indicaciones y Recomendaciones Clínicas al Paciente -->
+            ${indications ? `
+                <div style="border-left: 4px solid #0d9488; background: #f0fdfa; border-top: 1px solid #ccfbf1; border-right: 1px solid #ccfbf1; border-bottom: 1px solid #ccfbf1; border-radius: 0 8px 8px 0; padding: 9px 14px; margin-bottom: 10px; font-size: 0.76rem; line-height: 1.35; page-break-inside: avoid; break-inside: avoid;">
+                    <strong style="text-transform: uppercase; color: #0f766e; font-size: 0.72rem; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                        <i class="fa-solid fa-list-check" style="color: #0d9488;"></i> INDICACIONES Y PAUTAS DE CUIDADO AL PACIENTE
+                    </strong>
+                    <div style="color: #1e293b; white-space: pre-line;">${indications}</div>
+                </div>
+            ` : ''}
+
+            <!-- 5. Observaciones / Instrucciones Adicionales -->
             ${notes ? `
-                <div style="border-left: 3px solid #0066f5; background: #ffffff; border-top: 1px solid #f1f5f9; border-right: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9; border-radius: 0 4px 4px 0; padding: 5px 8px; margin-bottom: 6px; font-size: 0.72rem; line-height: 1.25; page-break-inside: avoid; break-inside: avoid;">
-                    <strong style="text-transform: uppercase; color: #0f172a; font-size: 0.66rem; letter-spacing: 0.05em; display: block; margin-bottom: 1px;">OBSERVACIONES / INSTRUCCIONES DE LA PRESCRIPCIÓN</strong>
+                <div style="border-left: 4px solid #06b6d4; background: #ffffff; border-top: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; border-radius: 0 8px 8px 0; padding: 8px 12px; margin-bottom: 10px; font-size: 0.74rem; line-height: 1.3; page-break-inside: avoid; break-inside: avoid;">
+                    <strong style="text-transform: uppercase; color: #0891b2; font-size: 0.70rem; letter-spacing: 0.05em; display: block; margin-bottom: 3px;">OBSERVACIONES / RECOMENDACIONES GENERALES</strong>
                     <div style="color: #475569;">${notes}</div>
                 </div>
             ` : ''}
 
-            <!-- 5. Clinical Indications -->
-            ${indications ? `
-                <div style="border-left: 3px solid #0066f5; background: #f8fafc; border-top: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; border-radius: 0 4px 4px 0; padding: 6px 10px; margin-bottom: 8px; font-size: 0.73rem; line-height: 1.3; page-break-inside: avoid; break-inside: avoid;">
-                    <strong style="text-transform: uppercase; color: #0f172a; font-size: 0.68rem; letter-spacing: 0.05em; display: block; margin-bottom: 2px;">
-                        <i class="fa-solid fa-list-check" style="color: #0066f5;"></i> INDICACIONES Y RECOMENDACIONES CLÍNICAS AL PACIENTE
-                    </strong>
-                    <div style="color: #334155; white-space: pre-line;">${indications}</div>
-                </div>
-            ` : ''}
-
-            <!-- 6. Doctor Signature Block (Aligned right with full details: signature, name, colegiado, licencia, specialty) -->
-            <div style="display: flex; justify-content: flex-end; margin-top: 12px; padding-top: 4px; padding-right: 15px; page-break-inside: avoid; break-inside: avoid;">
-                <div style="width: 290px; text-align: center;">
+            <!-- 6. Firma y Sello del Médico Tratante -->
+            <div style="display: flex; justify-content: flex-end; margin-top: 18px; padding-top: 6px; padding-right: 15px; page-break-inside: avoid; break-inside: avoid;">
+                <div style="width: 300px; text-align: center;">
                     ${doctorSig ? `
-                        <img src="${doctorSig}" style="max-height: 42px; max-width: 170px; object-fit: contain; margin: 0 auto 2px auto; display: block;" alt="Firma Odontólogo">
-                    ` : `<div style="height: 32px;"></div>`}
-                    <div style="border-top: 1px solid #334155; padding-top: 3px; font-size: 0.76rem; font-weight: 700; color: #0f172a;">
-                        ${doctorName.startsWith('Dr') ? doctorName : `Dr(a). ${doctorName}`}
+                        <img src="${doctorSig}" style="max-height: 50px; max-width: 180px; object-fit: contain; margin: 0 auto 3px auto; display: block;" alt="Firma Médico">
+                    ` : `<div style="height: 38px;"></div>`}
+                    <div style="border-top: 1.5px solid #0d9488; padding-top: 4px; font-size: 0.80rem; font-weight: 800; color: #0f172a;">
+                        ${finalDoctorName.startsWith('Dr') ? finalDoctorName : `Dr(a). ${finalDoctorName}`}
                     </div>
-                    <div style="font-size: 0.69rem; color: #334155; line-height: 1.25; margin-top: 1px;">
+                    <div style="font-size: 0.72rem; color: #334155; line-height: 1.25; margin-top: 1px;">
                         ${doctorSpecialty ? `<div>${doctorSpecialty}</div>` : ''}
-                        ${doctorLicense ? `<div><strong>N° Colegiado / Licencia:</strong> ${doctorLicense}</div>` : `<div>M.P.P.S. / C.O.V.</div>`}
+                        ${doctorLicense ? `<div><strong>M.P.P.S. / N° Colegiado:</strong> ${doctorLicense}</div>` : `<div>M.P.P.S. / Especialista Certificado</div>`}
                     </div>
-                    <div style="font-size: 0.65rem; color: #64748b; margin-top: 2px;">Firma y Sello del Odontólogo</div>
+                    <div style="font-size: 0.68rem; color: #64748b; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.04em;">Firma y Sello del Médico Tratante</div>
                 </div>
             </div>
 
-            <!-- 7. Official Footer Note -->
-            ${footerNote ? `
-                <div style="text-align: center; margin-top: 10px; padding-top: 4px; border-top: 1px dashed #cbd5e1; font-size: 0.68rem; color: #94a3b8; font-style: italic; page-break-inside: avoid; break-inside: avoid;">
-                    ${footerNote}
-                </div>
-            ` : ''}
+            <!-- 7. Pie Institucional Oficial VidaSana -->
+            <div style="text-align: center; margin-top: 16px; padding-top: 8px; border-top: 1px dashed #cbd5e1; font-size: 0.70rem; color: #64748b; page-break-inside: avoid; break-inside: avoid;">
+                <div style="font-weight: 700; color: #0d9488; margin-bottom: 2px;">Vida Sana Centro Médico Odontológico &bull; Salud, Estética y Bienestar Integral</div>
+                <div>Av. Libertador Con Calle Paraíso, Edif Torre Siclar Piso Local 1, Caracas &bull; Tlf: 0424-1894138 &bull; recepcion.vidasana@gmail.com</div>
+                <div style="font-style: italic; color: #94a3b8; margin-top: 3px;">${footerNote || 'Documento clínico oficial de prescripción médica e indicaciones válidas bajo supervisión del especialista tratante.'}</div>
+            </div>
         </div>
     `;
 }
@@ -29917,8 +29912,15 @@ window.printSingleRecipePDF = async function(patientId, recipeId = null) {
     }
 
     const config = await SupabaseDataService.getStationeryConfig();
-    const headerText = config.headerText || 'Clínica Odontológica Especializada';
-    const logoUrl = config.logoUrl || config.logo_url || '';
+    const headerText = config.headerText || 'Vida Sana Centro Médico Odontológico';
+    let logoUrl = config.logoUrl || config.logo_url || 'logo-vidasana.png';
+    if (logoUrl && !logoUrl.startsWith('data:')) {
+        try {
+            logoUrl = await toDataURL(logoUrl);
+        } catch(e) {
+            console.warn("Logo toDataURL fallback:", e);
+        }
+    }
     const recipeFooter = config.recipeFooterText || config.footerText || 'Documento Clínico Oficial de Prescripción Médica para el Paciente.';
 
     const users = await SupabaseDataService.getUsers();

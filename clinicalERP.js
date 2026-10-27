@@ -1666,9 +1666,151 @@
             this.renderServiceLiquidations();
         },
 
+        setServiceViewMode(mode, btn) {
+            this.serviceViewMode = mode;
+            const btnDoc = document.getElementById('btn-srv-view-by-doctor');
+            const btnSrv = document.getElementById('btn-srv-view-by-service');
+            if (btnDoc) btnDoc.classList.toggle('active', mode === 'by-doctor');
+            if (btnSrv) btnSrv.classList.toggle('active', mode === 'by-service');
+            this.renderServiceLiquidations();
+        },
+
+        toggleDoctorPayroll(safeKey) {
+            const details = document.getElementById('doc-details-' + safeKey);
+            const chevron = document.getElementById('doc-chevron-' + safeKey);
+            const btnText = document.getElementById('doc-btn-text-' + safeKey);
+            if (!details) return;
+
+            const isHidden = details.classList.contains('hidden');
+            if (isHidden) {
+                details.classList.remove('hidden');
+                if (chevron) chevron.style.transform = 'rotate(180deg)';
+                if (btnText) btnText.innerText = 'Ocultar Pacientes y Servicios';
+            } else {
+                details.classList.add('hidden');
+                if (chevron) chevron.style.transform = 'rotate(0deg)';
+                if (btnText) btnText.innerText = 'Ver Pacientes y Servicios';
+            }
+        },
+
+        async openSettleAllDoctorModal(safeKey) {
+            const g = this._doctorsGroupCache ? this._doctorsGroupCache[safeKey] : null;
+            if (!g) {
+                Swal.fire({ icon: 'warning', title: 'Doctor no encontrado', text: 'No se encontraron registros de este doctor.' });
+                return;
+            }
+
+            const pendingItems = g.items.filter(x => x.doctor && x.doctor.status === 'Pendiente');
+            if (pendingItems.length === 0) {
+                Swal.fire({ icon: 'info', title: 'Sin Pagos Pendientes', text: `Todos los honorarios de ${g.name} ya han sido liquidados.` });
+                return;
+            }
+
+            const pendingIds = pendingItems.map(x => x.id);
+            const totalToPay = g.pendingDocFee;
+            const rate = (typeof window.getExchangeRate === 'function') ? window.getExchangeRate() : 36.5;
+            const totalVES = (totalToPay * rate).toFixed(2);
+
+            const patientsList = Object.values(g.patients).map(p => {
+                const pendCount = p.items.filter(x => x.doctor && x.doctor.status === 'Pendiente').length;
+                return `<li><strong>${p.patientName}</strong>: ${pendCount} servicio(s) pendiente(s) ($$${p.pendingDocFee.toFixed(2)})</li>`;
+            }).join('');
+
+            const { value: formValues } = await Swal.fire({
+                title: `<div style="display:flex; align-items:center; justify-content:center; gap:10px; color:#0d9488;"><i class="fa-solid fa-receipt"></i> Liquidación Total: ${g.name}</div>`,
+                html: `
+                    <div style="text-align: left; font-size: 0.88rem; color: #1e293b;">
+                        <div style="background:#f0fdf4; border:1px solid #86efac; border-radius:10px; padding:12px 16px; margin-bottom:14px; text-align:center;">
+                            <div style="font-size:0.75rem; font-weight:800; color:#15803d; text-transform:uppercase;">Monto Total a Liquidar al Doctor</div>
+                            <div style="font-size:1.85rem; font-weight:900; color:#166534; margin:4px 0;">$${totalToPay.toFixed(2)} USD</div>
+                            <div style="font-size:0.80rem; color:#15803d; font-weight:600;">Equivalente Oficial BCV: <strong>${totalVES} Bs.</strong> (Tasa: ${rate.toFixed(2)})</div>
+                        </div>
+
+                        <div style="margin-bottom:12px; font-size:0.82rem; color:#475569;">
+                            <strong>Pacientes y servicios incluidos (${pendingItems.length} servicios en total):</strong>
+                            <ul style="margin:4px 0 0 16px; padding:0; font-size:0.80rem;">
+                                ${patientsList}
+                            </ul>
+                        </div>
+
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:12px;">
+                            <div>
+                                <label style="font-weight:700; font-size:0.78rem; color:#0f172a; display:block; margin-bottom:4px;">Método de Pago:</label>
+                                <select id="swal-settle-method" class="swal2-input" style="width:100%; margin:0; height:38px; font-size:0.85rem; padding:4px 8px;">
+                                    <option value="Transferencia">Transferencia Bancaria</option>
+                                    <option value="Pago Móvil">Pago Móvil</option>
+                                    <option value="Efectivo USD">Efectivo USD ($)</option>
+                                    <option value="Zelle">Zelle</option>
+                                    <option value="Binance">Binance USDT</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="font-weight:700; font-size:0.78rem; color:#0f172a; display:block; margin-bottom:4px;">N° de Referencia / Comprobante:</label>
+                                <input type="text" id="swal-settle-ref" class="swal2-input" placeholder="ej: 984021 / Efectivo en caja" style="width:100%; margin:0; height:38px; font-size:0.85rem; padding:4px 8px;">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label style="font-weight:700; font-size:0.78rem; color:#0f172a; display:block; margin-bottom:4px;">Notas / Observaciones de Liquidación:</label>
+                            <input type="text" id="swal-settle-notes" class="swal2-input" placeholder="ej: Liquidación de jornada del día. Todo conciliado." value="Liquidación global jornada - ${new Date().toLocaleDateString('es-ES')}" style="width:100%; margin:0; height:38px; font-size:0.85rem; padding:4px 8px;">
+                        </div>
+                    </div>
+                `,
+                focusConfirm: false,
+                showCancelButton: true,
+                confirmButtonText: `<i class="fa-solid fa-check"></i> Confirmar Pago Total ($${totalToPay.toFixed(2)})`,
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#16a34a',
+                cancelButtonColor: '#94a3b8',
+                preConfirm: () => {
+                    const method = document.getElementById('swal-settle-method')?.value || 'Transferencia';
+                    const ref = document.getElementById('swal-settle-ref')?.value?.trim() || '';
+                    const notes = document.getElementById('swal-settle-notes')?.value?.trim() || '';
+                    return { method, ref, notes };
+                }
+            });
+
+            if (!formValues) return;
+
+            try {
+                Swal.fire({
+                    title: 'Procesando liquidación...',
+                    text: 'Actualizando nómina médica y conciliación...',
+                    allowOutsideClick: false,
+                    didOpen: () => Swal.showLoading()
+                });
+
+                if (window.SupabaseDataService && window.SupabaseDataService.settleDoctorBatchServices) {
+                    const result = await window.SupabaseDataService.settleDoctorBatchServices({
+                        doctorName: g.name,
+                        serviceIds: pendingIds,
+                        paymentMethod: formValues.method,
+                        paymentRef: formValues.ref,
+                        notes: formValues.notes
+                    });
+
+                    // Reload all ERP collections and refresh
+                    await this.loadAll();
+                    this.renderPayroll();
+
+                    Swal.fire({
+                        icon: 'success',
+                        title: '¡Liquidación Exitosa!',
+                        html: `Se han liquidado exitosamente <strong>${result.count}</strong> servicio(s) de <strong>${g.name}</strong> por un total de <strong>$${result.totalSettled.toFixed(2)} USD</strong>.`,
+                        confirmButtonColor: '#0d9488'
+                    });
+                }
+            } catch(err) {
+                console.error('Error in openSettleAllDoctorModal:', err);
+                Swal.fire({ icon: 'error', title: 'Error al liquidar', text: err.message || 'Ocurrió un error inesperado al procesar la liquidación.' });
+            }
+        },
+
         renderServiceLiquidations() {
             const container = document.getElementById('service-liquidations-table-body');
-            if (!container) return;
+            const docContainer = document.getElementById('service-liquidations-by-doctor-container');
+            const tableCard = document.getElementById('service-liquidations-table-card') || (document.getElementById('service-liquidations-table')?.closest('.card'));
+            if (!container && !docContainer) return;
 
             let docPending = 0;
             let astPending = 0;
@@ -1727,6 +1869,293 @@
                 );
             }
 
+            // View mode resolution: 'by-doctor' is prioritized by default
+            const currentMode = this.serviceViewMode || 'by-doctor';
+            const btnDoc = document.getElementById('btn-srv-view-by-doctor');
+            const btnSrv = document.getElementById('btn-srv-view-by-service');
+            if (btnDoc) btnDoc.classList.toggle('active', currentMode === 'by-doctor');
+            if (btnSrv) btnSrv.classList.toggle('active', currentMode === 'by-service');
+
+            if (currentMode === 'by-doctor') {
+                if (docContainer) docContainer.classList.remove('hidden');
+                if (tableCard) tableCard.classList.add('hidden');
+                this.renderServiceLiquidationsByDoctor(list);
+            } else {
+                if (docContainer) docContainer.classList.add('hidden');
+                if (tableCard) tableCard.classList.remove('hidden');
+                this.renderServiceLiquidationsFlatTable(list);
+            }
+        },
+
+        renderServiceLiquidationsByDoctor(list) {
+            const container = document.getElementById('service-liquidations-by-doctor-container');
+            if (!container) return;
+
+            if (list.length === 0) {
+                container.innerHTML = `
+                    <div style="padding: 45px 20px; text-align: center; color: #64748b; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.02);">
+                        <div style="font-size: 2.2rem; margin-bottom: 10px; color: #cbd5e1;"><i class="fa-solid fa-user-doctor"></i></div>
+                        <strong style="font-size: 1.05rem; color: #1e293b;">No hay servicios o médicos en este filtro</strong>
+                        <p style="margin: 6px 0 0 0; font-size: 0.85rem;">Cuando se completen procedimientos o se cobren en caja, aparecerán organizados y agrupados por cada médico aquí.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Group by Doctor
+            const doctorsMap = {};
+            list.forEach(item => {
+                const rawName = item.doctor?.name || 'Médico Tratante';
+                const cleanName = rawName.trim();
+                const docKey = cleanName.toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim() || 'medico_general';
+
+                if (!doctorsMap[docKey]) {
+                    doctorsMap[docKey] = {
+                        key: docKey,
+                        name: cleanName,
+                        id: item.doctor?.id || '',
+                        specialty: item.doctor?.specialty || item.doctor?.role || 'Especialista',
+                        patients: {},
+                        items: [],
+                        totalGross: 0,
+                        totalDocFee: 0,
+                        pendingDocFee: 0,
+                        settledDocFee: 0,
+                        pendingItemsCount: 0,
+                        settledItemsCount: 0
+                    };
+                }
+
+                const g = doctorsMap[docKey];
+                g.items.push(item);
+                const price = parseFloat(item.service_price || 0);
+                const docAmt = parseFloat(item.doctor?.amount || 0);
+                g.totalGross += price;
+                g.totalDocFee += docAmt;
+
+                if (item.doctor?.status === 'Pendiente') {
+                    g.pendingDocFee += docAmt;
+                    g.pendingItemsCount++;
+                } else {
+                    g.settledDocFee += parseFloat(item.doctor?.settled_amount || docAmt);
+                    g.settledItemsCount++;
+                }
+
+                // Group by Patient inside this doctor
+                const ptName = (item.patient_name || 'Paciente S/N').trim();
+                if (!g.patients[ptName]) {
+                    g.patients[ptName] = {
+                        patientName: ptName,
+                        patientId: item.patient_id || '',
+                        items: [],
+                        totalGross: 0,
+                        totalDocFee: 0,
+                        pendingDocFee: 0
+                    };
+                }
+                const ptGroup = g.patients[ptName];
+                ptGroup.items.push(item);
+                ptGroup.totalGross += price;
+                ptGroup.totalDocFee += docAmt;
+                if (item.doctor?.status === 'Pendiente') {
+                    ptGroup.pendingDocFee += docAmt;
+                }
+            });
+
+            this._doctorsGroupCache = doctorsMap;
+
+            // Sort doctors: Doctors with pending fees first, then highest pending amount
+            const doctorsList = Object.values(doctorsMap).sort((a, b) => {
+                if (a.pendingDocFee > 0 && b.pendingDocFee <= 0) return -1;
+                if (b.pendingDocFee > 0 && a.pendingDocFee <= 0) return 1;
+                return b.pendingDocFee - a.pendingDocFee;
+            });
+
+            container.innerHTML = doctorsList.map(g => {
+                const safeKey = g.key.replace(/[^a-z0-9]/g, '_');
+                const patientCount = Object.keys(g.patients).length;
+                const hasPending = (g.pendingDocFee > 0);
+
+                // Render Patient breakdowns
+                const patientsHtml = Object.values(g.patients).map(pt => {
+                    const ptRows = pt.items.map(item => {
+                        const price = parseFloat(item.service_price || 0);
+                        const docAmt = parseFloat(item.doctor?.amount || 0);
+                        const isPend = (item.doctor?.status === 'Pendiente');
+                        const rateText = item.doctor?.type === 'fixed' 
+                            ? `Fijo $${parseFloat(item.doctor.rate || 0).toFixed(2)}` 
+                            : `${item.doctor?.rate || 40}%`;
+
+                        const dateStr = item.date || (item.created_at ? item.created_at.substring(0, 10) : 'Hoy');
+
+                        return `
+                            <tr style="border-bottom: 1px solid #f1f5f9;">
+                                <td style="padding: 9px 14px; color: #475569; font-size: 0.80rem;">
+                                    <i class="fa-regular fa-calendar text-muted"></i> ${dateStr}
+                                </td>
+                                <td style="padding: 9px 14px;">
+                                    <strong style="color: #0f172a; font-size: 0.85rem;">${item.service_name}</strong>
+                                    ${item.notes ? `<div style="font-size: 0.72rem; color: #64748b;">${item.notes}</div>` : ''}
+                                </td>
+                                <td style="padding: 9px 14px; text-align: right; font-weight: 600; color: #334155;">
+                                    $${price.toFixed(2)}
+                                </td>
+                                <td style="padding: 9px 14px; text-align: center;">
+                                    <span class="badge-tag purple" style="font-size: 0.72rem; padding: 2px 7px;">${rateText}</span>
+                                </td>
+                                <td style="padding: 9px 14px; text-align: right;">
+                                    <strong style="color: #15803d; font-size: 0.90rem;">$${docAmt.toFixed(2)}</strong>
+                                </td>
+                                <td style="padding: 9px 14px; text-align: center;">
+                                    <span class="badge-tag ${isPend ? 'amber' : 'green'}" style="font-size: 0.72rem;">
+                                        ${isPend ? 'Pendiente' : 'Liquidado'}
+                                    </span>
+                                </td>
+                                <td style="padding: 9px 14px; text-align: right;">
+                                    ${isPend ? `
+                                        <button type="button" class="btn btn-xs btn-outline" onclick="window.ClinicalERP.openSettleModal('${item.id}', 'doctor')" style="border-color:#16a34a; color:#15803d; font-weight:700;" title="Liquidar solo este servicio">
+                                            <i class="fa-solid fa-check"></i> Liquidar
+                                        </button>
+                                    ` : `
+                                        <span class="text-muted" style="font-size:0.75rem;"><i class="fa-solid fa-circle-check text-green"></i> Pagado</span>
+                                    `}
+                                </td>
+                            </tr>
+                        `;
+                    }).join('');
+
+                    return `
+                        <div style="margin: 10px 16px 14px 16px; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; background: #ffffff;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; flex-wrap: wrap; gap: 8px;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <i class="fa-solid fa-user-check text-cyan"></i>
+                                    <strong style="color: #0f172a; font-size: 0.88rem;">${pt.patientName}</strong>
+                                    <span class="badge-tag gray" style="font-size: 0.72rem;">${pt.items.length} servicio(s) atendido(s)</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 14px;">
+                                    <span style="font-size: 0.78rem; color: #64748b;">Facturado: <strong>$${pt.totalGross.toFixed(2)}</strong></span>
+                                    <span style="font-size: 0.85rem; font-weight: 800; color: #15803d; background: #dcfce7; padding: 2px 9px; border-radius: 6px; border: 1px solid #bbf7d0;">
+                                        Honorarios Doctor: $${pt.totalDocFee.toFixed(2)}
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="table-responsive" style="margin: 0;">
+                                <table class="table" style="margin: 0; width: 100%;">
+                                    <thead>
+                                        <tr style="background: #ffffff; color: #64748b; font-size: 0.74rem; border-bottom: 1px solid #e2e8f0;">
+                                            <th style="padding: 7px 14px;">Fecha</th>
+                                            <th style="padding: 7px 14px;">Servicio / Procedimiento</th>
+                                            <th style="padding: 7px 14px; text-align: right;">Precio ($)</th>
+                                            <th style="padding: 7px 14px; text-align: center;">Tasa Doctor</th>
+                                            <th style="padding: 7px 14px; text-align: right;">Honorario ($)</th>
+                                            <th style="padding: 7px 14px; text-align: center;">Estatus</th>
+                                            <th style="padding: 7px 14px; text-align: right;">Acción</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${ptRows}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                return `
+                    <div class="doctor-payroll-card" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); overflow: hidden; transition: all 0.2s ease;">
+                        
+                        <!-- Encabezado Resumen del Doctor (Clic para expandir) -->
+                        <div class="doctor-payroll-header" style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); cursor: pointer; gap: 16px; flex-wrap: wrap;" onclick="window.ClinicalERP.toggleDoctorPayroll('${safeKey}')">
+                            
+                            <div style="display: flex; align-items: center; gap: 14px; min-width: 260px;">
+                                <div style="width: 48px; height: 48px; border-radius: 50%; background: #0d9488; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; font-weight: 700; flex-shrink: 0; box-shadow: 0 3px 8px rgba(13,148,136,0.25);">
+                                    <i class="fa-solid fa-user-doctor"></i>
+                                </div>
+                                <div>
+                                    <div style="font-size: 1.05rem; font-weight: 800; color: #0f172a; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                        ${g.name.startsWith('Dr') ? g.name : `Dr(a). ${g.name}`}
+                                        <span class="badge-tag ${hasPending ? 'amber' : 'green'}" style="font-size: 0.72rem;">
+                                            <i class="fa-solid ${hasPending ? 'fa-clock' : 'fa-check'}"></i> ${hasPending ? 'Pendiente por Liquidar' : 'Totalmente Liquidado'}
+                                        </span>
+                                    </div>
+                                    <div style="font-size: 0.80rem; color: #64748b; margin-top: 2px;">
+                                        <span><i class="fa-solid fa-hospital-user text-cyan"></i> <strong>${patientCount}</strong> paciente(s) atendido(s)</span> &bull; 
+                                        <span><i class="fa-solid fa-stethoscope text-teal"></i> <strong>${g.items.length}</strong> servicio(s) realizados</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style="display: flex; align-items: center; gap: 18px; flex-wrap: wrap;">
+                                <div style="text-align: right;">
+                                    <div style="font-size: 0.69rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em;">Facturación Total Pacientes</div>
+                                    <div style="font-size: 0.95rem; font-weight: 700; color: #334155;">$${g.totalGross.toFixed(2)}</div>
+                                </div>
+
+                                <div style="text-align: right; padding: 6px 16px; background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 10px;">
+                                    <div style="font-size: 0.70rem; font-weight: 800; color: #15803d; text-transform: uppercase; letter-spacing: 0.04em;">
+                                        ${hasPending ? 'Total a Pagar al Doctor' : 'Total Ya Liquidado'}
+                                    </div>
+                                    <div style="font-size: 1.35rem; font-weight: 900; color: #166534;">
+                                        $${(hasPending ? g.pendingDocFee : g.settledDocFee).toFixed(2)}
+                                    </div>
+                                </div>
+
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    ${hasPending ? `
+                                        <button type="button" class="btn btn-sm btn-success" onclick="event.stopPropagation(); window.ClinicalERP.openSettleAllDoctorModal('${safeKey}')" style="background: #16a34a !important; color: #ffffff; font-weight: 800; padding: 8px 16px; border-radius: 8px; border: none; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 3px 8px rgba(22,163,74,0.25); cursor: pointer;" title="Liquidar todos los servicios pendientes de este doctor">
+                                            <i class="fa-solid fa-hand-holding-dollar"></i> Liquidar Total ($${g.pendingDocFee.toFixed(2)})
+                                        </button>
+                                    ` : `
+                                        <span class="badge-tag green" style="padding: 6px 12px; font-size: 0.78rem;"><i class="fa-solid fa-check-double"></i> Al día</span>
+                                    `}
+                                    <button type="button" class="btn btn-sm btn-outline" style="border-radius: 8px; padding: 7px 12px; color: #475569; border: 1px solid #cbd5e1;" title="Expandir / Contraer detalle de pacientes">
+                                        <span id="doc-btn-text-${safeKey}" style="font-size: 0.80rem; font-weight: 600;">Ver Pacientes</span>
+                                        <i class="fa-solid fa-chevron-down" id="doc-chevron-${safeKey}" style="transition: transform 0.2s ease; margin-left: 4px;"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Panel Colapsable de Pacientes y Procedimientos -->
+                        <div id="doc-details-${safeKey}" class="hidden" style="border-top: 1px solid #e2e8f0; background: #ffffff;">
+                            
+                            <div style="padding: 12px 18px 4px 18px; font-size: 0.82rem; font-weight: 700; color: #0d9488; display: flex; align-items: center; gap: 6px;">
+                                <i class="fa-solid fa-layer-group"></i> Desglose Detallado por Paciente:
+                            </div>
+
+                            ${patientsHtml}
+
+                            <!-- Resumen Final y Botón de Liquidación Completa -->
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 22px; background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-top: 1.5px solid #86efac; flex-wrap: wrap; gap: 14px;">
+                                <div style="font-size: 0.85rem; color: #166534;">
+                                    <i class="fa-solid fa-calculator text-teal" style="font-size: 1.1rem; margin-right: 6px;"></i>
+                                    <strong>Resumen de Liquidación para ${g.name}:</strong> ${patientCount} paciente(s) atendido(s) &bull; ${g.items.length} servicio(s) &bull; Facturación total: <strong>$${g.totalGross.toFixed(2)}</strong>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 20px;">
+                                    <div style="text-align: right;">
+                                        <div style="font-size: 0.72rem; font-weight: 800; color: #15803d; text-transform: uppercase;">TOTAL NETO A LIQUIDAR</div>
+                                        <div style="font-size: 1.45rem; font-weight: 900; color: #14532d;">$${g.pendingDocFee.toFixed(2)}</div>
+                                    </div>
+                                    ${hasPending ? `
+                                        <button type="button" class="btn btn-success" onclick="window.ClinicalERP.openSettleAllDoctorModal('${safeKey}')" style="background: #0d9488 !important; color: #ffffff; font-weight: 800; padding: 11px 22px; border-radius: 8px; border: none; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(13,148,136,0.3); font-size: 0.95rem; cursor: pointer;">
+                                            <i class="fa-solid fa-receipt"></i> Liquidar Total Completo de ${g.name}
+                                        </button>
+                                    ` : `
+                                        <span class="badge-tag green" style="padding: 8px 16px; font-size: 0.85rem;"><i class="fa-solid fa-check-double"></i> Todo Liquidado</span>
+                                    `}
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                `;
+            }).join('');
+        },
+
+        renderServiceLiquidationsFlatTable(list) {
+            const container = document.getElementById('service-liquidations-table-body');
+            if (!container) return;
+
             // Newest first
             list.sort((a, b) => new Date(b.created_at || b.date || 0) - new Date(a.created_at || a.date || 0));
 
@@ -1776,73 +2205,53 @@
                     <tr>
                         <td>
                             <div style="font-weight: 700; color: #0f172a;">${item.patient_name || 'Paciente S/N'}</div>
-                            <div style="font-size: 0.78rem; color: #64748b; margin-top: 2px; display: flex; align-items: center; flex-wrap: wrap; gap: 3px;">
-                                <span><i class="fa-regular fa-calendar" style="margin-right: 3px;"></i> ${item.date || (item.created_at ? item.created_at.substring(0, 10) : 'Hoy')}</span>
-                                ${item.invoice_id ? `<span class="badge-tag gray" style="font-size: 0.68rem;">#${item.invoice_id}</span>` : ''}
-                                ${methodBadge}
-                            </div>
+                            <div style="font-size: 0.74rem; color: #64748b;"><i class="fa-regular fa-calendar"></i> ${item.date || (item.created_at ? item.created_at.substring(0,10) : 'Hoy')}${methodBadge}</div>
                         </td>
                         <td>
-                            <strong style="color: #0f172a; font-size: 0.92rem; display: block;">${item.service_name}</strong>
-                            ${item.service_code ? `<small style="color: #64748b; font-size: 0.76rem;">Cód: ${item.service_code}</small>` : ''}
+                            <strong style="color: #0f172a; font-size: 0.88rem;">${item.service_name}</strong>
+                            ${item.notes ? `<div style="font-size: 0.72rem; color: #64748b; font-style: italic;">${item.notes}</div>` : ''}
                         </td>
-                        <td class="text-right font-weight-bold" style="color: #1e293b; font-size: 0.95rem;">
+                        <td class="text-right font-weight-bold" style="color: #0f172a;">
                             $${price.toFixed(2)}
                         </td>
                         <td>
-                            <div style="font-weight: 600; color: #0f172a; font-size: 0.88rem;">
-                                <i class="fa-solid fa-user-doctor text-cyan" style="margin-right: 4px;"></i> ${item.doctor?.name || 'Médico Tratante'}
-                            </div>
-                            <div style="display: flex; align-items: center; gap: 6px; margin-top: 3px;">
-                                <span class="badge-tag gray" style="font-size: 0.7rem;">${docRateText}</span>
+                            <div style="font-weight: 700; color: #0d9488;">${item.doctor?.name || 'Médico Tratante'}</div>
+                            <div style="font-size: 0.74rem; display: flex; align-items: center; gap: 6px; margin-top: 2px;">
+                                <span class="badge-tag purple" style="font-size: 0.68rem; padding: 1px 6px;">${docRateText}</span>
+                                <strong style="color: #059669;">$${docAmt.toFixed(2)}</strong>
                                 ${item.doctor?.status === 'Liquidado' 
-                                    ? `<span class="badge-tag green" style="font-size: 0.7rem; font-weight: 700;"><i class="fa-solid fa-check"></i> Pagado $${(item.doctor.settled_amount || docAmt).toFixed(2)}</span>`
-                                    : `<span class="badge-tag amber" style="font-size: 0.7rem; font-weight: 700;"><i class="fa-solid fa-clock"></i> Pendiente $${docAmt.toFixed(2)}</span>`
-                                }
+                                    ? `<span class="badge-tag green" style="font-size: 0.68rem;"><i class="fa-solid fa-check"></i> Pagado</span>` 
+                                    : `<span class="badge-tag amber" style="font-size: 0.68rem;">Pendiente</span>`}
                             </div>
                         </td>
                         <td>
-                            ${!item.assistant || item.assistant.status === 'No Aplica' ? `
-                                <span class="badge-tag gray" style="font-size: 0.75rem; color: #94a3b8;"><i class="fa-solid fa-minus"></i> No Aplica</span>
-                            ` : `
-                                <div style="font-weight: 600; color: #0f172a; font-size: 0.88rem;">
-                                    <i class="fa-solid fa-headset text-teal" style="margin-right: 4px;"></i> ${item.assistant?.name || 'Asistente'}
+                            ${item.assistant && item.assistant.has_assistant ? `
+                                <div style="font-weight: 600; color: #3b82f6;">${item.assistant.name || 'Asistente'}</div>
+                                <div style="font-size: 0.74rem; display: flex; align-items: center; gap: 6px; margin-top: 2px;">
+                                    <span class="badge-tag blue" style="font-size: 0.68rem; padding: 1px 6px;">${astRateText}</span>
+                                    <strong style="color: #2563eb;">$${astAmt.toFixed(2)}</strong>
+                                    ${item.assistant.status === 'Liquidado' 
+                                        ? `<span class="badge-tag green" style="font-size: 0.68rem;"><i class="fa-solid fa-check"></i> Pagado</span>` 
+                                        : `<span class="badge-tag amber" style="font-size: 0.68rem;">Pendiente</span>`}
                                 </div>
-                                <div style="display: flex; align-items: center; gap: 6px; margin-top: 3px;">
-                                    <span class="badge-tag gray" style="font-size: 0.7rem;">${astRateText}</span>
-                                    ${item.assistant?.status === 'Liquidado' 
-                                        ? `<span class="badge-tag green" style="font-size: 0.7rem; font-weight: 700;"><i class="fa-solid fa-check"></i> Pagado $${(item.assistant.settled_amount || astAmt).toFixed(2)}</span>`
-                                        : `<span class="badge-tag blue" style="font-size: 0.7rem; font-weight: 700;"><i class="fa-solid fa-clock"></i> Pendiente $${astAmt.toFixed(2)}</span>`
-                                    }
-                                </div>
-                            `}
+                            ` : `<span class="text-muted" style="font-size: 0.75rem;">Sin Asistente</span>`}
                         </td>
                         <td class="text-right">
-                            <strong style="color: #16a34a; font-size: 0.95rem;">$${clinicMargin.toFixed(2)}</strong>
+                            <strong style="color: #475569;">$${clinicMargin.toFixed(2)}</strong>
                         </td>
                         <td class="text-center">
-                            <span class="badge-tag ${overallBadge}" style="font-weight: 700; font-size: 0.76rem;">
-                                ${item.overall_status === 'Liquidado Total' ? '<i class="fa-solid fa-check-double"></i> TOTALMENTE PAGADO' : item.overall_status.toUpperCase()}
-                            </span>
+                            <span class="badge-tag ${overallBadge}">${item.overall_status || 'Pendiente'}</span>
                         </td>
                         <td class="text-right">
-                            <div style="display: flex; justify-content: flex-end; gap: 6px; align-items: center;">
-                                ${item.overall_status !== 'Liquidado Total' ? `
+                            <div style="display: inline-flex; align-items: center; gap: 6px;">
+                                ${(item.overall_status !== 'Liquidado Total') ? `
                                     <button type="button" class="btn btn-sm btn-primary" onclick="window.ClinicalERP.openSettleModal('${item.id}')" title="Liquidar Honorarios" style="padding: 5px 12px; font-weight: 700; border-radius: 8px; background: #16a34a !important; border: none !important; font-size: 0.8rem;">
                                         <i class="fa-solid fa-hand-holding-dollar"></i> Liquidar
                                     </button>
                                 ` : `
-                                    <button type="button" class="btn btn-sm btn-outline" onclick="window.ClinicalERP.printServiceReceipt('${item.id}')" title="Ver / Imprimir Recibo" style="padding: 5px 10px; border-radius: 8px; color: #16a34a; border-color: #bbf7d0; font-size: 0.8rem;">
-                                        <i class="fa-solid fa-receipt"></i> Recibo
-                                    </button>
+                                    <span class="badge-tag green" style="font-size: 0.72rem; padding: 4px 8px;"><i class="fa-solid fa-check-double"></i> Conciliado</span>
                                 `}
-                                <button type="button" class="btn btn-sm btn-outline" onclick="window.ClinicalERP.openEditGainModal('${item.id}')" title="Ajustar Honorarios / Ganancias" style="padding: 5px 9px; border-radius: 8px; font-size: 0.8rem;">
-                                    <i class="fa-solid fa-pen-to-square text-cyan"></i>
-                                </button>
-                                <button type="button" class="btn btn-sm btn-outline" onclick="window.ClinicalERP.printServiceReceipt('${item.id}')" title="Imprimir Comprobante" style="padding: 5px 9px; border-radius: 8px; font-size: 0.8rem;">
-                                    <i class="fa-solid fa-file-pdf text-teal"></i>
-                                </button>
-                                <button type="button" class="btn btn-sm btn-outline text-red" onclick="window.ClinicalERP.deleteServiceLiquidation('${item.id}')" title="Eliminar" style="padding: 5px 9px; border-radius: 8px; border-color: #fecaca; color: #ef4444; font-size: 0.8rem;">
+                                <button type="button" class="btn btn-xs btn-outline" onclick="window.ClinicalERP.deleteServiceLiquidation('${item.id}')" title="Eliminar registro" style="border-color: #fca5a5; color: #ef4444; font-size: 0.8rem;">
                                     <i class="fa-solid fa-trash"></i>
                                 </button>
                             </div>
@@ -1852,7 +2261,7 @@
             }).join('');
         },
 
-        getSeniatConfig() {
+                getSeniatConfig() {
             const saved = localStorage.getItem('vidasana_seniat_config');
             if (saved) {
                 try {

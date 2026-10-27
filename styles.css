@@ -7749,3 +7749,20 @@ body.is-doctor-role [id*="import-preview"] {
 body.is-doctor-role .dashboard-extra-widgets-grid {
     grid-template-columns: 1fr !important;
 }
+
+/* ==========================================================================
+   DOCTOR-CENTRIC MEDICAL PAYROLL & LIQUIDATION (PRIORIDAD POR DOCTOR)
+   ========================================================================== */
+.doctor-payroll-card {
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.doctor-payroll-card:hover {
+    box-shadow: 0 8px 24px rgba(13, 148, 136, 0.09) !important;
+}
+.doctor-payroll-header {
+    user-select: none;
+    transition: background 0.18s ease;
+}
+.doctor-payroll-header:hover {
+    background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%) !important;
+}
