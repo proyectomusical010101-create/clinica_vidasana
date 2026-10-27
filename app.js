@@ -15942,26 +15942,96 @@ function initGlobalEvents() {
         };
     }
     
-    // 1. SERVICES EXCEL TEMPLATE & IMPORT
+    // 1. SERVICES EXCEL TEMPLATE & IMPORT (Con Soporte Completo para Minutos, Horas y Días)
+    // Parser inteligente y flexible para duración y unidad de tiempo (minutos, horas, días)
+    function parseServiceDuration(rawTime, rawUnit) {
+        let timeVal = 30;
+        let timeUnit = 'min';
+
+        // 1. Verificar si se proporcionó una columna explícita de unidad
+        const unitStr = String(rawUnit || '').toLowerCase().trim();
+        if (unitStr.includes('dia') || unitStr.includes('día')) {
+            timeUnit = 'dias';
+        } else if (unitStr.includes('hora')) {
+            timeUnit = 'horas';
+        } else if (unitStr.includes('min')) {
+            timeUnit = 'min';
+        }
+
+        // 2. Analizar el valor del tiempo (texto combinado como "2 días", "3 horas", "20 minutos", "45", etc.)
+        if (rawTime !== undefined && rawTime !== null && rawTime !== '') {
+            if (typeof rawTime === 'string') {
+                const lower = rawTime.toLowerCase().trim();
+                // Detección en el texto si la celda contenía tanto el número como la palabra
+                if (lower.includes('dia') || lower.includes('día')) {
+                    timeUnit = 'dias';
+                } else if (lower.includes('hora')) {
+                    timeUnit = 'horas';
+                } else if (lower.includes('min')) {
+                    timeUnit = 'min';
+                }
+
+                // Extraer el número (soporta enteros y decimales como 1.5 o 1,5)
+                const match = lower.match(/\d+(?:[.,]\d+)?/);
+                if (match) {
+                    timeVal = parseFloat(match[0].replace(',', '.')) || 30;
+                }
+            } else if (typeof rawTime === 'number' && !isNaN(rawTime)) {
+                timeVal = rawTime;
+            }
+        }
+
+        // 3. Calcular chairTimeMin (total de minutos requeridos por la agenda/turnos) y el texto visible
+        let chairTimeMin = timeVal;
+        let timeDisplay = '';
+        if (timeUnit === 'dias') {
+            chairTimeMin = Math.round(timeVal * 1440);
+            timeDisplay = `${timeVal} ${timeVal === 1 ? 'día' : 'día(s)'}`;
+        } else if (timeUnit === 'horas') {
+            chairTimeMin = Math.round(timeVal * 60);
+            timeDisplay = `${timeVal} ${timeVal === 1 ? 'hora' : 'hora(s)'}`;
+        } else {
+            timeUnit = 'min';
+            chairTimeMin = Math.round(timeVal);
+            timeDisplay = `${timeVal} min`;
+        }
+
+        return { timeVal, timeUnit, chairTimeMin, timeDisplay };
+    }
+
     const btnDownloadSrvTemplate = document.getElementById('btn-download-services-template');
     if (btnDownloadSrvTemplate) {
         btnDownloadSrvTemplate.onclick = () => {
             const data = [
                 {
                     "Código": "OD-01",
+                    "Área": "Odontología",
                     "Categoría": "Diagnóstico",
                     "Nombre del Servicio": "Consulta y Diagnóstico Clínico + Rx Periapical",
                     "Precio Base (USD)": 25.00,
-                    "Tiempo en Silla (Minutos)": 20,
+                    "Tiempo / Duración": 30,
+                    "Unidad de Tiempo": "Minutos",
                     "Bono Higienista (USD)": 5.00
                 },
                 {
-                    "Código": "OP-01",
-                    "Categoría": "Operatoria",
-                    "Nombre del Servicio": "Restauración Fotocurada (Resina Clase I)",
-                    "Precio Base (USD)": 45.00,
-                    "Tiempo en Silla (Minutos)": 45,
-                    "Bono Higienista (USD)": 10.00
+                    "Código": "CIR-01",
+                    "Área": "Cirugía Bucal",
+                    "Categoría": "Cirugía Bucal",
+                    "Nombre del Servicio": "Cirugía de Terceros Molares (Cordales)",
+                    "Precio Base (USD)": 150.00,
+                    "Tiempo / Duración": 2,
+                    "Unidad de Tiempo": "Horas",
+                    "Bono Higienista (USD)": 15.00
+                },
+                {
+                    "Código": "LAB-01",
+                    "Área": "Laboratorio",
+                    "Categoría": "Laboratorio y Exámenes",
+                    "Nombre del Servicio": "Perfil 20 Completo (Entrega de Resultados)",
+                    "Precio Base (USD)": 35.00,
+                    "Tiempo / Duración": 2,
+                    "Unidad de Tiempo": "Días",
+                    "Bono Higienista (USD)": 0.00
                 }
             ];
             const worksheet = XLSX.utils.json_to_sheet(data);
@@ -15992,15 +16062,33 @@ function initGlobalEvents() {
                     return;
                 }
 
-                const rows = services.map(s => ({
-                    "Código": s.code || s.id || "",
-                    "Categoría / Especialidad": s.category || "General",
-                    "Nombre del Servicio / Tratamiento": s.name || "",
-                    "Precio Base (USD)": Number(s.price_usd || s.priceUSD || 0),
-                    "Tiempo en Silla (Minutos)": Number(s.chair_time_min || s.chairTimeMin || 30),
-                    "Bono Higienista (USD)": Number(s.hygienist_bonus || s.hygienistBonus || 0),
-                    "Descripción / Notas": s.description || ""
-                }));
+                const rows = services.map(s => {
+                    const totalMin = Number(s.chair_time_min || s.chairTimeMin || 30);
+                    const timeUnit = s.time_unit || s.timeUnit || (totalMin >= 1440 && totalMin % 1440 === 0 ? 'dias' : (totalMin >= 60 && totalMin % 60 === 0 ? 'horas' : 'min'));
+                    let timeUnitLabel = 'Minutos';
+                    if (timeUnit === 'dias' || timeUnit === 'días') timeUnitLabel = 'Días';
+                    else if (timeUnit === 'horas' || timeUnit === 'hora') timeUnitLabel = 'Horas';
+
+                    let timeVal = s.time_value !== undefined && s.time_value !== null ? Number(s.time_value) : (s.timeValue !== undefined && s.timeValue !== null ? Number(s.timeValue) : null);
+                    if (timeVal === null || isNaN(timeVal)) {
+                        if (timeUnit === 'dias') timeVal = Math.round(totalMin / 1440) || 1;
+                        else if (timeUnit === 'horas') timeVal = Math.round(totalMin / 60) || 1;
+                        else timeVal = totalMin;
+                    }
+
+                    return {
+                        "Código": s.code || s.id || "",
+                        "Área": s.area || (typeof detectClinicalArea === 'function' ? detectClinicalArea(s.category, s.name) : "Odontología"),
+                        "Categoría / Especialidad": s.category || "General",
+                        "Nombre del Servicio / Tratamiento": s.name || "",
+                        "Precio Base (USD)": Number(s.price_usd || s.priceUSD || 0),
+                        "Tiempo / Duración": timeVal,
+                        "Unidad de Tiempo": timeUnitLabel,
+                        "Tiempo en Silla (Minutos)": totalMin,
+                        "Bono Higienista (USD)": Number(s.hygienist_bonus || s.hygienistBonus || 0),
+                        "Descripción / Notas": s.description || ""
+                    };
+                });
 
                 const ws = XLSX.utils.json_to_sheet(rows);
                 const wb = XLSX.utils.book_new();
@@ -16053,20 +16141,29 @@ function initGlobalEvents() {
 
                     let count = 0;
                     for (const row of jsonData) {
-                        const code = (row["Código"] || "").toString().trim();
-                        const category = (row["Categoría"] || "General").toString().trim();
-                        const name = (row["Nombre del Servicio"] || row["Nombre del Tratamiento"] || "").toString().trim();
-                        const priceUSD = parseFloat(row["Precio Base (USD)"] || row["Precio Base"] || 0);
-                        const chairTimeMin = parseInt(row["Tiempo en Silla (Minutos)"] || row["Tiempo en Silla"] || row["Tiempo de Espera (Minutos)"] || row["Tiempo de Espera"] || row["Tiempo de espera"] || 30);
-                        const hygienistBonus = parseFloat(row["Bono Higienista (USD)"] || row["Bono Higienista"] || 0);
+                        const code = (row["Código"] || row["Codigo"] || "").toString().trim();
+                        const category = (row["Categoría"] || row["Categoria"] || row["Categoría / Especialidad"] || row["Categoria / Especialidad"] || "General").toString().trim();
+                        const name = (row["Nombre del Servicio"] || row["Nombre del Tratamiento"] || row["Nombre del Servicio / Tratamiento"] || row["Nombre"] || "").toString().trim();
+                        const area = (row["Área"] || row["Area"] || row["Área Clínica"] || row["Area Clinica"] || (typeof detectClinicalArea === 'function' ? detectClinicalArea(category, name) : 'Odontología')).toString().trim();
+                        const priceUSD = parseFloat(row["Precio Base (USD)"] || row["Precio Base"] || row["Precio"] || 0);
+                        const hygienistBonus = parseFloat(row["Bono Higienista (USD)"] || row["Bono Higienista"] || row["Bono"] || 0);
+
+                        // Lectura flexible e inteligente de tiempo y unidad
+                        const rawTime = row["Tiempo / Duración"] ?? row["Tiempo/Duración"] ?? row["Tiempo"] ?? row["Duración"] ?? row["Duracion"] ?? row["Tiempo Estimado"] ?? row["Tiempo en Silla (Minutos)"] ?? row["Tiempo en Silla"] ?? row["Tiempo de Espera (Minutos)"] ?? row["Tiempo de Espera"] ?? row["Tiempo de espera"] ?? 30;
+                        const rawUnit = row["Unidad de Tiempo"] ?? row["Unidad"] ?? row["Tipo de Tiempo"] ?? row["Unidad (min/horas/dias)"] ?? '';
+                        const parsedDuration = parseServiceDuration(rawTime, rawUnit);
 
                         if (code && name) {
                             await SupabaseDataService.saveBaremoService({
                                 code,
+                                area,
                                 category,
                                 name,
                                 priceUSD,
-                                chairTimeMin,
+                                chairTimeMin: parsedDuration.chairTimeMin,
+                                timeUnit: parsedDuration.timeUnit,
+                                timeValue: parsedDuration.timeVal,
+                                timeDisplay: parsedDuration.timeDisplay,
                                 materials: [],
                                 hygienistBonus
                             });
@@ -16075,7 +16172,7 @@ function initGlobalEvents() {
                     }
 
                     await renderPricingTable();
-                    Swal.fire({ icon: 'success', title: '¡Importación Completada!', text: `Se cargaron/actualizaron ${count} servicios correctamente.` });
+                    Swal.fire({ icon: 'success', title: '¡Importación Completada!', text: `Se cargaron/actualizaron ${count} servicios correctamente con sus duraciones y unidades.` });
                 } catch (err) {
                     console.error("Error al importar servicios:", err);
                     Swal.fire({ icon: 'error', title: 'Error de Lectura', text: `No se pudo procesar el archivo Excel. Detalle: ${err.message || err}` });

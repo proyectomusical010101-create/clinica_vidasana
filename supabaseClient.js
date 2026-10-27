@@ -191,6 +191,14 @@ class SupabaseDataService {
                 if (!error && data && data.length > 0) {
                     baremoList = data.map(d => {
                         const p = parseFloat(d.price_usd !== undefined && d.price_usd !== null ? d.price_usd : (d.priceUSD !== undefined && d.priceUSD !== null ? d.priceUSD : (d.price || 0)));
+                        const chairMin = Number(d.chair_time_min !== undefined ? d.chair_time_min : (d.chairTimeMin || 30));
+                        const tUnit = d.time_unit || d.timeUnit || (chairMin >= 1440 && chairMin % 1440 === 0 ? 'dias' : (chairMin >= 60 && chairMin % 60 === 0 ? 'horas' : 'min'));
+                        const tVal = d.time_value !== undefined && d.time_value !== null ? Number(d.time_value) : (
+                            d.timeValue !== undefined && d.timeValue !== null ? Number(d.timeValue) : (
+                                tUnit === 'dias' ? Math.round(chairMin / 1440) : (tUnit === 'horas' ? Math.round(chairMin / 60) : chairMin)
+                            )
+                        );
+                        const tDisplay = d.time_display || d.timeDisplay || `${tVal} ${tUnit === 'dias' ? 'día(s)' : (tUnit === 'horas' ? 'hora(s)' : 'min')}`;
                         return {
                             code: d.code,
                             area: d.area || (typeof detectClinicalArea === 'function' ? detectClinicalArea(d.category, d.name) : 'Odontología'),
@@ -198,7 +206,10 @@ class SupabaseDataService {
                             name: d.name,
                             price: p,
                             priceUSD: p,
-                            chairTimeMin: d.chair_time_min,
+                            chairTimeMin: chairMin,
+                            timeUnit: tUnit,
+                            timeValue: tVal,
+                            timeDisplay: tDisplay,
                             materials: d.materials || [],
                             hygienistBonus: parseFloat(d.hygienist_bonus !== undefined && d.hygienist_bonus !== null ? d.hygienist_bonus : (d.hygienistBonus || 0))
                         };
