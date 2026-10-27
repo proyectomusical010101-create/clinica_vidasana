@@ -287,6 +287,8 @@
         openAddSpecialty() {
             document.getElementById('form-specialty').reset();
             document.getElementById('specialty-id').value = '';
+            document.getElementById('specialty-doc-pct').value = 70;
+            document.getElementById('specialty-cli-pct').value = 30;
             document.getElementById('modal-specialty-title').innerText = 'Nueva Especialidad Médica';
             const modal = document.getElementById('modal-specialty');
             if (modal) modal.classList.remove('hidden');
@@ -298,8 +300,10 @@
             document.getElementById('specialty-id').value = spec.id;
             document.getElementById('specialty-name').value = spec.name || '';
             document.getElementById('specialty-category').value = spec.department || 'Consultas Médicas';
-            document.getElementById('specialty-doc-pct').value = spec.doctor_commission_pct || spec.doctor_percentage || 60;
-            document.getElementById('specialty-cli-pct').value = spec.clinic_commission_pct || spec.clinic_percentage || 40;
+            const docPct = spec.doctor_commission_pct !== undefined ? spec.doctor_commission_pct : (spec.doctor_percentage !== undefined ? spec.doctor_percentage : 70);
+            const cliPct = spec.clinic_commission_pct !== undefined ? spec.clinic_commission_pct : (spec.clinic_percentage !== undefined ? spec.clinic_percentage : (Math.round((100 - parseFloat(docPct)) * 100) / 100));
+            document.getElementById('specialty-doc-pct').value = docPct;
+            document.getElementById('specialty-cli-pct').value = cliPct;
             document.getElementById('specialty-desc').value = spec.description || '';
             document.getElementById('specialty-active').checked = spec.status ? (spec.status === 'Activo') : (spec.active !== false);
             document.getElementById('modal-specialty-title').innerText = 'Editar: ' + spec.name;
@@ -3307,6 +3311,27 @@
         bindEvents() {
             const formSpec = document.getElementById('form-specialty');
             if (formSpec) formSpec.addEventListener('submit', (e) => this.saveSpecialty(e));
+
+            // Sincronización Automática Bidireccional de Ganancia Médico <-> Ganancia Clínica (100% Total)
+            const specDocInp = document.getElementById('specialty-doc-pct');
+            const specCliInp = document.getElementById('specialty-cli-pct');
+            if (specDocInp && specCliInp && !specDocInp._hasAutoCompListener) {
+                specDocInp._hasAutoCompListener = true;
+                specDocInp.addEventListener('input', () => {
+                    const raw = parseFloat(specDocInp.value);
+                    if (!isNaN(raw)) {
+                        const clamped = Math.max(0, Math.min(100, raw));
+                        specCliInp.value = Math.round((100 - clamped) * 100) / 100;
+                    }
+                });
+                specCliInp.addEventListener('input', () => {
+                    const raw = parseFloat(specCliInp.value);
+                    if (!isNaN(raw)) {
+                        const clamped = Math.max(0, Math.min(100, raw));
+                        specDocInp.value = Math.round((100 - clamped) * 100) / 100;
+                    }
+                });
+            }
 
             const formRoom = document.getElementById('form-room');
             if (formRoom) formRoom.addEventListener('submit', (e) => this.saveRoom(e));

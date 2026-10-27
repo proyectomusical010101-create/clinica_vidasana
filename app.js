@@ -13701,10 +13701,8 @@ window.populateUserModalSelects = async function(docProf = {}) {
         window.initDoctorSchedulePlanner(docProf.schedule || '');
     }
 
-    const uCommInput = document.getElementById('u-commission');
-    if (uCommInput && !uCommInput._hasDynamicCommListener) {
-        uCommInput._hasDynamicCommListener = true;
-        uCommInput.addEventListener('input', () => {
+    if (typeof window.setupComplementaryPercentageInputs === 'function') {
+        window.setupComplementaryPercentageInputs('u-commission', 'u-clinic-commission', () => {
             if (typeof window.renderDoctorServicesVisualList === 'function') {
                 window.renderDoctorServicesVisualList();
             }
@@ -13817,6 +13815,10 @@ window.openCreateUserModal = async function() {
     if (igInputNew) igInputNew.value = '';
 
     window._doctorCustomServiceCommissions = {};
+    const uCommEl = document.getElementById('u-commission');
+    const uCliCommEl = document.getElementById('u-clinic-commission');
+    if (uCommEl) uCommEl.value = '70';
+    if (uCliCommEl) uCliCommEl.value = '30';
     await populateDoctorServicesSelect([], {});
     await window.populateUserModalSelects({});
 
@@ -13902,7 +13904,20 @@ window.editUser = async function(userId) {
 
     if (docProf) {
         if (docProf.schedule && document.getElementById('u-schedule')) document.getElementById('u-schedule').value = docProf.schedule;
-        if (docProf.commission && document.getElementById('u-commission')) document.getElementById('u-commission').value = docProf.commission;
+        if (docProf.commission !== undefined && docProf.commission !== null && document.getElementById('u-commission')) {
+            const dComm = parseFloat(docProf.commission);
+            document.getElementById('u-commission').value = isNaN(dComm) ? '' : dComm;
+            const cCommEl = document.getElementById('u-clinic-commission');
+            if (cCommEl) {
+                const cVal = docProf.clinicCommission !== undefined ? parseFloat(docProf.clinicCommission) : (Math.round((100 - dComm) * 100) / 100);
+                cCommEl.value = isNaN(cVal) ? '' : cVal;
+            }
+        } else {
+            const uCommEl = document.getElementById('u-commission');
+            const uCliCommEl = document.getElementById('u-clinic-commission');
+            if (uCommEl && !uCommEl.value) uCommEl.value = '70';
+            if (uCliCommEl && !uCliCommEl.value) uCliCommEl.value = '30';
+        }
         if (docProf.availability && document.getElementById('u-availability')) document.getElementById('u-availability').value = docProf.availability;
         if (Array.isArray(docProf.assignedServices)) {
             const srvSelect = document.getElementById('u-services');
@@ -14414,6 +14429,34 @@ window.isServiceInCategory = function(proc, category) {
     return true;
 };
 
+window.setupComplementaryPercentageInputs = function(inputA, inputB, onSyncCallback, total = 100) {
+    const elA = typeof inputA === 'string' ? document.getElementById(inputA) : inputA;
+    const elB = typeof inputB === 'string' ? document.getElementById(inputB) : inputB;
+    if (!elA || !elB) return;
+
+    if (elA._hasCompListener && elB._hasCompListener) return;
+    elA._hasCompListener = true;
+    elB._hasCompListener = true;
+
+    const sync = (source, target) => {
+        const rawVal = String(source.value || '').trim();
+        if (rawVal === '') {
+            target.value = '';
+        } else {
+            let val = parseFloat(rawVal);
+            if (isNaN(val)) val = 0;
+            if (val < 0) { val = 0; source.value = 0; }
+            if (val > total) { val = total; source.value = total; }
+            const complement = Math.round((total - val) * 100) / 100;
+            target.value = complement;
+        }
+        if (typeof onSyncCallback === 'function') onSyncCallback(source, target);
+    };
+
+    elA.addEventListener('input', () => sync(elA, elB));
+    elB.addEventListener('input', () => sync(elB, elA));
+};
+
 window._allDoctorBaremoServices = [];
 window._doctorServicesCategoryFilter = 'all';
 window._doctorCustomServiceCommissions = {};
@@ -14421,10 +14464,71 @@ window._doctorCustomServiceCommissions = {};
 window.updateDoctorServiceCustomRate = function(code, val) {
     if (!window._doctorCustomServiceCommissions) window._doctorCustomServiceCommissions = {};
     const trimmed = String(val).trim();
+    const cliInput = document.getElementById('custom-rate-cli-' + code);
     if (trimmed !== '' && !isNaN(trimmed)) {
-        window._doctorCustomServiceCommissions[code] = parseFloat(trimmed);
+        let docVal = parseFloat(trimmed);
+        if (docVal < 0) docVal = 0;
+        if (docVal > 100) docVal = 100;
+        window._doctorCustomServiceCommissions[code] = docVal;
+        if (cliInput) {
+            cliInput.value = Math.round((100 - docVal) * 100) / 100;
+            cliInput.style.borderColor = '#0d9488';
+            cliInput.style.backgroundColor = '#f0fdfa';
+            cliInput.style.color = '#0f766e';
+        }
     } else {
         delete window._doctorCustomServiceCommissions[code];
+        if (cliInput) {
+            cliInput.value = '';
+            cliInput.style.borderColor = '#cbd5e1';
+            cliInput.style.backgroundColor = '#ffffff';
+            cliInput.style.color = '#334155';
+        }
+    }
+    const counterEl = document.getElementById('u-services-counter');
+    const select = document.getElementById('u-services');
+    if (counterEl && select) {
+        const selectedSet = new Set(Array.from(select.selectedOptions).map(o => o.value));
+        const count = selectedSet.size;
+        const customCount = Object.keys(window._doctorCustomServiceCommissions || {}).filter(k => selectedSet.has(k)).length;
+        const customBadge = customCount > 0 ? ' • <span style="color:#0f766e;">(' + customCount + ' con % especial)</span>' : '';
+        counterEl.innerHTML = '<i class="fa-solid fa-check"></i> ' + count + ' ' + (count === 1 ? 'servicio asignado' : 'servicios asignados') + customBadge;
+    }
+};
+
+window.updateDoctorServiceCustomClinicRate = function(code, val) {
+    if (!window._doctorCustomServiceCommissions) window._doctorCustomServiceCommissions = {};
+    const trimmed = String(val).trim();
+    const docInput = document.getElementById('custom-rate-doc-' + code);
+    if (trimmed !== '' && !isNaN(trimmed)) {
+        let cliVal = parseFloat(trimmed);
+        if (cliVal < 0) cliVal = 0;
+        if (cliVal > 100) cliVal = 100;
+        const docVal = Math.round((100 - cliVal) * 100) / 100;
+        window._doctorCustomServiceCommissions[code] = docVal;
+        if (docInput) {
+            docInput.value = docVal;
+            docInput.style.borderColor = '#0d9488';
+            docInput.style.backgroundColor = '#f0fdfa';
+            docInput.style.color = '#0f766e';
+        }
+    } else {
+        delete window._doctorCustomServiceCommissions[code];
+        if (docInput) {
+            docInput.value = '';
+            docInput.style.borderColor = '#cbd5e1';
+            docInput.style.backgroundColor = '#ffffff';
+            docInput.style.color = '#334155';
+        }
+    }
+    const counterEl = document.getElementById('u-services-counter');
+    const select = document.getElementById('u-services');
+    if (counterEl && select) {
+        const selectedSet = new Set(Array.from(select.selectedOptions).map(o => o.value));
+        const count = selectedSet.size;
+        const customCount = Object.keys(window._doctorCustomServiceCommissions || {}).filter(k => selectedSet.has(k)).length;
+        const customBadge = customCount > 0 ? ' • <span style="color:#0f766e;">(' + customCount + ' con % especial)</span>' : '';
+        counterEl.innerHTML = '<i class="fa-solid fa-check"></i> ' + count + ' ' + (count === 1 ? 'servicio asignado' : 'servicios asignados') + customBadge;
     }
 };
 
@@ -14536,27 +14640,43 @@ window.renderDoctorServicesVisualList = function() {
         item.className = `u-service-item ${isSelected ? 'selected' : ''}`;
         item.dataset.code = proc.code;
 
-        // Custom Commission per service for this doctor
+        // Custom Commission per service for this doctor (Bidirectional 100% split)
         const customRate = window._doctorCustomServiceCommissions ? window._doctorCustomServiceCommissions[proc.code] : undefined;
         const hasCustomRate = (customRate !== undefined && customRate !== null && customRate !== '');
+        const genDocRate = parseFloat(genCommission) || 70;
+        const genCliRate = Math.round((100 - genDocRate) * 100) / 100;
+        const customDocVal = hasCustomRate ? customRate : '';
+        const customCliVal = hasCustomRate ? (Math.round((100 - parseFloat(customRate)) * 100) / 100) : '';
 
         let customCommHtml = '';
         if (isSelected) {
             customCommHtml = `
-                <div class="u-service-custom-comm" style="display: flex; align-items: center; gap: 4px; margin-left: 8px; flex-shrink: 0;" onclick="event.stopPropagation();">
-                    <span style="font-size: 0.72rem; color: ${hasCustomRate ? '#0f766e' : '#64748b'}; font-weight: 700;">% Médico:</span>
+                <div class="u-service-custom-comm" style="display: flex; align-items: center; gap: 4px; margin-left: 6px; flex-shrink: 0;" onclick="event.stopPropagation();">
+                    <span style="font-size: 0.68rem; color: ${hasCustomRate ? '#0f766e' : '#64748b'}; font-weight: 700;">% Méd:</span>
                     <input type="number" 
+                           id="custom-rate-doc-${proc.code}"
                            class="u-service-custom-rate-input" 
                            data-code="${proc.code}" 
-                           value="${hasCustomRate ? customRate : ''}" 
-                           placeholder="${genCommission}%" 
+                           value="${customDocVal}" 
+                           placeholder="${genDocRate}%" 
                            min="0" max="100" step="0.5" 
-                           style="width: 58px; height: 26px; padding: 2px 4px; font-size: 0.76rem; font-weight: 700; text-align: center; border-radius: 4px; border: 1px solid ${hasCustomRate ? '#0d9488' : '#cbd5e1'}; background: ${hasCustomRate ? '#f0fdfa' : '#ffffff'}; color: ${hasCustomRate ? '#0f766e' : '#334155'};" 
-                           title="Porcentaje especial para este médico en este servicio. Dejar vacío para aplicar la comisión general (${genCommission}%)."
+                           style="width: 50px; height: 26px; padding: 2px 3px; font-size: 0.74rem; font-weight: 700; text-align: center; border-radius: 4px; border: 1px solid ${hasCustomRate ? '#0d9488' : '#cbd5e1'}; background: ${hasCustomRate ? '#f0fdfa' : '#ffffff'}; color: ${hasCustomRate ? '#0f766e' : '#334155'};" 
+                           title="Ganancia para el Médico (automáticamente sincronizado al 100% con la clínica)."
                            oninput="window.updateDoctorServiceCustomRate('${proc.code}', this.value)"
                     >
-                    <span style="font-size: 0.72rem; color: #64748b; font-weight: 600;">%</span>
-                    ${hasCustomRate ? `<button type="button" class="btn btn-xs btn-outline" onclick="window.clearDoctorServiceCustomRate('${proc.code}', event)" style="padding: 1px 4px; font-size: 0.65rem; color: #ef4444; border-color: #fca5a5; border-radius: 3px;" title="Restablecer a comisión general (${genCommission}%)"><i class="fa-solid fa-rotate-left"></i></button>` : ''}
+                    <span style="font-size: 0.68rem; color: ${hasCustomRate ? '#0f766e' : '#64748b'}; font-weight: 700;">% Clín:</span>
+                    <input type="number" 
+                           id="custom-rate-cli-${proc.code}"
+                           class="u-service-custom-rate-input" 
+                           data-code="${proc.code}" 
+                           value="${customCliVal}" 
+                           placeholder="${genCliRate}%" 
+                           min="0" max="100" step="0.5" 
+                           style="width: 50px; height: 26px; padding: 2px 3px; font-size: 0.74rem; font-weight: 700; text-align: center; border-radius: 4px; border: 1px solid ${hasCustomRate ? '#0d9488' : '#cbd5e1'}; background: ${hasCustomRate ? '#f0fdfa' : '#ffffff'}; color: ${hasCustomRate ? '#0f766e' : '#334155'};" 
+                           title="Ganancia para la Clínica (automáticamente sincronizado al 100% con el médico)."
+                           oninput="window.updateDoctorServiceCustomClinicRate('${proc.code}', this.value)"
+                    >
+                    ${hasCustomRate ? `<button type="button" class="btn btn-xs btn-outline" onclick="window.clearDoctorServiceCustomRate('${proc.code}', event)" style="padding: 1px 4px; font-size: 0.65rem; color: #ef4444; border-color: #fca5a5; border-radius: 3px;" title="Restablecer a comisiones generales (${genDocRate}% / ${genCliRate}%)"><i class="fa-solid fa-rotate-left"></i></button>` : ''}
                 </div>
             `;
         }
@@ -14670,6 +14790,8 @@ function initGlobalEvents() {
                 if (licGroup) licGroup.classList.remove('hidden');
                 document.getElementById('u-schedule').setAttribute('required', 'true');
                 document.getElementById('u-commission').setAttribute('required', 'true');
+                const uCliReq = document.getElementById('u-clinic-commission');
+                if (uCliReq) uCliReq.setAttribute('required', 'true');
             } else {
                 docFieldsDiv.classList.add('hidden');
                 if (licGroup) licGroup.classList.add('hidden');
@@ -14677,6 +14799,8 @@ function initGlobalEvents() {
                 if (licInput) licInput.value = '';
                 document.getElementById('u-schedule').removeAttribute('required');
                 document.getElementById('u-commission').removeAttribute('required');
+                const uCliUnreq = document.getElementById('u-clinic-commission');
+                if (uCliUnreq) uCliUnreq.removeAttribute('required');
             }
             updateRoleScopeHint(role);
         };
@@ -17649,6 +17773,7 @@ if (patientSameDay.length === 0) {
                     serviceCommissions: cleanCustomComms,
                     schedule,
                     commission,
+                    clinicCommission: Math.round((100 - commission) * 100) / 100,
                     availability,
                     phone,
                     instagram
