@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=359">
+    <link rel="stylesheet" href="styles.css?v=360">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -2071,6 +2071,7 @@
                             <button class="subtab-btn" data-subtab="receivables">Cuentas por Cobrar</button>
                             <button class="subtab-btn" data-subtab="cash-flow">Flujo de Caja</button>
                             <button class="subtab-btn" data-subtab="daily-closing" onclick="window.renderDailyClosingView()"><i class="fa-solid fa-cash-register"></i> Cierre de Caja Diario</button>
+                            <button class="subtab-btn" data-subtab="closing-history" onclick="window.renderClosingHistoryView()"><i class="fa-solid fa-clock-rotate-left"></i> Historial de Cierres</button>
                         </div>
                     </div>
 
@@ -2514,6 +2515,12 @@
                                     <button type="button" class="btn btn-sm btn-primary" onclick="window.openFinancialAccountsModal()" style="font-weight: 700; border-radius: 8px; background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); border: none; box-shadow: 0 2px 6px rgba(2, 132, 199, 0.25);">
                                         <i class="fa-solid fa-credit-card"></i> Gestionar Cuentas y Puntos
                                     </button>
+                                    <button type="button" class="btn btn-sm btn-success" id="btn-execute-daily-closing" onclick="window.executeDailyClosing()" style="font-weight: 700; border-radius: 8px; background: #10b981; border: none; color: white; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);">
+                                        <i class="fa-solid fa-lock"></i> Cerrar Caja del Día
+                                    </button>
+                                    <span id="dc-day-closed-badge" class="badge-tag green hidden" style="font-size: 0.78rem; font-weight: 700; padding: 5px 10px; border-radius: 6px;">
+                                        <i class="fa-solid fa-circle-check"></i> Caja Cerrada
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -2546,6 +2553,30 @@
                             </div>
                         </div>
 
+                        <!-- Arqueo Interactivo de Métodos de Pago (Cuadre de Caja) -->
+                        <div class="card mb-20" style="background: var(--bg-card); border-radius: 12px; border: 1.5px solid var(--border-color); overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+                            <div class="card-header border-bottom" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; padding: 14px 20px; background: linear-gradient(135deg, rgba(16, 185, 129, 0.06) 0%, rgba(2, 132, 199, 0.06) 100%);">
+                                <div>
+                                    <h3 style="margin: 0; font-size: 1.15rem; color: #0f172a; font-weight: 800; display: flex; align-items: center; gap: 8px;">
+                                        <i class="fa-solid fa-calculator text-green"></i> Arqueo de Caja y Cuadre por Método de Pago
+                                    </h3>
+                                    <p class="subtitle" style="margin: 2px 0 0 0; font-size: 0.82rem; color: #64748b;">
+                                        Haga clic en cualquiera de los métodos para auditar las referencias bancarias, terminales y cuadrar con sus estados de cuenta.
+                                    </p>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span class="badge-tag cyan" style="font-weight: 700; font-size: 0.78rem;" id="dc-arqueo-rate-badge">
+                                        <i class="fa-solid fa-money-bill-transfer"></i> Tasa BCV Oficial
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="card-body" style="padding: 16px 20px;">
+                                <div id="dc-payment-methods-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px;">
+                                    <div class="text-center text-muted" style="grid-column: 1/-1; padding: 20px;">Cargando arqueo por método...</div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Department Selection Grid -->
                         <div class="card mb-20" style="background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border-color); overflow: hidden;">
                             <div class="card-header border-bottom" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; padding: 14px 20px; background: linear-gradient(135deg, rgba(2, 132, 199, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%);">
@@ -2565,6 +2596,58 @@
                                 <div id="dc-areas-summary-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px;">
                                     <div class="text-center text-muted" style="grid-column: 1/-1; padding: 20px;">Cargando departamentos...</div>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SUBTAB 5: HISTORIAL DE CIERRES DIARIOS -->
+                    <div id="subtab-closing-history" class="subtab-content">
+                        <div class="card mb-20" style="background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border-color); padding: 16px 20px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+                                <div>
+                                    <h3 style="margin: 0; font-size: 1.2rem; font-weight: 800; color: #0f172a; display: flex; align-items: center; gap: 8px;">
+                                        <i class="fa-solid fa-clock-rotate-left text-cyan"></i> Historial de Cierres Diarios y Reportes Z
+                                    </h3>
+                                    <p class="subtitle" style="margin: 3px 0 0 0; font-size: 0.83rem; color: #64748b;">
+                                        Registro auditado de cierres de caja definitivos, lotes de pago móvil, puntos de venta y arqueos históricos.
+                                    </p>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                                    <div style="display: flex; align-items: center; gap: 6px; background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 4px 10px;">
+                                        <i class="fa-solid fa-magnifying-glass text-muted"></i>
+                                        <input type="text" id="closing-history-search" class="form-control" placeholder="Buscar por Folio o Cajero..." style="border: none; background: transparent; font-size: 0.85rem; padding: 2px 4px; height: auto;" oninput="window.filterClosingHistoryTable()">
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-outline" onclick="window.renderClosingHistoryView()" style="font-weight: 700; border-radius: 8px;">
+                                        <i class="fa-solid fa-rotate"></i> Actualizar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Table of Historical Closings -->
+                        <div class="card" style="background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border-color); overflow: hidden;">
+                            <div class="table-responsive">
+                                <table class="data-table" style="width: 100%; border-collapse: collapse;">
+                                    <thead>
+                                        <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
+                                            <th style="padding: 12px 14px; text-align: left; font-size: 0.82rem; font-weight: 800; color: #475569;">FOLIO CIERRE</th>
+                                            <th style="padding: 12px 14px; text-align: left; font-size: 0.82rem; font-weight: 800; color: #475569;">FECHA OPERATIVA</th>
+                                            <th style="padding: 12px 14px; text-align: left; font-size: 0.82rem; font-weight: 800; color: #475569;">HORA Y RESPONSABLE</th>
+                                            <th style="padding: 12px 14px; text-align: right; font-size: 0.82rem; font-weight: 800; color: #475569;">TOTAL RECAUDADO</th>
+                                            <th style="padding: 12px 14px; text-align: left; font-size: 0.82rem; font-weight: 800; color: #475569;">DESGLOSE RÁPIDO</th>
+                                            <th style="padding: 12px 14px; text-align: center; font-size: 0.82rem; font-weight: 800; color: #475569;">TRANSACCIONES</th>
+                                            <th style="padding: 12px 14px; text-align: center; font-size: 0.82rem; font-weight: 800; color: #475569;">ESTADO</th>
+                                            <th style="padding: 12px 14px; text-align: center; font-size: 0.82rem; font-weight: 800; color: #475569;">ACCIONES</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="closing-history-table-body">
+                                        <tr>
+                                            <td colspan="8" class="text-center text-muted" style="padding: 30px;">
+                                                Cargando historial de cierres...
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
@@ -8058,6 +8141,106 @@
         </div>
     </div>
 
+    <!-- MODAL: AUDITORÍA DETALLADA POR MÉTODO DE PAGO (PAGO MÓVIL, PUNTO, ZELLE, EFECTIVO, ETC.) -->
+    <div id="modal-daily-closing-method-detail" class="modal-overlay hidden" style="z-index: 10585;">
+        <div class="modal-dialog" style="max-width: 1100px; width: 95vw; max-height: 90vh; display: flex; flex-direction: column; background: var(--bg-card); border-radius: 14px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+            <div class="modal-header" style="padding: 16px 24px; border-bottom: 1px solid var(--border-color); background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(2, 132, 199, 0.08) 100%); display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div id="dc-method-modal-icon" style="width: 44px; height: 44px; border-radius: 12px; background: rgba(16, 185, 129, 0.15); display: flex; align-items: center; justify-content: center; color: #10b981; font-size: 1.4rem;">
+                        <i class="fa-solid fa-mobile-screen"></i>
+                    </div>
+                    <div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <h3 id="dc-method-modal-title" style="margin: 0; font-size: 1.25rem; color: #0f172a; font-weight: 800;">
+                                Auditoría de Pagos: Pago Móvil
+                            </h3>
+                            <span id="dc-method-modal-date" class="badge-tag cyan" style="font-weight: 700; font-size: 0.78rem;">Fecha</span>
+                        </div>
+                        <p style="margin: 2px 0 0 0; font-size: 0.82rem; color: #64748b;">
+                            Detalle de referencias bancarias, montos y pacientes para cuadre con el extracto bancario.
+                        </p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" onclick="closeModal('modal-daily-closing-method-detail')" style="background: none; border: none; font-size: 1.25rem; color: #64748b; cursor: pointer; padding: 6px 10px; border-radius: 6px;">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="modal-body" style="padding: 20px; overflow-y: auto; flex: 1;">
+                <!-- Mini KPI bar inside modal -->
+                <div id="dc-method-modal-kpi-bar" style="display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 18px;">
+                    <!-- Filled dynamically -->
+                </div>
+
+                <!-- Grouped Subtotals by Bank/Account -->
+                <div id="dc-method-modal-accounts-summary" style="margin-bottom: 16px;"></div>
+
+                <!-- Detail Transactions Table -->
+                <div style="border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden;">
+                    <table class="data-table" style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="background: #f8fafc; border-bottom: 1.5px solid #cbd5e1;">
+                                <th style="padding: 10px 12px; text-align: left; font-size: 0.8rem; font-weight: 800; color: #475569;">HORA</th>
+                                <th style="padding: 10px 12px; text-align: left; font-size: 0.8rem; font-weight: 800; color: #475569;">PACIENTE</th>
+                                <th style="padding: 10px 12px; text-align: left; font-size: 0.8rem; font-weight: 800; color: #475569;">CONCEPTO / SERVICIO</th>
+                                <th style="padding: 10px 12px; text-align: left; font-size: 0.8rem; font-weight: 800; color: #475569;">BANCO / TERMINAL / CUENTA</th>
+                                <th style="padding: 10px 12px; text-align: left; font-size: 0.8rem; font-weight: 800; color: #475569;">REFERENCIA / LOTE</th>
+                                <th style="padding: 10px 12px; text-align: right; font-size: 0.8rem; font-weight: 800; color: #475569;">MONTO BS.</th>
+                                <th style="padding: 10px 12px; text-align: right; font-size: 0.8rem; font-weight: 800; color: #475569;">MONTO USD ($)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dc-method-modal-tbody">
+                            <!-- Filled dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="modal-footer" style="padding: 14px 24px; border-top: 1px solid var(--border-color); background: #f8fafc; display: flex; justify-content: space-between; align-items: center;">
+                <button type="button" class="btn btn-outline" onclick="closeModal('modal-daily-closing-method-detail')">Cerrar</button>
+                <button type="button" class="btn btn-primary" id="btn-print-method-detail" onclick="window.printMethodDetailReport()" style="font-weight: 700; background: #0284c7; border: none;">
+                    <i class="fa-solid fa-print"></i> Imprimir Arqueo de este Método
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: REPORTE Z / CIERRE DE LOTE DIARIO COMPLETO (ESTILO TICKET / VOUCHER DE AUDITORÍA) -->
+    <div id="modal-view-closing-detail" class="modal-overlay hidden" style="z-index: 10590;">
+        <div class="modal-dialog" style="max-width: 900px; width: 95vw; max-height: 92vh; display: flex; flex-direction: column; background: #ffffff; border-radius: 14px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);">
+            <div class="modal-header" style="padding: 14px 20px; border-bottom: 1px solid #e2e8f0; background: #0f172a; color: #ffffff; display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <i class="fa-solid fa-receipt text-cyan" style="font-size: 1.3rem;"></i>
+                    <div>
+                        <h3 style="margin: 0; font-size: 1.15rem; color: #ffffff; font-weight: 800;">
+                            Reporte Z - Cierre de Caja Diario Consolidado
+                        </h3>
+                        <small style="color: #94a3b8;" id="modal-closing-folio-header">Folio: CIE-...</small>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" onclick="closeModal('modal-view-closing-detail')" style="background: none; border: none; font-size: 1.25rem; color: #94a3b8; cursor: pointer; padding: 6px 10px;">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="modal-body" style="padding: 24px; overflow-y: auto; flex: 1; background: #f8fafc;">
+                <!-- Printable / Visual Container styled as terminal batch closure -->
+                <div id="closing-z-report-printable-area" style="background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 10px; padding: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+                    <!-- Filled dynamically by window.openClosingRecordDetail -->
+                </div>
+            </div>
+
+            <div class="modal-footer" style="padding: 14px 24px; border-top: 1px solid #e2e8f0; background: #f8fafc; display: flex; justify-content: space-between; align-items: center;">
+                <button type="button" class="btn btn-outline" onclick="closeModal('modal-view-closing-detail')">Cerrar</button>
+                <div style="display: flex; gap: 8px;">
+                    <button type="button" class="btn btn-primary" onclick="window.printClosingZReport()" style="font-weight: 700; background: #10b981; border: none;">
+                        <i class="fa-solid fa-print"></i> Imprimir Reporte Z / Cierre de Lote
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- MODAL: GESTIÓN DE CUENTAS BANCARIAS Y PUNTOS DE VENTA -->
     <div class="modal-overlay hidden" id="modal-financial-accounts">
         <div class="modal-dialog" style="max-width: 840px; width: 95vw;">
@@ -8231,14 +8414,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=359"></script>
-    <script src="supabaseClient.js?v=359"></script>
-    <script src="odontogram.js?v=359"></script>
-    <script src="signature.js?v=359"></script>
-    <script src="whatsapp.js?v=359"></script>
-    <script src="kardex.js?v=359"></script>
-    <script src="app.js?v=359"></script>
-    <script src="clinicalERP.js?v=359"></script>
-    <script src="tutorial.js?v=359"></script>
+    <script src="seededData.js?v=360"></script>
+    <script src="supabaseClient.js?v=360"></script>
+    <script src="odontogram.js?v=360"></script>
+    <script src="signature.js?v=360"></script>
+    <script src="whatsapp.js?v=360"></script>
+    <script src="kardex.js?v=360"></script>
+    <script src="app.js?v=360"></script>
+    <script src="clinicalERP.js?v=360"></script>
+    <script src="tutorial.js?v=360"></script>
 </body>
 </html>

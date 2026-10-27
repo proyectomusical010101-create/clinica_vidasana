@@ -23457,6 +23457,8 @@ async function renderFinanceView() {
 
             if (btn.dataset.subtab === 'daily-closing') {
                 await window.renderDailyClosingView();
+            } else if (btn.dataset.subtab === 'closing-history') {
+                await window.renderClosingHistoryView();
             }
         };
     });
@@ -25374,12 +25376,15 @@ window.renderDailyClosingView = async function() {
                         shift: timeInfo.shift,
                         patientId: p.id,
                         patientName: p.fullname,
+                        patientCedula: p.dni || p.cedula || '',
                         area: finalArea,
                         doctor: matchedDoctor || 'Dr. Médico Tratante',
                         assistant: matchedAssistant || '',
                         concept: matchedConcept,
                         method: pay.method ? getPaymentMethodLabel(pay.method) : 'Efectivo USD',
                         rawMethod: cleanMethod,
+                        reference: pay.reference || pay.docId || pay.id || '-',
+                        bank: pay.bank || (matchInv && matchInv.bank) || (pay.accountName || ''),
                         accountId: pay.accountId || (matchInv && matchInv.accountId) || '',
                         accountName: pay.accountName || (matchInv && matchInv.accountName) || (pay.bank ? `${pay.method ? getPaymentMethodLabel(pay.method) : 'Pago'} (${pay.bank})` : ''),
                         commission: parseFloat(pay.commission || (matchInv && matchInv.commission) || 0),
@@ -25418,12 +25423,15 @@ window.renderDailyClosingView = async function() {
                     shift: timeInfo.shift,
                     patientId: inv.patientId || 'S/C',
                     patientName: inv.patientName || 'Paciente Particular',
+                    patientCedula: inv.patientDni || inv.patientCedula || (inv.patient && inv.patient.dni) || '',
                     area: finalArea,
                     doctor: inv.doctor || 'Dr. Médico Tratante',
                     assistant: asst || '',
                     concept: itemsConcept,
                     method: inv.paymentMethod ? getPaymentMethodLabel(inv.paymentMethod) : 'Efectivo USD',
                     rawMethod: (inv.paymentMethod || 'cash').toLowerCase(),
+                    reference: inv.reference || inv.paymentReference || inv.ref || inv.id || '-',
+                    bank: inv.bank || inv.accountName || '',
                     accountId: inv.accountId || '',
                     accountName: inv.accountName || (inv.bank ? `${inv.paymentMethod ? getPaymentMethodLabel(inv.paymentMethod) : 'Pago'} (${inv.bank})` : ''),
                     commission: parseFloat(inv.commission || 0),
@@ -25450,9 +25458,238 @@ window.renderDailyClosingView = async function() {
     const elServices = document.getElementById('dc-kpi-services-count');
 
     if (elTotalUsd) elTotalUsd.textContent = `$${grandTotalUSD.toFixed(2)}`;
-    if (elTotalBs) elTotalBs.textContent = `Bs. ${grandTotalBs.toFixed(2)}`;
+    if (elTotalBs) elTotalBs.textContent = `Bs. ${grandTotalBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     if (elPatients) elPatients.textContent = uniquePatients;
     if (elServices) elServices.textContent = totalServicesCount;
+
+    // 2.1 Calculate Interactive Payment Method Breakdown (Arqueo de Métodos de Pago)
+    const methodBreakdown = {
+        pagomovil: {
+            key: 'pagomovil',
+            label: 'Pago Móvil',
+            icon: 'fa-mobile-screen',
+            color: '#0284c7',
+            bg: 'rgba(2, 132, 199, 0.12)',
+            totalUSD: 0,
+            totalBs: 0,
+            count: 0,
+            transactions: [],
+            accounts: {}
+        },
+        pos: {
+            key: 'pos',
+            label: 'Punto de Venta (POS)',
+            icon: 'fa-credit-card',
+            color: '#10b981',
+            bg: 'rgba(16, 185, 129, 0.12)',
+            totalUSD: 0,
+            totalBs: 0,
+            count: 0,
+            transactions: [],
+            accounts: {}
+        },
+        zelle: {
+            key: 'zelle',
+            label: 'Zelle',
+            icon: 'fa-globe',
+            color: '#8b5cf6',
+            bg: 'rgba(139, 92, 246, 0.12)',
+            totalUSD: 0,
+            totalBs: 0,
+            count: 0,
+            transactions: [],
+            accounts: {}
+        },
+        cash: {
+            key: 'cash',
+            label: 'Efectivo en Caja',
+            icon: 'fa-money-bill-wave',
+            color: '#059669',
+            bg: 'rgba(5, 150, 105, 0.12)',
+            totalUSD: 0,
+            totalBs: 0,
+            count: 0,
+            transactions: [],
+            accounts: {}
+        },
+        other: {
+            key: 'other',
+            label: 'Cashea / BioPago / Otros',
+            icon: 'fa-layer-group',
+            color: '#d97706',
+            bg: 'rgba(217, 119, 6, 0.12)',
+            totalUSD: 0,
+            totalBs: 0,
+            count: 0,
+            transactions: [],
+            accounts: {}
+        }
+    };
+
+    const categorizeMethod = (rawMethodStr, isCashea) => {
+        const m = (rawMethodStr || '').toLowerCase();
+        if (isCashea || m.includes('cashea')) return 'other';
+        if (m.includes('pos') || m.includes('punto') || m.includes('tarjeta') || m.includes('debito') || m.includes('débito') || m.includes('credito') || m.includes('crédito') || m.includes('terminal')) return 'pos';
+        if (m.includes('pago') || m.includes('movil') || m.includes('móvil') || m.includes('pagomovil') || m.includes('transferencia')) return 'pagomovil';
+        if (m.includes('zelle')) return 'zelle';
+        if (m.includes('cash') || m.includes('efectivo') || m.includes('dolar') || m.includes('dólar') || m.includes('divisa') || m.includes('bs') || m.includes('bolivar') || m.includes('bolívar')) return 'cash';
+        return 'other';
+    };
+
+    const addDirectToBucket = (t) => {
+        const cat = categorizeMethod(t.rawMethod || t.method, t.is_cashea);
+        const bucket = methodBreakdown[cat] || methodBreakdown.other;
+        bucket.totalUSD += t.amountUSD;
+        bucket.totalBs += t.amountBs;
+        bucket.count++;
+
+        const accName = t.accountName || t.bank || `${bucket.label} General`;
+        if (!bucket.accounts[accName]) {
+            bucket.accounts[accName] = { name: accName, totalUSD: 0, totalBs: 0, count: 0 };
+        }
+        bucket.accounts[accName].totalUSD += t.amountUSD;
+        bucket.accounts[accName].totalBs += t.amountBs;
+        bucket.accounts[accName].count++;
+
+        bucket.transactions.push({
+            ...t,
+            methodSubAmountUSD: t.amountUSD,
+            methodSubAmountBs: t.amountBs,
+            methodCategory: cat,
+            splitNote: null
+        });
+    };
+
+    dailyTransactions.forEach(t => {
+        if (t.splitDetails && typeof t.splitDetails === 'object' && Object.keys(t.splitDetails).length > 0) {
+            let hasValidSplit = false;
+            for (const sm in t.splitDetails) {
+                const subUSD = parseFloat(t.splitDetails[sm]) || 0;
+                if (subUSD > 0) {
+                    hasValidSplit = true;
+                    const subBs = subUSD * rate;
+                    const cat = categorizeMethod(sm, sm.toLowerCase().includes('cashea'));
+                    const bucket = methodBreakdown[cat] || methodBreakdown.other;
+                    bucket.totalUSD += subUSD;
+                    bucket.totalBs += subBs;
+                    bucket.count++;
+
+                    const accName = t.accountName || t.bank || `${bucket.label} General`;
+                    if (!bucket.accounts[accName]) {
+                        bucket.accounts[accName] = { name: accName, totalUSD: 0, totalBs: 0, count: 0 };
+                    }
+                    bucket.accounts[accName].totalUSD += subUSD;
+                    bucket.accounts[accName].totalBs += subBs;
+                    bucket.accounts[accName].count++;
+
+                    bucket.transactions.push({
+                        ...t,
+                        methodSubAmountUSD: subUSD,
+                        methodSubAmountBs: subBs,
+                        methodCategory: cat,
+                        splitNote: `Parte de Pago Mixto: $${subUSD.toFixed(2)} de $${t.amountUSD.toFixed(2)}`
+                    });
+                }
+            }
+            if (!hasValidSplit) {
+                addDirectToBucket(t);
+            }
+        } else {
+            addDirectToBucket(t);
+        }
+    });
+
+    window._dailyClosingMethodBreakdown = methodBreakdown;
+
+    // Update BCV Rate Badge in Arqueo
+    const elArqueoRate = document.getElementById('dc-arqueo-rate-badge');
+    if (elArqueoRate) {
+        elArqueoRate.innerHTML = `<i class="fa-solid fa-money-bill-transfer"></i> Tasa BCV: Bs. ${rate.toFixed(2)} / USD`;
+    }
+
+    // Render Payment Method Cards in Grid
+    const methodsGrid = document.getElementById('dc-payment-methods-grid');
+    if (methodsGrid) {
+        const cardsHtml = ['pagomovil', 'pos', 'zelle', 'cash', 'other'].map(key => {
+            const mb = methodBreakdown[key];
+            const isBolivarPrimary = (key === 'pagomovil' || key === 'pos');
+
+            return `
+                <div class="dc-method-card" onclick="window.openDailyClosingMethodDetail('${mb.key}')" 
+                     style="cursor: pointer; background: #ffffff; border: 1.5px solid var(--border-color); border-top: 4px solid ${mb.color}; border-radius: 12px; padding: 14px 16px; transition: all 0.2s ease-in-out; box-shadow: 0 1px 3px rgba(0,0,0,0.04); position: relative;"
+                     onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 8px 16px rgba(0,0,0,0.08)';"
+                     onmouseout="this.style.transform='none'; this.style.boxShadow='0 1px 3px rgba(0,0,0,0.04)';"
+                     title="Haga clic para auditar transacciones y referencias de ${mb.label}">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <div style="width: 36px; height: 36px; border-radius: 10px; background: ${mb.bg}; color: ${mb.color}; display: flex; align-items: center; justify-content: center; font-size: 1.15rem;">
+                                <i class="fa-solid ${mb.icon}"></i>
+                            </div>
+                            <div>
+                                <strong style="font-size: 0.95rem; color: #0f172a; display: block;">${mb.label}</strong>
+                                <small style="color: #64748b; font-size: 0.72rem;">${mb.count} ${mb.count === 1 ? 'operación' : 'operaciones'}</small>
+                            </div>
+                        </div>
+                        <span class="badge-tag" style="background: #f1f5f9; color: #334155; font-size: 0.72rem; font-weight: 700;">${mb.count}</span>
+                    </div>
+
+                    <div style="margin-top: 8px;">
+                        ${isBolivarPrimary ? `
+                            <div style="font-size: 1.25rem; font-weight: 800; color: #0f172a; line-height: 1.15;">
+                                Bs. ${mb.totalBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                            <div style="font-size: 0.8rem; font-weight: 700; color: #0284c7; margin-top: 2px;">
+                                $${mb.totalUSD.toFixed(2)} USD
+                            </div>
+                        ` : `
+                            <div style="font-size: 1.25rem; font-weight: 800; color: #0f172a; line-height: 1.15;">
+                                $${mb.totalUSD.toFixed(2)} <small style="font-size: 0.75rem; font-weight: 600; color: #64748b;">USD</small>
+                            </div>
+                            <div style="font-size: 0.78rem; font-weight: 700; color: #059669; margin-top: 2px;">
+                                Bs. ${mb.totalBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                        `}
+                    </div>
+
+                    <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; font-size: 0.73rem;">
+                        <span style="color: #64748b;">Auditar Referencias</span>
+                        <span style="color: ${mb.color}; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
+                            Ver Arqueo <i class="fa-solid fa-arrow-right"></i>
+                        </span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        methodsGrid.innerHTML = cardsHtml;
+    }
+
+    // Check if this day is already closed
+    const storedClosings = (function() {
+        try { return JSON.parse(localStorage.getItem('vidasana_daily_closings')) || []; } catch(e) { return []; }
+    })();
+    const existingClosing = storedClosings.find(c => c.date === targetDate);
+    const dayClosedBadge = document.getElementById('dc-day-closed-badge');
+    const btnExec = document.getElementById('btn-execute-daily-closing');
+
+    if (existingClosing) {
+        if (dayClosedBadge) {
+            dayClosedBadge.classList.remove('hidden');
+            dayClosedBadge.innerHTML = `<i class="fa-solid fa-circle-check"></i> Caja Cerrada (${existingClosing.id})`;
+        }
+        if (btnExec) {
+            btnExec.innerHTML = `<i class="fa-solid fa-receipt"></i> Ver / Reimprimir Cierre`;
+            btnExec.style.background = '#0284c7';
+        }
+    } else {
+        if (dayClosedBadge) {
+            dayClosedBadge.classList.add('hidden');
+        }
+        if (btnExec) {
+            btnExec.innerHTML = `<i class="fa-solid fa-lock"></i> Cerrar Caja del Día`;
+            btnExec.style.background = '#10b981';
+        }
+    }
 
     // 3. Render Department Summary Cards
     let dynamicSpecs = [];
@@ -28831,4 +29068,716 @@ window.renderAuditLogsPane = async function() {
         `;
     });
     tbody.innerHTML = html;
+};
+
+// ============================================================================
+// MODULO DE AUDITORÍA, ARQUEO Y CIERRES DE CAJA DIARIOS (REPORTES Z)
+// ============================================================================
+
+window._currentDetailMethodKey = null;
+window._currentViewingClosingRecord = null;
+
+// Helper: Get Stored Closings
+function getStoredDailyClosings() {
+    try {
+        return JSON.parse(localStorage.getItem('vidasana_daily_closings')) || [];
+    } catch (e) {
+        return [];
+    }
+}
+
+// Helper: Save Stored Closing
+function saveStoredDailyClosing(record) {
+    const list = getStoredDailyClosings();
+    const idx = list.findIndex(c => c.id === record.id || c.date === record.date);
+    if (idx >= 0) {
+        list[idx] = record;
+    } else {
+        list.unshift(record);
+    }
+    localStorage.setItem('vidasana_daily_closings', JSON.stringify(list));
+    return record;
+}
+
+// 1. Abrir modal de arqueo detallado por método de pago (Pago Móvil, Punto, Zelle, Efectivo, etc.)
+window.openDailyClosingMethodDetail = function(methodKey) {
+    window._currentDetailMethodKey = methodKey;
+    const mb = window._dailyClosingMethodBreakdown && window._dailyClosingMethodBreakdown[methodKey];
+    if (!mb) {
+        console.warn('No method breakdown found for:', methodKey);
+        return;
+    }
+
+    const modal = document.getElementById('modal-daily-closing-method-detail');
+    if (!modal) return;
+
+    // Header info
+    const titleEl = document.getElementById('dc-method-modal-title');
+    const dateBadge = document.getElementById('dc-method-modal-date');
+    const iconContainer = document.getElementById('dc-method-modal-icon');
+
+    if (titleEl) titleEl.textContent = `Auditoría de Pagos: ${mb.label}`;
+    if (dateBadge) dateBadge.textContent = `Fecha: ${window.dailyClosingSelectedDate}`;
+    if (iconContainer) {
+        iconContainer.style.background = mb.bg;
+        iconContainer.style.color = mb.color;
+        iconContainer.innerHTML = `<i class="fa-solid ${mb.icon}"></i>`;
+    }
+
+    // Mini KPI bar
+    const kpiBar = document.getElementById('dc-method-modal-kpi-bar');
+    if (kpiBar) {
+        kpiBar.innerHTML = `
+            <div style="flex: 1; min-width: 180px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 14px;">
+                <span style="font-size: 0.72rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Total en Bolívares (VES)</span>
+                <div style="font-size: 1.25rem; font-weight: 800; color: #059669; margin-top: 2px;">
+                    Bs. ${mb.totalBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+            </div>
+            <div style="flex: 1; min-width: 180px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 14px;">
+                <span style="font-size: 0.72rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Total Equivalente USD</span>
+                <div style="font-size: 1.25rem; font-weight: 800; color: #0f172a; margin-top: 2px;">
+                    $${mb.totalUSD.toFixed(2)} USD
+                </div>
+            </div>
+            <div style="flex: 1; min-width: 180px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 14px;">
+                <span style="font-size: 0.72rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Operaciones Registradas</span>
+                <div style="font-size: 1.25rem; font-weight: 800; color: #0284c7; margin-top: 2px;">
+                    ${mb.count} transacciones
+                </div>
+            </div>
+        `;
+    }
+
+    // Accounts summary (by bank/terminal)
+    const accountsSummary = document.getElementById('dc-method-modal-accounts-summary');
+    if (accountsSummary) {
+        const accKeys = Object.keys(mb.accounts || {});
+        if (accKeys.length > 0) {
+            accountsSummary.innerHTML = `
+                <div style="font-size: 0.78rem; font-weight: 700; color: #475569; margin-bottom: 6px; text-transform: uppercase;">
+                    <i class="fa-solid fa-building-columns"></i> Desglose por Banco / Terminal / Cuenta Destino:
+                </div>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    ${accKeys.map(k => {
+                        const acc = mb.accounts[k];
+                        return `
+                            <div style="background: #ffffff; border: 1.5px solid #cbd5e1; border-left: 3px solid ${mb.color}; border-radius: 6px; padding: 6px 12px; font-size: 0.8rem; display: flex; align-items: center; gap: 8px;">
+                                <strong style="color: #0f172a;">${acc.name}:</strong>
+                                <span style="color: #059669; font-weight: 800;">Bs. ${acc.totalBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                <span style="color: #64748b; font-size: 0.75rem;">($${acc.totalUSD.toFixed(2)})</span>
+                                <span class="badge-tag" style="padding: 1px 6px; font-size: 0.7rem; background: #f1f5f9;">${acc.count} ops</span>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        } else {
+            accountsSummary.innerHTML = '';
+        }
+    }
+
+    // Detail Transactions Table
+    const tbody = document.getElementById('dc-method-modal-tbody');
+    if (tbody) {
+        if (!mb.transactions || mb.transactions.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted" style="padding: 30px;">No hay pagos registrados con ${mb.label} para esta fecha.</td></tr>`;
+        } else {
+            tbody.innerHTML = mb.transactions.map((t, idx) => {
+                const subUSD = t.methodSubAmountUSD !== undefined ? t.methodSubAmountUSD : t.amountUSD;
+                const subBs = t.methodSubAmountBs !== undefined ? t.methodSubAmountBs : t.amountBs;
+
+                return `
+                    <tr style="border-bottom: 1px solid #f1f5f9;">
+                        <td style="padding: 10px 12px; font-size: 0.82rem; color: #334155;">
+                            ${t.time} <br><small style="color: #64748b;">(${t.shift === 'afternoon' ? 'Tarde' : 'Mañana'})</small>
+                        </td>
+                        <td style="padding: 10px 12px; font-size: 0.82rem;">
+                            <strong style="color: #0f172a;">${t.patientName}</strong>
+                            <div style="font-size: 0.72rem; color: #64748b;">C.I. ${t.patientCedula || t.patientId || 'S/D'}</div>
+                        </td>
+                        <td style="padding: 10px 12px; font-size: 0.82rem; color: #334155;">
+                            ${t.concept}
+                            ${t.splitNote ? `<div style="font-size: 0.72rem; color: #d97706; font-weight: 700; margin-top: 2px;"><i class="fa-solid fa-shuffle"></i> ${t.splitNote}</div>` : ''}
+                        </td>
+                        <td style="padding: 10px 12px; font-size: 0.82rem;">
+                            <span class="badge-tag cyan" style="font-size: 0.75rem; font-weight: 700;">
+                                ${t.accountName || t.bank || mb.label}
+                            </span>
+                        </td>
+                        <td style="padding: 10px 12px; font-size: 0.82rem;">
+                            <strong style="font-family: monospace; font-size: 0.88rem; color: #0f172a; background: #f8fafc; border: 1px solid #e2e8f0; padding: 2px 6px; border-radius: 4px;">
+                                ${t.reference && t.reference !== '-' ? t.reference : (t.id || 'N/A')}
+                            </strong>
+                        </td>
+                        <td style="padding: 10px 12px; font-size: 0.85rem; text-align: right;">
+                            <strong style="color: #059669;">
+                                Bs. ${subBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </strong>
+                        </td>
+                        <td style="padding: 10px 12px; font-size: 0.85rem; text-align: right;">
+                            <strong style="color: #0f172a;">
+                                $${subUSD.toFixed(2)}
+                            </strong>
+                        </td>
+                    </tr>
+                `;
+            }).join('') + `
+                <tr style="background: #f8fafc; border-top: 2px solid #cbd5e1; font-weight: 800;">
+                    <td colspan="5" style="padding: 10px 12px; text-align: right; font-size: 0.85rem; color: #0f172a;">
+                        TOTAL ${mb.label.toUpperCase()}:
+                    </td>
+                    <td style="padding: 10px 12px; text-align: right; font-size: 0.95rem; color: #059669;">
+                        Bs. ${mb.totalBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                    <td style="padding: 10px 12px; text-align: right; font-size: 0.95rem; color: #0f172a;">
+                        $${mb.totalUSD.toFixed(2)}
+                    </td>
+                </tr>
+            `;
+        }
+    }
+
+    openModal('modal-daily-closing-method-detail');
+};
+
+// 2. Imprimir informe/voucher de un método específico (Auditoría de lote)
+window.printMethodDetailReport = function() {
+    const key = window._currentDetailMethodKey;
+    const mb = window._dailyClosingMethodBreakdown && window._dailyClosingMethodBreakdown[key];
+    if (!mb) return;
+
+    const date = window.dailyClosingSelectedDate;
+    const rate = getExchangeRate();
+
+    const voucherHtml = `
+        <div style="font-family: Arial, sans-serif; padding: 20px; color: #1e293b; font-size: 11px; background: #fff; max-width: 800px; margin: 0 auto;">
+            <div style="border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h2 style="margin: 0; font-size: 16px; color: #0f172a;">CENTRO MÉDICO Y ODONTOLÓGICO VIDA SANA</h2>
+                    <div style="color: #64748b; font-size: 11px; margin-top: 2px;">ARQUEO DE CAJA - AUDITORÍA DE ${mb.label.toUpperCase()}</div>
+                </div>
+                <div style="text-align: right; font-size: 11px;">
+                    <strong>Fecha Operativa:</strong> ${date}<br>
+                    <strong>Tasa BCV:</strong> Bs. ${rate.toFixed(2)} / USD
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+                <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 12px; flex: 1; background: #f8fafc;">
+                    <span style="font-size: 9px; color: #64748b; text-transform: uppercase; font-weight: bold;">Subtotal Bolívares</span>
+                    <div style="font-size: 15px; font-weight: bold; color: #059669; margin-top: 2px;">
+                        Bs. ${mb.totalBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                </div>
+                <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 12px; flex: 1; background: #f8fafc;">
+                    <span style="font-size: 9px; color: #64748b; text-transform: uppercase; font-weight: bold;">Subtotal Divisas</span>
+                    <div style="font-size: 15px; font-weight: bold; color: #0f172a; margin-top: 2px;">
+                        $${mb.totalUSD.toFixed(2)} USD
+                    </div>
+                </div>
+                <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 12px; flex: 1; background: #f8fafc;">
+                    <span style="font-size: 9px; color: #64748b; text-transform: uppercase; font-weight: bold;">Total Operaciones</span>
+                    <div style="font-size: 15px; font-weight: bold; color: #0284c7; margin-top: 2px;">
+                        ${mb.count} pagos
+                    </div>
+                </div>
+            </div>
+
+            <table style="width: 100%; border-collapse: collapse; font-size: 10.5px; margin-bottom: 20px;">
+                <thead>
+                    <tr style="background: #f1f5f9; border-bottom: 1.5px solid #cbd5e1;">
+                        <th style="padding: 6px 8px; text-align: left;">Hora</th>
+                        <th style="padding: 6px 8px; text-align: left;">Paciente</th>
+                        <th style="padding: 6px 8px; text-align: left;">Concepto</th>
+                        <th style="padding: 6px 8px; text-align: left;">Banco/Cuenta</th>
+                        <th style="padding: 6px 8px; text-align: left;">Referencia</th>
+                        <th style="padding: 6px 8px; text-align: right;">Monto Bs.</th>
+                        <th style="padding: 6px 8px; text-align: right;">Monto USD</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${(mb.transactions || []).map(t => {
+                        const subUSD = t.methodSubAmountUSD !== undefined ? t.methodSubAmountUSD : t.amountUSD;
+                        const subBs = t.methodSubAmountBs !== undefined ? t.methodSubAmountBs : t.amountBs;
+                        return `
+                            <tr style="border-bottom: 1px solid #e2e8f0;">
+                                <td style="padding: 6px 8px;">${t.time}</td>
+                                <td style="padding: 6px 8px;">${t.patientName} (${t.patientCedula || t.patientId})</td>
+                                <td style="padding: 6px 8px;">${t.concept}</td>
+                                <td style="padding: 6px 8px;">${t.accountName || t.bank || mb.label}</td>
+                                <td style="padding: 6px 8px; font-family: monospace;">${t.reference || t.id}</td>
+                                <td style="padding: 6px 8px; text-align: right; color: #059669; font-weight: bold;">
+                                    Bs. ${subBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </td>
+                                <td style="padding: 6px 8px; text-align: right; font-weight: bold;">
+                                    $${subUSD.toFixed(2)}
+                                </td>
+                            </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
+
+            <div style="margin-top: 30px; display: flex; justify-content: space-between; border-top: 1px solid #cbd5e1; padding-top: 10px;">
+                <div style="width: 200px; border-top: 1px solid #0f172a; text-align: center; font-size: 10px; padding-top: 4px; margin-top: 25px;">Firma de Cajero / Recepción</div>
+                <div style="width: 200px; border-top: 1px solid #0f172a; text-align: center; font-size: 10px; padding-top: 4px; margin-top: 25px;">Firma de Auditoría / Gerencia</div>
+            </div>
+        </div>
+    `;
+
+    window.universalPrintHTML(voucherHtml, `Arqueo ${mb.label} - ${date}`);
+};
+
+// 3. Ejecutar Cierre Definitivo de Caja del Día ("Cerrar Caja del Día")
+window.executeDailyClosing = async function() {
+    const targetDate = window.dailyClosingSelectedDate;
+    const rate = getExchangeRate();
+    const transactions = window.dailyClosingTransactionsCache || [];
+    const breakdown = window._dailyClosingMethodBreakdown || {};
+
+    const grandTotalUSD = transactions.reduce((acc, t) => acc + t.amountUSD, 0);
+    const grandTotalBs = grandTotalUSD * rate;
+    const uniquePatients = new Set(transactions.map(t => t.patientId)).size;
+    const totalServicesCount = transactions.length;
+
+    // Check if day is already closed
+    const stored = getStoredDailyClosings();
+    const existing = stored.find(c => c.date === targetDate);
+
+    if (existing) {
+        const choice = await Swal.fire({
+            title: 'Cierre de Caja Existente',
+            html: `
+                <div style="text-align: left; font-size: 0.9rem; color: #334155;">
+                    <p>Esta fecha ya cuenta con un cierre definitivo registrado:</p>
+                    <div style="background: #f1f5f9; padding: 10px 14px; border-radius: 8px; border: 1px solid #cbd5e1; margin-bottom: 12px;">
+                        <strong>Folio:</strong> ${existing.id}<br>
+                        <strong>Fecha Cierre:</strong> ${new Date(existing.closedAt).toLocaleString('es-VE')}<br>
+                        <strong>Responsable:</strong> ${existing.closedBy}<br>
+                        <strong>Total:</strong> $${existing.totals.usd.toFixed(2)} (Bs. ${existing.totals.bs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                    </div>
+                    <p style="margin: 0; font-size: 0.82rem; color: #64748b;">¿Desea ver el Reporte Z emitido o regenerar el cierre con las transacciones actuales?</p>
+                </div>
+            `,
+            icon: 'info',
+            showCancelButton: true,
+            showDenyButton: true,
+            confirmButtonText: '<i class="fa-solid fa-receipt"></i> Ver Reporte Z',
+            denyButtonText: '<i class="fa-solid fa-rotate"></i> Regenerar Cierre',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#0284c7',
+            denyButtonColor: '#10b981',
+            cancelButtonColor: '#64748b'
+        });
+
+        if (choice.isConfirmed) {
+            window.openClosingRecordDetail(existing.id);
+            return;
+        } else if (!choice.isDenied) {
+            return;
+        }
+    }
+
+    // Confirmation dialog before creating closing
+    const res = await Swal.fire({
+        title: '¿Confirmar Cierre de Caja del Día?',
+        html: `
+            <div style="text-align: left; font-size: 0.88rem; color: #334155; line-height: 1.5;">
+                <p style="margin-bottom: 10px;">Se congelará el arqueo definitivo de la jornada del <strong>${targetDate}</strong>:</p>
+                <div style="background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                        <span>Total Recaudado en Divisas:</span>
+                        <strong style="color: #0f172a; font-size: 1rem;">$${grandTotalUSD.toFixed(2)} USD</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                        <span>Total Recaudado en Bolívares:</span>
+                        <strong style="color: #059669; font-size: 1rem;">Bs. ${grandTotalBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                        <span>Pacientes Atendidos:</span>
+                        <strong>${uniquePatients} pacientes</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span>Servicios / Pagos Totales:</span>
+                        <strong>${totalServicesCount} procedimientos</strong>
+                    </div>
+                </div>
+                <div style="font-size: 0.8rem; color: #64748b; background: #eff6ff; padding: 8px 12px; border-radius: 6px; border: 1px solid #bfdbfe;">
+                    <i class="fa-solid fa-circle-info text-cyan"></i> Este proceso emitirá el <strong>Reporte Z / Cierre de Lote</strong> con el desglose exacto de Pago Móvil, Puntos POS, Zelle y Efectivo.
+                </div>
+            </div>
+        `,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: '<i class="fa-solid fa-lock"></i> Sí, Cerrar Caja y Emitir Reporte Z',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#10b981',
+        cancelButtonColor: '#64748b'
+    });
+
+    if (!res.isConfirmed) return;
+
+    // Generate Closing Record
+    const currentUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const userName = currentUser ? `${currentUser.name || currentUser.fullname || 'Usuario'} (${currentUser.role || 'Caja'})` : 'Caja Principal';
+    const dateCompact = targetDate.replace(/-/g, '');
+    const closingFolio = existing ? existing.id : `CIE-${dateCompact}-${String(Date.now()).slice(-3)}`;
+
+    const closingRecord = {
+        id: closingFolio,
+        date: targetDate,
+        closedAt: new Date().toISOString(),
+        closedBy: userName,
+        rate: rate,
+        totals: {
+            usd: grandTotalUSD,
+            bs: grandTotalBs,
+            patients: uniquePatients,
+            services: totalServicesCount
+        },
+        methods: { ...breakdown },
+        transactions: transactions,
+        status: 'Cerrado'
+    };
+
+    saveStoredDailyClosing(closingRecord);
+
+    await window.renderDailyClosingView();
+
+    Swal.fire({
+        icon: 'success',
+        title: '¡Cierre de Caja Exitoso!',
+        text: `Se ha cerrado la caja del día correctamente con el Folio ${closingFolio}.`,
+        timer: 1600,
+        showConfirmButton: false
+    });
+
+    // Open Reporte Z modal
+    window.openClosingRecordDetail(closingFolio);
+};
+
+// 4. Renderizar Historial de Cierres Diarios
+window.renderClosingHistoryView = async function() {
+    const tableBody = document.getElementById('closing-history-table-body');
+    if (!tableBody) return;
+
+    const closings = getStoredDailyClosings();
+    closings.sort((a, b) => new Date(b.closedAt || b.date) - new Date(a.closedAt || a.date));
+
+    if (closings.length === 0) {
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="8" class="text-center text-muted" style="padding: 36px 20px;">
+                    <i class="fa-solid fa-folder-open" style="font-size: 2rem; color: #94a3b8; margin-bottom: 10px; display: block;"></i>
+                    No hay cierres de caja registrados todavía.<br>
+                    Realice el primer cierre desde la pestaña <strong>"Cierre de Caja Diario"</strong> con el botón <em>"Cerrar Caja del Día"</em>.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tableBody.innerHTML = closings.map(c => {
+        const timeFormatted = c.closedAt ? new Date(c.closedAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }) : '--:--';
+        const dateFormatted = c.date || (c.closedAt ? c.closedAt.split('T')[0] : '');
+
+        // Method mini badges
+        const m = c.methods || {};
+        const pmUSD = m.pagomovil ? m.pagomovil.totalUSD : 0;
+        const pmBs = m.pagomovil ? m.pagomovil.totalBs : 0;
+        const posUSD = m.pos ? m.pos.totalUSD : 0;
+        const posBs = m.pos ? m.pos.totalBs : 0;
+        const zelleUSD = m.zelle ? m.zelle.totalUSD : 0;
+        const cashUSD = m.cash ? m.cash.totalUSD : 0;
+
+        return `
+            <tr style="border-bottom: 1px solid var(--border-color); transition: background 0.15s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
+                <td style="padding: 12px 14px; font-weight: 800;">
+                    <span style="color: #0284c7; cursor: pointer; text-decoration: underline;" onclick="window.openClosingRecordDetail('${c.id}')" title="Ver Reporte Z">
+                        ${c.id}
+                    </span>
+                </td>
+                <td style="padding: 12px 14px; font-size: 0.85rem; font-weight: 700; color: #334155;">
+                    <i class="fa-solid fa-calendar-day text-cyan" style="margin-right: 4px;"></i> ${dateFormatted}
+                </td>
+                <td style="padding: 12px 14px; font-size: 0.82rem; color: #475569;">
+                    <strong>${timeFormatted}</strong><br>
+                    <small style="color: #64748b;">${c.closedBy || 'Caja'}</small>
+                </td>
+                <td style="padding: 12px 14px; text-align: right; font-size: 0.88rem;">
+                    <strong style="color: #0f172a; font-size: 0.95rem;">$${(c.totals?.usd || 0).toFixed(2)}</strong><br>
+                    <small style="color: #059669; font-weight: 700;">Bs. ${(c.totals?.bs || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</small>
+                </td>
+                <td style="padding: 12px 14px; font-size: 0.76rem;">
+                    <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                        ${pmUSD > 0 ? `<span class="badge-tag cyan" title="Pago Móvil: Bs. ${pmBs.toFixed(2)}">PM: $${pmUSD.toFixed(1)}</span>` : ''}
+                        ${posUSD > 0 ? `<span class="badge-tag green" title="Punto POS: Bs. ${posBs.toFixed(2)}">POS: $${posUSD.toFixed(1)}</span>` : ''}
+                        ${zelleUSD > 0 ? `<span class="badge-tag purple" title="Zelle">Zelle: $${zelleUSD.toFixed(1)}</span>` : ''}
+                        ${cashUSD > 0 ? `<span class="badge-tag" style="background:#f1f5f9; color:#334155;" title="Efectivo">Efec: $${cashUSD.toFixed(1)}</span>` : ''}
+                    </div>
+                </td>
+                <td style="padding: 12px 14px; text-align: center; font-size: 0.82rem; font-weight: 700; color: #475569;">
+                    ${c.totals?.services || (c.transactions ? c.transactions.length : 0)} ops
+                </td>
+                <td style="padding: 12px 14px; text-align: center;">
+                    <span class="badge-tag green" style="font-weight: 700; font-size: 0.75rem;">
+                        <i class="fa-solid fa-circle-check"></i> Cerrado
+                    </span>
+                </td>
+                <td style="padding: 12px 14px; text-align: center;">
+                    <div style="display: inline-flex; gap: 6px;">
+                        <button type="button" class="btn btn-xs btn-outline" onclick="window.openClosingRecordDetail('${c.id}')" title="Ver Arqueo Completo y Reporte Z" style="font-weight: 700; border-radius: 6px;">
+                            <i class="fa-solid fa-receipt"></i> Ver
+                        </button>
+                        <button type="button" class="btn btn-xs btn-primary" onclick="window.printClosingZReport('${c.id}')" title="Imprimir Reporte Z" style="font-weight: 700; border-radius: 6px; background: #0284c7; border: none;">
+                            <i class="fa-solid fa-print"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+};
+
+// 5. Filtro de búsqueda en la tabla de historial de cierres
+window.filterClosingHistoryTable = function() {
+    const input = document.getElementById('closing-history-search');
+    if (!input) return;
+    const term = input.value.trim().toLowerCase();
+    const rows = document.querySelectorAll('#closing-history-table-body tr');
+
+    rows.forEach(r => {
+        const text = r.innerText.toLowerCase();
+        r.style.display = text.includes(term) ? '' : 'none';
+    });
+};
+
+// 6. Abrir detalle completo de un cierre (Reporte Z / Cierre de Lote)
+window.openClosingRecordDetail = function(closingId) {
+    const closings = getStoredDailyClosings();
+    const record = closings.find(c => c.id === closingId) || (window._currentViewingClosingRecord && window._currentViewingClosingRecord.id === closingId ? window._currentViewingClosingRecord : closings[0]);
+
+    if (!record) {
+        Swal.fire({ icon: 'warning', title: 'Registro no encontrado', text: 'No se pudo localizar el cierre seleccionado.' });
+        return;
+    }
+
+    window._currentViewingClosingRecord = record;
+
+    const modal = document.getElementById('modal-view-closing-detail');
+    if (!modal) return;
+
+    const folioHeader = document.getElementById('modal-closing-folio-header');
+    if (folioHeader) {
+        folioHeader.textContent = `Folio: ${record.id} | Fecha Operativa: ${record.date} | Cerrado por: ${record.closedBy}`;
+    }
+
+    const container = document.getElementById('closing-z-report-printable-area');
+    if (!container) return;
+
+    const rate = parseFloat(record.rate || getExchangeRate());
+    const m = record.methods || {};
+    const txs = record.transactions || [];
+
+    // Helper for accounts
+    const allAccounts = [];
+    Object.values(m).forEach(methodBucket => {
+        if (methodBucket.accounts) {
+            Object.values(methodBucket.accounts).forEach(acc => {
+                allAccounts.push({
+                    method: methodBucket.label,
+                    ...acc
+                });
+            });
+        }
+    });
+
+    container.innerHTML = `
+        <div style="font-family: 'Courier New', Courier, monospace; color: #0f172a; font-size: 11.5px; line-height: 1.4;">
+            <!-- Header Clinica -->
+            <div style="text-align: center; border-bottom: 2px dashed #0f172a; padding-bottom: 12px; margin-bottom: 14px;">
+                <h2 style="margin: 0; font-size: 16px; font-weight: 900; letter-spacing: 0.5px;">CENTRO MÉDICO Y ODONTOLÓGICO VIDA SANA</h2>
+                <div style="font-size: 11px; margin-top: 2px;">RIF: J-50781755-5 | Tel: 0424-1894138</div>
+                <div style="font-size: 10.5px; color: #475569;">Av. Intercomunal, Sector Centro - Venezuela</div>
+                <div style="margin-top: 8px; font-size: 13px; font-weight: 900; background: #0f172a; color: #ffffff; padding: 4px 8px; display: inline-block; border-radius: 4px;">
+                    *** REPORTE Z - CIERRE DE CAJA DIARIA CONSOLIDADO ***
+                </div>
+            </div>
+
+            <!-- Metadata -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 11px; margin-bottom: 14px; border-bottom: 1px dashed #cbd5e1; padding-bottom: 10px;">
+                <div>
+                    <strong>FOLIO DE CIERRE:</strong> ${record.id}<br>
+                    <strong>FECHA OPERATIVA:</strong> ${record.date}<br>
+                    <strong>FECHA / HORA CIERRE:</strong> ${new Date(record.closedAt).toLocaleString('es-VE')}
+                </div>
+                <div style="text-align: right;">
+                    <strong>OPERADOR / CAJERO:</strong> ${record.closedBy}<br>
+                    <strong>TASA OFICIAL BCV:</strong> Bs. ${rate.toFixed(2)} / USD<br>
+                    <strong>ESTADO:</strong> CONSOLIDADO DEFINITIVO
+                </div>
+            </div>
+
+            <!-- Resumen por Metodo de Pago -->
+            <div style="margin-bottom: 16px;">
+                <div style="font-weight: 900; font-size: 12px; text-transform: uppercase; margin-bottom: 6px; border-bottom: 1px solid #0f172a; padding-bottom: 2px;">
+                    1. CUADRE CONSOLIDADO POR MÉTODO DE PAGO:
+                </div>
+                <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                    <thead>
+                        <tr style="border-bottom: 1.5px solid #0f172a;">
+                            <th style="text-align: left; padding: 4px 6px;">MÉTODO DE PAGO</th>
+                            <th style="text-align: center; padding: 4px 6px;">OPERACIONES</th>
+                            <th style="text-align: right; padding: 4px 6px;">SUBTOTAL BOLÍVARES (Bs.)</th>
+                            <th style="text-align: right; padding: 4px 6px;">SUBTOTAL DIVISAS ($)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${['pagomovil', 'pos', 'zelle', 'cash', 'other'].map(k => {
+                            const b = m[k];
+                            if (!b || b.count === 0) return '';
+                            return `
+                                <tr style="border-bottom: 1px dotted #cbd5e1;">
+                                    <td style="padding: 5px 6px; font-weight: bold;">${b.label}</td>
+                                    <td style="text-align: center; padding: 5px 6px;">${b.count}</td>
+                                    <td style="text-align: right; padding: 5px 6px; color: #059669; font-weight: bold;">
+                                        Bs. ${b.totalBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </td>
+                                    <td style="text-align: right; padding: 5px 6px; font-weight: bold;">
+                                        $${b.totalUSD.toFixed(2)}
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
+                        <tr style="border-top: 2px solid #0f172a; border-bottom: 2px solid #0f172a; background: #f8fafc; font-weight: 900; font-size: 12px;">
+                            <td style="padding: 6px;">*** TOTAL GENERAL RECAUDADO ***</td>
+                            <td style="text-align: center; padding: 6px;">${record.totals?.services || txs.length}</td>
+                            <td style="text-align: right; padding: 6px; color: #059669;">
+                                Bs. ${(record.totals?.bs || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td style="text-align: right; padding: 6px; color: #0f172a;">
+                                $${(record.totals?.usd || 0).toFixed(2)} USD
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Resumen por Cuenta / Terminal -->
+            ${allAccounts.length > 0 ? `
+            <div style="margin-bottom: 16px;">
+                <div style="font-weight: 900; font-size: 12px; text-transform: uppercase; margin-bottom: 6px; border-bottom: 1px solid #0f172a; padding-bottom: 2px;">
+                    2. AUDITORÍA POR CUENTA / TERMINAL / BANCO DESTINO:
+                </div>
+                <table style="width: 100%; border-collapse: collapse; font-size: 10.5px;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid #cbd5e1;">
+                            <th style="text-align: left; padding: 3px 6px;">CUENTA / TERMINAL</th>
+                            <th style="text-align: left; padding: 3px 6px;">MÉTODO</th>
+                            <th style="text-align: center; padding: 3px 6px;">OP.</th>
+                            <th style="text-align: right; padding: 3px 6px;">MONTO BS.</th>
+                            <th style="text-align: right; padding: 3px 6px;">MONTO USD</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${allAccounts.map(acc => `
+                            <tr style="border-bottom: 1px dotted #e2e8f0;">
+                                <td style="padding: 3px 6px; font-weight: bold;">${acc.name}</td>
+                                <td style="padding: 3px 6px;">${acc.method}</td>
+                                <td style="text-align: center; padding: 3px 6px;">${acc.count}</td>
+                                <td style="text-align: right; padding: 3px 6px; color: #059669;">
+                                    Bs. ${acc.totalBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </td>
+                                <td style="text-align: right; padding: 3px 6px; font-weight: bold;">
+                                    $${acc.totalUSD.toFixed(2)}
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+            ` : ''}
+
+            <!-- Detalle Transaccion por Transaccion (Lote Completo) -->
+            <div style="margin-bottom: 16px;">
+                <div style="font-weight: 900; font-size: 12px; text-transform: uppercase; margin-bottom: 6px; border-bottom: 1px solid #0f172a; padding-bottom: 2px;">
+                    3. DETALLE DE OPERACIONES AUDITADAS (LOTE COMPLETO):
+                </div>
+                <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
+                    <thead>
+                        <tr style="border-bottom: 1.5px solid #0f172a; background: #f1f5f9;">
+                            <th style="text-align: left; padding: 4px 6px;">HORA</th>
+                            <th style="text-align: left; padding: 4px 6px;">PACIENTE / C.I.</th>
+                            <th style="text-align: left; padding: 4px 6px;">CONCEPTO</th>
+                            <th style="text-align: left; padding: 4px 6px;">MÉTODO & BANCO</th>
+                            <th style="text-align: left; padding: 4px 6px;">REFERENCIA / LOTE</th>
+                            <th style="text-align: right; padding: 4px 6px;">BS.</th>
+                            <th style="text-align: right; padding: 4px 6px;">USD</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${txs.length === 0 ? `
+                            <tr><td colspan="7" style="text-align: center; padding: 10px;">No hubo transacciones registradas.</td></tr>
+                        ` : txs.map((t, idx) => `
+                            <tr style="border-bottom: 1px dotted #cbd5e1;">
+                                <td style="padding: 4px 6px;">${t.time}</td>
+                                <td style="padding: 4px 6px;">${t.patientName}<br><small style="color:#64748b;">${t.patientCedula || t.patientId}</small></td>
+                                <td style="padding: 4px 6px;">${t.concept}</td>
+                                <td style="padding: 4px 6px;">${t.method}${t.bank ? ` (${t.bank})` : ''}</td>
+                                <td style="padding: 4px 6px; font-weight: bold;">${t.reference || t.id}</td>
+                                <td style="text-align: right; padding: 4px 6px; color: #059669;">
+                                    Bs. ${(t.amountBs || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </td>
+                                <td style="text-align: right; padding: 4px 6px; font-weight: bold;">
+                                    $${(t.amountUSD || 0).toFixed(2)}
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Signatures -->
+            <div style="margin-top: 36px; display: flex; justify-content: space-between; border-top: 1px dashed #0f172a; padding-top: 14px;">
+                <div style="width: 220px; text-align: center; font-size: 10px;">
+                    <div style="border-top: 1px solid #0f172a; margin-top: 30px; padding-top: 4px;">
+                        <strong>FIRMA DE CAJERO(A)</strong><br>
+                        ${record.closedBy}
+                    </div>
+                </div>
+                <div style="width: 220px; text-align: center; font-size: 10px;">
+                    <div style="border-top: 1px solid #0f172a; margin-top: 30px; padding-top: 4px;">
+                        <strong>FIRMA ADMINISTRACIÓN</strong><br>
+                        Auditoría y Cuadre de Caja
+                    </div>
+                </div>
+            </div>
+
+            <div style="text-align: center; margin-top: 20px; font-size: 9px; color: #64748b; border-top: 1px dotted #cbd5e1; padding-top: 8px;">
+                *** DOCUMENTO FISCAL AUDITABLE GENERADO AUTOMÁTICAMENTE POR CENTRO MÉDICO VIDA SANA ***
+            </div>
+        </div>
+    `;
+
+    openModal('modal-view-closing-detail');
+};
+
+// 7. Imprimir Reporte Z consolidado
+window.printClosingZReport = function(closingId = null) {
+    if (closingId) {
+        const closings = getStoredDailyClosings();
+        window._currentViewingClosingRecord = closings.find(c => c.id === closingId) || window._currentViewingClosingRecord;
+    }
+
+    const container = document.getElementById('closing-z-report-printable-area');
+    if (!container || !window._currentViewingClosingRecord) {
+        if (closingId) {
+            window.openClosingRecordDetail(closingId);
+        }
+        return;
+    }
+
+    const title = `Reporte Z - ${window._currentViewingClosingRecord.id}`;
+    window.universalPrintHTML(container.innerHTML, title);
 };
