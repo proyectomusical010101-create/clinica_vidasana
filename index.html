@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=368">
+    <link rel="stylesheet" href="styles.css?v=369">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -2939,7 +2939,7 @@
 
                 <!-- MODAL: AGREGAR ITEM A FACTURACIÓN (BUSCADOR INTERACTIVO EN TIEMPO REAL) -->
                 <div class="modal-overlay hidden" id="modal-add-item-billing">
-                    <div class="modal-dialog" style="max-width: 580px; width: 95vw;">
+                    <div class="modal-dialog" style="max-width: 720px; width: 95vw; max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column;">
                         <div class="modal-header">
                             <h3><i class="fa-solid fa-magnifying-glass text-cyan"></i> Buscar Procedimiento del Baremo</h3>
                             <button class="modal-close" data-close="modal-add-item-billing">&times;</button>
@@ -3887,7 +3887,7 @@
 
     <!-- MODAL: AGREGAR ITEM AL PRESUPUESTO -->
     <div class="modal-overlay hidden" id="modal-add-item">
-        <div class="modal-dialog">
+        <div class="modal-dialog" style="max-width: 720px; width: 95vw; max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column;">
             <div class="modal-header">
                 <h3><i class="fa-solid fa-plus-circle text-cyan"></i> Agregar Item al Presupuesto</h3>
                 <button class="modal-close" data-close="modal-add-item">&times;</button>
@@ -3922,7 +3922,7 @@
 
     <!-- MODAL: REGISTRAR ABONO / PAGO DE PACIENTE -->
     <div class="modal-overlay hidden" id="modal-payment">
-        <div class="modal-dialog">
+        <div class="modal-dialog" style="max-width: 720px; width: 95vw; max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column;">
             <div class="modal-header">
                 <h3><i class="fa-solid fa-hand-holding-dollar text-green"></i> Registrar Pago / Abono de Tratamiento</h3>
                 <button class="modal-close" data-close="modal-payment">&times;</button>
@@ -4003,7 +4003,7 @@
 
     <!-- MODAL: CREAR NUEVO INSUMO EN KARDEX -->
     <div class="modal-overlay hidden" id="modal-material">
-        <div class="modal-dialog">
+        <div class="modal-dialog" style="max-width: 820px; width: 95vw; max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column;">
             <div class="modal-header">
                 <h3><i class="fa-solid fa-box-archive"></i> Registrar Nuevo Insumo en Inventario</h3>
                 <button class="modal-close" data-close="modal-material">&times;</button>
@@ -4080,7 +4080,7 @@
 
     <!-- MODAL: CREAR NUEVO SERVICIO EN BAREMO -->
     <div class="modal-overlay hidden" id="modal-service">
-        <div class="modal-dialog">
+        <div class="modal-dialog" style="max-width: 840px; width: 95vw; max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column;">
             <div class="modal-header">
                 <h3><i class="fa-solid fa-tags"></i> Registrar Nuevo Servicio en Baremo</h3>
                 <button class="modal-close" data-close="modal-service">&times;</button>
@@ -4167,7 +4167,7 @@
 
     <!-- MODAL: CREAR / EDITAR PRODUCTO CONSUMIBLE -->
     <div class="modal-overlay hidden" id="modal-consumable" style="z-index: 10500;">
-        <div class="modal-dialog" style="max-width: 650px; width: 95vw;">
+        <div class="modal-dialog" style="max-width: 740px; width: 95vw; max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column;">
             <div class="modal-header">
                 <h3 id="modal-consumable-title"><i class="fa-solid fa-mug-saucer text-cyan"></i> Registrar Nuevo Producto Consumible</h3>
                 <button class="modal-close" data-close="modal-consumable">&times;</button>
@@ -4223,7 +4223,7 @@
 
     <!-- MODAL: AGREGAR / EDITAR CITA -->
     <div class="modal-overlay hidden" id="modal-appointment">
-        <div class="modal-dialog" style="max-width: 760px; width: 95vw;">
+        <div class="modal-dialog" style="max-width: 800px; width: 95vw; max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column;">
             <div class="modal-header">
                 <h3 id="modal-appointment-title"><i class="fa-solid fa-calendar-plus text-cyan"></i> Agendar Nueva Cita Médica</h3>
                 <button class="modal-close" data-close="modal-appointment">&times;</button>
@@ -4632,7 +4632,7 @@
 
     <!-- MODAL: GUÍA DE ALCANCE DE ROLES Y PERMISOS -->
     <div class="modal-overlay hidden" id="modal-roles-guide">
-        <div class="modal-dialog" style="max-width: 880px; width: 95vw;">
+        <div class="modal-dialog" style="max-width: 900px; width: 95vw; max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column;">
             <div class="modal-header">
                 <h3><i class="fa-solid fa-shield-halved text-cyan"></i> Alcance de Funciones y Matriz de Permisos por Rol</h3>
                 <button class="modal-close" data-close="modal-roles-guide">&times;</button>
@@ -4807,7 +4807,7 @@
 
     <!-- MODAL: REGISTRO/EDICIÓN DE PACIENTE -->
     <div class="modal-overlay hidden" id="modal-patient">
-        <div class="modal-dialog" style="max-width: 90vw; width: 1000px;">
+        <div class="modal-dialog" style="max-width: 1040px; width: 96vw; max-height: 92vh; max-height: 92dvh; display: flex; flex-direction: column;">
             <div class="modal-header">
                 <h3 id="modal-patient-title"><i class="fa-solid fa-user-plus text-cyan"></i> Registro de Paciente</h3>
                 <button class="modal-close" data-close="modal-patient">&times;</button>
@@ -5245,7 +5245,7 @@
 
     <!-- MODAL: INTERCONSULTA Y SOLICITUD DE ESTUDIOS ESPECIALES -->
     <div class="modal-overlay hidden" id="modal-interconsultation">
-        <div class="modal-dialog" style="max-width: 800px; width: 95%;">
+        <div class="modal-dialog" style="max-width: 840px; width: 95vw; max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column;">
             <div class="modal-header">
                 <h3><i class="fa-solid fa-user-doctor text-cyan"></i> Solicitud de Interconsulta y Estudio Especial</h3>
                 <button class="modal-close" data-close="modal-interconsultation">&times;</button>
@@ -5379,7 +5379,7 @@
 
     <!-- MODAL: CONFECCIONADOR DE RÉCIPES E INDICACIONES MÉDICAS -->
     <div class="modal-overlay hidden" id="modal-recipe-and-indications">
-        <div class="modal-dialog" style="max-width: 850px; width: 95%;">
+        <div class="modal-dialog" style="max-width: 880px; width: 95vw; max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column;">
             <div class="modal-header">
                 <h3><i class="fa-solid fa-prescription text-cyan"></i> Confeccionador de Récipe Médico e Indicaciones</h3>
                 <button class="modal-close" data-close="modal-recipe-and-indications">&times;</button>
@@ -5493,7 +5493,7 @@
 
     <!-- MODAL: VISUALIZADOR DE RÉCIPES E INDICACIONES DE SESIÓN -->
     <div class="modal-overlay hidden" id="modal-view-session-recipes">
-        <div class="modal-dialog" style="max-width: 750px; width: 95%;">
+        <div class="modal-dialog" style="max-width: 800px; width: 95vw; max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column;">
             <div class="modal-header">
                 <h3><i class="fa-solid fa-file-prescription text-cyan"></i> Récipes e Indicaciones Registrados</h3>
                 <button class="modal-close" data-close="modal-view-session-recipes">&times;</button>
@@ -5511,7 +5511,7 @@
 
     <!-- MODAL: SELECTOR DE TRATAMIENTO PARA PIEZA DENTAL -->
     <div class="modal-overlay hidden" id="modal-tooth-treatment">
-        <div class="modal-dialog modal-sm">
+        <div class="modal-dialog modal-sm" style="max-width: 540px; width: 95vw; max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column;">
             <div class="modal-header">
                 <h3><i class="fa-solid fa-tooth text-cyan"></i> Tratamiento para Pieza <span id="modal-tooth-id">18</span> (<span id="modal-face-id">Oclusal</span>)</h3>
                 <button class="modal-close" data-close="modal-tooth-treatment">&times;</button>
@@ -5530,7 +5530,7 @@
 
     <!-- MODAL: NUEVA NOTA DE EVOLUCIÓN CLÍNICA -->
     <div class="modal-overlay hidden" id="modal-note">
-        <div class="modal-dialog">
+        <div class="modal-dialog" style="max-width: 760px; width: 95vw; max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column;">
             <div class="modal-header">
                 <h3><i class="fa-solid fa-pen-to-square"></i> Nueva Evolución de Cita Clínicas</h3>
                 <button class="modal-close" data-close="modal-note">&times;</button>
@@ -5588,7 +5588,7 @@
 
     <!-- MODAL: REGISTRAR EVOLUCIÓN DE SESIÓN CON FIRMA Y KARDEX -->
     <div class="modal-overlay hidden" id="modal-session">
-        <div class="modal-dialog" style="max-width: 600px; width: 100%;">
+        <div class="modal-dialog" style="max-width: 720px; width: 95vw; max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column;">
             <div class="modal-header">
                 <h3><i class="fa-solid fa-notes-medical text-cyan"></i> Registrar Nueva Sesión</h3>
                 <button class="modal-close" data-close="modal-session">&times;</button>
@@ -5789,7 +5789,7 @@
 
     <!-- MODAL: TRASLADO / CAMBIO ENTRE CUENTAS -->
     <div class="modal-overlay hidden" id="modal-account-transfer">
-        <div class="modal-dialog" style="max-width: 500px; width: 100%;">
+        <div class="modal-dialog" style="max-width: 580px; width: 95vw; max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column;">
             <div class="modal-header">
                 <h3><i class="fa-solid fa-right-left text-purple"></i> Traslado / Cambio entre Cuentas</h3>
                 <button class="modal-close" data-close="modal-account-transfer">&times;</button>
@@ -6032,7 +6032,7 @@
 
     <!-- MODAL: PAD DE FIRMA DIGITAL EXPANDIDO Y CÓMODO -->
     <div class="modal-overlay hidden" id="modal-signature-pad" style="z-index: 10005;">
-        <div class="modal-dialog modal-lg" style="max-width: 680px; width: 95%;">
+        <div class="modal-dialog modal-lg" style="max-width: 740px; width: 95vw; max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column;">
             <div class="modal-header" style="background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%); color: #ffffff; border-top-left-radius: var(--radius-lg); border-top-right-radius: var(--radius-lg); padding: 16px 20px;">
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <div style="width: 38px; height: 38px; border-radius: 50%; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
@@ -6071,7 +6071,7 @@
 
     <!-- MODAL: ESPECIALIDAD MÉDICA & COMISIONES -->
     <div class="modal-overlay hidden" id="modal-specialty" style="z-index: 2000;">
-        <div class="modal-dialog" style="max-width: 680px; width: 95vw;">
+        <div class="modal-dialog" style="max-width: 760px; width: 95vw; max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column;">
             <div class="modal-header">
                 <h3 id="modal-specialty-title"><i class="fa-solid fa-stethoscope text-teal"></i> Especialidad Médica</h3>
                 <button class="modal-close" data-close-erp="modal-specialty">&times;</button>
@@ -6422,7 +6422,7 @@
 
     <!-- MODAL: NÓMINA / HONORARIOS MÉDICOS -->
     <div class="modal-overlay hidden" id="modal-payroll">
-        <div class="modal-dialog" style="max-width: 740px; width: 95vw;">
+        <div class="modal-dialog" style="max-width: 780px; width: 95vw; max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column;">
             <div class="modal-header">
                 <h3 id="modal-payroll-title"><i class="fa-solid fa-hand-holding-dollar text-teal"></i> Liquidación de Nómina</h3>
                 <button class="modal-close" data-close-erp="modal-payroll">&times;</button>
@@ -6506,7 +6506,7 @@
 
     <!-- MODAL: REGISTRAR / EDITAR PERSONAL Y COLABORADOR (SIN ROL DE USUARIO) -->
     <div class="modal-overlay hidden" id="modal-payroll-staff">
-        <div class="modal-dialog" style="max-width: 600px; width: 95vw;">
+        <div class="modal-dialog" style="max-width: 680px; width: 95vw; max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column;">
             <div class="modal-header">
                 <h3 id="modal-payroll-staff-title"><i class="fa-solid fa-user-plus text-cyan"></i> Registrar Colaborador de Nómina</h3>
                 <button class="modal-close" data-close-erp="modal-payroll-staff">&times;</button>
@@ -6611,7 +6611,7 @@
 
     <!-- MODAL: LIQUIDAR SERVICIO (MÉDICO / ASISTENTE / AMBOS) -->
     <div class="modal-overlay hidden" id="modal-settle-service" style="z-index: 10600;">
-        <div class="modal-dialog" style="max-width: 580px; width: 95vw;">
+        <div class="modal-dialog" style="max-width: 680px; width: 95vw; max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column;">
             <div class="modal-header">
                 <h3 id="modal-settle-service-title"><i class="fa-solid fa-hand-holding-dollar text-cyan"></i> Liquidar Honorarios por Servicio</h3>
                 <button class="modal-close" data-close-erp="modal-settle-service">&times;</button>
@@ -6743,7 +6743,7 @@
 
     <!-- MODAL: CONFIGURAR RETENCIÓN SENIAT Y SUSTRAENDO -->
     <div class="modal-overlay hidden" id="modal-seniat-config" style="z-index: 10700;">
-        <div class="modal-dialog" style="max-width: 520px; width: 95vw;">
+        <div class="modal-dialog" style="max-width: 620px; width: 95vw; max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column;">
             <div class="modal-header">
                 <h3 id="modal-seniat-config-title"><i class="fa-solid fa-sliders text-cyan"></i> Configuración de Retención SENIAT</h3>
                 <button type="button" class="modal-close" data-close-erp="modal-seniat-config">&times;</button>
@@ -6806,7 +6806,7 @@
 
     <!-- MODAL: EDITAR GANANCIAS DEL SERVICIO (AJUSTE PREVIO) -->
     <div class="modal-overlay hidden" id="modal-edit-service-gain">
-        <div class="modal-dialog" style="max-width: 640px; width: 95vw;">
+        <div class="modal-dialog" style="max-width: 720px; width: 95vw; max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column;">
             <div class="modal-header">
                 <h3><i class="fa-solid fa-pen-to-square text-cyan"></i> Ajustar Ganancias de Servicio</h3>
                 <button class="modal-close" data-close-erp="modal-edit-service-gain">&times;</button>
@@ -6910,7 +6910,7 @@
 
     <!-- MODAL: REGISTRAR SERVICIO MANUAL PARA LIQUIDACIÓN -->
     <div class="modal-overlay hidden" id="modal-add-service-liquidation">
-        <div class="modal-dialog" style="max-width: 600px; width: 95vw;">
+        <div class="modal-dialog" style="max-width: 680px; width: 95vw; max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column;">
             <div class="modal-header">
                 <h3><i class="fa-solid fa-file-circle-plus text-cyan"></i> Registrar Servicio para Liquidación</h3>
                 <button class="modal-close" data-close-erp="modal-add-service-liquidation">&times;</button>
@@ -7002,7 +7002,7 @@
 
     <!-- MODAL: SEGUIMIENTO CASHEA / CRÉDITO -->
     <div class="modal-overlay hidden" id="modal-cashea-tracker">
-        <div class="modal-dialog modal-lg" style="max-width: 720px;">
+        <div class="modal-dialog modal-lg" style="max-width: 800px; width: 95vw; max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column;">
             <div class="modal-header">
                 <h3><i class="fa-solid fa-credit-card text-teal"></i> Seguimiento Cashea & Financiamiento a Crédito</h3>
                 <button class="modal-close" data-close-erp="modal-cashea-tracker">&times;</button>
@@ -7023,7 +7023,7 @@
 
     <!-- MODAL: SELECCIONAR TIPO DE PRESUPUESTO / ESPECIALIDAD -->
     <div class="modal-overlay hidden" id="modal-select-budget-type">
-        <div class="modal-dialog" style="max-width: 780px; width: 95vw;">
+        <div class="modal-dialog" style="max-width: 800px; width: 95vw; max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column;">
             <div class="modal-header" style="border-bottom: 1px solid var(--border-color); padding: 18px 24px; display: flex; justify-content: space-between; align-items: center;">
                 <div>
                     <h3 style="margin: 0; font-size: 1.35rem; color: #0f172a; font-family: 'Outfit', sans-serif; display: flex; align-items: center; gap: 10px;">
@@ -8623,10 +8623,10 @@
     <script src="supabaseClient.js?v=368"></script>
     <script src="odontogram.js?v=368"></script>
     <script src="signature.js?v=368"></script>
-    <script src="whatsapp.js?v=368"></script>
+    <script src="whatsapp.js?v=369"></script>
     <script src="kardex.js?v=368"></script>
-    <script src="app.js?v=368"></script>
-    <script src="clinicalERP.js?v=368"></script>
+    <script src="app.js?v=369"></script>
+    <script src="clinicalERP.js?v=369"></script>
     <script src="tutorial.js?v=368"></script>
 </body>
 </html>
