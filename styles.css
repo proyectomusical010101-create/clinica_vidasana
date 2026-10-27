@@ -14,7 +14,7 @@
     --bg-input: #f1f4ef;         /* Soft Fresh Light Input */
     --bg-viewport: #ffffff;
     
-    --border-color: #e2e8df;     /* Delicate Clean Border */
+    --border-color: #cbd5e1;     /* Clearly Visible Crisp Border */
     --border-highlight: rgba(127, 161, 60, 0.45);
     
     --text-heading: #1e262e;     /* Deep Slate/Charcoal Heading (Matching Logo Sana) */
@@ -2015,23 +2015,29 @@ body.dark-theme .timeline-item.timeline-item-attended {
 }
 
 .form-group label {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    font-weight: 500;
+    font-size: 0.82rem;
+    color: #334155;
+    font-weight: 600;
+    margin-bottom: 3px;
 }
 
 .form-control, .form-input, input[type="text"], input[type="date"], input[type="datetime-local"], input[type="tel"], input[type="email"], input[type="number"], input[type="password"], select, textarea {
-    background: var(--bg-input);
-    border: 1px solid var(--border-color);
+    background: #ffffff;
+    border: 1.5px solid #94a3b8;
     border-radius: 8px;
     padding: 9px 12px;
-    color: var(--text-main);
+    color: #0f172a;
     font-size: 0.88rem;
     line-height: normal;
     font-family: inherit;
-    transition: border-color 0.2s;
+    transition: all 0.2s ease;
     box-sizing: border-box;
     min-height: 42px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.form-control:hover, input:hover, select:hover, textarea:hover {
+    border-color: #64748b;
 }
 
 select, .form-select, select.form-control {
@@ -2041,14 +2047,29 @@ select, .form-select, select.form-control {
     padding: 8px 12px !important;
     font-size: 0.88rem !important;
     box-sizing: border-box !important;
-    background-color: var(--bg-card) !important;
-    color: var(--text-main) !important;
+    background-color: #ffffff !important;
+    border: 1.5px solid #94a3b8 !important;
+    color: #0f172a !important;
 }
 
 .form-control:focus, input:focus, select:focus, textarea:focus {
-    outline: none;
-    border-color: var(--primary-cyan);
-    box-shadow: 0 0 8px rgba(2, 132, 199, 0.2);
+    outline: none !important;
+    border-color: #0d9488 !important;
+    box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.22) !important;
+    background-color: #ffffff !important;
+}
+
+.form-control:disabled,
+.form-control[readonly],
+input:disabled,
+input[readonly],
+select:disabled,
+textarea:disabled,
+textarea[readonly] {
+    background-color: #f1f5f9 !important;
+    border-color: #cbd5e1 !important;
+    color: #64748b !important;
+    cursor: not-allowed;
 }
 
 .checkbox-group {
@@ -7562,4 +7583,98 @@ select, .form-select, select.form-control {
     #lbl-srv-time + div[style*="display: flex"] select {
         width: 100% !important;
     }
+}
+
+/* =========================================================
+   HIGH-CONTRAST FORM FIELD BORDERS & MODAL ENHANCEMENTS
+   ========================================================= */
+
+/* Ensure all inputs inside any modal-dialog have clearly defined, darker borders */
+.modal-dialog input[type="text"],
+.modal-dialog input[type="date"],
+.modal-dialog input[type="datetime-local"],
+.modal-dialog input[type="tel"],
+.modal-dialog input[type="email"],
+.modal-dialog input[type="number"],
+.modal-dialog input[type="password"],
+.modal-dialog input[type="search"],
+.modal-dialog select,
+.modal-dialog textarea,
+.modal-dialog .form-control,
+#modal-patient input,
+#modal-patient select,
+#modal-patient textarea,
+#modal-service input,
+#modal-service select,
+#modal-material input,
+#modal-material select,
+#modal-appointment input,
+#modal-appointment select {
+    border: 1.5px solid #94a3b8 !important; /* Visible Slate-400 Outline */
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    border-radius: 8px !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+}
+
+.modal-dialog input:hover,
+.modal-dialog select:hover,
+.modal-dialog textarea:hover,
+#modal-patient input:hover,
+#modal-patient select:hover,
+#modal-service input:hover,
+#modal-service select:hover {
+    border-color: #64748b !important; /* Slate-500 hover */
+}
+
+.modal-dialog input:focus,
+.modal-dialog select:focus,
+.modal-dialog textarea:focus,
+#modal-patient input:focus,
+#modal-patient select:focus,
+#modal-service input:focus,
+#modal-service select:focus {
+    outline: none !important;
+    border-color: #0d9488 !important; /* Clinical Teal Focus */
+    box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.22) !important;
+}
+
+/* Dark Theme Overrides for Form Inputs */
+body.dark-theme .modal-dialog input[type="text"],
+body.dark-theme .modal-dialog input[type="date"],
+body.dark-theme .modal-dialog input[type="datetime-local"],
+body.dark-theme .modal-dialog input[type="tel"],
+body.dark-theme .modal-dialog input[type="email"],
+body.dark-theme .modal-dialog input[type="number"],
+body.dark-theme .modal-dialog input[type="password"],
+body.dark-theme .modal-dialog input[type="search"],
+body.dark-theme .modal-dialog select,
+body.dark-theme .modal-dialog textarea,
+body.dark-theme .modal-dialog .form-control,
+body.dark-theme .form-control,
+body.dark-theme input,
+body.dark-theme select,
+body.dark-theme textarea {
+    border: 1.5px solid #475569 !important; /* Slate-600 */
+    background-color: #1e293b !important;
+    color: #f8fafc !important;
+}
+
+body.dark-theme .modal-dialog input:hover,
+body.dark-theme .modal-dialog select:hover,
+body.dark-theme .modal-dialog textarea:hover,
+body.dark-theme input:hover,
+body.dark-theme select:hover,
+body.dark-theme textarea:hover {
+    border-color: #64748b !important;
+}
+
+body.dark-theme .modal-dialog input:focus,
+body.dark-theme .modal-dialog select:focus,
+body.dark-theme .modal-dialog textarea:focus,
+body.dark-theme input:focus,
+body.dark-theme select:focus,
+body.dark-theme textarea:focus {
+    border-color: #00f2fe !important;
+    box-shadow: 0 0 0 3px rgba(0, 242, 254, 0.25) !important;
 }
