@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=375">
+    <link rel="stylesheet" href="styles.css?v=380">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -224,6 +224,10 @@
                 <a href="#consumables" class="nav-item" data-tab="consumables" data-tooltip="Consumibles & Cafetería">
                     <i class="fa-solid fa-mug-saucer"></i>
                     <span>Consumibles</span>
+                </a>
+                <a href="#hygienist-finances" class="nav-item mobile-sidebar-hide hidden" data-tab="hygienist-finances" data-tooltip="Mis Finanzas">
+                    <i class="fa-solid fa-wallet text-cyan"></i>
+                    <span>Mis Finanzas</span>
                 </a>
                 <a href="#finance" class="nav-item mobile-sidebar-hide" data-tab="finance" data-tooltip="Finanzas">
                     <i class="fa-solid fa-wallet"></i>
@@ -564,6 +568,126 @@
                                     <!-- Populated dynamically by ClinicalERP -->
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- VIEW: MIS FINANZAS & HONORARIOS (HIGIENISTA) -->
+                <section id="view-hygienist-finances" class="tab-view">
+                    <div class="view-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;">
+                        <div>
+                            <h1 style="font-family: 'Outfit', sans-serif; font-size: 1.6rem; color: #1e293b; display: flex; align-items: center; gap: 10px; margin: 0 0 6px 0;">
+                                <i class="fa-solid fa-wallet" style="color: var(--primary-cyan);"></i> Mis Finanzas & Comisiones
+                            </h1>
+                            <p class="subtitle" style="margin: 0; color: #64748b; font-size: 0.9rem;">
+                                Consulta y balance detallado de comisiones devengadas, pagos recibidos y servicios asistidos.
+                            </p>
+                        </div>
+                        <div class="action-buttons-group" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                            <span id="hygienist-finances-user-badge" class="badge-tag cyan" style="font-size: 0.85rem; padding: 6px 12px; font-weight: 700;">
+                                <i class="fa-solid fa-user-check"></i> <span id="hyg-finance-username">Higienista</span>
+                            </span>
+                            <button type="button" class="btn btn-outline btn-sm" onclick="window.renderHygienistFinancesView()" style="border-radius: 8px;">
+                                <i class="fa-solid fa-arrows-rotate"></i> Actualizar Balance
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- KPI CARDS PERSONALES -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 22px;">
+                        <!-- Card 1: Total Acumulado Histórico -->
+                        <div class="card p-15" style="border-radius: 12px; border: 1px solid #e2e8f0; background: #ffffff; box-shadow: 0 2px 10px rgba(0,0,0,0.02);">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div>
+                                    <div style="font-size: 0.72rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em;">Total Comisiones Devengadas</div>
+                                    <div style="font-size: 1.6rem; font-weight: 900; color: #0284c7; margin-top: 4px;" id="hyg-stat-total-earned">$0.00</div>
+                                    <div style="font-size: 0.75rem; color: #64748b; margin-top: 2px;" id="hyg-stat-total-bcv">≈ 0.00 Bs.</div>
+                                </div>
+                                <div style="width: 42px; height: 42px; border-radius: 10px; background: rgba(2, 132, 199, 0.1); color: #0284c7; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                                    <i class="fa-solid fa-sack-dollar"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card 2: Pendiente por Cobrar -->
+                        <div class="card p-15" style="border-radius: 12px; border: 1.5px solid #fde68a; background: #fffbeb; box-shadow: 0 2px 10px rgba(245, 158, 11, 0.04);">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div>
+                                    <div style="font-size: 0.72rem; font-weight: 800; color: #b45309; text-transform: uppercase; letter-spacing: 0.04em;">Pendiente por Cobrar</div>
+                                    <div style="font-size: 1.6rem; font-weight: 900; color: #d97706; margin-top: 4px;" id="hyg-stat-pending">$0.00</div>
+                                    <div style="font-size: 0.75rem; color: #b45309; margin-top: 2px;" id="hyg-stat-pending-bcv">≈ 0.00 Bs.</div>
+                                </div>
+                                <div style="width: 42px; height: 42px; border-radius: 10px; background: rgba(245, 158, 11, 0.15); color: #b45309; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                                    <i class="fa-solid fa-clock"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card 3: Ya Cobrado / Liquidado -->
+                        <div class="card p-15" style="border-radius: 12px; border: 1.5px solid #bbf7d0; background: #f0fdf4; box-shadow: 0 2px 10px rgba(22, 163, 74, 0.04);">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div>
+                                    <div style="font-size: 0.72rem; font-weight: 800; color: #15803d; text-transform: uppercase; letter-spacing: 0.04em;">Total Ya Cobrado</div>
+                                    <div style="font-size: 1.6rem; font-weight: 900; color: #16a34a; margin-top: 4px;" id="hyg-stat-settled">$0.00</div>
+                                    <div style="font-size: 0.75rem; color: #15803d; margin-top: 2px;" id="hyg-stat-settled-bcv">≈ 0.00 Bs.</div>
+                                </div>
+                                <div style="width: 42px; height: 42px; border-radius: 10px; background: rgba(22, 163, 74, 0.15); color: #15803d; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                                    <i class="fa-solid fa-circle-check"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card 4: Pacientes & Servicios -->
+                        <div class="card p-15" style="border-radius: 12px; border: 1px solid #e2e8f0; background: #ffffff; box-shadow: 0 2px 10px rgba(0,0,0,0.02);">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div>
+                                    <div style="font-size: 0.72rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em;">Servicios & Procedimientos</div>
+                                    <div style="font-size: 1.6rem; font-weight: 900; color: #0d9488; margin-top: 4px;" id="hyg-stat-services-count">0</div>
+                                    <div style="font-size: 0.75rem; color: #64748b; margin-top: 2px;" id="hyg-stat-patients-count">0 paciente(s)</div>
+                                </div>
+                                <div style="width: 42px; height: 42px; border-radius: 10px; background: rgba(13, 148, 136, 0.1); color: #0d9488; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                                    <i class="fa-solid fa-tooth"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TABLA DETALLADA DE SERVICIOS Y COMISIONES -->
+                    <div class="card" style="border-radius: 14px; border: 1px solid #e2e8f0; background: #ffffff; box-shadow: 0 4px 15px rgba(0,0,0,0.02); overflow: hidden;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid #e2e8f0; flex-wrap: wrap; gap: 12px; background: #f8fafc;">
+                            <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                                <button type="button" class="btn btn-xs btn-outline active-category-pill" id="btn-hyg-filter-all" onclick="window.filterHygienistFinances('all')">Todos</button>
+                                <button type="button" class="btn btn-xs btn-outline" id="btn-hyg-filter-pending" onclick="window.filterHygienistFinances('pending')" style="color: #b45309; border-color: #fde68a;">
+                                    <i class="fa-solid fa-clock"></i> Pendientes por Cobrar
+                                </button>
+                                <button type="button" class="btn btn-xs btn-outline" id="btn-hyg-filter-settled" onclick="window.filterHygienistFinances('settled')" style="color: #15803d; border-color: #bbf7d0;">
+                                    <i class="fa-solid fa-check"></i> Ya Cobrados
+                                </button>
+                            </div>
+                            <div style="position: relative; min-width: 260px;">
+                                <input type="text" id="hyg-finances-search" class="form-control" placeholder="🔍 Buscar por paciente o tratamiento..." oninput="window.onHygienistFinancesSearch(this.value)" style="height: 34px; font-size: 0.82rem; border-radius: 8px; padding-left: 10px;">
+                            </div>
+                        </div>
+
+                        <div class="table-responsive" style="margin: 0;">
+                            <table class="table" style="margin: 0; width: 100%;">
+                                <thead>
+                                    <tr style="background: #ffffff; color: #64748b; font-size: 0.74rem; border-bottom: 1px solid #e2e8f0; text-transform: uppercase;">
+                                        <th style="padding: 10px 14px;">Fecha</th>
+                                        <th style="padding: 10px 14px;">Paciente</th>
+                                        <th style="padding: 10px 14px;">Procedimiento Odontológico</th>
+                                        <th style="padding: 10px 14px; text-align: right;">Facturado ($)</th>
+                                        <th style="padding: 10px 14px; text-align: center;">Tasa Acordada</th>
+                                        <th style="padding: 10px 14px; text-align: right;">Mi Comisión ($)</th>
+                                        <th style="padding: 10px 14px; text-align: right;">Equiv. Bs. (BCV)</th>
+                                        <th style="padding: 10px 14px; text-align: center;">Estatus</th>
+                                        <th style="padding: 10px 14px;">Detalle de Liquidación</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="hygienist-finances-table-body">
+                                    <!-- Populated dynamically by window.renderHygienistFinancesView -->
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </section>
@@ -4634,6 +4758,24 @@
                             <option value="Inactivo">Inactivo (Acceso Suspendido)</option>
                         </select>
                     </div>
+                    <div class="form-group span-2" id="sys-user-hygienist-fields" style="display: none; background: rgba(8, 145, 178, 0.05); border: 1.5px solid rgba(8, 145, 178, 0.25); border-radius: 8px; padding: 12px; margin-top: 4px;">
+                        <label style="font-weight: 700; font-size: 0.82rem; color: #0891b2; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                            <i class="fa-solid fa-tooth"></i> Configuración de Comisión de Higienista Dental
+                        </label>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <div>
+                                <label style="font-size: 0.74rem; font-weight: 600;">% Comisión por Procedimiento *</label>
+                                <input type="number" id="sys-user-hygienist-commission" class="form-control" placeholder="ej: 30" min="0" max="100" step="0.5" value="30">
+                            </div>
+                            <div>
+                                <label style="font-size: 0.74rem; font-weight: 600;">Bono Fijo Opcional ($ USD)</label>
+                                <input type="number" id="sys-user-hygienist-bonus" class="form-control" placeholder="ej: 0.00" min="0" step="0.5" value="0">
+                            </div>
+                        </div>
+                        <small class="text-muted" style="font-size: 0.72rem; display: block; margin-top: 5px;">
+                            <i class="fa-solid fa-circle-info text-cyan"></i> Esta comisión se aplicará por defecto en cada procedimiento odontológico y podrá personalizarse libremente al momento de la liquidación.
+                        </small>
+                    </div>
                     <div class="form-group span-2">
                         <div class="card p-12" style="background: rgba(8, 145, 178, 0.05); border: 1px solid rgba(8, 145, 178, 0.2); border-radius: 8px; font-size: 0.82rem; color: #334155; margin-top: 4px;">
                             <i class="fa-solid fa-circle-info text-cyan"></i> <strong>Nota:</strong> Estas credenciales dan acceso a los módulos operativos y administrativos del sistema según el rol seleccionado.
@@ -8648,14 +8790,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=379"></script>
-    <script src="supabaseClient.js?v=379"></script>
-    <script src="odontogram.js?v=379"></script>
-    <script src="signature.js?v=379"></script>
-    <script src="whatsapp.js?v=379"></script>
-    <script src="kardex.js?v=379"></script>
-    <script src="app.js?v=379"></script>
-    <script src="clinicalERP.js?v=379"></script>
-    <script src="tutorial.js?v=379"></script>
+    <script src="seededData.js?v=380"></script>
+    <script src="supabaseClient.js?v=380"></script>
+    <script src="odontogram.js?v=380"></script>
+    <script src="signature.js?v=380"></script>
+    <script src="whatsapp.js?v=380"></script>
+    <script src="kardex.js?v=380"></script>
+    <script src="app.js?v=380"></script>
+    <script src="clinicalERP.js?v=380"></script>
+    <script src="tutorial.js?v=380"></script>
 </body>
 </html>

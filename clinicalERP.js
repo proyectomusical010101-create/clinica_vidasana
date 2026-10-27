@@ -1720,13 +1720,17 @@
         async openSettleAllDoctorModal(safeKey) {
             const g = this._doctorsGroupCache ? this._doctorsGroupCache[safeKey] : null;
             if (!g) {
-                Swal.fire({ icon: 'warning', title: 'Doctor no encontrado', text: 'No se encontraron registros de este doctor.' });
+                Swal.fire({ icon: 'warning', title: 'Profesional no encontrado', text: 'No se encontraron registros de este profesional.' });
                 return;
             }
 
-            const pendingItems = g.items.filter(x => x.doctor && x.doctor.status === 'Pendiente');
+            const isHyg = !!g.isHygienist;
+            const pendingItems = isHyg 
+                ? g.items.filter(x => x.assistant && x.assistant.status === 'Pendiente')
+                : g.items.filter(x => x.doctor && x.doctor.status === 'Pendiente');
+
             if (pendingItems.length === 0) {
-                Swal.fire({ icon: 'info', title: 'Sin Pagos Pendientes', text: `Todos los honorarios de ${g.name} ya han sido liquidados.` });
+                Swal.fire({ icon: 'info', title: 'Sin Pagos Pendientes', text: `Todos los honorarios de ${isHyg ? 'la higienista ' : ''}${g.name} ya han sido liquidados.` });
                 return;
             }
 
@@ -1736,18 +1740,20 @@
             const totalVES = (totalToPay * rate).toFixed(2);
 
             const patientsList = Object.values(g.patients).map(p => {
-                const pendCount = p.items.filter(x => x.doctor && x.doctor.status === 'Pendiente').length;
+                const pendCount = isHyg
+                    ? p.items.filter(x => x.assistant && x.assistant.status === 'Pendiente').length
+                    : p.items.filter(x => x.doctor && x.doctor.status === 'Pendiente').length;
                 return `<li><strong>${p.patientName}</strong>: ${pendCount} servicio(s) pendiente(s) ($${p.pendingDocFee.toFixed(2)})</li>`;
             }).join('');
 
             const debitAccountOptionsHtml = this.getDebitAccountOptionsHtml('Transferencia');
 
             const { value: formValues } = await Swal.fire({
-                title: `<div style="display:flex; align-items:center; justify-content:center; gap:10px; color:#0d9488;"><i class="fa-solid fa-receipt"></i> Liquidación Total: ${g.name}</div>`,
+                title: `<div style="display:flex; align-items:center; justify-content:center; gap:10px; color:${isHyg ? '#0284c7' : '#0d9488'};"><i class="fa-solid ${isHyg ? 'fa-tooth' : 'fa-receipt'}"></i> Liquidación Total: ${isHyg ? 'Higienista ' : ''}${g.name}</div>`,
                 html: `
                     <div style="text-align: left; font-size: 0.88rem; color: #1e293b;">
                         <div style="background:#f0fdf4; border:1px solid #86efac; border-radius:10px; padding:12px 16px; margin-bottom:14px; text-align:center;">
-                            <div style="font-size:0.75rem; font-weight:800; color:#15803d; text-transform:uppercase;">Monto Total a Liquidar al Doctor</div>
+                            <div style="font-size:0.75rem; font-weight:800; color:#15803d; text-transform:uppercase;">Monto Total a Liquidar ${isHyg ? 'a la Higienista' : 'al Doctor'}</div>
                             <div style="font-size:1.85rem; font-weight:900; color:#166534; margin:4px 0;">$${totalToPay.toFixed(2)} USD</div>
                             <div style="font-size:0.80rem; color:#15803d; font-weight:600;">Equivalente Oficial BCV: <strong>${totalVES} Bs.</strong> (Tasa: ${rate.toFixed(2)})</div>
                         </div>
@@ -1812,7 +1818,7 @@
             try {
                 Swal.fire({
                     title: 'Procesando liquidación...',
-                    text: 'Actualizando nómina médica y conciliación...',
+                    text: 'Actualizando nómina y conciliación...',
                     allowOutsideClick: false,
                     didOpen: () => Swal.showLoading()
                 });
@@ -1820,6 +1826,7 @@
                 if (window.SupabaseDataService && window.SupabaseDataService.settleDoctorBatchServices) {
                     const result = await window.SupabaseDataService.settleDoctorBatchServices({
                         doctorName: g.name,
+                        targetRole: isHyg ? 'assistant' : 'doctor',
                         serviceIds: pendingIds,
                         paymentMethod: formValues.method,
                         paymentRef: formValues.ref,
@@ -1835,8 +1842,8 @@
                     Swal.fire({
                         icon: 'success',
                         title: '¡Liquidación Exitosa!',
-                        html: `Se han liquidado exitosamente <strong>${result.count}</strong> servicio(s) de <strong>${g.name}</strong> por un total de <strong>$${result.totalSettled.toFixed(2)} USD</strong>.<br><small style="color:#64748b; margin-top:6px; display:inline-block;"><i class="fa-solid fa-building-columns text-teal"></i> Cuenta debitada: <strong>${formValues.debitAccountName || 'Clínica'}</strong></small>`,
-                        confirmButtonColor: '#0d9488'
+                        html: `Se han liquidado exitosamente <strong>${result.count}</strong> servicio(s) de <strong>${isHyg ? 'la higienista ' : ''}${g.name}</strong> por un total de <strong>$${result.totalSettled.toFixed(2)} USD</strong>.<br><small style="color:#64748b; margin-top:6px; display:inline-block;"><i class="fa-solid fa-building-columns text-teal"></i> Cuenta debitada: <strong>${formValues.debitAccountName || 'Clínica'}</strong></small>`,
+                        confirmButtonColor: isHyg ? '#0284c7' : '#0d9488'
                     });
                 }
             } catch(err) {
@@ -1934,76 +1941,146 @@
                 container.innerHTML = `
                     <div style="padding: 45px 20px; text-align: center; color: #64748b; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.02);">
                         <div style="font-size: 2.2rem; margin-bottom: 10px; color: #cbd5e1;"><i class="fa-solid fa-user-doctor"></i></div>
-                        <strong style="font-size: 1.05rem; color: #1e293b;">No hay servicios o médicos en este filtro</strong>
-                        <p style="margin: 6px 0 0 0; font-size: 0.85rem;">Cuando se completen procedimientos o se cobren en caja, aparecerán organizados y agrupados por cada médico aquí.</p>
+                        <strong style="font-size: 1.05rem; color: #1e293b;">No hay servicios o profesionales en este filtro</strong>
+                        <p style="margin: 6px 0 0 0; font-size: 0.85rem;">Cuando se completen procedimientos o se cobren en caja, aparecerán organizados y agrupados por cada médico e higienista aquí.</p>
                     </div>
                 `;
                 return;
             }
 
-            // Group by Doctor
+            // Group by Professional (Doctors and Dental Hygienists)
             const doctorsMap = {};
+
             list.forEach(item => {
-                const rawName = item.doctor?.name || 'Médico Tratante';
-                const cleanName = rawName.trim();
-                const docKey = cleanName.toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim() || 'medico_general';
-
-                if (!doctorsMap[docKey]) {
-                    doctorsMap[docKey] = {
-                        key: docKey,
-                        name: cleanName,
-                        id: item.doctor?.id || '',
-                        specialty: item.doctor?.specialty || item.doctor?.role || 'Especialista',
-                        patients: {},
-                        items: [],
-                        totalGross: 0,
-                        totalDocFee: 0,
-                        pendingDocFee: 0,
-                        settledDocFee: 0,
-                        pendingItemsCount: 0,
-                        settledItemsCount: 0
-                    };
-                }
-
-                const g = doctorsMap[docKey];
-                g.items.push(item);
                 const price = parseFloat(item.service_price || 0);
-                const docAmt = parseFloat(item.doctor?.amount || 0);
-                g.totalGross += price;
-                g.totalDocFee += docAmt;
 
-                if (item.doctor?.status === 'Pendiente') {
-                    g.pendingDocFee += docAmt;
-                    g.pendingItemsCount++;
-                } else {
-                    g.settledDocFee += parseFloat(item.doctor?.settled_amount || docAmt);
-                    g.settledItemsCount++;
+                // 1. Group by Doctor (if doctor data exists)
+                if (item.doctor && (item.doctor.name || item.doctor.amount !== undefined)) {
+                    const rawName = item.doctor.name || 'Médico Tratante';
+                    const cleanName = rawName.trim();
+                    const docKey = 'doc_' + (cleanName.toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').replace(/[^a-z0-9]/g, '_').trim() || 'medico_general');
+
+                    if (!doctorsMap[docKey]) {
+                        doctorsMap[docKey] = {
+                            key: docKey,
+                            name: cleanName,
+                            id: item.doctor?.id || '',
+                            roleType: 'doctor',
+                            isHygienist: false,
+                            specialty: item.doctor?.specialty || item.doctor?.role || 'Médico Especialista',
+                            patients: {},
+                            items: [],
+                            totalGross: 0,
+                            totalDocFee: 0,
+                            pendingDocFee: 0,
+                            settledDocFee: 0,
+                            pendingItemsCount: 0,
+                            settledItemsCount: 0
+                        };
+                    }
+
+                    const g = doctorsMap[docKey];
+                    g.items.push(item);
+                    const docAmt = parseFloat(item.doctor?.amount || 0);
+                    g.totalGross += price;
+                    g.totalDocFee += docAmt;
+
+                    if (item.doctor?.status === 'Pendiente') {
+                        g.pendingDocFee += docAmt;
+                        g.pendingItemsCount++;
+                    } else {
+                        g.settledDocFee += parseFloat(item.doctor?.settled_amount || docAmt);
+                        g.settledItemsCount++;
+                    }
+
+                    // Group by Patient inside this doctor
+                    const ptName = (item.patient_name || 'Paciente S/N').trim();
+                    if (!g.patients[ptName]) {
+                        g.patients[ptName] = {
+                            patientName: ptName,
+                            patientId: item.patient_id || '',
+                            items: [],
+                            totalGross: 0,
+                            totalDocFee: 0,
+                            pendingDocFee: 0
+                        };
+                    }
+                    const ptGroup = g.patients[ptName];
+                    ptGroup.items.push(item);
+                    ptGroup.totalGross += price;
+                    ptGroup.totalDocFee += docAmt;
+                    if (item.doctor?.status === 'Pendiente') {
+                        ptGroup.pendingDocFee += docAmt;
+                    }
                 }
 
-                // Group by Patient inside this doctor
-                const ptName = (item.patient_name || 'Paciente S/N').trim();
-                if (!g.patients[ptName]) {
-                    g.patients[ptName] = {
-                        patientName: ptName,
-                        patientId: item.patient_id || '',
-                        items: [],
-                        totalGross: 0,
-                        totalDocFee: 0,
-                        pendingDocFee: 0
-                    };
-                }
-                const ptGroup = g.patients[ptName];
-                ptGroup.items.push(item);
-                ptGroup.totalGross += price;
-                ptGroup.totalDocFee += docAmt;
-                if (item.doctor?.status === 'Pendiente') {
-                    ptGroup.pendingDocFee += docAmt;
+                // 2. Group by Assistant / Dental Hygienist (if assistant data exists and has fee or assignment)
+                const hasAst = item.assistant && item.assistant.has_assistant && item.assistant.name && 
+                    item.assistant.name.toLowerCase() !== 'no aplica' && 
+                    item.assistant.name.toLowerCase() !== 'no asignado';
+
+                if (hasAst) {
+                    const rawAstName = item.assistant.name.trim();
+                    const astKey = 'hyg_' + (rawAstName.toLowerCase().replace(/[^a-z0-9]/g, '_').trim() || 'higienista');
+
+                    if (!doctorsMap[astKey]) {
+                        doctorsMap[astKey] = {
+                            key: astKey,
+                            name: rawAstName,
+                            id: item.assistant?.id || '',
+                            roleType: 'hygienist',
+                            isHygienist: true,
+                            specialty: 'Higienista Dental / Asistencia',
+                            patients: {},
+                            items: [],
+                            totalGross: 0,
+                            totalDocFee: 0,
+                            pendingDocFee: 0,
+                            settledDocFee: 0,
+                            pendingItemsCount: 0,
+                            settledItemsCount: 0
+                        };
+                    }
+
+                    const gAst = doctorsMap[astKey];
+                    gAst.items.push(item);
+                    const astAmt = parseFloat(item.assistant?.amount || 0);
+                    gAst.totalGross += price;
+                    gAst.totalDocFee += astAmt;
+
+                    if (item.assistant?.status === 'Pendiente') {
+                        gAst.pendingDocFee += astAmt;
+                        gAst.pendingItemsCount++;
+                    } else {
+                        gAst.settledDocFee += parseFloat(item.assistant?.settled_amount || astAmt);
+                        gAst.settledItemsCount++;
+                    }
+
+                    // Group by Patient inside this hygienist
+                    const ptName = (item.patient_name || 'Paciente S/N').trim();
+                    if (!gAst.patients[ptName]) {
+                        gAst.patients[ptName] = {
+                            patientName: ptName,
+                            patientId: item.patient_id || '',
+                            items: [],
+                            totalGross: 0,
+                            totalDocFee: 0,
+                            pendingDocFee: 0
+                        };
+                    }
+                    const ptGroupAst = gAst.patients[ptName];
+                    ptGroupAst.items.push(item);
+                    ptGroupAst.totalGross += price;
+                    ptGroupAst.totalDocFee += astAmt;
+                    if (item.assistant?.status === 'Pendiente') {
+                        ptGroupAst.pendingDocFee += astAmt;
+                    }
                 }
             });
 
             this._doctorsGroupCache = doctorsMap;
 
-            // Sort doctors: Doctors with pending fees first, then highest pending amount
+            // Sort: Professionals with pending fees first, then highest pending amount
             const doctorsList = Object.values(doctorsMap).sort((a, b) => {
                 if (a.pendingDocFee > 0 && b.pendingDocFee <= 0) return -1;
                 if (b.pendingDocFee > 0 && a.pendingDocFee <= 0) return 1;
@@ -2014,16 +2091,19 @@
                 const safeKey = g.key.replace(/[^a-z0-9]/g, '_');
                 const patientCount = Object.keys(g.patients).length;
                 const hasPending = (g.pendingDocFee > 0);
+                const isHyg = !!g.isHygienist;
 
                 // Render Patient breakdowns
                 const patientsHtml = Object.values(g.patients).map(pt => {
                     const ptRows = pt.items.map(item => {
                         const price = parseFloat(item.service_price || 0);
-                        const docAmt = parseFloat(item.doctor?.amount || 0);
-                        const isPend = (item.doctor?.status === 'Pendiente');
-                        const rateText = item.doctor?.type === 'fixed' 
-                            ? `Fijo $${parseFloat(item.doctor.rate || 0).toFixed(2)}` 
-                            : `${item.doctor?.rate || 40}%`;
+                        const feeAmt = isHyg ? parseFloat(item.assistant?.amount || 0) : parseFloat(item.doctor?.amount || 0);
+                        const isPend = isHyg ? (item.assistant?.status === 'Pendiente') : (item.doctor?.status === 'Pendiente');
+                        
+                        const rateObj = isHyg ? item.assistant : item.doctor;
+                        const rateText = rateObj?.type === 'fixed' 
+                            ? `Fijo $${parseFloat(rateObj.rate || 0).toFixed(2)}` 
+                            : `${rateObj?.rate || (isHyg ? 30 : 40)}%`;
 
                         const dateStr = item.date || (item.created_at ? item.created_at.substring(0, 10) : 'Hoy');
 
@@ -2040,10 +2120,10 @@
                                     $${price.toFixed(2)}
                                 </td>
                                 <td style="padding: 9px 14px; text-align: center;">
-                                    <span class="badge-tag purple" style="font-size: 0.72rem; padding: 2px 7px;">${rateText}</span>
+                                    <span class="badge-tag ${isHyg ? 'cyan' : 'purple'}" style="font-size: 0.72rem; padding: 2px 7px;">${rateText}</span>
                                 </td>
                                 <td style="padding: 9px 14px; text-align: right;">
-                                    <strong style="color: #15803d; font-size: 0.90rem;">$${docAmt.toFixed(2)}</strong>
+                                    <strong style="color: #15803d; font-size: 0.90rem;">$${feeAmt.toFixed(2)}</strong>
                                 </td>
                                 <td style="padding: 9px 14px; text-align: center;">
                                     <span class="badge-tag ${isPend ? 'amber' : 'green'}" style="font-size: 0.72rem;">
@@ -2052,7 +2132,10 @@
                                 </td>
                                 <td style="padding: 9px 14px; text-align: right;">
                                     ${isPend ? `
-                                        <button type="button" class="btn btn-xs btn-outline" onclick="window.ClinicalERP.openSettleModal('${item.id}', 'doctor')" style="border-color:#16a34a; color:#15803d; font-weight:700;" title="Liquidar solo este servicio">
+                                        <button type="button" class="btn btn-xs btn-outline" onclick="window.ClinicalERP.openEditGainModal('${item.id}')" style="border-color:#0284c7; color:#0284c7; font-weight:700; margin-right:4px;" title="Editar o personalizar porcentaje o monto de comisión antes de liquidar">
+                                            <i class="fa-solid fa-pen-to-square"></i> Editar
+                                        </button>
+                                        <button type="button" class="btn btn-xs btn-outline" onclick="window.ClinicalERP.openSettleModal('${item.id}', '${isHyg ? 'assistant' : 'doctor'}')" style="border-color:#16a34a; color:#15803d; font-weight:700;" title="Liquidar solo este servicio">
                                             <i class="fa-solid fa-check"></i> Liquidar
                                         </button>
                                     ` : `
@@ -2074,7 +2157,7 @@
                                 <div style="display: flex; align-items: center; gap: 14px;">
                                     <span style="font-size: 0.78rem; color: #64748b;">Facturado: <strong>$${pt.totalGross.toFixed(2)}</strong></span>
                                     <span style="font-size: 0.85rem; font-weight: 800; color: #15803d; background: #dcfce7; padding: 2px 9px; border-radius: 6px; border: 1px solid #bbf7d0;">
-                                        Honorarios Doctor: $${pt.totalDocFee.toFixed(2)}
+                                        ${isHyg ? 'Comisión Higienista' : 'Honorarios Doctor'}: $${pt.totalDocFee.toFixed(2)}
                                     </span>
                                 </div>
                             </div>
@@ -2085,8 +2168,8 @@
                                             <th style="padding: 7px 14px;">Fecha</th>
                                             <th style="padding: 7px 14px;">Servicio / Procedimiento</th>
                                             <th style="padding: 7px 14px; text-align: right;">Precio ($)</th>
-                                            <th style="padding: 7px 14px; text-align: center;">Tasa Doctor</th>
-                                            <th style="padding: 7px 14px; text-align: right;">Honorario ($)</th>
+                                            <th style="padding: 7px 14px; text-align: center;">Tasa ${isHyg ? 'Higienista' : 'Doctor'}</th>
+                                            <th style="padding: 7px 14px; text-align: right;">${isHyg ? 'Comisión ($)' : 'Honorario ($)'}</th>
                                             <th style="padding: 7px 14px; text-align: center;">Estatus</th>
                                             <th style="padding: 7px 14px; text-align: right;">Acción</th>
                                         </tr>
@@ -2100,26 +2183,30 @@
                     `;
                 }).join('');
 
+                const headerTitle = isHyg
+                    ? `${g.name} <span class="badge-tag cyan" style="font-size: 0.72rem; margin-left: 4px;"><i class="fa-solid fa-tooth"></i> Higienista Dental</span>`
+                    : `${g.name.startsWith('Dr') ? g.name : `Dr(a). ${g.name}`} <span class="badge-tag teal" style="font-size: 0.72rem; margin-left: 4px;"><i class="fa-solid fa-user-doctor"></i> Médico / Odontólogo</span>`;
+
                 return `
                     <div class="doctor-payroll-card" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); overflow: hidden; transition: all 0.2s ease;">
                         
-                        <!-- Encabezado Resumen del Doctor (Clic para expandir) -->
+                        <!-- Encabezado Resumen del Profesional (Clic para expandir) -->
                         <div class="doctor-payroll-header" style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); cursor: pointer; gap: 16px; flex-wrap: wrap;" onclick="window.ClinicalERP.toggleDoctorPayroll('${safeKey}')">
                             
                             <div style="display: flex; align-items: center; gap: 14px; min-width: 260px;">
-                                <div style="width: 48px; height: 48px; border-radius: 50%; background: #0d9488; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; font-weight: 700; flex-shrink: 0; box-shadow: 0 3px 8px rgba(13,148,136,0.25);">
-                                    <i class="fa-solid fa-user-doctor"></i>
+                                <div style="width: 48px; height: 48px; border-radius: 50%; background: ${isHyg ? '#0284c7' : '#0d9488'}; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; font-weight: 700; flex-shrink: 0; box-shadow: 0 3px 8px ${isHyg ? 'rgba(2,132,199,0.25)' : 'rgba(13,148,136,0.25)'};">
+                                    <i class="fa-solid ${isHyg ? 'fa-tooth' : 'fa-user-doctor'}"></i>
                                 </div>
                                 <div>
                                     <div style="font-size: 1.05rem; font-weight: 800; color: #0f172a; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                        ${g.name.startsWith('Dr') ? g.name : `Dr(a). ${g.name}`}
+                                        ${headerTitle}
                                         <span class="badge-tag ${hasPending ? 'amber' : 'green'}" style="font-size: 0.72rem;">
                                             <i class="fa-solid ${hasPending ? 'fa-clock' : 'fa-check'}"></i> ${hasPending ? 'Pendiente por Liquidar' : 'Totalmente Liquidado'}
                                         </span>
                                     </div>
                                     <div style="font-size: 0.80rem; color: #64748b; margin-top: 2px;">
                                         <span><i class="fa-solid fa-hospital-user text-cyan"></i> <strong>${patientCount}</strong> paciente(s) atendido(s)</span> &bull; 
-                                        <span><i class="fa-solid fa-stethoscope text-teal"></i> <strong>${g.items.length}</strong> servicio(s) realizados</span>
+                                        <span><i class="fa-solid ${isHyg ? 'fa-tooth' : 'fa-stethoscope'} text-teal"></i> <strong>${g.items.length}</strong> servicio(s) ${isHyg ? 'asistidos' : 'realizados'}</span>
                                     </div>
                                 </div>
                             </div>
@@ -2132,7 +2219,7 @@
 
                                 <div style="text-align: right; padding: 6px 16px; background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 10px;">
                                     <div style="font-size: 0.70rem; font-weight: 800; color: #15803d; text-transform: uppercase; letter-spacing: 0.04em;">
-                                        ${hasPending ? 'Total a Pagar al Doctor' : 'Total Ya Liquidado'}
+                                        ${hasPending ? (isHyg ? 'Total a Pagar a la Higienista' : 'Total a Pagar al Doctor') : 'Total Ya Liquidado'}
                                     </div>
                                     <div style="font-size: 1.35rem; font-weight: 900; color: #166534;">
                                         $${(hasPending ? g.pendingDocFee : g.settledDocFee).toFixed(2)}
@@ -2141,7 +2228,7 @@
 
                                 <div style="display: flex; align-items: center; gap: 8px;">
                                     ${hasPending ? `
-                                        <button type="button" class="btn btn-sm btn-success" onclick="event.stopPropagation(); window.ClinicalERP.openSettleAllDoctorModal('${safeKey}')" style="background: #16a34a !important; color: #ffffff; font-weight: 800; padding: 8px 16px; border-radius: 8px; border: none; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 3px 8px rgba(22,163,74,0.25); cursor: pointer;" title="Liquidar todos los servicios pendientes de este doctor">
+                                        <button type="button" class="btn btn-sm btn-success" onclick="event.stopPropagation(); window.ClinicalERP.openSettleAllDoctorModal('${safeKey}')" style="background: ${isHyg ? '#0284c7 !important' : '#16a34a !important'}; color: #ffffff; font-weight: 800; padding: 8px 16px; border-radius: 8px; border: none; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 3px 8px ${isHyg ? 'rgba(2,132,199,0.25)' : 'rgba(22,163,74,0.25)'}; cursor: pointer;" title="Liquidar todos los servicios pendientes de este profesional">
                                             <i class="fa-solid fa-hand-holding-dollar"></i> Liquidar Total ($${g.pendingDocFee.toFixed(2)})
                                         </button>
                                     ` : `
@@ -2158,7 +2245,7 @@
                         <!-- Panel Colapsable de Pacientes y Procedimientos -->
                         <div id="doc-details-${safeKey}" class="hidden" style="border-top: 1px solid #e2e8f0; background: #ffffff;">
                             
-                            <div style="padding: 12px 18px 4px 18px; font-size: 0.82rem; font-weight: 700; color: #0d9488; display: flex; align-items: center; gap: 6px;">
+                            <div style="padding: 12px 18px 4px 18px; font-size: 0.82rem; font-weight: 700; color: ${isHyg ? '#0284c7' : '#0d9488'}; display: flex; align-items: center; gap: 6px;">
                                 <i class="fa-solid fa-layer-group"></i> Desglose Detallado por Paciente:
                             </div>
 
@@ -2168,7 +2255,7 @@
                             <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 22px; background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-top: 1.5px solid #86efac; flex-wrap: wrap; gap: 14px;">
                                 <div style="font-size: 0.85rem; color: #166534;">
                                     <i class="fa-solid fa-calculator text-teal" style="font-size: 1.1rem; margin-right: 6px;"></i>
-                                    <strong>Resumen de Liquidación para ${g.name}:</strong> ${patientCount} paciente(s) atendido(s) &bull; ${g.items.length} servicio(s) &bull; Facturación total: <strong>$${g.totalGross.toFixed(2)}</strong>
+                                    <strong>Resumen de Liquidación para ${isHyg ? 'la Higienista ' : ''}${g.name}:</strong> ${patientCount} paciente(s) atendido(s) &bull; ${g.items.length} servicio(s) &bull; Facturación total: <strong>$${g.totalGross.toFixed(2)}</strong>
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 20px;">
                                     <div style="text-align: right;">
@@ -2176,8 +2263,8 @@
                                         <div style="font-size: 1.45rem; font-weight: 900; color: #14532d;">$${g.pendingDocFee.toFixed(2)}</div>
                                     </div>
                                     ${hasPending ? `
-                                        <button type="button" class="btn btn-success" onclick="window.ClinicalERP.openSettleAllDoctorModal('${safeKey}')" style="background: #0d9488 !important; color: #ffffff; font-weight: 800; padding: 11px 22px; border-radius: 8px; border: none; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(13,148,136,0.3); font-size: 0.95rem; cursor: pointer;">
-                                            <i class="fa-solid fa-receipt"></i> Liquidar Total Completo de ${g.name}
+                                        <button type="button" class="btn btn-success" onclick="window.ClinicalERP.openSettleAllDoctorModal('${safeKey}')" style="background: ${isHyg ? '#0284c7 !important' : '#0d9488 !important'}; color: #ffffff; font-weight: 800; padding: 11px 22px; border-radius: 8px; border: none; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px ${isHyg ? 'rgba(2,132,199,0.3)' : 'rgba(13,148,136,0.3)'}; font-size: 0.95rem; cursor: pointer;">
+                                            <i class="fa-solid fa-receipt"></i> Liquidar Total Completo de ${isHyg ? 'Higienista ' : ''}${g.name}
                                         </button>
                                     ` : `
                                         <span class="badge-tag green" style="padding: 8px 16px; font-size: 0.85rem;"><i class="fa-solid fa-check-double"></i> Todo Liquidado</span>

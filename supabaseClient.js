@@ -2924,52 +2924,94 @@ class SupabaseDataService {
         }
     }
 
-    static async settleDoctorBatchServices({ doctorName, serviceIds = [], paymentMethod = 'Transferencia', paymentRef = '', debitAccountId = '', debitAccountName = '', notes = '' }) {
+    static async settleDoctorBatchServices({ doctorName, targetRole = 'doctor', serviceIds = [], paymentMethod = 'Transferencia', paymentRef = '', debitAccountId = '', debitAccountName = '', notes = '' }) {
         let list = await this.getServiceLiquidations(true);
         const nowStr = new Date().toISOString();
         let totalSettled = 0;
         let count = 0;
         const norm = (str) => (str || '').toLowerCase().trim().replace(/^dr\.\s*|^dra\.\s*/i, '');
-        const targetDocNorm = norm(doctorName);
+        const targetNorm = norm(doctorName);
 
         list.forEach(item => {
-            const itemDocName = norm(item.doctor?.name || '');
-            const itemDocId = String(item.doctor?.id || '').trim();
-            const matchesDoc = (itemDocName === targetDocNorm || itemDocId === String(doctorName).trim() || itemDocName.includes(targetDocNorm) || targetDocNorm.includes(itemDocName));
             const matchesId = serviceIds.length === 0 || serviceIds.includes(item.id);
+            if (!matchesId) return;
 
-            if (matchesDoc && matchesId && item.doctor && item.doctor.status === 'Pendiente') {
-                const amt = parseFloat(item.doctor.amount || 0);
-                item.doctor.status = 'Liquidado';
-                item.doctor.settled_amount = amt;
-                item.doctor.paid_at = nowStr;
-                item.doctor.payment_method = paymentMethod || 'Transferencia';
-                item.doctor.payment_ref = paymentRef || '';
-                item.doctor.debit_account_id = debitAccountId || '';
-                item.doctor.debit_account_name = debitAccountName || '';
-                totalSettled += amt;
-                count++;
+            if (targetRole === 'assistant') {
+                const itemAstName = norm(item.assistant?.name || '');
+                const itemAstId = String(item.assistant?.id || '').trim();
+                const matchesAst = (itemAstName === targetNorm || itemAstId === String(doctorName).trim() || itemAstName.includes(targetNorm) || targetNorm.includes(itemAstName));
 
-                const isDocPaid = true;
-                const isAstPaid = !item.assistant || !item.assistant.has_assistant || item.assistant.status === 'Liquidado' || item.assistant.status === 'No Aplica';
+                if (matchesAst && item.assistant && item.assistant.has_assistant && item.assistant.status === 'Pendiente') {
+                    const amt = parseFloat(item.assistant.amount || 0);
+                    item.assistant.status = 'Liquidado';
+                    item.assistant.settled_amount = amt;
+                    item.assistant.paid_at = nowStr;
+                    item.assistant.payment_method = paymentMethod || 'Transferencia';
+                    item.assistant.payment_ref = paymentRef || '';
+                    item.assistant.debit_account_id = debitAccountId || '';
+                    item.assistant.debit_account_name = debitAccountName || '';
+                    totalSettled += amt;
+                    count++;
 
-                if (isDocPaid && isAstPaid) {
-                    item.overall_status = 'Liquidado Total';
-                } else {
-                    item.overall_status = 'Parcialmente Liquidado';
+                    const isDocPaid = !item.doctor || item.doctor.status === 'Liquidado';
+                    const isAstPaid = true;
+
+                    if (isDocPaid && isAstPaid) {
+                        item.overall_status = 'Liquidado Total';
+                    } else {
+                        item.overall_status = 'Parcialmente Liquidado';
+                    }
+
+                    if (!item.settlement_log) item.settlement_log = [];
+                    item.settlement_log.push({
+                        target: 'assistant',
+                        amount: amt,
+                        method: paymentMethod || 'Transferencia',
+                        ref: paymentRef || '',
+                        debit_account_id: debitAccountId || '',
+                        debit_account_name: debitAccountName || '',
+                        date: nowStr,
+                        notes: notes || `Liquidación masiva de comisiones higienista: ${doctorName}`
+                    });
                 }
+            } else {
+                const itemDocName = norm(item.doctor?.name || '');
+                const itemDocId = String(item.doctor?.id || '').trim();
+                const matchesDoc = (itemDocName === targetNorm || itemDocId === String(doctorName).trim() || itemDocName.includes(targetNorm) || targetNorm.includes(itemDocName));
 
-                if (!item.settlement_log) item.settlement_log = [];
-                item.settlement_log.push({
-                    target: 'doctor',
-                    amount: amt,
-                    method: paymentMethod || 'Transferencia',
-                    ref: paymentRef || '',
-                    debit_account_id: debitAccountId || '',
-                    debit_account_name: debitAccountName || '',
-                    date: nowStr,
-                    notes: notes || `Liquidación masiva por doctor: ${doctorName}`
-                });
+                if (matchesDoc && item.doctor && item.doctor.status === 'Pendiente') {
+                    const amt = parseFloat(item.doctor.amount || 0);
+                    item.doctor.status = 'Liquidado';
+                    item.doctor.settled_amount = amt;
+                    item.doctor.paid_at = nowStr;
+                    item.doctor.payment_method = paymentMethod || 'Transferencia';
+                    item.doctor.payment_ref = paymentRef || '';
+                    item.doctor.debit_account_id = debitAccountId || '';
+                    item.doctor.debit_account_name = debitAccountName || '';
+                    totalSettled += amt;
+                    count++;
+
+                    const isDocPaid = true;
+                    const isAstPaid = !item.assistant || !item.assistant.has_assistant || item.assistant.status === 'Liquidado' || item.assistant.status === 'No Aplica';
+
+                    if (isDocPaid && isAstPaid) {
+                        item.overall_status = 'Liquidado Total';
+                    } else {
+                        item.overall_status = 'Parcialmente Liquidado';
+                    }
+
+                    if (!item.settlement_log) item.settlement_log = [];
+                    item.settlement_log.push({
+                        target: 'doctor',
+                        amount: amt,
+                        method: paymentMethod || 'Transferencia',
+                        ref: paymentRef || '',
+                        debit_account_id: debitAccountId || '',
+                        debit_account_name: debitAccountName || '',
+                        date: nowStr,
+                        notes: notes || `Liquidación masiva por doctor: ${doctorName}`
+                    });
+                }
             }
         });
 
@@ -3126,24 +3168,49 @@ class SupabaseDataService {
             ? parseFloat(((price * docRate) / 100).toFixed(2))
             : parseFloat(docRate.toFixed(2));
 
-        // 2. Calculate Assistant Gain
+        // 2. Calculate Assistant / Hygienist Gain
         let astHas = hasAssistant;
-        let astCalcType = 'fixed';
-        let astRate = 0.0;
+        let astCalcType = 'percentage';
+        let astRate = 30.0; // Default 30% for hygienist if no specific profile
         let astAmount = 0.0;
         let astFinalName = assistantName;
+
+        let astUser = null;
+        if (assistantId) {
+            astUser = users.find(u => u.id === assistantId);
+        } else if (assistantName) {
+            astUser = users.find(u => u.fullname && u.fullname.toLowerCase() === assistantName.toLowerCase());
+        }
+
+        if (astUser) {
+            astHas = true;
+            if (!astFinalName) astFinalName = astUser.fullname;
+            const hygProf = astUser.hygienistProfile || astUser.hygienist_profile || astUser.doctorProfile || astUser.doctor_profile || {};
+            if (astUser.commission_pct !== undefined && astUser.commission_pct !== null && astUser.commission_pct !== '') {
+                astRate = parseFloat(astUser.commission_pct);
+                astCalcType = 'percentage';
+            } else if (hygProf.commissionPct !== undefined && hygProf.commissionPct !== null && hygProf.commissionPct !== '') {
+                astRate = parseFloat(hygProf.commissionPct);
+                astCalcType = 'percentage';
+            } else if (hygProf.commission !== undefined && hygProf.commission !== null && hygProf.commission !== '') {
+                astRate = parseFloat(hygProf.commission);
+                astCalcType = 'percentage';
+            } else if (hygProf.fixedBonus !== undefined && hygProf.fixedBonus !== null && parseFloat(hygProf.fixedBonus) > 0) {
+                astRate = parseFloat(hygProf.fixedBonus);
+                astCalcType = 'fixed';
+            }
+        }
 
         if (baremoItem && baremoItem.hygienistBonus && parseFloat(baremoItem.hygienistBonus) > 0) {
             astRate = parseFloat(baremoItem.hygienistBonus);
             astCalcType = 'fixed';
             astHas = true;
-            if (!astFinalName) astFinalName = 'Asistente de Turno';
+            if (!astFinalName) astFinalName = 'Higienista Dental';
         }
 
-        if (astHas && astRate === 0) {
-            // Default flat $5.00 assistant bonus if assistant assigned but no baremo rule
-            astRate = 5.00;
-            astCalcType = 'fixed';
+        if (astHas && astRate === 0 && (!baremoItem || !baremoItem.hygienistBonus)) {
+            astRate = 30.0;
+            astCalcType = 'percentage';
         }
 
         astAmount = astHas ? (astCalcType === 'percentage' ? parseFloat(((price * astRate) / 100).toFixed(2)) : parseFloat(astRate.toFixed(2))) : 0.0;
@@ -3176,8 +3243,8 @@ class SupabaseDataService {
                 payment_ref: null
             },
             assistant: {
-                id: assistantId || '',
-                name: astHas ? (astFinalName || 'Asistente Clínico') : 'No aplica',
+                id: astUser ? astUser.id : (assistantId || ''),
+                name: astHas ? (astFinalName || 'Higienista Dental') : 'No aplica',
                 has_assistant: astHas,
                 calc_type: astCalcType,
                 rate: astRate,

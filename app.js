@@ -1431,14 +1431,15 @@ function applyRolePermissionsUI(role) {
         specialties: '.nav-item[data-tab="specialties"]',
         rooms: '.nav-item[data-tab="rooms"]',
         payroll: '.nav-item[data-tab="payroll"]',
-        consumables: '.nav-item[data-tab="consumables"]'
+        consumables: '.nav-item[data-tab="consumables"]',
+        hygienist_finances: '.nav-item[data-tab="hygienist-finances"]'
     };
 
     const permissions = {
-        admin: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll', 'consumables'],
+        admin: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll', 'consumables', 'hygienist_finances'],
         doctor: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'pricing', 'settings', 'help'],
-        hygienist: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'consumables', 'settings', 'help'],
-        assistant: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'billing', 'finance', 'settings', 'help', 'consumables']
+        hygienist: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'consumables', 'settings', 'help', 'hygienist_finances'],
+        assistant: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'consumables', 'settings', 'help', 'hygienist_finances']
     };
 
     const allowedTabs = permissions[roleType] || permissions.assistant;
@@ -1620,14 +1621,14 @@ function renderMobileNavigationForRole(roleType) {
             { tab: 'pricing', icon: 'fa-tags', label: 'Servicios' }
         ];
     } else if (roleType === 'hygienist') {
-        // HIGIENISTA: Pacientes, Agenda, Presupuesto, Historias, Servicios, Insumos Odontología
+        // HIGIENISTA: Home, Mis Finanzas, Pacientes, Agenda, Presupuesto, Historias
         bottomButtons = [
             { tab: 'dashboard', icon: 'fa-house', label: 'Home' },
+            { tab: 'hygienist-finances', icon: 'fa-wallet', label: 'Mis Finanzas' },
             { tab: 'patients', icon: 'fa-hospital-user', label: 'Pacientes' },
             { tab: 'agenda', icon: 'fa-calendar-days', label: 'Agenda' },
             { tab: 'odontogram', icon: 'fa-file-invoice-dollar', label: 'Presupuesto' },
-            { tab: 'ehr', icon: 'fa-notes-medical', label: 'Historias' },
-            { tab: 'inventory', icon: 'fa-boxes-stacked', label: 'Insumos' }
+            { tab: 'ehr', icon: 'fa-notes-medical', label: 'Historias' }
         ];
     } else if (roleType === 'assistant') {
         // ASISTENTE GENERAL: Pacientes, Agenda, Presupuesto, Historias, Insumos
@@ -2107,6 +2108,8 @@ window.navigateToTab = async function(tabName) {
         if (window.ClinicalERP) window.ClinicalERP.renderPayroll();
     } else if (tabName === 'consumables') {
         if (typeof window.renderConsumablesView === 'function') await window.renderConsumablesView();
+    } else if (tabName === 'hygienist-finances') {
+        if (typeof window.renderHygienistFinancesView === 'function') await window.renderHygienistFinancesView();
     }
 
     // Update floating budget bubble visibility upon navigation
@@ -14649,6 +14652,27 @@ window.openCreateSystemUserModal = function() {
     const hint = document.getElementById('sys-user-password-hint');
     if (hint) hint.classList.add('hidden');
 
+    const hygComm = document.getElementById('sys-user-hygienist-commission');
+    if (hygComm) hygComm.value = '30';
+    const hygBonus = document.getElementById('sys-user-hygienist-bonus');
+    if (hygBonus) hygBonus.value = '0';
+    const hygFields = document.getElementById('sys-user-hygienist-fields');
+    if (hygFields) hygFields.style.display = 'none';
+
+    const roleSel = document.getElementById('sys-user-role');
+    if (roleSel) {
+        if (!roleSel._hasHygListener) {
+            roleSel._hasHygListener = true;
+            roleSel.addEventListener('change', (e) => {
+                const val = (e.target.value || '').toLowerCase();
+                const isH = val.includes('higien') || val.includes('asistent');
+                const f = document.getElementById('sys-user-hygienist-fields');
+                if (f) f.style.display = isH ? 'block' : 'none';
+            });
+        }
+        roleSel.dispatchEvent(new Event('change'));
+    }
+
     openModal('modal-system-user');
 };
 
@@ -14687,7 +14711,27 @@ window.editSystemUser = async function(userId) {
                 }
             }
         }
+        if (!roleSel._hasHygListener) {
+            roleSel._hasHygListener = true;
+            roleSel.addEventListener('change', (e) => {
+                const val = (e.target.value || '').toLowerCase();
+                const isH = val.includes('higien') || val.includes('asistent');
+                const f = document.getElementById('sys-user-hygienist-fields');
+                if (f) f.style.display = isH ? 'block' : 'none';
+            });
+        }
     }
+
+    const hygComm = document.getElementById('sys-user-hygienist-commission');
+    const hygBonus = document.getElementById('sys-user-hygienist-bonus');
+    const hygFields = document.getElementById('sys-user-hygienist-fields');
+    const prof = user.hygienistProfile || user.hygienist_profile || user.doctorProfile || user.doctor_profile || {};
+    const commVal = user.commission_pct !== undefined ? user.commission_pct : (prof.commissionPct !== undefined ? prof.commissionPct : (prof.commission !== undefined ? prof.commission : 30));
+    const bonusVal = prof.fixedBonus !== undefined ? prof.fixedBonus : (prof.fixedFee || 0);
+    if (hygComm) hygComm.value = commVal;
+    if (hygBonus) hygBonus.value = bonusVal;
+    const isHyg = (user.role || '').toLowerCase().includes('higien') || (user.role || '').toLowerCase().includes('asistent');
+    if (hygFields) hygFields.style.display = isHyg ? 'block' : 'none';
 
     const statusSel = document.getElementById('sys-user-status');
     if (statusSel) statusSel.value = user.status || 'Activo';
@@ -15942,14 +15986,22 @@ function initGlobalEvents() {
             const role = uRoleSelect.value;
             const r = (role || '').toLowerCase();
             const isDoctor = r.includes('odont') || r.includes('especialista') || r.includes('cirujano') || r.includes('médico') || r.includes('medico') || r.includes('doctor');
+            const isHygienist = r.includes('higien') || r.includes('asistent');
             const licGroup = document.getElementById('u-license-group');
-            if (isDoctor) {
+            if (isDoctor || isHygienist) {
                 docFieldsDiv.classList.remove('hidden');
                 if (licGroup) licGroup.classList.remove('hidden');
                 document.getElementById('u-schedule').setAttribute('required', 'true');
                 document.getElementById('u-commission').setAttribute('required', 'true');
                 const uCliReq = document.getElementById('u-clinic-commission');
                 if (uCliReq) uCliReq.setAttribute('required', 'true');
+
+                const commInput = document.getElementById('u-commission');
+                if (commInput && isHygienist && (!commInput.value || commInput.value === '70')) {
+                    commInput.value = '30';
+                    const uCli = document.getElementById('u-clinic-commission');
+                    if (uCli) uCli.value = '70';
+                }
             } else {
                 docFieldsDiv.classList.add('hidden');
                 if (licGroup) licGroup.classList.add('hidden');
@@ -19273,16 +19325,18 @@ if (patientSameDay.length === 0) {
 
             const r = (role || '').toLowerCase();
             const isDoctor = r.includes('odont') || r.includes('especialista') || r.includes('cirujano') || r.includes('médico') || r.includes('medico') || r.includes('doctor');
-            const license = isDoctor ? (rawLicense || 'N/A') : 'N/A';
+            const isHygienist = r.includes('higien') || r.includes('asistent');
+            const license = (isDoctor || isHygienist) ? (rawLicense || 'N/A') : 'N/A';
             let doctorProfile = null;
+            let hygienistProfile = null;
 
-            if (isDoctor) {
+            if (isDoctor || isHygienist) {
                 const assignedServices = Array.from(document.getElementById('u-services').selectedOptions).map(opt => opt.value);
                 const schedule = document.getElementById('u-schedule').value.trim();
-                const commission = parseFloat(document.getElementById('u-commission').value) || 0;
+                const commission = parseFloat(document.getElementById('u-commission').value) || (isHygienist ? 30 : 0);
                 const availability = document.getElementById('u-availability').value.trim();
 
-                const specialty = document.getElementById('u-specialty')?.value || '';
+                const specialty = document.getElementById('u-specialty')?.value || (isHygienist ? 'Higienista Dental' : '');
                 const shift = document.getElementById('u-shift')?.value || 'both';
                 const asstSel = document.getElementById('u-assistant');
                 const assistantId = asstSel?.value || '';
@@ -19323,6 +19377,18 @@ if (patientSameDay.length === 0) {
                     phone,
                     instagram
                 };
+
+                if (isHygienist) {
+                    hygienistProfile = {
+                        commissionPct: commission,
+                        clinicCommission: Math.round((100 - commission) * 100) / 100,
+                        schedule,
+                        shift,
+                        roomId,
+                        roomName,
+                        assignedServices
+                    };
+                }
             }
 
             let userObj = null;
@@ -19342,7 +19408,9 @@ if (patientSameDay.length === 0) {
                     status: existing ? (existing.status || 'Activo') : 'Activo',
                     createdAt: existing ? existing.createdAt : new Date().toISOString().split('T')[0],
                     doctorProfile: doctorProfile || (existing ? existing.doctorProfile : {}),
-                    doctor_profile: doctorProfile || (existing ? existing.doctor_profile : {})
+                    doctor_profile: doctorProfile || (existing ? existing.doctor_profile : {}),
+                    hygienistProfile: hygienistProfile || (existing ? existing.hygienistProfile : {}),
+                    commission_pct: (isHygienist && doctorProfile) ? doctorProfile.commission : (existing ? existing.commission_pct : (doctorProfile?.commission || 30))
                 };
             } else {
                 userObj = {
@@ -19357,7 +19425,9 @@ if (patientSameDay.length === 0) {
                     status: 'Activo',
                     createdAt: new Date().toISOString().split('T')[0],
                     doctorProfile: doctorProfile || {},
-                    doctor_profile: doctorProfile || {}
+                    doctor_profile: doctorProfile || {},
+                    hygienistProfile: hygienistProfile || {},
+                    commission_pct: (isHygienist && doctorProfile) ? doctorProfile.commission : (doctorProfile?.commission || 30)
                 };
             }
 
@@ -19465,6 +19535,21 @@ if (patientSameDay.length === 0) {
                 status,
                 createdAt: new Date().toISOString().split('T')[0]
             };
+        }
+
+        const rLower = (role || '').toLowerCase();
+        const isHyg = rLower.includes('higien') || rLower.includes('asistent');
+        if (isHyg) {
+            const commVal = parseFloat(document.getElementById('sys-user-hygienist-commission')?.value) || 30;
+            const bonusVal = parseFloat(document.getElementById('sys-user-hygienist-bonus')?.value) || 0;
+            userObj.commission_pct = commVal;
+            userObj.hygienistProfile = {
+                commissionPct: commVal,
+                fixedBonus: bonusVal
+            };
+            userObj.doctorProfile = userObj.doctorProfile || {};
+            userObj.doctorProfile.commission = commVal;
+            userObj.doctorProfile.fixedFee = bonusVal;
         }
 
         try {
@@ -32321,3 +32406,221 @@ document.addEventListener('DOMContentLoaded', () => {
         fileImport.onchange = (e) => window.importConsumablesFromExcel(e);
     }
 });
+
+// ==========================================================================
+// MÓDULO PERSONAL: MIS FINANZAS & HONORARIOS (HIGIENISTA)
+// ==========================================================================
+window._hygienistFinancesFilter = 'all';
+window._hygienistFinancesSearch = '';
+
+window.filterHygienistFinances = function(filter) {
+    window._hygienistFinancesFilter = filter;
+    const viewEl = document.getElementById('view-hygienist-finances');
+    if (viewEl) {
+        viewEl.querySelectorAll('#btn-hyg-filter-all, #btn-hyg-filter-pending, #btn-hyg-filter-settled').forEach(b => b.classList.remove('active-category-pill'));
+        const btn = document.getElementById(`btn-hyg-filter-${filter}`);
+        if (btn) btn.classList.add('active-category-pill');
+    }
+    window.renderHygienistFinancesView(window._hygienistFinancesFilter, window._hygienistFinancesSearch);
+};
+
+window.onHygienistFinancesSearch = function(query) {
+    window._hygienistFinancesSearch = (query || '').toLowerCase().trim();
+    window.renderHygienistFinancesView(window._hygienistFinancesFilter, window._hygienistFinancesSearch);
+};
+
+window.renderHygienistFinancesView = async function(filterMode = null, searchQuery = null) {
+    const tbody = document.getElementById('hygienist-finances-table-body');
+    if (!tbody) return;
+
+    if (filterMode !== null) window._hygienistFinancesFilter = filterMode;
+    if (searchQuery !== null) window._hygienistFinancesSearch = searchQuery;
+    const curFilter = window._hygienistFinancesFilter || 'all';
+    const curSearch = window._hygienistFinancesSearch || '';
+
+    const currentUser = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+    const userBadgeEl = document.getElementById('hyg-finance-username');
+    if (userBadgeEl && currentUser) {
+        userBadgeEl.innerText = currentUser.fullname || 'Higienista Dental';
+    }
+
+    let allLiqs = [];
+    if (window.SupabaseDataService && window.SupabaseDataService.getServiceLiquidations) {
+        allLiqs = await window.SupabaseDataService.getServiceLiquidations(false);
+    }
+
+    const norm = str => (str || '').toLowerCase().trim().replace(/^dr\.\s*|^dra\.\s*/i, '');
+    const uNorm = norm(currentUser ? currentUser.fullname : '');
+    const uId = currentUser ? String(currentUser.id) : '';
+    const isAdmin = currentUser && (currentUser.role || '').toLowerCase().includes('admin');
+
+    // Filter strictly services related to this hygienist / assistant
+    const myServices = allLiqs.filter(item => {
+        // Assistant fee check
+        const ast = item.assistant;
+        if (ast && ast.has_assistant) {
+            const astNameNorm = norm(ast.name);
+            const astId = String(ast.id || '');
+            if (astId === uId || astNameNorm === uNorm || (uNorm && astNameNorm.includes(uNorm)) || (uNorm && uNorm.includes(astNameNorm))) {
+                return true;
+            }
+        }
+        // Direct doctor check if current user is hygienist
+        const doc = item.doctor;
+        if (doc) {
+            const docNameNorm = norm(doc.name);
+            const docId = String(doc.id || '');
+            if ((docId === uId || docNameNorm === uNorm) && currentUser && (currentUser.role || '').toLowerCase().includes('higien')) {
+                return true;
+            }
+        }
+        // If admin is inspecting the view, show all hygienist / assistant services
+        if (isAdmin && ast && ast.has_assistant && ast.name && ast.name.toLowerCase() !== 'no aplica') {
+            return true;
+        }
+        return false;
+    });
+
+    // Calculate metrics
+    let totalEarned = 0;
+    let totalPending = 0;
+    let totalSettled = 0;
+    const patientsSet = new Set();
+    const rate = (typeof window.getExchangeRate === 'function') ? window.getExchangeRate() : 36.5;
+
+    myServices.forEach(item => {
+        const ast = item.assistant;
+        const isAst = ast && ast.has_assistant && (norm(ast.name) === uNorm || String(ast.id || '') === uId || isAdmin);
+        const feeAmt = isAst ? parseFloat(ast.amount || 0) : parseFloat(item.doctor?.amount || 0);
+        const isPend = isAst ? (ast.status === 'Pendiente') : (item.doctor?.status === 'Pendiente');
+
+        totalEarned += feeAmt;
+        if (isPend) {
+            totalPending += feeAmt;
+        } else {
+            const settledAmt = isAst ? parseFloat(ast.settled_amount || feeAmt) : parseFloat(item.doctor?.settled_amount || feeAmt);
+            totalSettled += settledAmt;
+        }
+
+        if (item.patient_name) patientsSet.add(item.patient_name.trim());
+    });
+
+    // Update KPI Cards
+    const elTotEarned = document.getElementById('hyg-stat-total-earned');
+    const elTotBcv = document.getElementById('hyg-stat-total-bcv');
+    const elPending = document.getElementById('hyg-stat-pending');
+    const elPendingBcv = document.getElementById('hyg-stat-pending-bcv');
+    const elSettled = document.getElementById('hyg-stat-settled');
+    const elSettledBcv = document.getElementById('hyg-stat-settled-bcv');
+    const elSrvCount = document.getElementById('hyg-stat-services-count');
+    const elPatCount = document.getElementById('hyg-stat-patients-count');
+
+    if (elTotEarned) elTotEarned.innerText = `$${totalEarned.toFixed(2)}`;
+    if (elTotBcv) elTotBcv.innerText = `≈ ${(totalEarned * rate).toFixed(2)} Bs.`;
+    if (elPending) elPending.innerText = `$${totalPending.toFixed(2)}`;
+    if (elPendingBcv) elPendingBcv.innerText = `≈ ${(totalPending * rate).toFixed(2)} Bs.`;
+    if (elSettled) elSettled.innerText = `$${totalSettled.toFixed(2)}`;
+    if (elSettledBcv) elSettledBcv.innerText = `≈ ${(totalSettled * rate).toFixed(2)} Bs.`;
+    if (elSrvCount) elSrvCount.innerText = myServices.length;
+    if (elPatCount) elPatCount.innerText = `${patientsSet.size} paciente(s)`;
+
+    // Apply Filter Mode
+    let displayList = [...myServices];
+    if (curFilter === 'pending') {
+        displayList = displayList.filter(item => {
+            const ast = item.assistant;
+            const isAst = ast && ast.has_assistant && (norm(ast.name) === uNorm || String(ast.id || '') === uId || isAdmin);
+            return isAst ? (ast.status === 'Pendiente') : (item.doctor?.status === 'Pendiente');
+        });
+    } else if (curFilter === 'settled') {
+        displayList = displayList.filter(item => {
+            const ast = item.assistant;
+            const isAst = ast && ast.has_assistant && (norm(ast.name) === uNorm || String(ast.id || '') === uId || isAdmin);
+            return isAst ? (ast.status === 'Liquidado') : (item.doctor?.status === 'Liquidado');
+        });
+    }
+
+    // Apply Search
+    if (curSearch) {
+        displayList = displayList.filter(item => {
+            return (item.patient_name || '').toLowerCase().includes(curSearch) ||
+                   (item.service_name || '').toLowerCase().includes(curSearch) ||
+                   (item.notes || '').toLowerCase().includes(curSearch);
+        });
+    }
+
+    // Sort: Newest first
+    displayList.sort((a, b) => new Date(b.created_at || b.date || 0) - new Date(a.created_at || a.date || 0));
+
+    if (displayList.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="9" style="padding: 40px 20px; text-align: center; color: #64748b;">
+                    <div style="font-size: 2.2rem; margin-bottom: 8px; color: #cbd5e1;"><i class="fa-solid fa-tooth"></i></div>
+                    <strong style="font-size: 1rem; color: #1e293b;">No hay servicios o comisiones en este filtro</strong>
+                    <p style="margin: 4px 0 0 0; font-size: 0.84rem;">A medida que atiendas o asistas procedimientos en sillón dental y se facturen, verás aquí tus honorarios al instante.</p>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = displayList.map(item => {
+        const ast = item.assistant;
+        const isAst = ast && ast.has_assistant && (norm(ast.name) === uNorm || String(ast.id || '') === uId || isAdmin);
+        const feeAmt = isAst ? parseFloat(ast.amount || 0) : parseFloat(item.doctor?.amount || 0);
+        const isPend = isAst ? (ast.status === 'Pendiente') : (item.doctor?.status === 'Pendiente');
+        const price = parseFloat(item.service_price || 0);
+
+        const rateObj = isAst ? ast : item.doctor;
+        const rateText = rateObj?.type === 'fixed' 
+            ? `Fijo $${parseFloat(rateObj.rate || 0).toFixed(2)}` 
+            : `${rateObj?.rate || 30}%`;
+
+        const dateStr = item.date || (item.created_at ? item.created_at.substring(0, 10) : 'Hoy');
+        const vesAmt = (feeAmt * rate).toFixed(2);
+
+        const paidDetail = isPend 
+            ? `<span class="badge-tag amber" style="font-size: 0.72rem;"><i class="fa-solid fa-clock"></i> Pendiente</span>`
+            : `<div style="font-size: 0.76rem; color: #15803d; font-weight: 600;">
+                <i class="fa-solid fa-circle-check"></i> ${rateObj?.payment_method || 'Transferencia'}
+                ${rateObj?.payment_ref ? `<div style="font-size: 0.70rem; color: #64748b;">Ref: ${rateObj.payment_ref}</div>` : ''}
+                ${rateObj?.paid_at ? `<div style="font-size: 0.68rem; color: #94a3b8;">${rateObj.paid_at.substring(0, 10)}</div>` : ''}
+               </div>`;
+
+        return `
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 10px 14px; color: #475569; font-size: 0.80rem;">
+                    <i class="fa-regular fa-calendar text-muted"></i> ${dateStr}
+                </td>
+                <td style="padding: 10px 14px;">
+                    <strong style="color: #0f172a; font-size: 0.85rem;"><i class="fa-solid fa-user-check text-cyan" style="font-size: 0.78rem;"></i> ${item.patient_name || 'Paciente Particular'}</strong>
+                </td>
+                <td style="padding: 10px 14px;">
+                    <div style="font-weight: 600; color: #1e293b; font-size: 0.85rem;">${item.service_name}</div>
+                    ${item.notes ? `<div style="font-size: 0.72rem; color: #64748b;">${item.notes}</div>` : ''}
+                </td>
+                <td style="padding: 10px 14px; text-align: right; font-weight: 600; color: #475569;">
+                    $${price.toFixed(2)}
+                </td>
+                <td style="padding: 10px 14px; text-align: center;">
+                    <span class="badge-tag cyan" style="font-size: 0.72rem; padding: 2px 7px;">${rateText}</span>
+                </td>
+                <td style="padding: 10px 14px; text-align: right;">
+                    <strong style="color: #15803d; font-size: 0.92rem;">$${feeAmt.toFixed(2)}</strong>
+                </td>
+                <td style="padding: 10px 14px; text-align: right; font-weight: 600; color: #64748b; font-size: 0.80rem;">
+                    ${vesAmt} Bs.
+                </td>
+                <td style="padding: 10px 14px; text-align: center;">
+                    <span class="badge-tag ${isPend ? 'amber' : 'green'}" style="font-size: 0.72rem;">
+                        ${isPend ? 'Pendiente' : 'Liquidado'}
+                    </span>
+                </td>
+                <td style="padding: 10px 14px;">
+                    ${paidDetail}
+                </td>
+            </tr>
+        `;
+    }).join('');
+};
