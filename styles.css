@@ -7784,6 +7784,16 @@ body.is-hygienist-role #btn-open-medical-budget {
     display: none !important;
 }
 
+/* Hygienist Birthday Tracker & WhatsApp Greetings Enabled */
+body.is-hygienist-role #btn-birthday-hub,
+body.is-hygienist-role .whatsapp-pill-link,
+body.is-hygienist-role .bday-btn-whatsapp {
+    display: inline-flex !important;
+}
+body.is-hygienist-role .dashboard-birthdays-card {
+    display: block !important;
+}
+
 /* Room Occupied Card High-Visibility Red Styling */
 .erp-room-card-wrapper {
     position: relative;

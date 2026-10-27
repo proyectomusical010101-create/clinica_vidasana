@@ -1557,6 +1557,12 @@ function applyRolePermissionsUI(role) {
             // Lock down Reminders
             const remindersBtn = document.getElementById('btn-agenda-reminders');
             if (remindersBtn) remindersBtn.style.display = 'none';
+        } else {
+            // Restore Birthdays for non-doctor roles (Admin, Assistant, Hygienist)
+            const bdayHubBtn = document.getElementById('btn-birthday-hub');
+            if (bdayHubBtn) bdayHubBtn.style.display = 'inline-flex';
+            const bdayCard = document.querySelector('.dashboard-birthdays-card');
+            if (bdayCard) bdayCard.style.display = 'block';
         }
 
         if (isHyg) {
@@ -1567,6 +1573,12 @@ function applyRolePermissionsUI(role) {
             if (ehrAbonoBtn) ehrAbonoBtn.style.display = 'none';
             const casheaBtn = document.getElementById('btn-header-cashea');
             if (casheaBtn) casheaBtn.style.display = 'none';
+
+            // Ensure Birthdays & WhatsApp greetings are accessible to Hygienist
+            const bdayHubBtn = document.getElementById('btn-birthday-hub');
+            if (bdayHubBtn) bdayHubBtn.style.display = 'inline-flex';
+            const bdayCard = document.querySelector('.dashboard-birthdays-card');
+            if (bdayCard) bdayCard.style.display = 'block';
 
             // Scoping inventory area filters for Hygienist (Only Dental)
             const invAreaGroup = document.getElementById('inventory-area-filters');
@@ -19487,58 +19499,25 @@ if (patientSameDay.length === 0) {
     if (formSysUser) formSysUser.onsubmit = handleSaveSystemUser;
 
     window.openBudgetForNewPatient = async function(patientId) {
-        if (window.selectPatientAndLoadApprovedBudget) {
-            await window.selectPatientAndLoadApprovedBudget(patientId);
-            return;
-        }
-
         setActivePatientId(patientId);
 
-        // Forzar cambio al editor
+        // Forzar cambio al editor del odontograma
         localStorage.setItem('dental_odontogram_subview', 'editor');
         document.documentElement.setAttribute('data-odontogram-subview', 'editor');
-        const listContainer = document.getElementById('odontogram-list-container');
-        const editorContainer = document.getElementById('odontogram-editor-container');
-        if (listContainer) listContainer.classList.add('hidden');
-        if (editorContainer) editorContainer.classList.remove('hidden');
 
         const navOdontogram = document.querySelector('.nav-item[data-tab="odontogram"]') || document.getElementById('mob-nav-odontogram');
         if (navOdontogram) navOdontogram.click();
 
-        const patients = await SupabaseDataService.getPatients();
-        const patient = patients.find(p => String(p.id) === String(patientId));
-
-        // RESET ESTRICTO: No arrastrar ítems de presupuestos ni marcas de otros pacientes
-        if (patient && patient.metadata && patient.metadata.draftBudget && Array.isArray(patient.metadata.draftBudget.items) && patient.metadata.draftBudget.items.length > 0) {
-            currentBudgetItems = [...patient.metadata.draftBudget.items];
-            activeEditingBudgetId = patient.metadata.draftBudget.id || null;
-        } else {
-            currentBudgetItems = [];
-            activeEditingBudgetId = null;
+        if (window.selectPatientAndLoadApprovedBudget) {
+            await window.selectPatientAndLoadApprovedBudget(patientId);
         }
 
-        if (window.odontogram) {
-            if (patient && patient.odontogramData && Object.keys(patient.odontogramData).length > 0) {
-                window.odontogram.setData(patient.odontogramData);
-            } else {
-                window.odontogram.setData({});
-            }
-        }
-
-        if (window.patientSigPad) {
-            window.patientSigPad.clear();
-        }
-
-        if (window.doctorSigPad) {
-            await autoLoadDoctorSignatureInBudget(patient ? patient.assignedDoctor : null);
-        }
-
-        await renderOdontogramView();
-
-        const searchInput = document.getElementById('od-patient-search-input');
-        if (searchInput) searchInput.value = patient ? (patient.fullname || '') : '';
-
-        renderBudgetTable();
+        const listContainer = document.getElementById('odontogram-list-container');
+        const editorContainer = document.getElementById('odontogram-editor-container');
+        const medEditorContainer = document.getElementById('medical-budget-editor-container');
+        if (listContainer) listContainer.classList.add('hidden');
+        if (editorContainer) editorContainer.classList.remove('hidden');
+        if (medEditorContainer) medEditorContainer.classList.add('hidden');
     };
 
     window.savePatientRecord = async function(redirectToBudget = false) {
@@ -20030,8 +20009,10 @@ if (patientSameDay.length === 0) {
                 await window.openBudgetForNewPatient(id);
                 Swal.fire({
                     icon: 'success',
-                    title: '¡Paciente Guardado!',
-                    text: `Ficha de ${fullname} creada. Redirigiendo a elaboración de presupuesto...`,
+                    title: isHyg ? '¡Historia Clínica Actualizada!' : '¡Paciente Guardado!',
+                    text: isHyg
+                        ? `Registros clínicos de ${patientToSave.fullname || fullname} guardados. Abriendo Odontograma Dental para presupuesto...`
+                        : `Ficha de ${fullname} creada. Redirigiendo a elaboración de presupuesto...`,
                     timer: 2000,
                     showConfirmButton: false
                 });
@@ -20069,6 +20050,14 @@ if (patientSameDay.length === 0) {
     const savePatientBudgetBtn = document.getElementById('btn-patient-save-and-budget');
     if (savePatientBudgetBtn) {
         savePatientBudgetBtn.onclick = async (e) => {
+            e.preventDefault();
+            await window.savePatientRecord(true);
+        };
+    }
+
+    const hygBudgetBtn = document.getElementById('btn-patient-hygienist-budget');
+    if (hygBudgetBtn) {
+        hygBudgetBtn.onclick = async (e) => {
             e.preventDefault();
             await window.savePatientRecord(true);
         };
@@ -22541,33 +22530,45 @@ function initPatientStepperWizard() {
         }
         window.updatePatientStep4FooterButtons = function() {
             const btnSaveAndBudget = document.getElementById('btn-patient-save-and-budget');
-            if (!btnSaveAndBudget) return;
-
-            // If patient modal was opened from inside an ongoing budget creation, editing an existing patient, OR from direct sale: HIDE
-            if (window.patientModalOpenedFromBudget || window.editingPatientId || window.returnToDirectSaleAfterPatientCreated) {
-                btnSaveAndBudget.classList.add('hidden');
-                return;
+            if (btnSaveAndBudget) {
+                // If patient modal was opened from inside an ongoing budget creation, editing an existing patient, OR from direct sale: HIDE
+                if (window.patientModalOpenedFromBudget || window.editingPatientId || window.returnToDirectSaleAfterPatientCreated) {
+                    btnSaveAndBudget.classList.add('hidden');
+                } else {
+                    // ONLY when registering a NEW patient: show "Nuevo Presupuesto" on steps 1, 2, 3
+                    if (currentStep <= 3) {
+                        btnSaveAndBudget.classList.remove('hidden');
+                        btnSaveAndBudget.innerHTML = '<i class="fa-solid fa-file-invoice-dollar"></i> Nuevo Presupuesto';
+                    } else if (currentStep === 4) {
+                        if (window.step4HasBudgetItems === false) {
+                            btnSaveAndBudget.classList.remove('hidden');
+                            btnSaveAndBudget.innerHTML = '<i class="fa-solid fa-file-invoice-dollar"></i> Crear Presupuesto';
+                        } else {
+                            btnSaveAndBudget.classList.add('hidden');
+                        }
+                    }
+                }
             }
 
-            // ONLY when registering a NEW patient: show "Nuevo Presupuesto" on steps 1, 2, 3
-            if (currentStep <= 3) {
-                btnSaveAndBudget.classList.remove('hidden');
-                btnSaveAndBudget.innerHTML = '<i class="fa-solid fa-file-invoice-dollar"></i> Nuevo Presupuesto';
-            } else if (currentStep === 4) {
-                if (window.step4HasBudgetItems === false) {
-                    btnSaveAndBudget.classList.remove('hidden');
-                    btnSaveAndBudget.innerHTML = '<i class="fa-solid fa-file-invoice-dollar"></i> Crear Presupuesto';
+            // Botón adicional "Crear Presupuesto" para el rol Higienista al editar Anamnesis / Examen
+            const btnHygBudget = document.getElementById('btn-patient-hygienist-budget');
+            if (btnHygBudget) {
+                const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+                const isHyg = curUser && (typeof isHygienistRole === 'function' ? isHygienistRole(curUser.role) : (curUser.role && curUser.role.toLowerCase().includes('higien')));
+                if (isHyg && window.editingPatientId && (currentStep === 2 || currentStep === 3)) {
+                    btnHygBudget.classList.remove('hidden');
+                    btnHygBudget.style.display = 'inline-flex';
                 } else {
-                    btnSaveAndBudget.classList.add('hidden');
+                    btnHygBudget.classList.add('hidden');
+                    btnHygBudget.style.display = 'none';
                 }
             }
         };
 
         if (currentStep === 4) {
             renderSessionsPlanner();
-        } else {
-            window.updatePatientStep4FooterButtons();
         }
+        window.updatePatientStep4FooterButtons();
     }
 
     window.setPatientStepperStep = showStep;
