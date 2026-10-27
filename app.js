@@ -23466,14 +23466,78 @@ async function renderFinanceView() {
     await renderCashFlow();
     await window.renderDailyClosingView();
 
+    // Sincronización Bimonetaria en Vivo para Registro de Gastos (USD <-> VES)
+    window.initPayableCurrencyConversion = function() {
+        const inpUsd = document.getElementById('pay-amount');
+        const inpVes = document.getElementById('pay-amount-ves');
+        const rateBadge = document.getElementById('payable-rate-badge');
+        const statusSel = document.getElementById('pay-status');
+        const paidGroup = document.getElementById('payable-paid-fields-group');
+        const rate = (typeof getExchangeRate === 'function') ? getExchangeRate() : (parseFloat(localStorage.getItem('dental_exchange_rate')) || 36.5);
+
+        if (rateBadge) {
+            rateBadge.innerHTML = `<i class="fa-solid fa-arrows-rotate"></i> Tasa BCV: ${rate.toFixed(2)} Bs/$`;
+        }
+
+        if (inpUsd && !inpUsd._hasCxpListener) {
+            inpUsd._hasCxpListener = true;
+            inpUsd.addEventListener('input', () => {
+                const curRate = (typeof getExchangeRate === 'function') ? getExchangeRate() : rate;
+                const usd = parseFloat(inpUsd.value);
+                if (!isNaN(usd) && usd >= 0 && inpVes) {
+                    inpVes.value = (usd * curRate).toFixed(2);
+                } else if (inpUsd.value === '' && inpVes) {
+                    inpVes.value = '';
+                }
+            });
+        }
+
+        if (inpVes && !inpVes._hasCxpListener) {
+            inpVes._hasCxpListener = true;
+            inpVes.addEventListener('input', () => {
+                const curRate = (typeof getExchangeRate === 'function') ? getExchangeRate() : rate;
+                const ves = parseFloat(inpVes.value);
+                if (!isNaN(ves) && ves >= 0 && curRate > 0 && inpUsd) {
+                    inpUsd.value = (ves / curRate).toFixed(2);
+                } else if (inpVes.value === '' && inpUsd) {
+                    inpUsd.value = '';
+                }
+            });
+        }
+
+        if (statusSel && !statusSel._hasCxpListener) {
+            statusSel._hasCxpListener = true;
+            statusSel.addEventListener('change', () => {
+                if (paidGroup) {
+                    if (statusSel.value === 'Pagado') {
+                        paidGroup.style.display = 'block';
+                        const dateInp = document.getElementById('pay-paid-date');
+                        if (dateInp && !dateInp.value) {
+                            dateInp.value = new Date().toISOString().split('T')[0];
+                        }
+                    } else {
+                        paidGroup.style.display = 'none';
+                    }
+                }
+            });
+        }
+    };
+
+    window.initPayableCurrencyConversion();
+
     const formPayable = document.getElementById('form-payable');
     formPayable.onsubmit = async (e) => {
         e.preventDefault();
         const providerName = document.getElementById('pay-provider').value.trim();
         const serviceName = document.getElementById('pay-service').value.trim();
         const amount = parseFloat(document.getElementById('pay-amount').value) || 0;
+        const rate = (typeof getExchangeRate === 'function') ? getExchangeRate() : 36.5;
+        const amountVES = parseFloat(document.getElementById('pay-amount-ves')?.value) || (amount * rate);
         const dueDate = document.getElementById('pay-due-date').value;
         const status = document.getElementById('pay-status').value;
+        const paymentMethod = document.getElementById('pay-method')?.value || 'cash';
+        const paidDate = document.getElementById('pay-paid-date')?.value || (status === 'Pagado' ? (dueDate || new Date().toISOString().split('T')[0]) : null);
+        const paymentRef = document.getElementById('pay-ref')?.value?.trim() || '';
 
         if (!providerName || !serviceName || amount <= 0 || !dueDate) {
             Swal.fire({ icon: 'warning', text: 'Por favor, complete todos los campos obligatorios.' });
@@ -23487,8 +23551,15 @@ async function renderFinanceView() {
             providerName,
             serviceName,
             amount,
+            amountBs: amountVES,
             dueDate,
-            status
+            status,
+            paymentMethod: status === 'Pagado' ? paymentMethod : null,
+            paidDate: status === 'Pagado' ? paidDate : null,
+            paidUSD: status === 'Pagado' ? amount : null,
+            paidVES: status === 'Pagado' ? amountVES : null,
+            paymentRef: status === 'Pagado' ? paymentRef : null,
+            updatedAt: new Date().toISOString()
         });
 
         formPayable.reset();
@@ -23496,11 +23567,17 @@ async function renderFinanceView() {
         document.getElementById('payable-id').value = '';
         document.getElementById('payable-form-title').innerHTML = `<i class="fa-solid fa-plus-circle text-cyan"></i> Registrar Gasto / Cuenta por Pagar`;
         document.getElementById('btn-cancel-payable').style.display = 'none';
+        const paidFields = document.getElementById('payable-paid-fields-group');
+        if (paidFields) paidFields.style.display = 'none';
 
         await renderProviderBills();
         await renderCashFlow();
+        if (typeof window.renderDailyClosingView === 'function') {
+            await window.renderDailyClosingView();
+        }
 
-        Swal.fire({ icon: 'success', title: 'Cuenta por pagar guardada', timer: 1500, showConfirmButton: false });
+        const msgTitle = status === 'Pagado' ? 'Gasto liquidado y debitado del Flujo de Caja' : 'Cuenta por pagar registrada exitosamente';
+        Swal.fire({ icon: 'success', title: msgTitle, timer: 1800, showConfirmButton: false });
     };
 
     document.getElementById('btn-cancel-payable').onclick = () => {
@@ -23509,6 +23586,10 @@ async function renderFinanceView() {
         document.getElementById('payable-id').value = '';
         document.getElementById('payable-form-title').innerHTML = `<i class="fa-solid fa-plus-circle text-cyan"></i> Registrar Gasto / Cuenta por Pagar`;
         document.getElementById('btn-cancel-payable').style.display = 'none';
+        const paidFields = document.getElementById('payable-paid-fields-group');
+        if (paidFields) paidFields.style.display = 'none';
+        const inpVes = document.getElementById('pay-amount-ves');
+        if (inpVes) inpVes.value = '';
     };
 
     const exportExcelBtn = document.getElementById('btn-export-finance-excel');
@@ -23829,36 +23910,87 @@ async function renderProviderBills() {
         alertMessages.push(`<div style="color: #059669; font-weight: 600; margin-bottom: 4px;"><i class="fa-solid fa-user-doctor"></i> HONORARIOS MÉDICOS POR PAGAR: ${pendingDocLiqs.length} atención(es) concretada(s) lista(s) para liquidar por un total de <strong>$${totalPendingDoctorFees.toFixed(2)} USD</strong> (incluye atenciones con Cashea y Crédito Interno).</div>`);
     }
 
-    // 2. Render provider bills
+    const rate = (typeof getExchangeRate === 'function') ? getExchangeRate() : 36.5;
+    const curUser = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+    const canDelete = (typeof canCurrentUserDelete === 'function') ? canCurrentUserDelete(curUser) : true;
+
+    // 2. Render provider bills (Gastos y Cuentas por Pagar)
     bills.forEach(bill => {
         const dueDateObj = new Date(bill.dueDate);
         const timeDiff = dueDateObj.getTime() - today.getTime();
         const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
+        const amtUSD = parseFloat(bill.amount || 0);
+        const amtBs = parseFloat(bill.amountBs || (amtUSD * rate));
 
         let statusClass = 'green';
-        if (bill.status === 'Pendiente') {
+        let statusBadge = '';
+        let dateInfoHtml = '';
+
+        if (bill.status === 'Pagado') {
+            statusClass = 'green';
+            const mLabel = bill.paymentMethod ? getPaymentMethodLabel(bill.paymentMethod) : 'Liquidado';
+            statusBadge = `
+                <span class="badge-tag green" style="background:#dcfce7; color:#15803d; border:1px solid #86efac; font-weight:700;">
+                    <i class="fa-solid fa-circle-check"></i> Pagado
+                </span>
+                <div style="font-size:0.7rem; color:#059669; font-weight:600; margin-top:2px;">
+                    <i class="fa-solid fa-wallet"></i> ${mLabel}
+                </div>
+            `;
+            dateInfoHtml = `
+                <div style="font-size:0.8rem; font-weight:600; color:#0f172a;">${bill.paidDate || bill.dueDate}</div>
+                <small class="text-muted"><i class="fa-solid fa-check text-green"></i> Liquidado</small>
+            `;
+        } else {
             if (daysDiff < 0) {
                 statusClass = 'red';
-                alertMessages.push(`<div style="color: #ef4444; font-weight: 600; margin-bottom: 4px;"><i class="fa-solid fa-triangle-exclamation"></i> GASTO VENCIDO: ${bill.providerName} (${bill.serviceName}) venció hace ${Math.abs(daysDiff)} días ($${bill.amount.toFixed(2)})</div>`);
+                alertMessages.push(`<div style="color: #ef4444; font-weight: 600; margin-bottom: 4px;"><i class="fa-solid fa-triangle-exclamation"></i> GASTO VENCIDO: ${bill.providerName} (${bill.serviceName}) venció hace ${Math.abs(daysDiff)} días (${amtUSD.toFixed(2)})</div>`);
             } else if (daysDiff <= 3) {
                 statusClass = 'amber';
-                alertMessages.push(`<div style="color: #d97706; font-weight: 600; margin-bottom: 4px;"><i class="fa-solid fa-clock"></i> POR VENCER: ${bill.providerName} (${bill.serviceName}) vence en ${daysDiff} días ($${bill.amount.toFixed(2)})</div>`);
+                alertMessages.push(`<div style="color: #d97706; font-weight: 600; margin-bottom: 4px;"><i class="fa-solid fa-clock"></i> POR VENCER: ${bill.providerName} (${bill.serviceName}) vence en ${daysDiff} días (${amtUSD.toFixed(2)})</div>`);
             } else {
                 statusClass = 'blue';
             }
+            statusBadge = `
+                <span class="badge-tag ${statusClass}">
+                    <i class="fa-solid fa-clock"></i> Pendiente
+                </span>
+            `;
+            dateInfoHtml = `
+                <div style="font-size:0.8rem; font-weight:600; color:#0f172a;">${bill.dueDate}</div>
+                <small class="${daysDiff < 0 ? 'text-red font-bold' : 'text-muted'}">
+                    ${daysDiff < 0 ? `(${Math.abs(daysDiff)}d vencido)` : (daysDiff === 0 ? '¡Vence Hoy!' : `Vence en ${daysDiff}d`)}
+                </small>
+            `;
         }
+
+        const settleBtn = (bill.status !== 'Pagado') ? `
+            <button class="btn btn-xs btn-success" onclick="window.settleProviderBill('${bill.id}')" title="Liquidar y Debitar del Flujo de Caja" style="background:#10b981 !important; color:white !important; border:none !important; font-weight:700; padding:4px 9px; border-radius:6px; cursor:pointer;">
+                <i class="fa-solid fa-hand-holding-dollar"></i> Liquidar
+            </button>
+        ` : '';
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td><strong>${bill.providerName}</strong></td>
-            <td>${bill.serviceName}</td>
-            <td>$${bill.amount.toFixed(2)}</td>
-            <td>${bill.dueDate}</td>
-            <td><span class="badge-tag ${statusClass}">${bill.status}</span></td>
             <td>
-                <div class="actions-cell-group">
+                <strong>${bill.providerName}</strong>
+                ${bill.paymentRef ? `<div style="font-size:0.72rem; color:#64748b;"><i class="fa-solid fa-receipt"></i> Ref: ${bill.paymentRef}</div>` : ''}
+            </td>
+            <td>
+                <div style="font-weight:600; color:#0f172a;">${bill.serviceName}</div>
+                <small class="text-muted">Gasto Operativo</small>
+            </td>
+            <td>
+                <strong style="font-size:0.95rem; color:#0f172a;">${amtUSD.toFixed(2)}</strong>
+                <div style="font-size:0.74rem; color:#0284c7; font-weight:600;">${amtBs.toFixed(2)} Bs.</div>
+            </td>
+            <td>${dateInfoHtml}</td>
+            <td>${statusBadge}</td>
+            <td>
+                <div class="actions-cell-group" style="display:flex; gap:4px; align-items:center; flex-wrap:wrap;">
+                    ${settleBtn}
                     <button class="btn btn-xs btn-outline" onclick="editProviderBill('${bill.id}')" title="Editar"><i class="fa-solid fa-edit"></i></button>
-                    <button class="btn btn-xs btn-outline text-red" onclick="deleteProviderBill('${bill.id}')" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
+                    ${canDelete ? `<button class="btn btn-xs btn-outline text-red" onclick="deleteProviderBill('${bill.id}')" title="Eliminar"><i class="fa-solid fa-trash"></i></button>` : ''}
                 </div>
             </td>
         `;
@@ -23882,11 +24014,149 @@ window.editProviderBill = async function(id) {
     document.getElementById('pay-provider').value = bill.providerName;
     document.getElementById('pay-service').value = bill.serviceName;
     document.getElementById('pay-amount').value = bill.amount;
+
+    const rate = (typeof getExchangeRate === 'function') ? getExchangeRate() : 36.5;
+    const inpVes = document.getElementById('pay-amount-ves');
+    if (inpVes) {
+        inpVes.value = (bill.amountBs || (bill.amount * rate)).toFixed(2);
+    }
+
     document.getElementById('pay-due-date').value = bill.dueDate;
     document.getElementById('pay-status').value = bill.status;
 
+    const paidFields = document.getElementById('payable-paid-fields-group');
+    if (paidFields) {
+        if (bill.status === 'Pagado') {
+            paidFields.style.display = 'block';
+            if (document.getElementById('pay-method') && bill.paymentMethod) {
+                document.getElementById('pay-method').value = bill.paymentMethod;
+            }
+            if (document.getElementById('pay-paid-date')) {
+                document.getElementById('pay-paid-date').value = bill.paidDate || bill.dueDate || new Date().toISOString().split('T')[0];
+            }
+            if (document.getElementById('pay-ref')) {
+                document.getElementById('pay-ref').value = bill.paymentRef || '';
+            }
+        } else {
+            paidFields.style.display = 'none';
+        }
+    }
+
     document.getElementById('payable-form-title').innerHTML = `<i class="fa-solid fa-edit text-cyan"></i> Editar Gasto / Proveedor`;
     document.getElementById('btn-cancel-payable').style.display = 'inline-block';
+
+    const formEl = document.getElementById('form-payable');
+    if (formEl) formEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+};
+
+window.settleProviderBill = async function(id) {
+    const bills = await SupabaseDataService.getProviderBills();
+    const bill = bills.find(b => b.id === id);
+    if (!bill) {
+        Swal.fire({ icon: 'error', title: 'Error', text: 'No se encontró la cuenta por pagar especificada.' });
+        return;
+    }
+
+    const rate = (typeof getExchangeRate === 'function') ? getExchangeRate() : 36.5;
+    const amountUSD = parseFloat(bill.amount || 0);
+    const amountBs = parseFloat(bill.amountBs || (amountUSD * rate));
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    const { value: formValues } = await Swal.fire({
+        title: '<div style="font-size:1.2rem; font-weight:700; color:#0f172a;"><i class="fa-solid fa-money-bill-wave" style="color:#10b981;"></i> Liquidar Cuenta por Pagar</div>',
+        html: `
+            <div style="text-align: left; font-size: 0.9rem;">
+                <div style="background: #f8fafc; border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; margin-bottom: 15px;">
+                    <div style="font-weight: 700; color: #0f172a; font-size: 1rem; margin-bottom: 4px;">
+                        <i class="fa-solid fa-building text-cyan"></i> ${bill.providerName}
+                    </div>
+                    <div style="color: #64748b; margin-bottom: 8px;">
+                        <i class="fa-solid fa-tag"></i> ${bill.serviceName}
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: baseline; border-top: 1px dashed #cbd5e1; padding-top: 8px;">
+                        <span style="font-weight: 600; color: #475569;">Total a Liquidar:</span>
+                        <div style="text-align: right;">
+                            <strong style="font-size: 1.25rem; color: #0d9488;">${amountUSD.toFixed(2)} USD</strong>
+                            <div style="font-size: 0.8rem; color: #0284c7; font-weight: 600;">≈ ${amountBs.toFixed(2)} Bs. (Tasa: ${rate.toFixed(2)})</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; font-weight: 600; color: #334155; margin-bottom: 4px; font-size: 0.82rem;">
+                        <i class="fa-solid fa-wallet text-cyan"></i> Cuenta / Método de Pago de Salida *
+                    </label>
+                    <select id="swal-pay-method" class="swal2-input" style="width: 100%; margin: 0; padding: 8px 12px; font-size: 0.88rem; height: auto; border: 1px solid #cbd5e1; border-radius: 6px;">
+                        <option value="cash">💵 Efectivo ($ USD / Divisas)</option>
+                        <option value="pagomovil">📱 Pago Móvil / Transferencia (Bs. VES)</option>
+                        <option value="pos">💳 Punto de Venta / Débito</option>
+                        <option value="zelle">🌐 Zelle ($ USD)</option>
+                        <option value="binance">🟡 Binance USDT</option>
+                    </select>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+                    <div>
+                        <label style="display: block; font-weight: 600; color: #334155; margin-bottom: 4px; font-size: 0.82rem;">
+                            <i class="fa-regular fa-calendar"></i> Fecha de Pago *
+                        </label>
+                        <input type="date" id="swal-pay-date" class="swal2-input" value="${todayStr}" style="width: 100%; margin: 0; padding: 8px 10px; font-size: 0.85rem; height: auto; border: 1px solid #cbd5e1; border-radius: 6px;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-weight: 600; color: #334155; margin-bottom: 4px; font-size: 0.82rem;">
+                            <i class="fa-solid fa-receipt"></i> Referencia / Comprobante
+                        </label>
+                        <input type="text" id="swal-pay-ref" class="swal2-input" placeholder="ej: 049281 / Recibo #12" style="width: 100%; margin: 0; padding: 8px 10px; font-size: 0.85rem; height: auto; border: 1px solid #cbd5e1; border-radius: 6px;">
+                    </div>
+                </div>
+
+                <div style="background: rgba(16, 185, 129, 0.08); border-left: 3px solid #10b981; padding: 8px 10px; border-radius: 4px; font-size: 0.78rem; color: #065f46;">
+                    <i class="fa-solid fa-circle-check"></i> Al confirmar, se registrará el débito automático en el Flujo de Caja por <strong>${amountUSD.toFixed(2)} USD</strong> y se descontará del balance de la cuenta seleccionada.
+                </div>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: '<i class="fa-solid fa-check"></i> Confirmar y Debitar de Caja',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#10b981',
+        cancelButtonColor: '#64748b',
+        focusConfirm: false,
+        preConfirm: () => {
+            const method = document.getElementById('swal-pay-method').value;
+            const paidDate = document.getElementById('swal-pay-date').value;
+            const ref = document.getElementById('swal-pay-ref').value.trim();
+            if (!paidDate) {
+                Swal.showValidationMessage('Por favor ingrese la fecha de liquidación');
+                return false;
+            }
+            return { method, paidDate, ref };
+        }
+    });
+
+    if (formValues) {
+        bill.status = 'Pagado';
+        bill.paymentMethod = formValues.method;
+        bill.paidDate = formValues.paidDate;
+        bill.paymentRef = formValues.ref;
+        bill.paidUSD = amountUSD;
+        bill.paidVES = amountBs;
+        bill.updatedAt = new Date().toISOString();
+
+        await SupabaseDataService.saveProviderBill(bill);
+        await renderProviderBills();
+        await renderCashFlow();
+        if (typeof window.renderDailyClosingView === 'function') {
+            await window.renderDailyClosingView();
+        }
+
+        Swal.fire({
+            icon: 'success',
+            title: '¡Gasto Liquidado!',
+            html: `Se ha registrado el pago de <strong>${amountUSD.toFixed(2)} USD</strong> a <strong>${bill.providerName}</strong> y se ha debitado en el Flujo de Caja.`,
+            timer: 2200,
+            showConfirmButton: false
+        });
+    }
 };
 
 window.deleteProviderBill = async function(id) {
@@ -24420,17 +24690,104 @@ async function renderCashFlow() {
         });
     });
 
-    // 4. Provider Bills Outflows
+    // 4. Provider Bills Outflows (Gastos y Cuentas por Pagar Liquidadas)
     bills.forEach(bill => {
         if (bill.status === 'Pagado') {
-            outflows += bill.amount;
+            const billAmt = parseFloat(bill.paidUSD || bill.amount || 0);
+            outflows += billAmt;
+            const bMethod = (bill.paymentMethod || 'cash').toLowerCase();
+            let cleanMethod = 'cash';
+            if (bMethod.includes('pago') || bMethod.includes('movil') || bMethod.includes('móvil') || bMethod.includes('transferencia') || bMethod.includes('bs')) {
+                cleanMethod = 'pagomovil';
+            } else if (bMethod.includes('pos') || bMethod.includes('punto') || bMethod.includes('tarjeta') || bMethod.includes('debito')) {
+                cleanMethod = 'pos';
+            } else if (bMethod.includes('zelle')) {
+                cleanMethod = 'zelle';
+            } else if (bMethod.includes('binance') || bMethod.includes('usdt')) {
+                cleanMethod = 'binance';
+            } else if (bMethod.includes('cashea')) {
+                cleanMethod = 'cashea';
+            } else {
+                cleanMethod = 'cash';
+            }
+
+            if (methodTotals[cleanMethod] !== undefined) {
+                methodTotals[cleanMethod] -= billAmt;
+            } else {
+                methodTotals['cash'] -= billAmt;
+            }
+
+            const pDate = bill.paidDate || bill.dueDate || new Date().toISOString().split('T')[0];
+            const pMethodLabel = bill.paymentMethod ? getPaymentMethodLabel(bill.paymentMethod) : 'Efectivo ($ USD)';
+
             transactions.push({
-                date: bill.dueDate,
-                concept: `Pago a Proveedor: ${bill.providerName} (${bill.serviceName})`,
+                date: pDate,
+                concept: `Liquidación / Gasto: ${bill.providerName} (${bill.serviceName})${bill.paymentRef ? ` - Ref: ${bill.paymentRef}` : ''}`,
                 type: 'Egreso',
-                method: 'Cash (Efectivo)',
-                amount: bill.amount
+                method: pMethodLabel,
+                amount: billAmt,
+                isOutflow: true
             });
+        }
+    });
+
+    // 5. Settled Doctor & Assistant Fees Outflows (Honorarios Médicos Liquidados)
+    let liquidationsList = [];
+    try {
+        liquidationsList = await SupabaseDataService.getServiceLiquidations(false);
+    } catch(e) {}
+
+    liquidationsList.forEach(liq => {
+        if (liq.doctor && (liq.doctor.status === 'Liquidado' || liq.doctor.status === 'Pagado')) {
+            const docAmt = parseFloat(liq.doctor.settled_amount || liq.doctor.amount || 0);
+            if (docAmt > 0) {
+                outflows += docAmt;
+                const dMethod = (liq.doctor.payment_method || 'transferencia').toLowerCase();
+                let cleanMethod = 'pagomovil';
+                if (dMethod.includes('efectivo') || dMethod.includes('cash') || dMethod.includes('divisa')) cleanMethod = 'cash';
+                else if (dMethod.includes('zelle')) cleanMethod = 'zelle';
+                else if (dMethod.includes('pos') || dMethod.includes('punto')) cleanMethod = 'pos';
+                else if (dMethod.includes('binance') || dMethod.includes('usdt')) cleanMethod = 'binance';
+                else cleanMethod = 'pagomovil';
+
+                if (methodTotals[cleanMethod] !== undefined) methodTotals[cleanMethod] -= docAmt;
+                else methodTotals['cash'] -= docAmt;
+
+                const lDate = (liq.doctor.paid_at || liq.date || '').split('T')[0] || new Date().toISOString().split('T')[0];
+                transactions.push({
+                    date: lDate,
+                    concept: `Liquidación Honorarios: Dr(a). ${liq.doctor.name || 'Médico'} (${liq.service_name || 'Servicio'})${liq.doctor.payment_ref ? ` - Ref: ${liq.doctor.payment_ref}` : ''}`,
+                    type: 'Egreso',
+                    method: getPaymentMethodLabel(liq.doctor.payment_method || cleanMethod),
+                    amount: docAmt,
+                    isOutflow: true
+                });
+            }
+        }
+
+        if (liq.assistant && (liq.assistant.status === 'Liquidado' || liq.assistant.status === 'Pagado')) {
+            const astAmt = parseFloat(liq.assistant.settled_amount || liq.assistant.amount || 0);
+            if (astAmt > 0) {
+                outflows += astAmt;
+                const aMethod = (liq.assistant.payment_method || 'transferencia').toLowerCase();
+                let cleanMethod = 'pagomovil';
+                if (aMethod.includes('efectivo') || aMethod.includes('cash')) cleanMethod = 'cash';
+                else if (aMethod.includes('zelle')) cleanMethod = 'zelle';
+                else cleanMethod = 'pagomovil';
+
+                if (methodTotals[cleanMethod] !== undefined) methodTotals[cleanMethod] -= astAmt;
+                else methodTotals['cash'] -= astAmt;
+
+                const lDate = (liq.assistant.paid_at || liq.date || '').split('T')[0] || new Date().toISOString().split('T')[0];
+                transactions.push({
+                    date: lDate,
+                    concept: `Liquidación Bono Asistente: ${liq.assistant.name || 'Asistente'} (${liq.service_name || 'Servicio'})`,
+                    type: 'Egreso',
+                    method: getPaymentMethodLabel(liq.assistant.payment_method || cleanMethod),
+                    amount: astAmt,
+                    isOutflow: true
+                });
+            }
         }
     });
 

@@ -1910,6 +1910,9 @@
                 if (typeof window.renderDailyClosingView === 'function') {
                     try { window.renderDailyClosingView(); } catch(e) {}
                 }
+                if (typeof window.renderCashFlow === 'function') {
+                    try { await window.renderCashFlow(); } catch(e) {}
+                }
                 if (typeof Swal !== 'undefined') {
                     Swal.fire({
                         icon: 'success',

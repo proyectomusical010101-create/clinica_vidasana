@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=358">
+    <link rel="stylesheet" href="styles.css?v=359">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -2087,27 +2087,90 @@
                                         <input type="hidden" id="payable-id">
                                         <div class="form-group span-2">
                                             <label class="form-label" for="pay-provider">Proveedor / Concepto *</label>
-                                            <input type="text" id="pay-provider" class="form-control" required placeholder="ej: Corpoelec, Cantv, Agua de Mérida, etc.">
+                                            <input type="text" id="pay-provider" class="form-control" required placeholder="ej: Corpoelec, Cantv, Agua de Mérida, Materiales Dentales, etc.">
                                         </div>
-                                        <div class="form-group">
+                                        <div class="form-group span-2">
                                             <label class="form-label" for="pay-service">Servicio / Descripción *</label>
-                                            <input type="text" id="pay-service" class="form-control" required placeholder="ej: Electricidad del consultorio, Internet de fibra">
+                                            <input type="text" id="pay-service" class="form-control" required placeholder="ej: Electricidad del consultorio, Internet de fibra, Resinas 3M">
                                         </div>
-                                        <div class="form-group">
-                                            <label class="form-label" for="pay-amount">Monto ($ USD) *</label>
-                                            <input type="number" id="pay-amount" class="form-control" step="0.01" required placeholder="50.00">
+
+                                        <!-- Módulo Bimonetario de Importe del Gasto -->
+                                        <div class="form-group span-2" style="background: rgba(13, 148, 136, 0.05); padding: 12px; border-radius: 8px; border: 1px dashed var(--border-color);">
+                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                                <span style="font-weight: 700; color: var(--primary-cyan); font-size: 0.85rem;">
+                                                    <i class="fa-solid fa-calculator"></i> Importe Bimonetario del Gasto
+                                                </span>
+                                                <span id="payable-rate-badge" class="badge-tag cyan" style="font-size: 0.72rem; font-weight: 700;">
+                                                    <i class="fa-solid fa-arrows-rotate"></i> Tasa BCV
+                                                </span>
+                                            </div>
+                                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                                <div>
+                                                    <label class="form-label" for="pay-amount" style="font-size: 0.78rem; font-weight: 700; color: #0f172a; margin-bottom: 3px;">
+                                                        Monto en Divisas ($ USD) *
+                                                    </label>
+                                                    <div style="position: relative;">
+                                                        <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-weight: 800; color: #0d9488;">$</span>
+                                                        <input type="number" id="pay-amount" class="form-control" step="0.01" min="0" required placeholder="0.00" style="padding-left: 26px; font-weight: 700; color: #0f172a;">
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <label class="form-label" for="pay-amount-ves" style="font-size: 0.78rem; font-weight: 700; color: #0f172a; margin-bottom: 3px;">
+                                                        Monto en Bolívares (Bs. VES)
+                                                    </label>
+                                                    <div style="position: relative;">
+                                                        <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-weight: 800; color: #0284c7;">Bs.</span>
+                                                        <input type="number" id="pay-amount-ves" class="form-control" step="0.01" min="0" placeholder="0.00" style="padding-left: 36px; font-weight: 700; color: #0f172a;">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <small class="text-muted" style="display: block; margin-top: 5px; font-size: 0.72rem;">
+                                                <i class="fa-solid fa-circle-info text-cyan"></i> Ingrese el monto en divisas o bolívares; se calcula y sincroniza automáticamente en ambas monedas.
+                                            </small>
                                         </div>
+
                                         <div class="form-group">
                                             <label class="form-label" for="pay-due-date">Fecha de Vencimiento *</label>
                                             <input type="date" id="pay-due-date" class="form-control" required>
                                         </div>
                                         <div class="form-group">
-                                            <label class="form-label" for="pay-status">Estado</label>
+                                            <label class="form-label" for="pay-status">Estado del Gasto</label>
                                             <select id="pay-status" class="form-control">
-                                                <option value="Pendiente">Pendiente</option>
-                                                <option value="Pagado">Pagado</option>
+                                                <option value="Pendiente">Pendiente por Pagar</option>
+                                                <option value="Pagado">Pagado / Liquidado</option>
                                             </select>
                                         </div>
+
+                                        <!-- Campos de Liquidación cuando el estado es Pagado -->
+                                        <div id="payable-paid-fields-group" class="form-group span-2" style="display: none; background: rgba(16, 185, 129, 0.05); padding: 12px; border-radius: 8px; border: 1px solid #a7f3d0;">
+                                            <div style="font-weight: 700; color: #059669; font-size: 0.82rem; margin-bottom: 8px;">
+                                                <i class="fa-solid fa-money-bill-transfer"></i> Datos de Liquidación y Salida de Fondos
+                                            </div>
+                                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                                <div>
+                                                    <label class="form-label" for="pay-method" style="font-size: 0.78rem; font-weight: 600;">Cuenta / Método de Salida *</label>
+                                                    <select id="pay-method" class="form-control">
+                                                        <option value="cash">💵 Efectivo ($ USD / Divisas)</option>
+                                                        <option value="pagomovil">📱 Pago Móvil / Transf. (Bs. VES)</option>
+                                                        <option value="pos">💳 Punto de Venta / Débito</option>
+                                                        <option value="zelle">🌐 Zelle ($ USD)</option>
+                                                        <option value="binance">🟡 Binance USDT</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label class="form-label" for="pay-paid-date" style="font-size: 0.78rem; font-weight: 600;">Fecha de Pago *</label>
+                                                    <input type="date" id="pay-paid-date" class="form-control">
+                                                </div>
+                                                <div class="span-2">
+                                                    <label class="form-label" for="pay-ref" style="font-size: 0.78rem; font-weight: 600;">Referencia / Nº Comprobante</label>
+                                                    <input type="text" id="pay-ref" class="form-control" placeholder="ej: Comprobante #9418 / Pago Móvil">
+                                                </div>
+                                            </div>
+                                            <small class="text-muted" style="display: block; margin-top: 4px; font-size: 0.72rem; color: #065f46 !important;">
+                                                <i class="fa-solid fa-arrow-trend-down text-red"></i> Se registrará el egreso y débito automático en el Flujo de Caja y la cuenta seleccionada.
+                                            </small>
+                                        </div>
+
                                         <div class="span-2 flex-row gap-10 mt-10">
                                             <button type="submit" class="btn btn-primary flex-1" id="btn-save-payable">Guardar Registro</button>
                                             <button type="button" class="btn btn-outline" id="btn-cancel-payable" style="display: none;">Cancelar</button>
@@ -8168,14 +8231,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=358"></script>
-    <script src="supabaseClient.js?v=358"></script>
-    <script src="odontogram.js?v=358"></script>
-    <script src="signature.js?v=358"></script>
-    <script src="whatsapp.js?v=358"></script>
-    <script src="kardex.js?v=358"></script>
-    <script src="app.js?v=358"></script>
-    <script src="clinicalERP.js?v=358"></script>
-    <script src="tutorial.js?v=358"></script>
+    <script src="seededData.js?v=359"></script>
+    <script src="supabaseClient.js?v=359"></script>
+    <script src="odontogram.js?v=359"></script>
+    <script src="signature.js?v=359"></script>
+    <script src="whatsapp.js?v=359"></script>
+    <script src="kardex.js?v=359"></script>
+    <script src="app.js?v=359"></script>
+    <script src="clinicalERP.js?v=359"></script>
+    <script src="tutorial.js?v=359"></script>
 </body>
 </html>
