@@ -257,6 +257,65 @@ function isDoctorOrAssistantUser(user) {
 }
 window.isDoctorOrAssistantUser = isDoctorOrAssistantUser;
 
+function isHygienistRole(role) {
+    if (!role) return false;
+    const r = String(role).toLowerCase().trim();
+    return r.includes('higien');
+}
+window.isHygienistRole = isHygienistRole;
+
+function isHygienistUser(user) {
+    if (!user) return false;
+    return isHygienistRole(user.role);
+}
+window.isHygienistUser = isHygienistUser;
+
+function isDentalSpecialtyOrArea(str) {
+    if (!str) return false;
+    const s = String(str).toLowerCase().trim();
+    return s.includes('odont') || s.includes('dent') || s.includes('ortod') || 
+           s.includes('endod') || s.includes('period') || s.includes('protes') || 
+           s.includes('maxilo') || s.includes('bucal') || s.includes('estomat') ||
+           s.includes('limpieza') || s.includes('profilaxis') || s.includes('higiene');
+}
+window.isDentalSpecialtyOrArea = isDentalSpecialtyOrArea;
+
+function isPatientAssignedToHygienist(patient, appointments = null, budgets = null) {
+    if (!patient) return false;
+    if (isDentalSpecialtyOrArea(patient.specialty) || isDentalSpecialtyOrArea(patient.area) || isDentalSpecialtyOrArea(patient.department)) {
+        return true;
+    }
+    if (patient.odontogram && Object.keys(patient.odontogram).length > 0) return true;
+    if (Array.isArray(patient.treatments) && patient.treatments.length > 0) return true;
+    if (Array.isArray(patient.sessions) && patient.sessions.length > 0) return true;
+
+    if (Array.isArray(appointments) && appointments.length > 0) {
+        const patId = String(patient.id || '').trim();
+        const hasDentalAppt = appointments.some(a => {
+            const matchesPat = (patId && String(a.patientId || a.patient_id) === patId);
+            return matchesPat && (isDentalSpecialtyOrArea(a.specialty) || isDentalSpecialtyOrArea(a.treatment) || isDentalSpecialtyOrArea(a.doctorName) || isDentalSpecialtyOrArea(a.area));
+        });
+        if (hasDentalAppt) return true;
+    }
+
+    if (Array.isArray(budgets) && budgets.length > 0) {
+        const patId = String(patient.id || '').trim();
+        const hasDentalBudget = budgets.some(b => {
+            if (patId && String(b.patientId) !== patId) return false;
+            return b.type !== 'medical' || isDentalSpecialtyOrArea(b.area) || isDentalSpecialtyOrArea(b.specialty) || isDentalSpecialtyOrArea(b.category);
+        });
+        if (hasDentalBudget) return true;
+    }
+
+    const spec = String(patient.specialty || (patient.metadata && patient.metadata.specialty) || '').toLowerCase();
+    if (spec && !isDentalSpecialtyOrArea(spec) && (spec.includes('ginec') || spec.includes('pediat') || spec.includes('cardio') || spec.includes('trauma') || spec.includes('dermat') || spec.includes('oftalm') || spec.includes('otorrino') || spec.includes('urolog') || spec.includes('medicina'))) {
+        return false;
+    }
+
+    return true;
+}
+window.isPatientAssignedToHygienist = isPatientAssignedToHygienist;
+
 function isAssistantRole(role) {
     if (!role) return false;
     const r = String(role).toLowerCase().trim();
@@ -1349,10 +1408,11 @@ function checkAuthSession() {
 function applyRolePermissionsUI(role) {
     const r = (role || '').toLowerCase();
     const isAdmin = r.includes('admin') || r.includes('super') || r.includes('director') || r.includes('gerente');
-    const isAssistant = !isAdmin && (typeof isAssistantRole === 'function' ? isAssistantRole(r) : (r.includes('asist') || r.includes('higien') || r.includes('recep') || r.includes('caja') || r.includes('auxiliar')));
-    const isDoctor = !isAdmin && !isAssistant && (r.includes('medico') || r.includes('odont') || r.includes('doctor') || r.includes('dentista') || r.includes('médico') || r.includes('cirujano') || r.includes('especialista'));
+    const isHygienist = !isAdmin && r.includes('higien');
+    const isAssistant = !isAdmin && !isHygienist && (typeof isAssistantRole === 'function' ? isAssistantRole(r) : (r.includes('asist') || r.includes('recep') || r.includes('caja') || r.includes('auxiliar')));
+    const isDoctor = !isAdmin && !isAssistant && !isHygienist && (r.includes('medico') || r.includes('odont') || r.includes('doctor') || r.includes('dentista') || r.includes('médico') || r.includes('cirujano') || r.includes('especialista'));
 
-    const roleType = isAdmin ? 'admin' : (isDoctor ? 'doctor' : 'assistant');
+    const roleType = isAdmin ? 'admin' : (isDoctor ? 'doctor' : (isHygienist ? 'hygienist' : 'assistant'));
 
     const tabSelectors = {
         dashboard: '.nav-item[data-tab="dashboard"]',
@@ -1377,6 +1437,7 @@ function applyRolePermissionsUI(role) {
     const permissions = {
         admin: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll', 'consumables'],
         doctor: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'pricing', 'settings', 'help'],
+        hygienist: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'consumables', 'settings', 'help'],
         assistant: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'billing', 'finance', 'settings', 'help', 'consumables']
     };
 
@@ -1439,10 +1500,10 @@ function applyRolePermissionsUI(role) {
     const newPatientModalBtn = document.getElementById('btn-new-patient-modal');
     const editClinicalWizardBtn = document.getElementById('btn-edit-clinical-wizard');
     if (quickPatientBtn) {
-        quickPatientBtn.style.display = (roleType === 'doctor') ? 'none' : 'inline-flex';
+        quickPatientBtn.style.display = (roleType === 'doctor' || roleType === 'hygienist') ? 'none' : 'inline-flex';
     }
     if (newPatientModalBtn) {
-        newPatientModalBtn.style.display = (roleType === 'doctor') ? 'none' : 'inline-flex';
+        newPatientModalBtn.style.display = (roleType === 'doctor' || roleType === 'hygienist') ? 'none' : 'inline-flex';
     }
     if (editClinicalWizardBtn) {
         // Higienista / Asistente, Doctores y Admins pueden completar o editar la historia clínica y plan de tratamiento
@@ -1459,10 +1520,12 @@ function applyRolePermissionsUI(role) {
         }
     }
 
-    // Doctor role global isolation: body flag & feature lockdown
+    // Doctor & Hygienist global body flags & feature lockdown
     if (typeof document !== 'undefined' && document.body) {
         const isDoc = (roleType === 'doctor');
+        const isHyg = (roleType === 'hygienist');
         document.body.classList.toggle('is-doctor-role', isDoc);
+        document.body.classList.toggle('is-hygienist-role', isHyg);
 
         if (isDoc) {
             // Lock down Cashea
@@ -1495,6 +1558,37 @@ function applyRolePermissionsUI(role) {
             const remindersBtn = document.getElementById('btn-agenda-reminders');
             if (remindersBtn) remindersBtn.style.display = 'none';
         }
+
+        if (isHyg) {
+            // Hygienist specific feature locks
+            const directSaleBtn = document.getElementById('btn-header-direct-sale');
+            if (directSaleBtn) directSaleBtn.style.display = 'none';
+            const ehrAbonoBtn = document.getElementById('btn-ehr-add-abono');
+            if (ehrAbonoBtn) ehrAbonoBtn.style.display = 'none';
+            const casheaBtn = document.getElementById('btn-header-cashea');
+            if (casheaBtn) casheaBtn.style.display = 'none';
+
+            // Scoping inventory area filters for Hygienist (Only Dental)
+            const invAreaGroup = document.getElementById('inventory-area-filters');
+            if (invAreaGroup) {
+                invAreaGroup.querySelectorAll('button[data-area-filter]').forEach(btn => {
+                    const af = btn.getAttribute('data-area-filter');
+                    if (af === 'all' || isDentalSpecialtyOrArea(af)) {
+                        btn.style.display = 'inline-flex';
+                    } else {
+                        btn.style.display = 'none';
+                    }
+                });
+            }
+        } else {
+            // Restore inventory area filters for admin/assistant
+            const invAreaGroup = document.getElementById('inventory-area-filters');
+            if (invAreaGroup) {
+                invAreaGroup.querySelectorAll('button[data-area-filter]').forEach(btn => {
+                    btn.style.display = 'inline-flex';
+                });
+            }
+        }
     }
 }
 
@@ -1513,8 +1607,18 @@ function renderMobileNavigationForRole(roleType) {
             { tab: 'ehr', icon: 'fa-notes-medical', label: 'Historias' },
             { tab: 'pricing', icon: 'fa-tags', label: 'Servicios' }
         ];
+    } else if (roleType === 'hygienist') {
+        // HIGIENISTA: Pacientes, Agenda, Presupuesto, Historias, Servicios, Insumos Odontología
+        bottomButtons = [
+            { tab: 'dashboard', icon: 'fa-house', label: 'Home' },
+            { tab: 'patients', icon: 'fa-hospital-user', label: 'Pacientes' },
+            { tab: 'agenda', icon: 'fa-calendar-days', label: 'Agenda' },
+            { tab: 'odontogram', icon: 'fa-file-invoice-dollar', label: 'Presupuesto' },
+            { tab: 'ehr', icon: 'fa-notes-medical', label: 'Historias' },
+            { tab: 'inventory', icon: 'fa-boxes-stacked', label: 'Insumos' }
+        ];
     } else if (roleType === 'assistant') {
-        // HIGIENISTA / ASISTENTE: Pacientes, Agenda, Presupuesto, Historias, Insumos
+        // ASISTENTE GENERAL: Pacientes, Agenda, Presupuesto, Historias, Insumos
         bottomButtons = [
             { tab: 'dashboard', icon: 'fa-house', label: 'Home' },
             { tab: 'patients', icon: 'fa-hospital-user', label: 'Pacientes' },
@@ -1583,6 +1687,15 @@ function renderMobileNavigationForRole(roleType) {
         if (fabIncome) fabIncome.style.display = 'none';
         if (fabTransfer) fabTransfer.style.display = 'none';
         if (fabBilling) fabBilling.style.display = 'flex';
+    } else if (roleType === 'hygienist') {
+        if (fabPatient) fabPatient.style.display = 'none'; // Hygienist doesn't register new patients
+        if (fabAppt) fabAppt.style.display = 'flex';
+        if (fabBudget) fabBudget.style.display = 'flex';
+        if (fabEvol) fabEvol.style.display = 'flex';
+        if (fabExpense) fabExpense.style.display = 'none';
+        if (fabIncome) fabIncome.style.display = 'none';
+        if (fabTransfer) fabTransfer.style.display = 'none';
+        if (fabBilling) fabBilling.style.display = 'none'; // Hygienist doesn't invoice / charge
     } else if (roleType === 'assistant') {
         if (fabPatient) fabPatient.style.display = 'flex';
         if (fabAppt) fabAppt.style.display = 'flex';
@@ -1634,6 +1747,7 @@ function logout() {
     localStorage.removeItem('dental_active_patient_id');
     localStorage.removeItem('dental_odontogram_subview');
     document.body.classList.remove('is-doctor-role');
+    document.body.classList.remove('is-hygienist-role');
     document.documentElement.classList.remove('has-auth-session');
     document.documentElement.classList.add('no-auth-session');
     
@@ -1673,6 +1787,7 @@ function handleInactivityTimeout() {
     localStorage.removeItem('dental_active_patient_id');
     localStorage.removeItem('dental_odontogram_subview');
     document.body.classList.remove('is-doctor-role');
+    document.body.classList.remove('is-hygienist-role');
     document.documentElement.classList.remove('has-auth-session');
     document.documentElement.classList.add('no-auth-session');
 
@@ -2707,7 +2822,8 @@ async function renderBudgetListView(forceRefresh = false) {
     const currentUser = getCurrentUser();
     const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
     const isDoctor = currentUser && (typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false);
-    const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor);
+    const isHygienist = currentUser && (typeof isHygienistRole === 'function' ? isHygienistRole(currentUser.role) : (currentUser.role && currentUser.role.toLowerCase().includes('higien')));
+    const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor && !isHygienist);
 
     // If logged in as Doctor: ONLY show his assigned budgets & scoped by specialty
     if (isDoctor) {
@@ -2760,6 +2876,44 @@ async function renderBudgetListView(forceRefresh = false) {
             if (filterLab) filterLab.style.display = 'inline-block';
             if (filterProc) filterProc.style.display = 'inline-block';
         }
+    } else if (isHygienist) {
+        // If logged in as Hygienist: show ALL dental budgets across all dental doctors
+        budgets = budgets.filter(b => {
+            const cat = String(b.category || b.specialty || b.area || 'Odontología').toLowerCase();
+            const isDentalBudget = isDentalSpecialtyOrArea(cat) || b.type !== 'medical';
+            if (isDentalBudget) return true;
+            if (Array.isArray(b.items) && b.items.length > 0) {
+                return b.items.some(it => {
+                    const iCat = String(it.category || it.specialty || it.name || '').toLowerCase();
+                    return isDentalSpecialtyOrArea(iCat);
+                });
+            }
+            return false;
+        });
+
+        // Hide non-dental category filter pills for hygienist
+        const filterDental = document.getElementById('filter-cat-dental');
+        const filterMed = document.getElementById('filter-cat-med');
+        const filterXray = document.getElementById('filter-cat-xray');
+        const filterLab = document.getElementById('filter-cat-lab');
+        const filterProc = document.getElementById('filter-cat-proc');
+        if (filterMed) filterMed.style.display = 'none';
+        if (filterXray) filterXray.style.display = 'none';
+        if (filterLab) filterLab.style.display = 'none';
+        if (filterProc) filterProc.style.display = 'none';
+        if (filterDental) filterDental.style.display = 'inline-block';
+    } else {
+        // Admin or Assistant: show all category filter pills
+        const filterDental = document.getElementById('filter-cat-dental');
+        const filterMed = document.getElementById('filter-cat-med');
+        const filterXray = document.getElementById('filter-cat-xray');
+        const filterLab = document.getElementById('filter-cat-lab');
+        const filterProc = document.getElementById('filter-cat-proc');
+        if (filterDental) filterDental.style.display = 'inline-block';
+        if (filterMed) filterMed.style.display = 'inline-block';
+        if (filterXray) filterXray.style.display = 'inline-block';
+        if (filterLab) filterLab.style.display = 'inline-block';
+        if (filterProc) filterProc.style.display = 'inline-block';
     }
 
     // Calcular contadores por área clínica
@@ -5710,7 +5864,8 @@ async function renderPatientsTable(filter = null, searchQuery = null, highlightP
     const currentUser = getCurrentUser();
     const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
     const isDoctor = currentUser && (typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false);
-    const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor);
+    const isHygienist = currentUser && (typeof isHygienistRole === 'function' ? isHygienistRole(currentUser.role) : (currentUser.role && currentUser.role.toLowerCase().includes('higien')));
+    const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor && !isHygienist);
 
     // If logged in as Doctor: ONLY show his assigned patients
     if (isDoctor) {
@@ -5719,6 +5874,15 @@ async function renderPatientsTable(filter = null, searchQuery = null, highlightP
             (typeof SupabaseDataService !== 'undefined' && SupabaseDataService.getBudgets) ? SupabaseDataService.getBudgets().catch(() => []) : []
         ]);
         patients = patients.filter(p => isPatientAssignedToDoctor(p, currentUser, allAppts, allBudgets));
+    }
+
+    // If logged in as Hygienist: ONLY show patients belonging to Odontología (across all odontologists)
+    if (isHygienist) {
+        let [allAppts, allBudgets] = await Promise.all([
+            (typeof SupabaseDataService !== 'undefined' && SupabaseDataService.getAppointments) ? SupabaseDataService.getAppointments().catch(() => []) : [],
+            (typeof SupabaseDataService !== 'undefined' && SupabaseDataService.getBudgets) ? SupabaseDataService.getBudgets().catch(() => []) : []
+        ]);
+        patients = patients.filter(p => isPatientAssignedToHygienist(p, allAppts, allBudgets));
     }
 
     // Filter by status tab if specified
@@ -9447,7 +9611,8 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
     const currentUser = getCurrentUser();
     const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
     const isDoctor = currentUser && (typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false);
-    const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor);
+    const isHygienist = currentUser && (typeof isHygienistRole === 'function' ? isHygienistRole(currentUser.role) : (currentUser.role && currentUser.role.toLowerCase().includes('higien')));
+    const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor && !isHygienist);
 
     // If logged in as Doctor: ONLY show his assigned patients
     if (isDoctor) {
@@ -9456,6 +9621,15 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
             (typeof SupabaseDataService !== 'undefined' && SupabaseDataService.getBudgets) ? SupabaseDataService.getBudgets().catch(() => []) : []
         ]);
         patients = patients.filter(p => isPatientAssignedToDoctor(p, currentUser, allAppts, allBudgets));
+    }
+
+    // If logged in as Hygienist: ONLY show patients belonging to Odontología
+    if (isHygienist) {
+        let [allAppts, allBudgets] = await Promise.all([
+            (typeof SupabaseDataService !== 'undefined' && SupabaseDataService.getAppointments) ? SupabaseDataService.getAppointments().catch(() => []) : [],
+            (typeof SupabaseDataService !== 'undefined' && SupabaseDataService.getBudgets) ? SupabaseDataService.getBudgets().catch(() => []) : []
+        ]);
+        patients = patients.filter(p => isPatientAssignedToHygienist(p, allAppts, allBudgets));
     }
 
     let activeId = getActivePatientId();
@@ -11133,7 +11307,8 @@ async function renderDashboard() {
         const currentUser = getCurrentUser();
         const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
         const isDoctor = currentUser && (typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false);
-        const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor);
+        const isHygienist = currentUser && (typeof isHygienistRole === 'function' ? isHygienistRole(currentUser.role) : (currentUser.role && currentUser.role.toLowerCase().includes('higien')));
+        const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor && !isHygienist);
 
         if (isDoctor) {
             const docId = String(currentUser.id || '').trim();
@@ -11144,6 +11319,15 @@ async function renderDashboard() {
                 if (docId && aDocId && aDocId === docId) return true;
                 const aDocName = String(app.doctorName || app.doctor_name || app.doctor || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
                 return cleanDocName && aDocName && (aDocName === cleanDocName || aDocName.includes(cleanDocName) || cleanDocName.includes(aDocName));
+            });
+        }
+
+        if (isHygienist) {
+            appointments = appointments.filter(app => {
+                return isDentalSpecialtyOrArea(app.specialty) || 
+                       isDentalSpecialtyOrArea(app.treatment) || 
+                       isDentalSpecialtyOrArea(app.doctorName) || 
+                       isDentalSpecialtyOrArea(app.area);
             });
         }
 
@@ -12171,7 +12355,8 @@ async function renderAgendaView(filter = (window.currentAgendaFilter || 'pending
     const currentUser = getCurrentUser();
     const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
     const isDoctor = currentUser && (typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false);
-    const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor);
+    const isHygienist = currentUser && (typeof isHygienistRole === 'function' ? isHygienistRole(currentUser.role) : (currentUser.role && currentUser.role.toLowerCase().includes('higien')));
+    const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor && !isHygienist);
 
     // If logged in as Doctor: ONLY show his assigned appointments
     if (isDoctor) {
@@ -12183,6 +12368,16 @@ async function renderAgendaView(filter = (window.currentAgendaFilter || 'pending
             if (docId && aDocId && aDocId === docId) return true;
             const aDocName = String(app.doctorName || app.doctor_name || app.doctor || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
             return cleanDocName && aDocName && (aDocName === cleanDocName || aDocName.includes(cleanDocName) || cleanDocName.includes(aDocName));
+        });
+    }
+
+    // If logged in as Hygienist: ONLY show appointments of Odontología (across all odontologists)
+    if (isHygienist) {
+        allAppointments = allAppointments.filter(app => {
+            return isDentalSpecialtyOrArea(app.specialty) || 
+                   isDentalSpecialtyOrArea(app.treatment) || 
+                   isDentalSpecialtyOrArea(app.doctorName) || 
+                   isDentalSpecialtyOrArea(app.area);
         });
     }
 
@@ -12685,6 +12880,140 @@ window.openPaymentModalForAppointment = async function(patientId, patientName, t
     }
 };
 
+window.occupyRoomForAppointment = async function(app, patient = null) {
+    if (!app) return;
+    try {
+        const rooms = await SupabaseDataService.getClinicRooms();
+        if (!rooms || rooms.length === 0) return;
+
+        const docId = String(app.doctorId || app.doctor_id || '').trim();
+        const docName = String(app.doctorName || app.doctor_name || app.doctor || '').trim();
+        const cleanDocName = docName.toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+
+        // 1. Try finding by app.roomId
+        let targetRoom = null;
+        if (app.roomId) {
+            targetRoom = rooms.find(r => String(r.id) === String(app.roomId));
+        }
+
+        // 2. Try finding by app.roomName
+        if (!targetRoom && app.roomName) {
+            const rnLower = app.roomName.toLowerCase().trim();
+            targetRoom = rooms.find(r => (r.name || '').toLowerCase().trim() === rnLower || String(r.room_number) === rnLower);
+        }
+
+        // 3. Try finding by doctor's assigned room (current_tenant, schedules, shifts)
+        if (!targetRoom && (docId || cleanDocName)) {
+            targetRoom = rooms.find(r => {
+                if (r.current_tenant && cleanDocName && r.current_tenant.toLowerCase().includes(cleanDocName)) return true;
+                if (Array.isArray(r.schedules) && r.schedules.some(s => (docId && s.doctor_id === docId) || (s.doctor_name && cleanDocName && s.doctor_name.toLowerCase().includes(cleanDocName)))) return true;
+                if (r.shifts?.morning?.doctor_name && cleanDocName && r.shifts.morning.doctor_name.toLowerCase().includes(cleanDocName)) return true;
+                if (r.shifts?.afternoon?.doctor_name && cleanDocName && r.shifts.afternoon.doctor_name.toLowerCase().includes(cleanDocName)) return true;
+                return false;
+            });
+        }
+
+        // 4. Try finding from user's doctorProfile
+        if (!targetRoom && (docId || cleanDocName)) {
+            try {
+                const users = await SupabaseDataService.getUsers();
+                const docUser = users.find(u => (docId && u.id === docId) || (u.fullname && cleanDocName && u.fullname.toLowerCase().includes(cleanDocName)));
+                const assignedRoomId = docUser?.doctorProfile?.assignedRoomId || docUser?.doctorProfile?.assignedRoom;
+                if (assignedRoomId) {
+                    targetRoom = rooms.find(r => r.id === assignedRoomId || (r.name && r.name.toLowerCase() === String(assignedRoomId).toLowerCase()));
+                }
+            } catch(e) {}
+        }
+
+        // 5. Fallback: first available room
+        if (!targetRoom && rooms.length > 0) {
+            targetRoom = rooms.find(r => (r.status || '').toLowerCase() === 'disponible') || rooms[0];
+        }
+
+        if (targetRoom) {
+            targetRoom.status = 'ocupado';
+            targetRoom.active_doctor_name = docName;
+            targetRoom.active_doctor_id = docId;
+            targetRoom.active_patient_name = (patient && patient.fullname) || app.patientName || '';
+            targetRoom.active_patient_id = (patient && patient.id) || app.patientId || '';
+            targetRoom.active_appointment_id = app.id;
+            targetRoom.occupied_at = new Date().toISOString();
+
+            await SupabaseDataService.saveClinicRoom(targetRoom);
+
+            if (window.ClinicalERP) {
+                if (Array.isArray(window.ClinicalERP.rooms)) {
+                    const idx = window.ClinicalERP.rooms.findIndex(r => r.id === targetRoom.id);
+                    if (idx >= 0) {
+                        window.ClinicalERP.rooms[idx] = { ...window.ClinicalERP.rooms[idx], ...targetRoom };
+                    }
+                }
+                if (typeof window.ClinicalERP.renderRooms === 'function') window.ClinicalERP.renderRooms();
+                if (typeof window.ClinicalERP.renderRoomsWidget === 'function') window.ClinicalERP.renderRoomsWidget();
+            }
+        }
+    } catch(err) {
+        console.warn('Error in occupyRoomForAppointment:', err);
+    }
+};
+
+window.freeRoomForAppointment = async function(apptId) {
+    if (!apptId) return;
+    try {
+        const rooms = await SupabaseDataService.getClinicRooms();
+        const occupiedRooms = rooms.filter(r => r.active_appointment_id === apptId || (r.status === 'ocupado' && !r.active_appointment_id));
+        for (const room of occupiedRooms) {
+            room.status = (room.current_tenant || (Array.isArray(room.schedules) && room.schedules.length > 0)) ? 'alquilado' : 'disponible';
+            room.active_doctor_name = null;
+            room.active_doctor_id = null;
+            room.active_patient_name = null;
+            room.active_patient_id = null;
+            room.active_appointment_id = null;
+            await SupabaseDataService.saveClinicRoom(room);
+        }
+        if (window.ClinicalERP) {
+            await window.ClinicalERP.loadRooms();
+            if (typeof window.ClinicalERP.renderRooms === 'function') window.ClinicalERP.renderRooms();
+            if (typeof window.ClinicalERP.renderRoomsWidget === 'function') window.ClinicalERP.renderRoomsWidget();
+        }
+    } catch(err) {
+        console.warn('Error in freeRoomForAppointment:', err);
+    }
+};
+
+window.freeClinicRoom = async function(roomId) {
+    if (!roomId) return;
+    try {
+        const rooms = await SupabaseDataService.getClinicRooms();
+        const room = rooms.find(r => r.id === roomId);
+        if (room) {
+            room.status = (room.current_tenant || (Array.isArray(room.schedules) && room.schedules.length > 0)) ? 'alquilado' : 'disponible';
+            room.active_doctor_name = null;
+            room.active_doctor_id = null;
+            room.active_patient_name = null;
+            room.active_patient_id = null;
+            room.active_appointment_id = null;
+            await SupabaseDataService.saveClinicRoom(room);
+            if (window.ClinicalERP) {
+                await window.ClinicalERP.loadRooms();
+                if (typeof window.ClinicalERP.renderRooms === 'function') window.ClinicalERP.renderRooms();
+                if (typeof window.ClinicalERP.renderRoomsWidget === 'function') window.ClinicalERP.renderRoomsWidget();
+            }
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Consultorio Liberado',
+                    text: `El consultorio "${room.name}" ahora está disponible.`,
+                    timer: 1500,
+                    showConfirmButton: false
+                });
+            }
+        }
+    } catch(err) {
+        console.warn('Error in freeClinicRoom:', err);
+    }
+};
+
 window.atenderAppointmentFromAgenda = async (apptId) => {
     try {
         const appts = await SupabaseDataService.getAppointments();
@@ -12704,6 +13033,13 @@ window.atenderAppointmentFromAgenda = async (apptId) => {
         // Set state
         window.activeAttendingAppointmentId = apptId;
         setActivePatientId(patient.id);
+
+        // Update appointment status to 'En Consulta'
+        app.status = 'En Consulta';
+        await SupabaseDataService.saveAppointment(app);
+
+        // Ocupar automáticamente el consultorio y médico de la cita
+        await window.occupyRoomForAppointment(app, patient);
 
         // Pre-fill session modal with dynamic dropdown
         const completed = patient.sessions ? patient.sessions.length : 0;
@@ -12929,6 +13265,7 @@ async function renderInventoryTable(filter = null, searchQuery = null, areaFilte
     let items = await SupabaseDataService.getInventory();
     const currentUser = getCurrentUser();
     const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
+    const isHygienist = currentUser && (typeof isHygienistRole === 'function' ? isHygienistRole(currentUser.role) : (currentUser.role && currentUser.role.toLowerCase().includes('higien')));
 
     // Ensure each item has a clinical area (inference engine fallback)
     items.forEach(item => {
@@ -12936,6 +13273,11 @@ async function renderInventoryTable(filter = null, searchQuery = null, areaFilte
             item.area = detectClinicalArea(item.category, item.name);
         }
     });
+
+    // If logged in as Hygienist: ONLY show items of Odontología
+    if (isHygienist) {
+        items = items.filter(item => isDentalSpecialtyOrArea(item.area) || isDentalSpecialtyOrArea(item.category) || isDentalSpecialtyOrArea(item.department));
+    }
 
     // 1. Filter by Clinical Area
     if (currentArea !== 'all') {
@@ -13345,7 +13687,8 @@ async function renderPricingTable(filter = 'all', searchQuery = '') {
     const currentUser = getCurrentUser();
     const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
     const isDoctor = currentUser && (typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false);
-    const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor);
+    const isHygienist = currentUser && (typeof isHygienistRole === 'function' ? isHygienistRole(currentUser.role) : (currentUser.role && currentUser.role.toLowerCase().includes('higien')));
+    const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor && !isHygienist);
     const isLabFilter = (filter && filter.toLowerCase() === 'laboratorio');
 
     // If logged in as Doctor: ONLY show services offered by him
@@ -13362,6 +13705,17 @@ async function renderPricingTable(filter = 'all', searchQuery = '') {
                 (p.category && p.category.toLowerCase().includes(specLower))
             );
         }
+    }
+
+    // If logged in as Hygienist: ONLY show services of Odontología
+    if (isHygienist) {
+        baremo = baremo.filter(p => {
+            return isDentalSpecialtyOrArea(p.area) || 
+                   isDentalSpecialtyOrArea(p.category) || 
+                   isDentalSpecialtyOrArea(p.specialty) ||
+                   isDentalSpecialtyOrArea(p.department) ||
+                   ['operatoria', 'endodoncia', 'cirugía bucal', 'cirugía', 'ortodoncia', 'estética dental', 'prótesis', 'prevención', 'periodoncia', 'higiene', 'profilaxis'].includes((p.category || '').toLowerCase());
+        });
     }
 
     // Ensure each service has an area assigned
@@ -15842,6 +16196,10 @@ function initGlobalEvents() {
                         await SupabaseDataService.saveAppointment(appt);
                         apptUpdated = true;
                     }
+                    if (typeof window.freeRoomForAppointment === 'function') {
+                        await window.freeRoomForAppointment(window.activeAttendingAppointmentId);
+                    }
+                    window.activeAttendingAppointmentId = null;
                 } catch(e) {
                     console.error("Error updating appointment status:", e);
                 }
@@ -19145,6 +19503,21 @@ if (patientSameDay.length === 0) {
     };
 
     window.savePatientRecord = async function(redirectToBudget = false) {
+        const currentUser = getCurrentUser();
+        const isHyg = currentUser && (typeof isHygienistRole === 'function' ? isHygienistRole(currentUser.role) : (currentUser.role && currentUser.role.toLowerCase().includes('higien')));
+
+        // El rol de higienista NO puede registrar nuevos pacientes
+        if (isHyg && !window.editingPatientId) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Acceso Restringido',
+                text: 'El rol de Higienista no tiene permisos para crear o registrar nuevos pacientes. Solo puede completar Anamnesis y Examen clínico en pacientes existentes.',
+                confirmButtonColor: '#0891b2'
+            });
+            window._isSavingPatientRecord = false;
+            return false;
+        }
+
         const isReturnToDirectSale = Boolean(window.returnToDirectSaleAfterPatientCreated);
         if (isReturnToDirectSale) {
             redirectToBudget = false;
@@ -19187,9 +19560,12 @@ if (patientSameDay.length === 0) {
             );
         }
 
-        if (!window.validateRequiredFormFields(patientRequiredFields)) {
-            if (typeof window.setPatientStepperStep === 'function') window.setPatientStepperStep(1);
-            return false;
+        // Si es Higienista editando paciente existente, no se exige validar filiación porque está en solo lectura
+        if (!isHyg) {
+            if (!window.validateRequiredFormFields(patientRequiredFields)) {
+                if (typeof window.setPatientStepperStep === 'function') window.setPatientStepperStep(1);
+                return false;
+            }
         }
 
         const allergies = Array.from(document.querySelectorAll('input[name="p-allergies"]:checked')).map(cb => cb.value);
@@ -19286,92 +19662,150 @@ if (patientSameDay.length === 0) {
             const existing = patients.find(p => p.id === id || (window.editingPatientId && p.id === window.editingPatientId));
 
             if (existing) {
-                // MODO EDICIÓN: Actualizar todos los datos clínicos y personales preservando historial
-                patientToSave = {
-                    ...existing,
-                    id: existing.id,
-                    fullname,
-                    birthdate,
-                    phone,
-                    email: getVal('p-email'),
-                    instagram: getVal('p-instagram'),
-                    occupation: profession,
-                    address: address,
-                    allergies,
-                    systemic,
-                    medication,
-                    emergencyContact,
-                    tagId,
-                    tagName,
-                    tagColor,
-                    tagRule,
-                    updatedAt: new Date().toISOString(),
-                    odontogramData: (existing && existing.odontogramData) ? existing.odontogramData : {},
-                    metadata: {
-                        ...(existing.metadata || {}),
+                if (isHyg) {
+                    // MODO HIGIENISTA: Preservar estrictamente los datos de filiación del paciente,
+                    // permitiendo registrar y actualizar únicamente Anamnesis y Examen clínico
+                    patientToSave = {
+                        ...existing,
+                        id: existing.id,
+                        fullname: existing.fullname,
+                        birthdate: existing.birthdate,
+                        phone: existing.phone,
+                        email: existing.email,
+                        instagram: existing.instagram,
+                        occupation: existing.occupation || profession,
+                        address: existing.address,
+                        allergies,
+                        systemic,
+                        medication,
+                        emergencyContact,
+                        updatedAt: new Date().toISOString(),
+                        odontogramData: (existing && existing.odontogramData) ? existing.odontogramData : {},
+                        metadata: {
+                            ...(existing.metadata || {}),
+                            updatedAt: new Date().toISOString(),
+                            profession: existing.metadata?.profession || existing.occupation || profession,
+                            consultReason: consultReason || existing.metadata?.consultReason,
+                            medicalTreatment,
+                            medicalTreatmentDetails,
+                            childDiseases,
+                            hasAllergies,
+                            allergiesDetails,
+                            surgeries,
+                            bleedingIssue,
+                            respiratoryIssues,
+                            respiratoryIssuesDetails,
+                            anesthesiaReaction,
+                            anesthesiaReactionDetails,
+                            penicillinAllergy,
+                            penicillinAllergyDetails,
+                            heartIssues,
+                            heartIssuesDetails,
+                            tissueHardPalate,
+                            tissueSoftPalate,
+                            tissueMouthFloor,
+                            tissueCheeks,
+                            tissueTongue,
+                            tissueFrenum,
+                            habitSwallowing,
+                            habitNailbiting,
+                            habitThumbsucking,
+                            habitThumbsuckingFinger,
+                            habitOthers,
+                            habitMouthbreather,
+                            habitFrequency,
+                            habitIntensity,
+                            sessionsPlan: step4WasRendered ? sessionsData : ((existing.metadata && existing.metadata.sessionsPlan) || [])
+                        }
+                    };
+                } else {
+                    // MODO EDICIÓN: Actualizar todos los datos clínicos y personales preservando historial
+                    patientToSave = {
+                        ...existing,
+                        id: existing.id,
+                        fullname,
+                        birthdate,
+                        phone,
+                        email: getVal('p-email'),
+                        instagram: getVal('p-instagram'),
+                        occupation: profession,
+                        address: address,
+                        allergies,
+                        systemic,
+                        medication,
+                        emergencyContact,
                         tagId,
                         tagName,
                         tagColor,
                         tagRule,
                         updatedAt: new Date().toISOString(),
-                        type,
-                        age,
-                        gender,
-                        address,
-                        mobilePhone,
-                        localPhone,
-                        workPhone,
-                        profession,
-                        instagram: getVal('p-instagram'),
-                        consultReason,
-                        repName,
-                        repId,
-                        repPhone,
-                        repRelation,
-                        medicalTreatment,
-                        medicalTreatmentDetails,
-                        childDiseases,
-                        hasAllergies,
-                        allergiesDetails,
-                        surgeries,
-                        bleedingIssue,
-                        respiratoryIssues,
-                        respiratoryIssuesDetails,
-                        anesthesiaReaction,
-                        anesthesiaReactionDetails,
-                        penicillinAllergy,
-                        penicillinAllergyDetails,
-                        heartIssues,
-                        heartIssuesDetails,
-                        tissueHardPalate,
-                        tissueSoftPalate,
-                        tissueMouthFloor,
-                        tissueCheeks,
-                        tissueTongue,
-                        tissueFrenum,
-                        habitSwallowing,
-                        habitNailbiting,
-                        habitThumbsucking,
-                        habitThumbsuckingFinger,
-                        habitOthers,
-                        habitMouthbreather,
-                        habitFrequency,
-                        habitIntensity,
-                        initTreatmentName: getVal('p-init-treatment-name'),
-                        initTreatmentSessions: getVal('p-init-treatment-sessions'),
-                        initTreatmentInterval: getVal('p-init-treatment-interval'),
-                        initialTreatmentPlan: {
-                            treatmentName: getVal('p-init-treatment-name') || 'Tratamiento Integral',
-                            totalSessions: parseInt(getVal('p-init-treatment-sessions')) || 2,
-                            interval: getVal('p-init-treatment-interval') || 'Quincenal'
-                        },
-                        sessionsPlan: step4WasRendered ? sessionsData : ((existing.metadata && existing.metadata.sessionsPlan) || []),
-                        draftOdontogramData: (window.odontogram && Object.keys(window.odontogram.getData() || {}).length > 0) ? window.odontogram.getData() : ((existing.metadata && existing.metadata.draftOdontogramData) || {}),
-                        draftBudget: {
-                            items: (currentBudgetItems && currentBudgetItems.length > 0) ? currentBudgetItems : ((existing.metadata && existing.metadata.draftBudget && existing.metadata.draftBudget.items) || [])
+                        odontogramData: (existing && existing.odontogramData) ? existing.odontogramData : {},
+                        metadata: {
+                            ...(existing.metadata || {}),
+                            tagId,
+                            tagName,
+                            tagColor,
+                            tagRule,
+                            updatedAt: new Date().toISOString(),
+                            type,
+                            age,
+                            gender,
+                            address,
+                            mobilePhone,
+                            localPhone,
+                            workPhone,
+                            profession,
+                            instagram: getVal('p-instagram'),
+                            consultReason,
+                            repName,
+                            repId,
+                            repPhone,
+                            repRelation,
+                            medicalTreatment,
+                            medicalTreatmentDetails,
+                            childDiseases,
+                            hasAllergies,
+                            allergiesDetails,
+                            surgeries,
+                            bleedingIssue,
+                            respiratoryIssues,
+                            respiratoryIssuesDetails,
+                            anesthesiaReaction,
+                            anesthesiaReactionDetails,
+                            penicillinAllergy,
+                            penicillinAllergyDetails,
+                            heartIssues,
+                            heartIssuesDetails,
+                            tissueHardPalate,
+                            tissueSoftPalate,
+                            tissueMouthFloor,
+                            tissueCheeks,
+                            tissueTongue,
+                            tissueFrenum,
+                            habitSwallowing,
+                            habitNailbiting,
+                            habitThumbsucking,
+                            habitThumbsuckingFinger,
+                            habitOthers,
+                            habitMouthbreather,
+                            habitFrequency,
+                            habitIntensity,
+                            initTreatmentName: getVal('p-init-treatment-name'),
+                            initTreatmentSessions: getVal('p-init-treatment-sessions'),
+                            initTreatmentInterval: getVal('p-init-treatment-interval'),
+                            initialTreatmentPlan: {
+                                treatmentName: getVal('p-init-treatment-name') || 'Tratamiento Integral',
+                                totalSessions: parseInt(getVal('p-init-treatment-sessions')) || 2,
+                                interval: getVal('p-init-treatment-interval') || 'Quincenal'
+                            },
+                            sessionsPlan: step4WasRendered ? sessionsData : ((existing.metadata && existing.metadata.sessionsPlan) || []),
+                            draftOdontogramData: (window.odontogram && Object.keys(window.odontogram.getData() || {}).length > 0) ? window.odontogram.getData() : ((existing.metadata && existing.metadata.draftOdontogramData) || {}),
+                            draftBudget: {
+                                items: (currentBudgetItems && currentBudgetItems.length > 0) ? currentBudgetItems : ((existing.metadata && existing.metadata.draftBudget && existing.metadata.draftBudget.items) || [])
+                            }
                         }
-                    }
-                };
+                    };
+                }
             } else {
                 // MODO NUEVO PACIENTE: Guardar ficha integral con todos los datos de pasos 1, 2, 3 y 4
                 patientToSave = {
@@ -19565,8 +19999,10 @@ if (patientSameDay.length === 0) {
             } else {
                 Swal.fire({
                     icon: 'success',
-                    title: '¡Paciente Guardado!',
-                    text: `${fullname} ha sido guardado exitosamente en la base de datos.`,
+                    title: isHyg ? '¡Historia Clínica Actualizada!' : '¡Paciente Guardado!',
+                    text: isHyg
+                        ? `Los registros de Anamnesis y Examen Clínico de ${patientToSave.fullname || fullname} fueron actualizados exitosamente.`
+                        : `${fullname} ha sido guardado exitosamente en la base de datos.`,
                     timer: 2000,
                     showConfirmButton: false
                 });
@@ -22105,32 +22541,36 @@ function initPatientStepperWizard() {
             if (!targetStep || isNaN(targetStep) || targetStep === currentStep) return;
             if (targetStep > getTotalSteps()) return;
 
-            // If navigating forward from Step 1, validate required patient fields
+            // If navigating forward from Step 1, validate required patient fields (omit if hygienist editing clinical data)
             if (currentStep === 1 && targetStep > 1) {
-                const birthdate = document.getElementById('p-birthdate') ? document.getElementById('p-birthdate').value : '';
-                const pTypeValNav = document.getElementById('p-type') ? document.getElementById('p-type').value : 'Adulto';
-                const ageNav = birthdate ? calculateAge(birthdate) : (parseInt(document.getElementById('p-age')?.value, 10) || 0);
+                const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+                const isHygNav = curUser && (typeof isHygienistRole === 'function' ? isHygienistRole(curUser.role) : (curUser.role && curUser.role.toLowerCase().includes('higien')));
+                if (!isHygNav || !window.editingPatientId) {
+                    const birthdate = document.getElementById('p-birthdate') ? document.getElementById('p-birthdate').value : '';
+                    const pTypeValNav = document.getElementById('p-type') ? document.getElementById('p-type').value : 'Adulto';
+                    const ageNav = birthdate ? calculateAge(birthdate) : (parseInt(document.getElementById('p-age')?.value, 10) || 0);
 
-                const step1Fields = [
-                    { id: 'p-firstname', label: 'Primer Nombre' },
-                    { id: 'p-lastname', label: 'Primer Apellido' },
-                    { id: 'p-id', label: 'Cédula / Documento de Identidad' },
-                    { id: 'p-birthdate', label: 'Fecha de Nacimiento' },
-                    { id: 'p-mobile-phone', label: 'Teléfono Móvil (WhatsApp)' },
-                    { id: 'p-address', label: 'Dirección de Habitación' }
-                ];
+                    const step1Fields = [
+                        { id: 'p-firstname', label: 'Primer Nombre' },
+                        { id: 'p-lastname', label: 'Primer Apellido' },
+                        { id: 'p-id', label: 'Cédula / Documento de Identidad' },
+                        { id: 'p-birthdate', label: 'Fecha de Nacimiento' },
+                        { id: 'p-mobile-phone', label: 'Teléfono Móvil (WhatsApp)' },
+                        { id: 'p-address', label: 'Dirección de Habitación' }
+                    ];
 
-                if (pTypeValNav === 'Infantil' || (ageNav > 0 && ageNav < 18)) {
-                    step1Fields.push(
-                        { id: 'p-rep-name', label: 'Nombre Completo del Representante Legal' },
-                        { id: 'p-rep-id', label: 'Cédula del Representante Legal' },
-                        { id: 'p-rep-phone', label: 'Teléfono del Representante Legal' },
-                        { id: 'p-rep-relation', label: 'Parentesco con el Menor' }
-                    );
-                }
+                    if (pTypeValNav === 'Infantil' || (ageNav > 0 && ageNav < 18)) {
+                        step1Fields.push(
+                            { id: 'p-rep-name', label: 'Nombre Completo del Representante Legal' },
+                            { id: 'p-rep-id', label: 'Cédula del Representante Legal' },
+                            { id: 'p-rep-phone', label: 'Teléfono del Representante Legal' },
+                            { id: 'p-rep-relation', label: 'Parentesco con el Menor' }
+                        );
+                    }
 
-                if (!window.validateRequiredFormFields(step1Fields)) {
-                    return;
+                    if (!window.validateRequiredFormFields(step1Fields)) {
+                        return;
+                    }
                 }
             }
 
@@ -22151,32 +22591,36 @@ function initPatientStepperWizard() {
         btnNext.onclick = async (e) => {
             e.preventDefault();
             
-            // Validation for Step 1
+            // Validation for Step 1 (omit if hygienist editing clinical data)
             if (currentStep === 1) {
-                const birthdate = document.getElementById('p-birthdate') ? document.getElementById('p-birthdate').value : '';
-                const pTypeValNext = document.getElementById('p-type') ? document.getElementById('p-type').value : 'Adulto';
-                const ageNext = birthdate ? calculateAge(birthdate) : (parseInt(document.getElementById('p-age')?.value, 10) || 0);
+                const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+                const isHygNext = curUser && (typeof isHygienistRole === 'function' ? isHygienistRole(curUser.role) : (curUser.role && curUser.role.toLowerCase().includes('higien')));
+                if (!isHygNext || !window.editingPatientId) {
+                    const birthdate = document.getElementById('p-birthdate') ? document.getElementById('p-birthdate').value : '';
+                    const pTypeValNext = document.getElementById('p-type') ? document.getElementById('p-type').value : 'Adulto';
+                    const ageNext = birthdate ? calculateAge(birthdate) : (parseInt(document.getElementById('p-age')?.value, 10) || 0);
 
-                const step1Fields = [
-                    { id: 'p-firstname', label: 'Primer Nombre' },
-                    { id: 'p-lastname', label: 'Primer Apellido' },
-                    { id: 'p-id', label: 'Cédula / Documento de Identidad' },
-                    { id: 'p-birthdate', label: 'Fecha de Nacimiento' },
-                    { id: 'p-mobile-phone', label: 'Teléfono Móvil (WhatsApp)' },
-                    { id: 'p-address', label: 'Dirección de Habitación' }
-                ];
+                    const step1Fields = [
+                        { id: 'p-firstname', label: 'Primer Nombre' },
+                        { id: 'p-lastname', label: 'Primer Apellido' },
+                        { id: 'p-id', label: 'Cédula / Documento de Identidad' },
+                        { id: 'p-birthdate', label: 'Fecha de Nacimiento' },
+                        { id: 'p-mobile-phone', label: 'Teléfono Móvil (WhatsApp)' },
+                        { id: 'p-address', label: 'Dirección de Habitación' }
+                    ];
 
-                if (pTypeValNext === 'Infantil' || (ageNext > 0 && ageNext < 18)) {
-                    step1Fields.push(
-                        { id: 'p-rep-name', label: 'Nombre Completo del Representante Legal' },
-                        { id: 'p-rep-id', label: 'Cédula del Representante Legal' },
-                        { id: 'p-rep-phone', label: 'Teléfono del Representante Legal' },
-                        { id: 'p-rep-relation', label: 'Parentesco con el Menor' }
-                    );
-                }
+                    if (pTypeValNext === 'Infantil' || (ageNext > 0 && ageNext < 18)) {
+                        step1Fields.push(
+                            { id: 'p-rep-name', label: 'Nombre Completo del Representante Legal' },
+                            { id: 'p-rep-id', label: 'Cédula del Representante Legal' },
+                            { id: 'p-rep-phone', label: 'Teléfono del Representante Legal' },
+                            { id: 'p-rep-relation', label: 'Parentesco con el Menor' }
+                        );
+                    }
 
-                if (!window.validateRequiredFormFields(step1Fields)) {
-                    return;
+                    if (!window.validateRequiredFormFields(step1Fields)) {
+                        return;
+                    }
                 }
             }
 
@@ -22527,12 +22971,36 @@ function initPatientStepperWizard() {
     };
 
     window.openPatientModalForNew = () => {
+        const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+        const isHyg = curUser && (typeof isHygienistRole === 'function' ? isHygienistRole(curUser.role) : (curUser.role && curUser.role.toLowerCase().includes('higien')));
+        if (isHyg) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Acceso Restringido',
+                text: 'El rol de Higienista no tiene permisos para crear o registrar nuevos pacientes. Esta acción corresponde a Recepción o Asistencia Médica.',
+                confirmButtonColor: '#0891b2'
+            });
+            return;
+        }
+
         window.patientModalOpenedFromBudget = false;
         window.currentPatientId = null;
         window.editingPatientId = null;
         window.wizardMode = 'all_steps';
         resetWizard();
         
+        // Re-enable step 1 inputs if previously disabled
+        const step1 = document.getElementById('step-content-1');
+        if (step1) {
+            step1.querySelectorAll('input, select, textarea').forEach(el => {
+                el.disabled = false;
+                el.style.backgroundColor = '';
+                el.style.cursor = '';
+            });
+            const notice = document.getElementById('hyg-filiacion-notice');
+            if (notice) notice.style.display = 'none';
+        }
+
         const modalTitle = document.getElementById('modal-patient-title');
         if (modalTitle) {
             modalTitle.innerHTML = `<i class="fa-solid fa-user-plus text-cyan"></i> Registro de Paciente`;
@@ -22573,9 +23041,12 @@ function initPatientStepperWizard() {
             window.wizardMode = 'clinical_complete';
             resetWizard();
 
+            const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+            const isHyg = curUser && (typeof isHygienistRole === 'function' ? isHygienistRole(curUser.role) : (curUser.role && curUser.role.toLowerCase().includes('higien')));
+
             const modalTitle = document.getElementById('modal-patient-title');
             if (modalTitle) {
-                modalTitle.innerHTML = `<i class="fa-solid fa-user-pen text-cyan"></i> Editar Paciente: ${p.fullname}`;
+                modalTitle.innerHTML = `<i class="fa-solid ${isHyg ? 'fa-tooth' : 'fa-user-pen'} text-cyan"></i> ${isHyg ? 'Historia Clínica / Examen' : 'Editar Paciente'}: ${p.fullname}`;
             }
             const saveBtn = document.getElementById('btn-save-patient');
             if (saveBtn) {
@@ -22587,6 +23058,36 @@ function initPatientStepperWizard() {
 
             const pIdInput = document.getElementById('p-id');
             if (pIdInput) pIdInput.readOnly = true;
+
+            // Protection of filiation data for hygienist
+            const step1 = document.getElementById('step-content-1');
+            let hygNotice = document.getElementById('hyg-filiacion-notice');
+            if (step1) {
+                const inputs = step1.querySelectorAll('input, select, textarea');
+                if (isHyg) {
+                    inputs.forEach(el => {
+                        el.disabled = true;
+                        el.style.backgroundColor = '#f8fafc';
+                        el.style.cursor = 'not-allowed';
+                    });
+                    if (!hygNotice) {
+                        hygNotice = document.createElement('div');
+                        hygNotice.id = 'hyg-filiacion-notice';
+                        hygNotice.style.cssText = 'background:#fef2f2; border:1px solid #fecaca; color:#b91c1c; padding:10px 14px; border-radius:8px; margin-bottom:14px; font-size:0.85rem; font-weight:600; display:flex; align-items:center; gap:8px;';
+                        hygNotice.innerHTML = '<i class="fa-solid fa-shield-halved"></i> <span>Los datos de filiación están protegidos. Como Higienista, puede avanzar para completar o editar la <strong>Anamnesis</strong> y el <strong>Examen Clínico</strong>.</span>';
+                        step1.insertBefore(hygNotice, step1.firstChild);
+                    } else {
+                        hygNotice.style.display = 'flex';
+                    }
+                } else {
+                    inputs.forEach(el => {
+                        el.disabled = false;
+                        el.style.backgroundColor = '';
+                        el.style.cursor = '';
+                    });
+                    if (hygNotice) hygNotice.style.display = 'none';
+                }
+            }
 
             showStep(1);
             openModal('modal-patient');
@@ -31186,11 +31687,25 @@ window.filterConsumablesList = function() {
     const tbody = document.getElementById('consumables-table-body') || document.getElementById('cons-table-tbody');
     if (!tbody) return;
 
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const isHyg = curUser && (typeof isHygienistRole === 'function' ? isHygienistRole(curUser.role) : (curUser.role && curUser.role.toLowerCase().includes('higien')));
+
     const searchInput = document.getElementById('consumables-table-search') || document.getElementById('cons-search-input');
     const query = (searchInput?.value || '').trim().toLowerCase();
     const activeCat = window._currentConsumableCategoryFilter || 'all';
 
     const filtered = list.filter(item => {
+        // If Hygienist: only dental-related consumables
+        if (isHyg) {
+            const isDental = typeof isDentalSpecialtyOrArea === 'function' && (
+                isDentalSpecialtyOrArea(item.category) ||
+                isDentalSpecialtyOrArea(item.name) ||
+                isDentalSpecialtyOrArea(item.notes) ||
+                isDentalSpecialtyOrArea(item.area)
+            );
+            if (!isDental) return false;
+        }
+
         // Category filter
         if (activeCat !== 'all' && (item.category || '').toLowerCase() !== activeCat.toLowerCase()) {
             return false;

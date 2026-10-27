@@ -7751,6 +7751,63 @@ body.is-doctor-role .dashboard-extra-widgets-grid {
 }
 
 /* ==========================================================================
+   HYGIENIST ROLE SECURITY & ISOLATION (ÁREA EXCLUSIVA DE ODONTOLOGÍA)
+   ========================================================================== */
+body.is-hygienist-role .nav-item[data-tab="billing"],
+body.is-hygienist-role .nav-item[data-tab="finance"],
+body.is-hygienist-role .nav-item[data-tab="payroll"],
+body.is-hygienist-role .nav-item[data-tab="users"],
+body.is-hygienist-role .nav-item[data-tab="rooms"],
+body.is-hygienist-role .nav-item[data-tab="specialties"],
+body.is-hygienist-role .nav-item[data-tab="stationery"],
+body.is-hygienist-role .nav-item[data-tab="cashea"],
+body.is-hygienist-role #btn-header-direct-sale,
+body.is-hygienist-role #btn-direct-sale-top,
+body.is-hygienist-role #btn-direct-sale-top-main,
+body.is-hygienist-role #btn-header-cashea,
+body.is-hygienist-role #btn-quick-patient,
+body.is-hygienist-role #btn-new-patient-modal,
+body.is-hygienist-role #btn-add-patient-top,
+body.is-hygienist-role #fab-act-patient,
+body.is-hygienist-role #fab-act-billing,
+body.is-hygienist-role #fab-act-direct-sale,
+body.is-hygienist-role #fab-act-expense,
+body.is-hygienist-role #fab-act-income,
+body.is-hygienist-role #fab-act-transfer,
+body.is-hygienist-role .btn-act-cobrar,
+body.is-hygienist-role .btn-appt-pay,
+body.is-hygienist-role button[onclick*="openEhrPaymentModal"],
+body.is-hygienist-role button[onclick*="openDirectSaleModal"],
+body.is-hygienist-role button[onclick*="openCasheaModal"],
+body.is-hygienist-role #medical-budget-editor-container,
+body.is-hygienist-role #btn-open-medical-budget {
+    display: none !important;
+}
+
+/* Room Occupied Card High-Visibility Red Styling */
+.erp-room-card.is-occupied {
+    border: 2.5px solid #ef4444 !important;
+    background: #fffafa !important;
+    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.18) !important;
+    position: relative;
+}
+.erp-room-occupied-banner {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: #ffffff;
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    padding: 6px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.28);
+    border-bottom: 1px solid #b91c1c;
+}
+
+/* ==========================================================================
    DOCTOR-CENTRIC MEDICAL PAYROLL & LIQUIDATION (PRIORIDAD POR DOCTOR)
    ========================================================================== */
 .doctor-payroll-card {

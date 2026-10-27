@@ -689,7 +689,7 @@
 
             const statusMap = {
                 'disponible': { cls: 'disponible', text: 'Disponible', icon: 'fa-circle-check' },
-                'ocupado': { cls: 'ocupado', text: 'En Consulta', icon: 'fa-user-clock' },
+                'ocupado': { cls: 'ocupado', text: 'Ocupado', icon: 'fa-user-clock' },
                 'alquilado': { cls: 'alquilado', text: 'Alquilado', icon: 'fa-file-signature' },
                 'mantenimiento': { cls: 'mantenimiento', text: 'Mantenimiento', icon: 'fa-screwdriver-wrench' },
                 'propio': { cls: 'alquilado', text: 'Uso Propio', icon: 'fa-hospital' }
@@ -706,6 +706,7 @@
 
             container.innerHTML = list.map(r => {
                 const stKey = (r.status || 'disponible').toLowerCase();
+                const isOccupied = stKey === 'ocupado';
                 const st = statusMap[stKey] || statusMap['disponible'];
                 const feeShift = r.rental_fee_shift ? ('$' + parseFloat(r.rental_fee_shift).toFixed(2)) : 'N/A';
                 const feeMonth = r.rental_fee_monthly ? ('$' + parseFloat(r.rental_fee_monthly).toFixed(2)) : 'N/A';
@@ -732,7 +733,21 @@
                 const afternoonDoc = afternoon.doctor_name ? afternoon.doctor_name : '<span style="color: #94a3b8; font-style: italic;">Sin asignar (Disponible)</span>';
 
                 return `
-                    <div class="erp-room-card">
+                    <div class="erp-room-card ${isOccupied ? 'is-occupied' : ''}">
+                        ${isOccupied ? `
+                            <div class="erp-room-occupied-banner">
+                                <span style="display: flex; align-items: center; gap: 6px;">
+                                    <i class="fa-solid fa-lock"></i> OCUPADO
+                                </span>
+                                <span style="font-size: 0.68rem; font-weight: 700; text-transform: none; letter-spacing: normal;">
+                                    ${r.active_doctor_name ? ('Dr(a). ' + r.active_doctor_name.replace(/^dr\.\s*|^dra\.\s*/i, '')) : 'Médico en consulta'}
+                                    ${r.active_patient_name ? (' • ' + r.active_patient_name) : ''}
+                                </span>
+                                <button type="button" class="btn btn-xs" onclick="event.stopPropagation(); window.freeClinicRoom && window.freeClinicRoom('${r.id}')" style="background: rgba(255,255,255,0.25); color: #ffffff; border: 1px solid rgba(255,255,255,0.6); padding: 1px 7px; font-size: 0.65rem; border-radius: 4px; cursor: pointer;" title="Liberar consultorio manualmente">
+                                    <i class="fa-solid fa-door-open"></i> Liberar
+                                </button>
+                            </div>
+                        ` : ''}
                         <div class="erp-room-card-top-bar ${st.cls}"></div>
                         <div class="erp-room-card-header">
                             <div>
@@ -4027,18 +4042,19 @@
 
             const statusColors = {
                 'disponible': { badge: 'green', text: 'Disponible' },
-                'ocupado': { badge: 'red', text: 'En Consulta' },
+                'ocupado': { badge: 'red', text: 'Ocupado' },
                 'alquilado': { badge: 'blue', text: 'Alquilado' },
                 'mantenimiento': { badge: 'amber', text: 'Mantenimiento' }
             };
 
             const renderRoomCard = (r) => {
                 const stKey = (r.status || 'disponible').toLowerCase();
+                const isOccupied = stKey === 'ocupado';
                 const st = statusColors[stKey] || statusColors['disponible'];
                 return `
-                    <div class="badge-tag ${st.badge}" style="display: flex; flex-direction: column; align-items: center; padding: 8px; border-radius: 10px; text-align: center;">
+                    <div class="badge-tag ${isOccupied ? 'red' : st.badge}" style="display: flex; flex-direction: column; align-items: center; padding: 8px; border-radius: 10px; text-align: center; ${isOccupied ? 'border: 1.5px solid #ef4444 !important; background: #fee2e2 !important; color: #b91c1c !important;' : ''}">
                         <strong style="font-size: 0.82rem;">${r.room_number ? ('#' + r.room_number) : (r.name.substring(0, 14))}</strong>
-                        <small style="font-size: 0.68rem; margin-top: 2px;">${st.text.toUpperCase()}</small>
+                        <small style="font-size: 0.68rem; margin-top: 2px; font-weight: 800;">${isOccupied ? 'OCUPADO' : st.text.toUpperCase()}</small>
                     </div>
                 `;
             };
