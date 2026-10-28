@@ -357,15 +357,52 @@ function isDentalDoctor(user) {
 }
 window.isDentalDoctor = isDentalDoctor;
 
+function isSuperOrAdminRole(role) {
+    if (!role) return false;
+    const r = String(role).toLowerCase().trim();
+    if (r.includes('recep') || r.includes('caja') || r.includes('cajer') || r.includes('factura') || 
+        r.includes('asist') || r.includes('auxiliar') || r.includes('higien') || r.includes('enferm') || 
+        r.includes('médic') || r.includes('medico') || r.includes('odont') || r.includes('doctor')) {
+        return false;
+    }
+    return r.includes('super administrador') || r.includes('superadmin') || r.includes('administrador') || 
+           r.includes('admin') || r.includes('gerente') || r.includes('director');
+}
+window.isSuperOrAdminRole = isSuperOrAdminRole;
+
+function isReceptionOrCashierRole(role) {
+    if (!role) return false;
+    const r = String(role).toLowerCase().trim();
+    if (isSuperOrAdminRole(r)) return false;
+    return r.includes('recep') || r.includes('caja') || r.includes('cajer') || r.includes('factura');
+}
+window.isReceptionOrCashierRole = isReceptionOrCashierRole;
+
+function isReceptionOrCashierUser(user = null) {
+    const u = user || (typeof getCurrentUser === 'function' ? getCurrentUser() : null);
+    if (!u) return false;
+    return isReceptionOrCashierRole(u.role);
+}
+window.isReceptionOrCashierUser = isReceptionOrCashierUser;
+
+function canCurrentUserManageServices(user = null) {
+    const u = user || (typeof getCurrentUser === 'function' ? getCurrentUser() : null);
+    if (!u) return false;
+    return isSuperOrAdminRole(u.role);
+}
+window.canCurrentUserManageServices = canCurrentUserManageServices;
+
+function canCurrentUserManageMaterials(user = null) {
+    const u = user || (typeof getCurrentUser === 'function' ? getCurrentUser() : null);
+    if (!u) return false;
+    return isSuperOrAdminRole(u.role);
+}
+window.canCurrentUserManageMaterials = canCurrentUserManageMaterials;
+
 function canCurrentUserDelete(user = null) {
     const u = user || (typeof getCurrentUser === 'function' ? getCurrentUser() : null);
     if (!u) return false;
-    if (typeof isSystemAdminRole === 'function' && isSystemAdminRole(u.role)) return true;
-    if (typeof isAssistantUser === 'function' && isAssistantUser(u)) return false;
-    if (typeof isDoctorUser === 'function' && isDoctorUser(u)) return false;
-    const r = (u.role || '').toLowerCase();
-    if (r.includes('admin') || r.includes('super') || r.includes('director') || r.includes('gerente')) return true;
-    return false;
+    return isSuperOrAdminRole(u.role);
 }
 window.canCurrentUserDelete = canCurrentUserDelete;
 
@@ -1428,7 +1465,7 @@ function checkAuthSession() {
 
 function applyRolePermissionsUI(role) {
     const r = (role || '').toLowerCase();
-    const isAdmin = r.includes('admin') || r.includes('super') || r.includes('director') || r.includes('gerente');
+    const isAdmin = typeof isSuperOrAdminRole === 'function' ? isSuperOrAdminRole(role) : (r.includes('admin') || r.includes('super') || r.includes('director') || r.includes('gerente'));
     const isHygienist = !isAdmin && r.includes('higien');
     const isAssistant = !isAdmin && !isHygienist && (typeof isAssistantRole === 'function' ? isAssistantRole(r) : (r.includes('asist') || r.includes('recep') || r.includes('caja') || r.includes('auxiliar')));
     const isDoctor = !isAdmin && !isAssistant && !isHygienist && (r.includes('medico') || r.includes('odont') || r.includes('doctor') || r.includes('dentista') || r.includes('médico') || r.includes('cirujano') || r.includes('especialista'));
@@ -1460,7 +1497,7 @@ function applyRolePermissionsUI(role) {
         admin: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll', 'consumables', 'hygienist_finances'],
         doctor: ['dashboard', 'agenda', 'odontogram', 'ehr', 'pricing', 'settings', 'help'],
         hygienist: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'consumables', 'settings', 'help', 'hygienist_finances'],
-        assistant: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'consumables', 'settings', 'help', 'hygienist_finances']
+        assistant: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'consumables', 'settings', 'help']
     };
 
     const allowedTabs = permissions[roleType] || permissions.assistant;
@@ -1511,10 +1548,57 @@ function applyRolePermissionsUI(role) {
         if (paneAppearanceBtn) paneAppearanceBtn.style.display = 'flex';
     }
 
-    // Additional UI restrictions for assistant
+    // Additional UI restrictions for services (Baremo) and inventory (Insumos)
     const addSrvBtn = document.getElementById('btn-add-service');
-    if (addSrvBtn) {
-        addSrvBtn.style.display = 'inline-flex';
+    const exportSrvBtn = document.getElementById('btn-export-services-excel');
+    const tplSrvBtn = document.getElementById('btn-download-services-template');
+    const importSrvBtn = document.getElementById('btn-import-services');
+
+    const addMatBtn = document.getElementById('btn-add-material');
+    const exportMatBtn = document.getElementById('btn-export-materials-excel');
+    const tplMatBtn = document.getElementById('btn-download-materials-template');
+    const importMatBtn = document.getElementById('btn-import-materials');
+
+    if (isAdmin) {
+        if (addSrvBtn) addSrvBtn.style.display = 'inline-flex';
+        if (exportSrvBtn) exportSrvBtn.style.display = 'inline-flex';
+        if (tplSrvBtn) tplSrvBtn.style.display = 'inline-flex';
+        if (importSrvBtn) importSrvBtn.style.display = 'inline-flex';
+
+        if (addMatBtn) addMatBtn.style.display = 'inline-flex';
+        if (exportMatBtn) exportMatBtn.style.display = 'inline-flex';
+        if (tplMatBtn) tplMatBtn.style.display = 'inline-flex';
+        if (importMatBtn) importMatBtn.style.display = 'inline-flex';
+    } else {
+        // Recepcionista, Caja, Asistente, Higienista y Médicos: bloqueados de crear, importar, exportar o descargar plantilla
+        if (addSrvBtn) addSrvBtn.style.display = 'none';
+        if (exportSrvBtn) exportSrvBtn.style.display = 'none';
+        if (tplSrvBtn) tplSrvBtn.style.display = 'none';
+        if (importSrvBtn) importSrvBtn.style.display = 'none';
+
+        if (addMatBtn) addMatBtn.style.display = 'none';
+        if (exportMatBtn) exportMatBtn.style.display = 'none';
+        if (tplMatBtn) tplMatBtn.style.display = 'none';
+        if (importMatBtn) importMatBtn.style.display = 'none';
+    }
+
+    // Finanzas: ocultar pestaña y botón móvil para no administradores
+    const financeTab = document.querySelector('.nav-item[data-tab="finance"]');
+    const mobFinanceBtn = document.getElementById('mob-nav-finance');
+    if (!isAdmin) {
+        if (financeTab) financeTab.classList.add('hidden');
+        if (mobFinanceBtn) mobFinanceBtn.classList.add('hidden');
+        const curActiveTab = localStorage.getItem('dental_active_tab');
+        if (curActiveTab === 'finance') {
+            localStorage.setItem('dental_active_tab', 'dashboard');
+            const viewFinance = document.getElementById('view-finance');
+            if (viewFinance && viewFinance.classList.contains('active')) {
+                window.navigateToTab('dashboard');
+            }
+        }
+    } else {
+        if (financeTab) financeTab.classList.remove('hidden');
+        if (mobFinanceBtn) mobFinanceBtn.classList.remove('hidden');
     }
 
     // Separation of duties: Allow register patient buttons
@@ -2040,15 +2124,25 @@ window.navigateToTab = async function(tabName) {
     // RBAC Navigation Guard
     const user = getCurrentUser();
     if (user) {
-        const r = (user.role || '').toLowerCase();
-        const isAdmin = r.includes('admin') || r.includes('super') || r.includes('director');
-        const isDoctor = r.includes('medico') || r.includes('odont') || r.includes('doctor') || r.includes('dentista') || r.includes('médico');
-        const roleType = isAdmin ? 'admin' : (isDoctor ? 'doctor' : 'assistant');
+        const isAdmin = typeof isSuperOrAdminRole === 'function' ? isSuperOrAdminRole(user.role) : false;
+        const isDoctor = !isAdmin && (typeof isDoctorUser === 'function' && isDoctorUser(user));
+        const isHygienist = !isAdmin && (typeof isHygienistRole === 'function' && isHygienistRole(user.role));
+        const roleType = isAdmin ? 'admin' : (isDoctor ? 'doctor' : (isHygienist ? 'hygienist' : 'assistant'));
         const allowedTabs = {
             admin: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll', 'consumables', 'hygienist-finances'],
             doctor: ['dashboard', 'agenda', 'odontogram', 'ehr', 'pricing', 'settings', 'help'],
-            assistant: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'billing', 'finance', 'settings', 'help', 'consumables']
+            hygienist: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'consumables', 'settings', 'help', 'hygienist-finances'],
+            assistant: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'billing', 'settings', 'help', 'consumables']
         }[roleType] || ['dashboard', 'help'];
+
+        if (tabName === 'finance' && !isAdmin) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Acceso Denegado',
+                text: 'Su rol no cuenta con permisos para ver el módulo de finanzas.'
+            });
+            return window.navigateToTab('dashboard');
+        }
 
         if (!allowedTabs.includes(tabName)) {
             Swal.fire({
@@ -2059,7 +2153,7 @@ window.navigateToTab = async function(tabName) {
             if (roleType === 'doctor') {
                 return window.navigateToTab('ehr');
             }
-            return;
+            return window.navigateToTab('dashboard');
         }
     }
 
@@ -13786,7 +13880,7 @@ async function renderPricingTable(filter = 'all', searchQuery = '') {
     const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
     const isDoctor = currentUser && (typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false);
     const isHygienist = currentUser && (typeof isHygienistRole === 'function' ? isHygienistRole(currentUser.role) : (currentUser.role && currentUser.role.toLowerCase().includes('higien')));
-    const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor && !isHygienist);
+    const canManage = typeof canCurrentUserManageServices === 'function' ? canCurrentUserManageServices(currentUser) : false;
     const hideContact = typeof shouldHidePatientContact === 'function' && shouldHidePatientContact(currentUser);
     const isLabFilter = (filter && filter.toLowerCase() === 'laboratorio');
 
@@ -13855,8 +13949,8 @@ async function renderPricingTable(filter = 'all', searchQuery = '') {
             const pUSD = parseFloat(p.priceUSD !== undefined && p.priceUSD !== null ? p.priceUSD : (p.price || 0)) || 0;
             const priceVES = (pUSD * rate).toFixed(2);
             const safeCode = (p.code || '').replace(/'/g, "\\'");
-            const deleteSrvBtn = canDelete ? `<button class="btn btn-xs btn-outline text-red" onclick="window.deletePricingService('${safeCode}')" title="Eliminar Servicio" style="padding: 2px 6px;"><i class="fa-solid fa-trash"></i></button>` : '';
-            const editSrvBtn = canDelete ? `<button class="btn btn-xs btn-outline" onclick="window.editPricingService('${safeCode}')" title="Editar Servicio" style="padding: 2px 6px;"><i class="fa-solid fa-pen-to-square"></i></button>` : '';
+            const deleteSrvBtn = canManage ? `<button class="btn btn-xs btn-outline text-red" onclick="window.deletePricingService('${safeCode}')" title="Eliminar Servicio" style="padding: 2px 6px;"><i class="fa-solid fa-trash"></i></button>` : '';
+            const editSrvBtn = canManage ? `<button class="btn btn-xs btn-outline" onclick="window.editPricingService('${safeCode}')" title="Editar Servicio" style="padding: 2px 6px;"><i class="fa-solid fa-pen-to-square"></i></button>` : '';
             const areaInfo = typeof getAreaIconInfo === 'function' ? getAreaIconInfo(p.area) : { icon: 'fa-hospital', color: '#64748b', bg: 'rgba(100,116,139,0.1)' };
 
             const isLabService = (p.area && p.area.toLowerCase() === 'laboratorio') || (p.category && p.category.toLowerCase().includes('lab')) || isLabFilter;
@@ -13915,6 +14009,15 @@ async function renderPricingTable(filter = 'all', searchQuery = '') {
 
 window.editPricingService = async function(code) {
     if (!code) return;
+    const curUser = getCurrentUser();
+    if (typeof canCurrentUserManageServices === 'function' && !canCurrentUserManageServices(curUser)) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Acceso Denegado',
+            text: 'Su rol no cuenta con permisos para editar servicios del catálogo.'
+        });
+        return;
+    }
     let services = [];
     if (window.SupabaseDataService && typeof window.SupabaseDataService.getBaremo === 'function') {
         services = await window.SupabaseDataService.getBaremo();
@@ -14187,7 +14290,7 @@ window.restockInventoryMaterial = async function(code) {
 
 window.deletePricingService = async function(code) {
     const user = getCurrentUser();
-    if (!canCurrentUserDelete(user)) {
+    if (typeof canCurrentUserManageServices === 'function' ? !canCurrentUserManageServices(user) : !canCurrentUserDelete(user)) {
         Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Su rol no cuenta con permisos para eliminar servicios del catálogo.' });
         return;
     }
@@ -16824,6 +16927,15 @@ function initGlobalEvents() {
     const btnAddMat = document.getElementById('btn-add-material');
     if (btnAddMat) {
         btnAddMat.onclick = () => {
+            const curUser = getCurrentUser();
+            if (typeof canCurrentUserManageMaterials === 'function' && !canCurrentUserManageMaterials(curUser)) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Acceso Denegado',
+                    text: 'Su rol no cuenta con permisos para registrar nuevos insumos en inventario.'
+                });
+                return;
+            }
             const form = document.getElementById('form-material');
             if (form) form.reset();
             const codeInput = document.getElementById('mat-code');
@@ -16842,6 +16954,15 @@ function initGlobalEvents() {
     if (saveMatBtn) {
         saveMatBtn.onclick = async (e) => {
             e.preventDefault();
+            const curUser = getCurrentUser();
+            if (typeof canCurrentUserManageMaterials === 'function' && !canCurrentUserManageMaterials(curUser)) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Acceso Denegado',
+                    text: 'Su rol no cuenta con permisos para guardar o registrar insumos en inventario.'
+                });
+                return;
+            }
             const code = document.getElementById('mat-code').value.trim();
             const name = document.getElementById('mat-name').value.trim();
             const area = document.getElementById('mat-area') ? document.getElementById('mat-area').value : 'Odontología';
@@ -17126,6 +17247,15 @@ function initGlobalEvents() {
     };
 
     window.openCreateServiceModal = async function(preselectedArea = null, fromDoctor = false) {
+        const curUser = getCurrentUser();
+        if (typeof canCurrentUserManageServices === 'function' && !canCurrentUserManageServices(curUser)) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Acceso Denegado',
+                text: 'Su rol no cuenta con permisos para crear nuevos servicios en el catálogo.'
+            });
+            return;
+        }
         if (fromDoctor) {
             window._serviceModalOpenedFromDoctorModal = true;
         }
@@ -17170,6 +17300,15 @@ function initGlobalEvents() {
     const btnAddSrv = document.getElementById('btn-add-service');
     if (btnAddSrv) {
         btnAddSrv.onclick = async () => {
+            const curUser = getCurrentUser();
+            if (typeof canCurrentUserManageServices === 'function' && !canCurrentUserManageServices(curUser)) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Acceso Denegado',
+                    text: 'Su rol no cuenta con permisos para crear nuevos servicios en el catálogo.'
+                });
+                return;
+            }
             const activeFilterBtn = document.querySelector('#view-pricing .filter-btn.active');
             const activeFilter = activeFilterBtn ? activeFilterBtn.dataset.filter : 'all';
             await window.openCreateServiceModal(activeFilter !== 'all' ? activeFilter : null, false);
@@ -17180,6 +17319,15 @@ function initGlobalEvents() {
     if (saveSrvBtn) {
         saveSrvBtn.onclick = async (e) => {
             e.preventDefault();
+            const curUser = getCurrentUser();
+            if (typeof canCurrentUserManageServices === 'function' && !canCurrentUserManageServices(curUser)) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Acceso Denegado',
+                    text: 'Su rol no cuenta con permisos para guardar o modificar servicios en el catálogo.'
+                });
+                return;
+            }
             const code = document.getElementById('srv-code').value.trim();
             const name = document.getElementById('srv-name').value.trim();
             const area = document.getElementById('srv-area') ? document.getElementById('srv-area').value : 'Odontología';
@@ -17542,6 +17690,15 @@ function initGlobalEvents() {
     const btnDownloadSrvTemplate = document.getElementById('btn-download-services-template');
     if (btnDownloadSrvTemplate) {
         btnDownloadSrvTemplate.onclick = () => {
+            const curUser = getCurrentUser();
+            if (typeof canCurrentUserManageServices === 'function' && !canCurrentUserManageServices(curUser)) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Acceso Denegado',
+                    text: 'Su rol no cuenta con permisos para descargar la plantilla de servicios.'
+                });
+                return;
+            }
             const data = [
                 {
                     "Código": "OD-01",
@@ -17584,6 +17741,15 @@ function initGlobalEvents() {
     const btnExportSrv = document.getElementById('btn-export-services-excel');
     if (btnExportSrv) {
         btnExportSrv.onclick = async () => {
+            const curUser = getCurrentUser();
+            if (typeof canCurrentUserManageServices === 'function' && !canCurrentUserManageServices(curUser)) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Acceso Denegado',
+                    text: 'Su rol no cuenta con permisos para exportar el catálogo de servicios.'
+                });
+                return;
+            }
             if (!window.XLSX) {
                 Swal.fire({ icon: 'error', title: 'Error', text: 'Librería XLSX no disponible.' });
                 return;
@@ -17651,7 +17817,18 @@ function initGlobalEvents() {
     const btnImportSrv = document.getElementById('btn-import-services');
     const importSrvFile = document.getElementById('import-services-file');
     if (btnImportSrv && importSrvFile) {
-        btnImportSrv.onclick = () => importSrvFile.click();
+        btnImportSrv.onclick = () => {
+            const curUser = getCurrentUser();
+            if (typeof canCurrentUserManageServices === 'function' && !canCurrentUserManageServices(curUser)) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Acceso Denegado',
+                    text: 'Su rol no cuenta con permisos para importar servicios al catálogo.'
+                });
+                return;
+            }
+            importSrvFile.click();
+        };
         importSrvFile.onchange = async (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -17732,6 +17909,15 @@ function initGlobalEvents() {
     const btnDownloadMatTemplate = document.getElementById('btn-download-materials-template');
     if (btnDownloadMatTemplate) {
         btnDownloadMatTemplate.onclick = () => {
+            const curUser = getCurrentUser();
+            if (typeof canCurrentUserManageMaterials === 'function' && !canCurrentUserManageMaterials(curUser)) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Acceso Denegado',
+                    text: 'Su rol no cuenta con permisos para descargar la plantilla de insumos.'
+                });
+                return;
+            }
             const data = [
                 {
                     "Código": "INS-01",
@@ -17762,6 +17948,15 @@ function initGlobalEvents() {
     const btnExportMat = document.getElementById('btn-export-materials-excel');
     if (btnExportMat) {
         btnExportMat.onclick = async () => {
+            const curUser = getCurrentUser();
+            if (typeof canCurrentUserManageMaterials === 'function' && !canCurrentUserManageMaterials(curUser)) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Acceso Denegado',
+                    text: 'Su rol no cuenta con permisos para exportar el inventario de insumos.'
+                });
+                return;
+            }
             if (!window.XLSX) {
                 Swal.fire({ icon: 'error', title: 'Error', text: 'Librería XLSX no disponible.' });
                 return;
@@ -18025,7 +18220,18 @@ function initGlobalEvents() {
     const btnImportMat = document.getElementById('btn-import-materials');
     const importMatFile = document.getElementById('import-materials-file');
     if (btnImportMat && importMatFile) {
-        btnImportMat.onclick = () => importMatFile.click();
+        btnImportMat.onclick = () => {
+            const curUser = getCurrentUser();
+            if (typeof canCurrentUserManageMaterials === 'function' && !canCurrentUserManageMaterials(curUser)) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Acceso Denegado',
+                    text: 'Su rol no cuenta con permisos para importar insumos al inventario.'
+                });
+                return;
+            }
+            importMatFile.click();
+        };
         importMatFile.onchange = async (e) => {
             const file = e.target.files[0];
             if (!file) return;
