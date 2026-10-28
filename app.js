@@ -30104,9 +30104,11 @@ window.clearRecipePatient = function() {
     if (searchContainer) searchContainer.classList.remove('hidden');
     if (searchInput) {
         searchInput.value = '';
-        setTimeout(() => searchInput.focus(), 100);
     }
-    if (resultsContainer) resultsContainer.style.display = 'none';
+    if (resultsContainer) {
+        resultsContainer.style.display = 'none';
+        resultsContainer.innerHTML = '';
+    }
 
     if (trtSelect) trtSelect.innerHTML = '<option value="General">General / Consulta Externa</option>';
     if (tbody) tbody.innerHTML = '';
@@ -30129,13 +30131,18 @@ window.selectRecipePatient = async function(patientId) {
     const nameEl = document.getElementById('recipe-patient-name');
     const metaEl = document.getElementById('recipe-patient-meta');
     const searchContainer = document.getElementById('recipe-patient-search-container');
+    const searchInput = document.getElementById('recipe-patient-search-input');
     const resultsContainer = document.getElementById('recipe-patient-search-results');
 
     const hideContact = typeof shouldHidePatientContact === 'function' && shouldHidePatientContact();
     if (nameEl) nameEl.innerText = p.fullname || 'Paciente';
     if (metaEl) metaEl.innerText = hideContact ? `C.I.: ${p.id}` : `C.I.: ${p.id} | Tel: ${p.phone || 'S/N'}`;
     if (searchContainer) searchContainer.classList.add('hidden');
-    if (resultsContainer) resultsContainer.style.display = 'none';
+    if (searchInput) searchInput.value = '';
+    if (resultsContainer) {
+        resultsContainer.style.display = 'none';
+        resultsContainer.innerHTML = '';
+    }
 
     // Populate treatment dropdown with this patient's treatments/sessions
     const select = document.getElementById('recipe-treatment-select');
@@ -30172,14 +30179,23 @@ window.renderRecipePatientSearchResults = async function(query) {
     if (!resultsContainer) return;
 
     const normalizeStr = (s) => (s || '').toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-    const term = normalizeStr(query).trim();
+    const rawQuery = (query || '').trim();
+    const term = normalizeStr(rawQuery);
 
     const allPatients = await SupabaseDataService.getPatients();
     let patients = allPatients;
     const cur = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
     const hideContact = typeof shouldHidePatientContact === 'function' && shouldHidePatientContact(cur);
     if (cur && typeof isDoctorUser === 'function' && isDoctorUser(cur)) {
-        patients = allPatients.filter(p => typeof isPatientAssignedToDoctor === 'function' ? isPatientAssignedToDoctor(p, cur) : true);
+        let appts = [];
+        let budgets = [];
+        try {
+            if (typeof SupabaseDataService !== 'undefined') {
+                if (SupabaseDataService.getAppointments) appts = await SupabaseDataService.getAppointments();
+                if (SupabaseDataService.getBudgets) budgets = await SupabaseDataService.getBudgets();
+            }
+        } catch(e) {}
+        patients = allPatients.filter(p => typeof isPatientAssignedToDoctor === 'function' ? isPatientAssignedToDoctor(p, cur, appts, budgets) : true);
     }
     let matches = [];
     if (!term) {
@@ -30194,7 +30210,11 @@ window.renderRecipePatientSearchResults = async function(query) {
     }
 
     if (matches.length === 0) {
-        resultsContainer.innerHTML = `<div style="padding: 12px; text-align: center; color: #64748b; font-size: 0.85rem;">No se encontraron pacientes con "${term}"</div>`;
+        if (!term) {
+            resultsContainer.innerHTML = `<div style="padding: 12px; text-align: center; color: #64748b; font-size: 0.85rem;"><i class="fa-solid fa-users text-teal" style="margin-right: 6px;"></i>No hay pacientes asignados disponibles</div>`;
+        } else {
+            resultsContainer.innerHTML = `<div style="padding: 12px; text-align: center; color: #64748b; font-size: 0.85rem;"><i class="fa-solid fa-circle-exclamation text-amber" style="margin-right: 6px;"></i>No se encontraron pacientes con "${rawQuery}"</div>`;
+        }
         resultsContainer.style.display = 'block';
         return;
     }
@@ -30224,6 +30244,16 @@ window.openRecipeModal = async function(sessionNum = null, sessionTitle = '') {
     const metaEl = document.getElementById('recipe-patient-meta');
     const searchContainer = document.getElementById('recipe-patient-search-container');
     const searchInput = document.getElementById('recipe-patient-search-input');
+    const resultsContainer = document.getElementById('recipe-patient-search-results');
+
+    // Ensure results container is hidden and clean on every modal open
+    if (resultsContainer) {
+        resultsContainer.style.display = 'none';
+        resultsContainer.innerHTML = '';
+    }
+    if (searchInput) {
+        searchInput.value = '';
+    }
 
     if (p) {
         window._recipeSelectedPatientId = p.id;
@@ -30239,7 +30269,8 @@ window.openRecipeModal = async function(sessionNum = null, sessionTitle = '') {
         searchInput.addEventListener('input', (e) => {
             window.renderRecipePatientSearchResults(e.target.value);
         });
-        searchInput.addEventListener('focus', () => {
+        searchInput.addEventListener('click', (e) => {
+            e.stopPropagation();
             window.renderRecipePatientSearchResults(searchInput.value);
         });
         searchInput.addEventListener('keydown', (e) => {
@@ -30251,6 +30282,19 @@ window.openRecipeModal = async function(sessionNum = null, sessionTitle = '') {
                 const firstItem = document.querySelector('#recipe-patient-search-results .recipe-patient-search-item');
                 if (firstItem) {
                     firstItem.click();
+                }
+            }
+        });
+    }
+
+    if (!window._recipePatientSearchClickOutsideBound) {
+        window._recipePatientSearchClickOutsideBound = true;
+        document.addEventListener('click', (e) => {
+            const container = document.getElementById('recipe-patient-search-container');
+            const res = document.getElementById('recipe-patient-search-results');
+            if (res && res.style.display !== 'none') {
+                if (!container || !container.contains(e.target)) {
+                    res.style.display = 'none';
                 }
             }
         });
@@ -30363,10 +30407,10 @@ window.openRecipeModal = async function(sessionNum = null, sessionTitle = '') {
     }
 
     const notesEl = document.getElementById('recipe-general-notes');
-    if (notesEl && !notesEl.value) notesEl.value = 'Tomar los medicamentos indicados strictly después de las comidas.';
+    if (notesEl && !notesEl.value) notesEl.value = '';
 
     const indEl = document.getElementById('recipe-clinical-indications');
-    if (indEl && !indEl.value) indEl.value = '1. Reposo relativo durante las primeras 48 horas.\n2. Aplicar hielo local en la zona externa por lapsos de 15 minutos.\n3. Dieta blanda y fría. Evitar exponerse al sol o realizar esfuerzos físicos.';
+    if (indEl) indEl.value = '';
 
     window.switchRecipeModalTab('recipe');
     openModal('modal-recipe-and-indications');
@@ -30429,6 +30473,32 @@ window.saveRecipeAndIndicationsFinal = async function() {
         return;
     }
 
+    const indications = document.getElementById('recipe-clinical-indications') ? document.getElementById('recipe-clinical-indications').value.trim() : '';
+
+    // Alert if clinical indications are empty or untouched
+    if (!indications) {
+        const confirmResult = await Swal.fire({
+            icon: 'warning',
+            title: '¿Guardar sin Indicaciones Clínicas?',
+            html: 'No has ingresado ninguna <strong>indicación clínica</strong> para este récipe.<br><br>¿Está seguro de emitir el récipe <strong>sin indicaciones médicas</strong>, o prefiere redactarlas ahora?',
+            showCancelButton: true,
+            confirmButtonColor: '#f59e0b',
+            cancelButtonColor: '#0d9488',
+            confirmButtonText: '<i class="fa-solid fa-check"></i> Sí, guardar sin indicaciones',
+            cancelButtonText: '<i class="fa-solid fa-pen-to-square"></i> Redactar indicaciones ahora',
+            reverseButtons: true
+        });
+
+        if (!confirmResult.isConfirmed) {
+            window.switchRecipeModalTab('indications');
+            const indInput = document.getElementById('recipe-clinical-indications');
+            if (indInput) {
+                setTimeout(() => indInput.focus(), 150);
+            }
+            return;
+        }
+    }
+
     const treatmentLinked = document.getElementById('recipe-treatment-select') ? document.getElementById('recipe-treatment-select').value : 'General';
     const medicines = [];
     document.querySelectorAll('#recipe-medicines-tbody tr').forEach(tr => {
@@ -30441,7 +30511,6 @@ window.saveRecipeAndIndicationsFinal = async function() {
     });
 
     const notes = document.getElementById('recipe-general-notes') ? document.getElementById('recipe-general-notes').value.trim() : '';
-    const indications = document.getElementById('recipe-clinical-indications') ? document.getElementById('recipe-clinical-indications').value.trim() : '';
 
     // Capture selected doctor info
     const doctorSelect = document.getElementById('recipe-doctor-select');
@@ -30579,6 +30648,27 @@ window.printSingleRecipePDF = async function(patientId, recipeId = null) {
 
     // If modal is open or no saved recipe exists in history, build from current modal inputs
     if (!recipe || isModalOpen) {
+        const indications = document.getElementById('recipe-clinical-indications') ? document.getElementById('recipe-clinical-indications').value.trim() : '';
+        if (isModalOpen && !indications) {
+            const confirmResult = await Swal.fire({
+                icon: 'warning',
+                title: '¿Imprimir sin Indicaciones Clínicas?',
+                html: 'No has ingresado ninguna <strong>indicación clínica</strong> para este récipe.<br><br>¿Está seguro de generar el documento <strong>sin indicaciones médicas</strong>, o prefiere redactarlas ahora?',
+                showCancelButton: true,
+                confirmButtonColor: '#f59e0b',
+                cancelButtonColor: '#0d9488',
+                confirmButtonText: '<i class="fa-solid fa-check"></i> Sí, generar sin indicaciones',
+                cancelButtonText: '<i class="fa-solid fa-pen-to-square"></i> Redactar indicaciones',
+                reverseButtons: true
+            });
+            if (!confirmResult.isConfirmed) {
+                window.switchRecipeModalTab('indications');
+                const indInput = document.getElementById('recipe-clinical-indications');
+                if (indInput) setTimeout(() => indInput.focus(), 150);
+                return;
+            }
+        }
+
         const treatmentLinked = document.getElementById('recipe-treatment-select') ? document.getElementById('recipe-treatment-select').value : 'General';
         const medicines = [];
         document.querySelectorAll('#recipe-medicines-tbody tr').forEach(tr => {
@@ -30588,7 +30678,6 @@ window.printSingleRecipePDF = async function(patientId, recipeId = null) {
             if (med) medicines.push({ med, dose, freq });
         });
         const notes = document.getElementById('recipe-general-notes') ? document.getElementById('recipe-general-notes').value.trim() : '';
-        const indications = document.getElementById('recipe-clinical-indications') ? document.getElementById('recipe-clinical-indications').value.trim() : '';
         
         const doctorSelect = document.getElementById('recipe-doctor-select');
         let selDocName = '';
@@ -30711,6 +30800,27 @@ window.sendRecipeWhatsApp = async function(patientId, recipeId = null) {
     const isModalOpen = !document.getElementById('modal-recipe-and-indications')?.classList.contains('hidden');
 
     if (!recipe || isModalOpen) {
+        const indications = document.getElementById('recipe-clinical-indications') ? document.getElementById('recipe-clinical-indications').value.trim() : '';
+        if (isModalOpen && !indications) {
+            const confirmResult = await Swal.fire({
+                icon: 'warning',
+                title: '¿Enviar sin Indicaciones Clínicas?',
+                html: 'No has ingresado ninguna <strong>indicación clínica</strong> para este récipe.<br><br>¿Está seguro de enviar el récipe <strong>sin indicaciones médicas</strong> por WhatsApp, o prefiere redactarlas ahora?',
+                showCancelButton: true,
+                confirmButtonColor: '#f59e0b',
+                cancelButtonColor: '#0d9488',
+                confirmButtonText: '<i class="fa-solid fa-check"></i> Sí, enviar sin indicaciones',
+                cancelButtonText: '<i class="fa-solid fa-pen-to-square"></i> Redactar indicaciones',
+                reverseButtons: true
+            });
+            if (!confirmResult.isConfirmed) {
+                window.switchRecipeModalTab('indications');
+                const indInput = document.getElementById('recipe-clinical-indications');
+                if (indInput) setTimeout(() => indInput.focus(), 150);
+                return;
+            }
+        }
+
         const treatmentLinked = document.getElementById('recipe-treatment-select') ? document.getElementById('recipe-treatment-select').value : 'General';
         const medicines = [];
         document.querySelectorAll('#recipe-medicines-tbody tr').forEach(tr => {
@@ -30720,7 +30830,6 @@ window.sendRecipeWhatsApp = async function(patientId, recipeId = null) {
             if (med) medicines.push({ med, dose, freq });
         });
         const notes = document.getElementById('recipe-general-notes') ? document.getElementById('recipe-general-notes').value.trim() : '';
-        const indications = document.getElementById('recipe-clinical-indications') ? document.getElementById('recipe-clinical-indications').value.trim() : '';
 
         // Doctor info
         const doctorSelect = document.getElementById('recipe-doctor-select');
