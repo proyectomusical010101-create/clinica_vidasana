@@ -11449,9 +11449,111 @@ function formatApptDateTag(dateStr, isTomorrow = false) {
 }
 
 // ==========================================
+// DATE RANGE & PERIOD FILTERS FOR DASHBOARD & FINANCE
+// ==========================================
+window.currentDashboardPeriod = 'month';
+window.dashboardCustomStart = '';
+window.dashboardCustomEnd = '';
+
+window.currentFinancePeriod = 'month';
+window.financeCustomStart = '';
+window.financeCustomEnd = '';
+
+window.currentPayableStatusFilter = 'all';
+
+window.formatDateToISO = function(d) {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
+window.getDateRangeFromPreset = function(preset, customStart, customEnd) {
+    const now = new Date();
+    if (preset === 'week') {
+        const dayOfWeek = (now.getDay() + 6) % 7; // Monday = 0, Sunday = 6
+        const start = new Date(now);
+        start.setDate(now.getDate() - dayOfWeek);
+        const end = new Date(start);
+        end.setDate(start.getDate() + 6);
+        return { start: window.formatDateToISO(start), end: window.formatDateToISO(end), label: 'Esta Semana' };
+    } else if (preset === 'month') {
+        const start = new Date(now.getFullYear(), now.getMonth(), 1);
+        const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        return { start: window.formatDateToISO(start), end: window.formatDateToISO(end), label: 'Este Mes' };
+    } else if (preset === 'quarter') {
+        const qMonth = Math.floor(now.getMonth() / 3) * 3;
+        const start = new Date(now.getFullYear(), qMonth, 1);
+        const end = new Date(now.getFullYear(), qMonth + 3, 0);
+        return { start: window.formatDateToISO(start), end: window.formatDateToISO(end), label: 'Este Trimestre' };
+    } else if (preset === 'semester') {
+        const sMonth = Math.floor(now.getMonth() / 6) * 6;
+        const start = new Date(now.getFullYear(), sMonth, 1);
+        const end = new Date(now.getFullYear(), sMonth + 6, 0);
+        return { start: window.formatDateToISO(start), end: window.formatDateToISO(end), label: 'Este Semestre' };
+    } else if (preset === 'year') {
+        const start = new Date(now.getFullYear(), 0, 1);
+        const end = new Date(now.getFullYear(), 11, 31);
+        return { start: window.formatDateToISO(start), end: window.formatDateToISO(end), label: `Este Año (${now.getFullYear()})` };
+    } else if (preset === 'custom') {
+        return { 
+            start: customStart || window.formatDateToISO(now), 
+            end: customEnd || window.formatDateToISO(now), 
+            label: 'Personalizado' 
+        };
+    }
+    return { start: '1970-01-01', end: '2099-12-31', label: 'Todo el Historial' };
+};
+
+window.initDashboardPeriodFilters = function() {
+    const group = document.getElementById('dashboard-date-filter-group');
+    if (!group || group._hasPeriodListeners) return;
+    group._hasPeriodListeners = true;
+
+    const buttons = group.querySelectorAll('.btn-period-filter');
+    const customContainer = document.getElementById('dashboard-custom-date-container');
+    const btnApply = document.getElementById('btn-apply-dashboard-custom-date');
+
+    buttons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            buttons.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const period = btn.dataset.period;
+            window.currentDashboardPeriod = period;
+
+            if (period === 'custom') {
+                if (customContainer) customContainer.style.display = 'flex';
+            } else {
+                if (customContainer) customContainer.style.display = 'none';
+                renderDashboard(period);
+            }
+        });
+    });
+
+    if (btnApply) {
+        btnApply.addEventListener('click', () => {
+            const startVal = document.getElementById('dashboard-custom-start')?.value;
+            const endVal = document.getElementById('dashboard-custom-end')?.value;
+            if (!startVal || !endVal) {
+                if (window.Swal) Swal.fire({ icon: 'warning', title: 'Rango Incompleto', text: 'Por favor seleccione la fecha inicial y final.' });
+                return;
+            }
+            if (startVal > endVal) {
+                if (window.Swal) Swal.fire({ icon: 'warning', title: 'Rango Inválido', text: 'La fecha inicial no puede ser posterior a la fecha final.' });
+                return;
+            }
+            window.dashboardCustomStart = startVal;
+            window.dashboardCustomEnd = endVal;
+            window.currentDashboardPeriod = 'custom';
+            renderDashboard('custom', startVal, endVal);
+        });
+    }
+};
+
+// ==========================================
 // DASHBOARD & METRICS VIEW WITH APPOINTMENT DELETE
 // ==========================================
-async function renderDashboard() {
+async function renderDashboard(preset, customStart, customEnd) {
     const agendaList = document.getElementById('dashboard-agenda-list');
     if (agendaList) {
         agendaList.innerHTML = '';
@@ -11652,11 +11754,24 @@ async function renderDashboard() {
                 return false;
             });
         }
+
+        if (typeof window.initDashboardPeriodFilters === 'function') {
+            window.initDashboardPeriodFilters();
+        }
+
         const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local format
-        const monthStr = todayStr.substring(0, 7); // YYYY-MM
+        const activePreset = preset || window.currentDashboardPeriod || 'month';
+        const range = (typeof window.getDateRangeFromPreset === 'function')
+            ? window.getDateRangeFromPreset(activePreset, customStart || window.dashboardCustomStart, customEnd || window.dashboardCustomEnd)
+            : { start: todayStr.substring(0, 7) + '-01', end: todayStr, label: 'Este Mes' };
+
+        const rangeBadge = document.getElementById('dashboard-range-text');
+        if (rangeBadge) {
+            rangeBadge.innerText = `${range.label} (${range.start} al ${range.end})`;
+        }
 
         let todayIncome = 0;
-        let monthIncome = 0;
+        let periodIncome = 0;
         let totalReceivables = 0;
         const debtorPatientsSet = new Set();
         let attendedCount = 0;
@@ -11672,8 +11787,8 @@ async function renderDashboard() {
                 if (payDate === todayStr) {
                     todayIncome += paid;
                 }
-                if (payDate.startsWith(monthStr)) {
-                    monthIncome += paid;
+                if (payDate >= range.start && payDate <= range.end) {
+                    periodIncome += paid;
                 }
                 if (debt > 0) {
                     totalReceivables += debt;
@@ -11691,16 +11806,22 @@ async function renderDashboard() {
                 }
             });
 
-            // 3. Pacientes atendidos hoy
-            let hasSessionToday = false;
+            // 3. Pacientes atendidos en el período seleccionado
+            let hasSessionInRange = false;
             if (p.sessions && p.sessions.length > 0) {
-                hasSessionToday = p.sessions.some(s => s.datetime && s.datetime.startsWith(todayStr));
+                hasSessionInRange = p.sessions.some(s => {
+                    const sDate = (s.datetime || '').split('T')[0];
+                    return sDate >= range.start && sDate <= range.end;
+                });
             }
-            let hasNoteToday = false;
+            let hasNoteInRange = false;
             if (p.clinicalNotes && p.clinicalNotes.length > 0) {
-                hasNoteToday = p.clinicalNotes.some(n => n.datetime && n.datetime.replace('T', ' ').startsWith(todayStr));
+                hasNoteInRange = p.clinicalNotes.some(n => {
+                    const nDate = (n.datetime || '').replace('T', ' ').split(' ')[0];
+                    return nDate >= range.start && nDate <= range.end;
+                });
             }
-            if (hasSessionToday || hasNoteToday) {
+            if (hasSessionInRange || hasNoteInRange) {
                 attendedCount++;
             }
         });
@@ -11724,8 +11845,8 @@ async function renderDashboard() {
                 if (invDate === todayStr && paid > 0) {
                     todayIncome += paid;
                 }
-                if (invDate.startsWith(monthStr) && paid > 0) {
-                    monthIncome += paid;
+                if (invDate >= range.start && invDate <= range.end && paid > 0) {
+                    periodIncome += paid;
                 }
                 if (debt > 0) {
                     totalReceivables += debt;
@@ -11734,15 +11855,18 @@ async function renderDashboard() {
             }
         });
 
-        // 4. Presupuestos y facturas emitidas vs aprobadas
+        // 4. Presupuestos y facturas emitidas vs aprobadas en el período seleccionado
         let totalBudgets = 0;
         let approvedBudgets = 0;
         (allInvoices || []).forEach(inv => {
             const isBudget = inv.id.startsWith('PRE-') || (inv.items && inv.items.length > 0);
             if (isBudget) {
-                totalBudgets++;
-                if (inv.status === 'Aprobado' || inv.status === 'Pagada' || inv.status === 'Pagado') {
-                    approvedBudgets++;
+                const invDate = (inv.invoiceDate || inv.date || '').split('T')[0];
+                if (!invDate || (invDate >= range.start && invDate <= range.end)) {
+                    totalBudgets++;
+                    if (inv.status === 'Aprobado' || inv.status === 'Pagada' || inv.status === 'Pagado') {
+                        approvedBudgets++;
+                    }
                 }
             }
         });
@@ -11757,16 +11881,19 @@ async function renderDashboard() {
         if (trendToday) trendToday.innerHTML = `<i class="fa-solid fa-circle-dollar-to-slot"></i> ${curSymbol}${todayIncome.toFixed(2)} hoy`;
 
         const metricMonth = document.getElementById('metric-month-income');
-        if (metricMonth) metricMonth.innerText = `${curSymbol}${monthIncome.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        if (metricMonth) metricMonth.innerText = `${curSymbol}${periodIncome.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+        const cardMonthSpan = document.querySelector('#card-metric-month-income .stat-header span');
+        if (cardMonthSpan) cardMonthSpan.innerText = `Ingresos (${range.label})`;
 
         const subMonth = document.getElementById('metric-month-sub');
-        if (subMonth) subMonth.innerText = `Total cobrado en ${new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}`;
+        if (subMonth) subMonth.innerText = `Total cobrado (${range.start} al ${range.end})`;
 
         const metricConversion = document.getElementById('metric-conversion');
         if (metricConversion) metricConversion.innerText = `${conversionPct}%`;
 
         const subConversion = document.getElementById('metric-conversion-sub');
-        if (subConversion) subConversion.innerText = `${approvedBudgets} Aprobados de ${totalBudgets} Emitidos`;
+        if (subConversion) subConversion.innerText = `${approvedBudgets} Aprobados de ${totalBudgets} Emitidos (${range.label})`;
 
         const metricReceivables = document.getElementById('metric-receivables');
         if (metricReceivables) metricReceivables.innerText = `${curSymbol}${totalReceivables.toFixed(2)}`;
@@ -11776,6 +11903,9 @@ async function renderDashboard() {
 
         const metricAttendedToday = document.getElementById('metric-attended-today');
         if (metricAttendedToday) metricAttendedToday.innerText = attendedCount.toString();
+
+        const attendedCardSpan = document.querySelector('#card-attended-patients .stat-header span');
+        if (attendedCardSpan) attendedCardSpan.innerText = `Pacientes Atendidos (${range.label})`;
 
         // 6. Rendimiento de Médicos y Especialidades en Dashboard
         try {
@@ -25631,6 +25761,88 @@ async function generateInvoicePreviewHTML(invoice, patient, assistant) {
 
 let activePayableId = null;
 
+window.initFinancePeriodFilters = function() {
+    const group = document.getElementById('finance-date-filter-group');
+    if (!group || group._hasFinancePeriodListeners) return;
+    group._hasFinancePeriodListeners = true;
+
+    const buttons = group.querySelectorAll('.btn-finance-period');
+    const customContainer = document.getElementById('finance-custom-date-container');
+    const btnApply = document.getElementById('btn-apply-finance-custom-date');
+
+    buttons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            buttons.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const period = btn.dataset.period;
+            window.currentFinancePeriod = period;
+
+            if (period === 'custom') {
+                if (customContainer) customContainer.style.display = 'flex';
+            } else {
+                if (customContainer) customContainer.style.display = 'none';
+                renderCashFlow(period);
+            }
+        });
+    });
+
+    if (btnApply) {
+        btnApply.addEventListener('click', () => {
+            const startVal = document.getElementById('finance-custom-start')?.value;
+            const endVal = document.getElementById('finance-custom-end')?.value;
+            if (!startVal || !endVal) {
+                if (window.Swal) Swal.fire({ icon: 'warning', title: 'Rango Incompleto', text: 'Por favor seleccione la fecha inicial y final.' });
+                return;
+            }
+            if (startVal > endVal) {
+                if (window.Swal) Swal.fire({ icon: 'warning', title: 'Rango Inválido', text: 'La fecha inicial no puede ser posterior a la fecha final.' });
+                return;
+            }
+            window.financeCustomStart = startVal;
+            window.financeCustomEnd = endVal;
+            window.currentFinancePeriod = 'custom';
+            renderCashFlow('custom', startVal, endVal);
+        });
+    }
+};
+
+window.initPayablesStatusFilters = function() {
+    const container = document.getElementById('payables-status-filter-pills');
+    if (container && !container._hasFilterListeners) {
+        container._hasFilterListeners = true;
+        const buttons = container.querySelectorAll('button[data-status-filter]');
+        buttons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                buttons.forEach(b => {
+                    b.classList.remove('active-payable-filter');
+                    b.style.background = 'transparent';
+                    const fType = b.dataset.statusFilter;
+                    b.style.color = fType === 'pending' ? '#b45309' : (fType === 'paid' ? '#047857' : (fType === 'overdue' ? '#b91c1c' : '#0d9488'));
+                    b.style.borderColor = fType === 'pending' ? '#f59e0b' : (fType === 'paid' ? '#10b981' : (fType === 'overdue' ? '#ef4444' : '#0d9488'));
+                });
+                btn.classList.add('active-payable-filter');
+                btn.style.background = '#0d9488';
+                btn.style.color = '#ffffff';
+                btn.style.borderColor = '#0d9488';
+                window.currentPayableStatusFilter = btn.dataset.statusFilter;
+                renderProviderBills();
+            });
+        });
+    }
+
+    // Auto-configurar frecuencia mensual cuando el usuario elige la fecha de vencimiento
+    const dueDateInp = document.getElementById('pay-due-date');
+    if (dueDateInp && !dueDateInp._hasRecurrenceAutoListener) {
+        dueDateInp._hasRecurrenceAutoListener = true;
+        dueDateInp.addEventListener('change', () => {
+            const recSel = document.getElementById('pay-recurrence');
+            if (recSel && (!recSel.value || recSel.value === 'monthly')) {
+                recSel.value = 'monthly';
+            }
+        });
+    }
+};
+
 async function renderFinanceView() {
     const subtabs = document.querySelectorAll('#view-finance .subtab-btn');
     const subcontents = document.querySelectorAll('#view-finance .subtab-content');
@@ -25650,6 +25862,13 @@ async function renderFinanceView() {
             }
         };
     });
+
+    if (typeof window.initFinancePeriodFilters === 'function') {
+        window.initFinancePeriodFilters();
+    }
+    if (typeof window.initPayablesStatusFilters === 'function') {
+        window.initPayablesStatusFilters();
+    }
 
     await renderProviderBills();
     await renderReceivables();
@@ -25724,6 +25943,8 @@ async function renderFinanceView() {
         const rate = (typeof getExchangeRate === 'function') ? getExchangeRate() : 36.5;
         const amountVES = parseFloat(document.getElementById('pay-amount-ves')?.value) || (amount * rate);
         const dueDate = document.getElementById('pay-due-date').value;
+        const recurrence = document.getElementById('pay-recurrence')?.value || 'monthly';
+        const reminderDays = parseInt(document.getElementById('pay-reminder-days')?.value, 10) || 3;
         const status = document.getElementById('pay-status').value;
         const paymentMethod = document.getElementById('pay-method')?.value || 'cash';
         const paidDate = document.getElementById('pay-paid-date')?.value || (status === 'Pagado' ? (dueDate || new Date().toISOString().split('T')[0]) : null);
@@ -25748,6 +25969,8 @@ async function renderFinanceView() {
             amount,
             amountBs: amountVES,
             dueDate,
+            recurrence,
+            reminderDays,
             status,
             paymentMethod: status === 'Pagado' ? paymentMethod : null,
             paidDate: status === 'Pagado' ? paidDate : null,
@@ -25762,6 +25985,10 @@ async function renderFinanceView() {
         document.getElementById('payable-id').value = '';
         document.getElementById('payable-form-title').innerHTML = `<i class="fa-solid fa-plus-circle text-cyan"></i> Registrar Gasto / Cuenta por Pagar`;
         document.getElementById('btn-cancel-payable').style.display = 'none';
+        const recSel = document.getElementById('pay-recurrence');
+        if (recSel) recSel.value = 'monthly';
+        const remInp = document.getElementById('pay-reminder-days');
+        if (remInp) remInp.value = '3';
         const paidFields = document.getElementById('payable-paid-fields-group');
         if (paidFields) paidFields.style.display = 'none';
 
@@ -25781,6 +26008,10 @@ async function renderFinanceView() {
         document.getElementById('payable-id').value = '';
         document.getElementById('payable-form-title').innerHTML = `<i class="fa-solid fa-plus-circle text-cyan"></i> Registrar Gasto / Cuenta por Pagar`;
         document.getElementById('btn-cancel-payable').style.display = 'none';
+        const recSel = document.getElementById('pay-recurrence');
+        if (recSel) recSel.value = 'monthly';
+        const remInp = document.getElementById('pay-reminder-days');
+        if (remInp) remInp.value = '3';
         const paidFields = document.getElementById('payable-paid-fields-group');
         if (paidFields) paidFields.style.display = 'none';
         const inpVes = document.getElementById('pay-amount-ves');
@@ -26031,6 +26262,7 @@ async function renderProviderBills() {
     if (!tbody) return;
     tbody.innerHTML = '';
 
+    const statusFilter = window.currentPayableStatusFilter || 'all';
     const bills = await SupabaseDataService.getProviderBills();
     let liquidations = [];
     try {
@@ -26048,58 +26280,56 @@ async function renderProviderBills() {
     // Pending doctor fees to pay
     const pendingDocLiqs = (liquidations || []).filter(l => l && l.doctor && l.doctor.status === 'Pendiente');
 
-    if (bills.length === 0 && pendingDocLiqs.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding: 15px;">No hay gastos ni cuentas por pagar registradas.</td></tr>';
-        if (remindersBox) remindersBox.innerHTML = '<span class="text-muted" style="font-size:0.8rem;"><i class="fa-solid fa-bell-slash"></i> Sin recordatorios de vencimiento pendientes.</span>';
-        return;
-    }
-
     // 1. Render pending doctor fees (Honorarios Médicos por Pagar)
     let totalPendingDoctorFees = 0;
-    pendingDocLiqs.forEach(liq => {
-        const price = parseFloat(liq.service_price || 0);
-        let docFee = 0;
-        if (liq.doctor.type === 'fixed') {
-            docFee = parseFloat(liq.doctor.rate || 0);
-        } else {
-            const pct = parseFloat(liq.doctor.rate || 40) / 100;
-            docFee = price * pct;
-        }
-        totalPendingDoctorFees += docFee;
+    const showDoctorFees = (statusFilter === 'all' || statusFilter === 'pending');
 
-        const isCashea = !!(liq.is_cashea || (liq.payment_method || '').toLowerCase().includes('cashea') || (liq.notes || '').toLowerCase().includes('cashea'));
-        const isCredit = !!(liq.is_credit || (liq.payment_terms || '').toLowerCase().includes('crédito') || (liq.payment_terms || '').toLowerCase().includes('credito') || (liq.payment_method || '').toLowerCase().includes('credito') || (liq.notes || '').toLowerCase().includes('crédito') || (liq.notes || '').toLowerCase().includes('credito'));
+    if (showDoctorFees) {
+        pendingDocLiqs.forEach(liq => {
+            const price = parseFloat(liq.service_price || 0);
+            let docFee = 0;
+            if (liq.doctor.type === 'fixed') {
+                docFee = parseFloat(liq.doctor.rate || 0);
+            } else {
+                const pct = parseFloat(liq.doctor.rate || 40) / 100;
+                docFee = price * pct;
+            }
+            totalPendingDoctorFees += docFee;
 
-        const methodBadge = isCashea 
-            ? `<span class="badge-tag" style="background: #fdf2f8; color: #db2777; border: 1px solid #fbcfe8; font-size: 0.68rem; font-weight: 700; margin-left: 4px;" title="Atención con Cashea (Médico cobra de inmediato)"><i class="fa-solid fa-mobile-screen-button"></i> Cashea</span>` 
-            : (isCredit 
-                ? `<span class="badge-tag" style="background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; font-size: 0.68rem; font-weight: 700; margin-left: 4px;" title="Atención a crédito interno (Médico cobra de inmediato)"><i class="fa-solid fa-hand-holding-dollar"></i> Crédito Interno</span>` 
-                : '');
+            const isCashea = !!(liq.is_cashea || (liq.payment_method || '').toLowerCase().includes('cashea') || (liq.notes || '').toLowerCase().includes('cashea'));
+            const isCredit = !!(liq.is_credit || (liq.payment_terms || '').toLowerCase().includes('crédito') || (liq.payment_terms || '').toLowerCase().includes('credito') || (liq.payment_method || '').toLowerCase().includes('credito') || (liq.notes || '').toLowerCase().includes('crédito') || (liq.notes || '').toLowerCase().includes('credito'));
 
-        const tr = document.createElement('tr');
-        tr.style.background = 'rgba(6, 182, 212, 0.04)';
-        tr.innerHTML = `
-            <td>
-                <strong><i class="fa-solid fa-user-doctor text-cyan" style="margin-right: 4px;"></i>${liq.doctor.name || 'Médico Tratante'}</strong>
-                <div style="font-size: 0.74rem; color: #64748b;">Honorario Médico ${methodBadge}</div>
-            </td>
-            <td>
-                <div style="font-weight: 600; color: #0f172a;">${liq.service_name || 'Servicio Médico'}</div>
-                <small class="text-muted"><i class="fa-regular fa-user"></i> Pac: ${liq.patient_name || 'Paciente'}</small>
-            </td>
-            <td style="font-weight: 700; color: #0f172a;">$${docFee.toFixed(2)}</td>
-            <td><small><i class="fa-regular fa-calendar"></i> ${liq.date || (liq.created_at ? liq.created_at.substring(0, 10) : 'Hoy')}</small></td>
-            <td><span class="badge-tag amber"><i class="fa-solid fa-clock"></i> Pendiente</span></td>
-            <td>
-                <div class="actions-cell-group">
-                    <button class="btn btn-xs btn-primary" onclick="if(window.ClinicalERP && window.ClinicalERP.openSettleModal){ window.ClinicalERP.openSettleModal('${liq.id}', 'doctor'); } else { alert('Módulo ERP no disponible'); }" title="Liquidar Honorarios Médicos">
-                        <i class="fa-solid fa-hand-holding-dollar"></i> Liquidar
-                    </button>
-                </div>
-            </td>
-        `;
-        tbody.appendChild(tr);
-    });
+            const methodBadge = isCashea 
+                ? `<span class="badge-tag" style="background: #fdf2f8; color: #db2777; border: 1px solid #fbcfe8; font-size: 0.68rem; font-weight: 700; margin-left: 4px;" title="Atención con Cashea (Médico cobra de inmediato)"><i class="fa-solid fa-mobile-screen-button"></i> Cashea</span>` 
+                : (isCredit 
+                    ? `<span class="badge-tag" style="background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; font-size: 0.68rem; font-weight: 700; margin-left: 4px;" title="Atención a crédito interno (Médico cobra de inmediato)"><i class="fa-solid fa-hand-holding-dollar"></i> Crédito Interno</span>` 
+                    : '');
+
+            const tr = document.createElement('tr');
+            tr.style.background = 'rgba(6, 182, 212, 0.04)';
+            tr.innerHTML = `
+                <td>
+                    <strong><i class="fa-solid fa-user-doctor text-cyan" style="margin-right: 4px;"></i>${liq.doctor.name || 'Médico Tratante'}</strong>
+                    <div style="font-size: 0.74rem; color: #64748b;">Honorario Médico ${methodBadge}</div>
+                </td>
+                <td>
+                    <div style="font-weight: 600; color: #0f172a;">${liq.service_name || 'Servicio Médico'}</div>
+                    <small class="text-muted"><i class="fa-regular fa-user"></i> Pac: ${liq.patient_name || 'Paciente'}</small>
+                </td>
+                <td style="font-weight: 700; color: #0f172a;">$${docFee.toFixed(2)}</td>
+                <td><small><i class="fa-regular fa-calendar"></i> ${liq.date || (liq.created_at ? liq.created_at.substring(0, 10) : 'Hoy')}</small></td>
+                <td><span class="badge-tag amber"><i class="fa-solid fa-clock"></i> Pendiente</span></td>
+                <td>
+                    <div class="actions-cell-group">
+                        <button class="btn btn-xs btn-primary" onclick="if(window.ClinicalERP && window.ClinicalERP.openSettleModal){ window.ClinicalERP.openSettleModal('${liq.id}', 'doctor'); } else { alert('Módulo ERP no disponible'); }" title="Liquidar Honorarios Médicos">
+                            <i class="fa-solid fa-hand-holding-dollar"></i> Liquidar
+                        </button>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
 
     if (pendingDocLiqs.length > 0) {
         alertMessages.push(`<div style="color: #059669; font-weight: 600; margin-bottom: 4px;"><i class="fa-solid fa-user-doctor"></i> HONORARIOS MÉDICOS POR PAGAR: ${pendingDocLiqs.length} atención(es) concretada(s) lista(s) para liquidar por un total de <strong>$${totalPendingDoctorFees.toFixed(2)} USD</strong> (incluye atenciones con Cashea y Crédito Interno).</div>`);
@@ -26109,19 +26339,49 @@ async function renderProviderBills() {
     const curUser = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
     const canDelete = (typeof canCurrentUserDelete === 'function') ? canCurrentUserDelete(curUser) : true;
 
+    let renderedBillsCount = 0;
+
     // 2. Render provider bills (Gastos y Cuentas por Pagar)
     bills.forEach(bill => {
-        const dueDateObj = new Date(bill.dueDate);
-        const timeDiff = dueDateObj.getTime() - today.getTime();
+        const dueDateObj = new Date(bill.dueDate + 'T00:00:00');
+        const todayZero = new Date(today.toISOString().split('T')[0] + 'T00:00:00');
+        const timeDiff = dueDateObj.getTime() - todayZero.getTime();
         const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
         const amtUSD = parseFloat(bill.amount || 0);
         const amtBs = parseFloat(bill.amountBs || (amtUSD * rate));
+        const reminderThreshold = parseInt(bill.reminderDays, 10) || 3;
+        const isMonthly = (bill.recurrence === 'monthly');
+
+        const isPaid = (bill.status === 'Pagado');
+        const isOverdue = (!isPaid && daysDiff < 0);
+        const isPending = (!isPaid && daysDiff >= 0);
+
+        // Always check reminder / overdue alerts for active bills
+        if (!isPaid) {
+            if (isOverdue) {
+                alertMessages.push(`<div style="color: #ef4444; font-weight: 600; margin-bottom: 4px;"><i class="fa-solid fa-triangle-exclamation"></i> GASTO VENCIDO: <strong>${bill.providerName}</strong> (${bill.serviceName}) venció hace ${Math.abs(daysDiff)} día(s) ($${amtUSD.toFixed(2)})</div>`);
+            } else if (daysDiff <= reminderThreshold) {
+                const recBadge = isMonthly ? '<span class="badge-tag cyan" style="font-size:0.68rem; margin-left:4px;">Recurrente Mensual</span>' : '';
+                alertMessages.push(`<div style="color: #d97706; font-weight: 600; margin-bottom: 4px;"><i class="fa-solid fa-bell"></i> RECORDATORIO (${reminderThreshold}d antelación): <strong>${bill.providerName}</strong> (${bill.serviceName}) vence en ${daysDiff === 0 ? '¡HOY!' : daysDiff + ' día(s)'} ($${amtUSD.toFixed(2)})${recBadge}</div>`);
+            }
+        }
+
+        // Apply Status Filter
+        if (statusFilter === 'pending' && !isPending) return;
+        if (statusFilter === 'paid' && !isPaid) return;
+        if (statusFilter === 'overdue' && !isOverdue) return;
+
+        renderedBillsCount++;
 
         let statusClass = 'green';
         let statusBadge = '';
         let dateInfoHtml = '';
 
-        if (bill.status === 'Pagado') {
+        const recPill = isMonthly 
+            ? `<div style="margin-top: 3px;"><span class="badge-tag" style="background: rgba(13, 148, 136, 0.1); color: #0d9488; font-size: 0.68rem; font-weight: 700;"><i class="fa-solid fa-repeat"></i> Mensual (${reminderThreshold}d ant.)</span></div>` 
+            : '';
+
+        if (isPaid) {
             statusClass = 'green';
             const mLabel = bill.paymentMethod ? getPaymentMethodLabel(bill.paymentMethod) : 'Liquidado';
             statusBadge = `
@@ -26137,20 +26397,28 @@ async function renderProviderBills() {
                 <small class="text-muted"><i class="fa-solid fa-check text-green"></i> Liquidado</small>
             `;
         } else {
-            if (daysDiff < 0) {
+            if (isOverdue) {
                 statusClass = 'red';
-                alertMessages.push(`<div style="color: #ef4444; font-weight: 600; margin-bottom: 4px;"><i class="fa-solid fa-triangle-exclamation"></i> GASTO VENCIDO: ${bill.providerName} (${bill.serviceName}) venció hace ${Math.abs(daysDiff)} días (${amtUSD.toFixed(2)})</div>`);
-            } else if (daysDiff <= 3) {
+                statusBadge = `
+                    <span class="badge-tag red" style="background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; font-weight:700;">
+                        <i class="fa-solid fa-triangle-exclamation"></i> Vencida
+                    </span>
+                `;
+            } else if (daysDiff <= reminderThreshold) {
                 statusClass = 'amber';
-                alertMessages.push(`<div style="color: #d97706; font-weight: 600; margin-bottom: 4px;"><i class="fa-solid fa-clock"></i> POR VENCER: ${bill.providerName} (${bill.serviceName}) vence en ${daysDiff} días (${amtUSD.toFixed(2)})</div>`);
+                statusBadge = `
+                    <span class="badge-tag amber">
+                        <i class="fa-solid fa-clock"></i> Por Vencer
+                    </span>
+                `;
             } else {
                 statusClass = 'blue';
+                statusBadge = `
+                    <span class="badge-tag blue">
+                        <i class="fa-solid fa-clock"></i> Pendiente
+                    </span>
+                `;
             }
-            statusBadge = `
-                <span class="badge-tag ${statusClass}">
-                    <i class="fa-solid fa-clock"></i> Pendiente
-                </span>
-            `;
             dateInfoHtml = `
                 <div style="font-size:0.8rem; font-weight:600; color:#0f172a;">${bill.dueDate}</div>
                 <small class="${daysDiff < 0 ? 'text-red font-bold' : 'text-muted'}">
@@ -26159,7 +26427,7 @@ async function renderProviderBills() {
             `;
         }
 
-        const settleBtn = (bill.status !== 'Pagado') ? `
+        const settleBtn = (!isPaid) ? `
             <button class="btn btn-xs btn-success" onclick="window.settleProviderBill('${bill.id}')" title="Liquidar y Debitar del Flujo de Caja" style="background:#10b981 !important; color:white !important; border:none !important; font-weight:700; padding:4px 9px; border-radius:6px; cursor:pointer;">
                 <i class="fa-solid fa-hand-holding-dollar"></i> Liquidar
             </button>
@@ -26169,6 +26437,7 @@ async function renderProviderBills() {
         tr.innerHTML = `
             <td>
                 <strong>${bill.providerName}</strong>
+                ${recPill}
                 ${bill.paymentRef ? `<div style="font-size:0.72rem; color:#64748b;"><i class="fa-solid fa-receipt"></i> Ref: ${bill.paymentRef}</div>` : ''}
             </td>
             <td>
@@ -26176,7 +26445,7 @@ async function renderProviderBills() {
                 <small class="text-muted">Gasto Operativo</small>
             </td>
             <td>
-                <strong style="font-size:0.95rem; color:#0f172a;">${amtUSD.toFixed(2)}</strong>
+                <strong style="font-size:0.95rem; color:#0f172a;">$${amtUSD.toFixed(2)}</strong>
                 <div style="font-size:0.74rem; color:#0284c7; font-weight:600;">${amtBs.toFixed(2)} Bs.</div>
             </td>
             <td>${dateInfoHtml}</td>
@@ -26191,6 +26460,11 @@ async function renderProviderBills() {
         `;
         tbody.appendChild(tr);
     });
+
+    if (renderedBillsCount === 0 && (!showDoctorFees || pendingDocLiqs.length === 0)) {
+        const filterLabel = statusFilter === 'pending' ? 'pendientes' : (statusFilter === 'paid' ? 'pagadas' : (statusFilter === 'overdue' ? 'vencidas' : ''));
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding: 24px;"><i class="fa-solid fa-inbox" style="font-size:1.5rem; display:block; margin-bottom:6px; opacity:0.5;"></i>No se encontraron cuentas por pagar ${filterLabel}.</td></tr>`;
+    }
 
     if (alertMessages.length > 0) {
         remindersBox.innerHTML = alertMessages.join('');
@@ -26217,6 +26491,14 @@ window.editProviderBill = async function(id) {
     }
 
     document.getElementById('pay-due-date').value = bill.dueDate;
+
+    if (document.getElementById('pay-recurrence')) {
+        document.getElementById('pay-recurrence').value = bill.recurrence || 'monthly';
+    }
+    if (document.getElementById('pay-reminder-days')) {
+        document.getElementById('pay-reminder-days').value = bill.reminderDays || 3;
+    }
+
     document.getElementById('pay-status').value = bill.status;
 
     const paidFields = document.getElementById('payable-paid-fields-group');
@@ -26338,17 +26620,52 @@ window.settleProviderBill = async function(id) {
         bill.updatedAt = new Date().toISOString();
 
         await SupabaseDataService.saveProviderBill(bill);
+
+        // Si el gasto está configurado como Recurrente Mensual, auto-programar el siguiente mes
+        if (bill.recurrence === 'monthly' && bill.dueDate) {
+            try {
+                const parts = bill.dueDate.split('-');
+                if (parts.length === 3) {
+                    const dueYear = parseInt(parts[0], 10);
+                    const dueMonth = parseInt(parts[1], 10) - 1;
+                    const dueDay = parseInt(parts[2], 10);
+                    const nextDateObj = new Date(dueYear, dueMonth + 1, dueDay);
+                    const nextDueDate = (typeof window.formatDateToISO === 'function') 
+                        ? window.formatDateToISO(nextDateObj) 
+                        : nextDateObj.toISOString().split('T')[0];
+
+                    const nextBill = {
+                        id: 'BILL-' + Date.now().toString().slice(-6),
+                        providerName: bill.providerName,
+                        serviceName: bill.serviceName,
+                        amount: bill.amount,
+                        amountBs: bill.amountBs,
+                        dueDate: nextDueDate,
+                        status: 'Pendiente',
+                        recurrence: 'monthly',
+                        reminderDays: bill.reminderDays || 3,
+                        updatedAt: new Date().toISOString()
+                    };
+                    await SupabaseDataService.saveProviderBill(nextBill);
+                }
+            } catch(recErr) {
+                console.warn('Error scheduling next recurring monthly bill:', recErr);
+            }
+        }
+
         await renderProviderBills();
         await renderCashFlow();
         if (typeof window.renderDailyClosingView === 'function') {
             await window.renderDailyClosingView();
         }
 
+        const recurrenceNotice = bill.recurrence === 'monthly' ? '<br><small style="color:#0d9488; font-weight:600;"><i class="fa-solid fa-repeat"></i> Se ha programado automáticamente el próximo ciclo mensual en cuentas por pagar.</small>' : '';
+
         Swal.fire({
             icon: 'success',
             title: '¡Gasto Liquidado!',
-            html: `Se ha registrado el pago de <strong>${amountUSD.toFixed(2)} USD</strong> a <strong>${bill.providerName}</strong> y se ha debitado en el Flujo de Caja.`,
-            timer: 2200,
+            html: `Se ha registrado el pago de <strong>${amountUSD.toFixed(2)} USD</strong> a <strong>${bill.providerName}</strong> y se ha debitado en el Flujo de Caja.${recurrenceNotice}`,
+            timer: 2800,
             showConfirmButton: false
         });
     }
@@ -26670,10 +26987,20 @@ function getAreaIconInfo(areaName) {
     }
 }
 
-async function renderCashFlow() {
+async function renderCashFlow(preset, customStart, customEnd) {
     const tbody = document.getElementById('finance-cashflow-tbody');
     if (!tbody) return;
     tbody.innerHTML = '';
+
+    const activePreset = preset || window.currentFinancePeriod || 'month';
+    const range = (typeof window.getDateRangeFromPreset === 'function')
+        ? window.getDateRangeFromPreset(activePreset, customStart || window.financeCustomStart, customEnd || window.financeCustomEnd)
+        : { start: '1970-01-01', end: '2099-12-31', label: 'Todo el Historial' };
+
+    const rangeBadge = document.getElementById('finance-range-text');
+    if (rangeBadge) {
+        rangeBadge.innerText = `${range.label} (${range.start} al ${range.end})`;
+    }
 
     const patients = await SupabaseDataService.getPatients();
     const invoices = await SupabaseDataService.getInvoices();
@@ -26699,6 +27026,9 @@ async function renderCashFlow() {
     // 1. Process Patient Payments Ledger
     patients.forEach(p => {
         (p.payments || []).forEach(pay => {
+            const payDate = (pay.date || '').split('T')[0] || (pay.created_at || '').split('T')[0];
+            if (payDate && (payDate < range.start || payDate > range.end)) return;
+
             if (pay.paidUSD > 0) {
                 inflows += pay.paidUSD;
                 const uniqueKey = `${p.id}_${pay.id || pay.reference || pay.concept}_${pay.date}`;
@@ -26792,7 +27122,10 @@ async function renderCashFlow() {
 
     // 2. Include any paid invoices not already counted in patient ledger
     invoices.forEach(inv => {
-        const invPaid = parseFloat(inv.paidRef || 0);
+        const invDate = (inv.invoiceDate || inv.date || '').split('T')[0] || (inv.created_at || '').split('T')[0];
+        if (invDate && (invDate < range.start || invDate > range.end)) return;
+
+        const invPaid = parseFloat(inv.paidRef !== undefined ? inv.paidRef : (inv.metadata?.paidUSD !== undefined ? inv.metadata.paidUSD : (inv.status === 'Pagado' ? (inv.totalRef || 0) : 0)));
         if (invPaid > 0 && !processedDocKeys.has(inv.id)) {
             inflows += invPaid;
             processedDocKeys.add(inv.id);
@@ -26862,6 +27195,9 @@ async function renderCashFlow() {
     // 3. Account Transfers (Traslados entre cuentas)
     const transfers = JSON.parse(localStorage.getItem('dental_account_transfers')) || [];
     transfers.forEach(t => {
+        const tDate = (t.date || '').split('T')[0];
+        if (tDate && (tDate < range.start || tDate > range.end)) return;
+
         const fromM = (t.fromAccount || '').toLowerCase();
         const toM = (t.toAccount || '').toLowerCase();
         const amountSent = parseFloat(t.amountSent) || 0;
@@ -26888,6 +27224,9 @@ async function renderCashFlow() {
     // 4. Provider Bills Outflows (Gastos y Cuentas por Pagar Liquidadas)
     bills.forEach(bill => {
         if (bill.status === 'Pagado') {
+            const pDate = (bill.paidDate || bill.dueDate || '').split('T')[0];
+            if (pDate && (pDate < range.start || pDate > range.end)) return;
+
             const billAmt = parseFloat(bill.paidUSD || bill.amount || 0);
             outflows += billAmt;
             const bMethod = (bill.paymentMethod || 'cash').toLowerCase();
@@ -26912,7 +27251,6 @@ async function renderCashFlow() {
                 methodTotals['cash'] -= billAmt;
             }
 
-            const pDate = bill.paidDate || bill.dueDate || new Date().toISOString().split('T')[0];
             const pMethodLabel = bill.paymentMethod ? getPaymentMethodLabel(bill.paymentMethod) : 'Efectivo ($ USD)';
 
             transactions.push({
@@ -26934,54 +27272,58 @@ async function renderCashFlow() {
 
     liquidationsList.forEach(liq => {
         if (liq.doctor && (liq.doctor.status === 'Liquidado' || liq.doctor.status === 'Pagado')) {
-            const docAmt = parseFloat(liq.doctor.settled_amount || liq.doctor.amount || 0);
-            if (docAmt > 0) {
-                outflows += docAmt;
-                const dMethod = (liq.doctor.payment_method || 'transferencia').toLowerCase();
-                let cleanMethod = 'pagomovil';
-                if (dMethod.includes('efectivo') || dMethod.includes('cash') || dMethod.includes('divisa')) cleanMethod = 'cash';
-                else if (dMethod.includes('zelle')) cleanMethod = 'zelle';
-                else if (dMethod.includes('pos') || dMethod.includes('punto')) cleanMethod = 'pos';
-                else if (dMethod.includes('binance') || dMethod.includes('usdt')) cleanMethod = 'binance';
-                else cleanMethod = 'pagomovil';
+            const lDate = (liq.doctor.paid_at || liq.date || '').split('T')[0] || new Date().toISOString().split('T')[0];
+            if (!lDate || (lDate >= range.start && lDate <= range.end)) {
+                const docAmt = parseFloat(liq.doctor.settled_amount || liq.doctor.amount || 0);
+                if (docAmt > 0) {
+                    outflows += docAmt;
+                    const dMethod = (liq.doctor.payment_method || 'transferencia').toLowerCase();
+                    let cleanMethod = 'pagomovil';
+                    if (dMethod.includes('efectivo') || dMethod.includes('cash') || dMethod.includes('divisa')) cleanMethod = 'cash';
+                    else if (dMethod.includes('zelle')) cleanMethod = 'zelle';
+                    else if (dMethod.includes('pos') || dMethod.includes('punto')) cleanMethod = 'pos';
+                    else if (dMethod.includes('binance') || dMethod.includes('usdt')) cleanMethod = 'binance';
+                    else cleanMethod = 'pagomovil';
 
-                if (methodTotals[cleanMethod] !== undefined) methodTotals[cleanMethod] -= docAmt;
-                else methodTotals['cash'] -= docAmt;
+                    if (methodTotals[cleanMethod] !== undefined) methodTotals[cleanMethod] -= docAmt;
+                    else methodTotals['cash'] -= docAmt;
 
-                const lDate = (liq.doctor.paid_at || liq.date || '').split('T')[0] || new Date().toISOString().split('T')[0];
-                transactions.push({
-                    date: lDate,
-                    concept: `Liquidación Honorarios: Dr(a). ${liq.doctor.name || 'Médico'} (${liq.service_name || 'Servicio'})${liq.doctor.payment_ref ? ` - Ref: ${liq.doctor.payment_ref}` : ''}`,
-                    type: 'Egreso',
-                    method: getPaymentMethodLabel(liq.doctor.payment_method || cleanMethod),
-                    amount: docAmt,
-                    isOutflow: true
-                });
+                    transactions.push({
+                        date: lDate,
+                        concept: `Liquidación Honorarios: Dr(a). ${liq.doctor.name || 'Médico'} (${liq.service_name || 'Servicio'})${liq.doctor.payment_ref ? ` - Ref: ${liq.doctor.payment_ref}` : ''}`,
+                        type: 'Egreso',
+                        method: getPaymentMethodLabel(liq.doctor.payment_method || cleanMethod),
+                        amount: docAmt,
+                        isOutflow: true
+                    });
+                }
             }
         }
 
         if (liq.assistant && (liq.assistant.status === 'Liquidado' || liq.assistant.status === 'Pagado')) {
-            const astAmt = parseFloat(liq.assistant.settled_amount || liq.assistant.amount || 0);
-            if (astAmt > 0) {
-                outflows += astAmt;
-                const aMethod = (liq.assistant.payment_method || 'transferencia').toLowerCase();
-                let cleanMethod = 'pagomovil';
-                if (aMethod.includes('efectivo') || aMethod.includes('cash')) cleanMethod = 'cash';
-                else if (aMethod.includes('zelle')) cleanMethod = 'zelle';
-                else cleanMethod = 'pagomovil';
+            const lDate = (liq.assistant.paid_at || liq.date || '').split('T')[0] || new Date().toISOString().split('T')[0];
+            if (!lDate || (lDate >= range.start && lDate <= range.end)) {
+                const astAmt = parseFloat(liq.assistant.settled_amount || liq.assistant.amount || 0);
+                if (astAmt > 0) {
+                    outflows += astAmt;
+                    const aMethod = (liq.assistant.payment_method || 'transferencia').toLowerCase();
+                    let cleanMethod = 'pagomovil';
+                    if (aMethod.includes('efectivo') || aMethod.includes('cash')) cleanMethod = 'cash';
+                    else if (aMethod.includes('zelle')) cleanMethod = 'zelle';
+                    else cleanMethod = 'pagomovil';
 
-                if (methodTotals[cleanMethod] !== undefined) methodTotals[cleanMethod] -= astAmt;
-                else methodTotals['cash'] -= astAmt;
+                    if (methodTotals[cleanMethod] !== undefined) methodTotals[cleanMethod] -= astAmt;
+                    else methodTotals['cash'] -= astAmt;
 
-                const lDate = (liq.assistant.paid_at || liq.date || '').split('T')[0] || new Date().toISOString().split('T')[0];
-                transactions.push({
-                    date: lDate,
-                    concept: `Liquidación Bono Asistente: ${liq.assistant.name || 'Asistente'} (${liq.service_name || 'Servicio'})`,
-                    type: 'Egreso',
-                    method: getPaymentMethodLabel(liq.assistant.payment_method || cleanMethod),
-                    amount: astAmt,
-                    isOutflow: true
-                });
+                    transactions.push({
+                        date: lDate,
+                        concept: `Liquidación Bono Asistente: ${liq.assistant.name || 'Asistente'} (${liq.service_name || 'Servicio'})`,
+                        type: 'Egreso',
+                        method: getPaymentMethodLabel(liq.assistant.payment_method || cleanMethod),
+                        amount: astAmt,
+                        isOutflow: true
+                    });
+                }
             }
         }
     });
@@ -27005,8 +27347,8 @@ async function renderCashFlow() {
         }
     }
 
-    document.getElementById('cf-inflows-details').innerText = `${window.cashFlowClinicalTransactions.length} ingresos registrados`;
-    document.getElementById('cf-outflows-details').innerText = `${bills.filter(b => b.status === 'Pagado').length} facturas liquidadas`;
+    document.getElementById('cf-inflows-details').innerText = `${window.cashFlowClinicalTransactions.length} ingresos en período (${range.label})`;
+    document.getElementById('cf-outflows-details').innerText = `${bills.filter(b => b.status === 'Pagado' && (!b.paidDate || (b.paidDate >= range.start && b.paidDate <= range.end))).length} facturas liquidadas`;
 
     // 5. Update High-Contrast Executive Payment Methods Breakdown Grid
     const updateMethodCard = (usdId, bsId, usdVal) => {

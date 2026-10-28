@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=383">
+    <link rel="stylesheet" href="styles.css?v=384">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -423,6 +423,42 @@
                             <p class="subtitle">Resumen ejecutivo del consultorio, métricas financieras y agenda activa.</p>
                         </div>
                         <div class="date-badge" id="current-date-badge">Sábado, 8 de Agosto de 2026</div>
+                    </div>
+
+                    <!-- Dashboard Period Filter Bar -->
+                    <div class="card mb-20" id="dashboard-period-card" style="padding: 12px 16px; background: #ffffff; border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px;">
+                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                <span style="font-size: 0.82rem; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;">
+                                    <i class="fa-solid fa-filter text-cyan" style="margin-right: 4px;"></i> Período:
+                                </span>
+                                <div class="subtabs" id="dashboard-date-filter-group" style="display: inline-flex; background: #f1f5f9; padding: 4px; border-radius: 8px; gap: 4px;">
+                                    <button type="button" class="subtab-btn btn-period-filter" data-period="week" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Semana</button>
+                                    <button type="button" class="subtab-btn btn-period-filter active" data-period="month" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Mes</button>
+                                    <button type="button" class="subtab-btn btn-period-filter" data-period="quarter" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Trimestre</button>
+                                    <button type="button" class="subtab-btn btn-period-filter" data-period="semester" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Semestre</button>
+                                    <button type="button" class="subtab-btn btn-period-filter" data-period="year" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Anual</button>
+                                    <button type="button" class="subtab-btn btn-period-filter" data-period="custom" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;"><i class="fa-regular fa-calendar-days"></i> Personalizada</button>
+                                </div>
+                            </div>
+                            <!-- Custom Date Range Inputs for Dashboard -->
+                            <div id="dashboard-custom-date-container" style="display: none; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                <div style="display: flex; align-items: center; gap: 5px;">
+                                    <label for="dashboard-custom-start" style="font-size: 0.78rem; font-weight: 600; color: #64748b;">Desde:</label>
+                                    <input type="date" id="dashboard-custom-start" class="form-control" style="padding: 4px 8px; font-size: 0.8rem; height: 32px; width: 140px;">
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 5px;">
+                                    <label for="dashboard-custom-end" style="font-size: 0.78rem; font-weight: 600; color: #64748b;">Hasta:</label>
+                                    <input type="date" id="dashboard-custom-end" class="form-control" style="padding: 4px 8px; font-size: 0.8rem; height: 32px; width: 140px;">
+                                </div>
+                                <button type="button" id="btn-apply-dashboard-custom-date" class="btn btn-xs btn-primary" style="height: 32px; padding: 0 12px; font-weight: 600;">
+                                    <i class="fa-solid fa-check"></i> Aplicar
+                                </button>
+                            </div>
+                            <div id="dashboard-current-range-badge" style="font-size: 0.78rem; font-weight: 700; color: #0d9488; background: rgba(13, 148, 136, 0.08); padding: 5px 10px; border-radius: 6px; border: 1px solid rgba(13, 148, 136, 0.2);">
+                                <i class="fa-regular fa-calendar-check"></i> <span id="dashboard-range-text">Mes en curso</span>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Metrics Grid -->
@@ -2301,6 +2337,42 @@
                         </div>
                     </div>
 
+                    <!-- Finance Period Filter Bar -->
+                    <div class="card mb-20" id="finance-period-card" style="padding: 12px 16px; background: #ffffff; border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px;">
+                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                <span style="font-size: 0.82rem; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;">
+                                    <i class="fa-solid fa-calendar-week text-cyan" style="margin-right: 4px;"></i> Período Financiero:
+                                </span>
+                                <div class="subtabs" id="finance-date-filter-group" style="display: inline-flex; background: #f1f5f9; padding: 4px; border-radius: 8px; gap: 4px;">
+                                    <button type="button" class="subtab-btn btn-finance-period" data-period="week" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Semana</button>
+                                    <button type="button" class="subtab-btn btn-finance-period active" data-period="month" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Mes</button>
+                                    <button type="button" class="subtab-btn btn-finance-period" data-period="quarter" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Trimestre</button>
+                                    <button type="button" class="subtab-btn btn-finance-period" data-period="semester" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Semestre</button>
+                                    <button type="button" class="subtab-btn btn-finance-period" data-period="year" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Anual</button>
+                                    <button type="button" class="subtab-btn btn-finance-period" data-period="custom" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;"><i class="fa-regular fa-calendar-days"></i> Personalizada</button>
+                                </div>
+                            </div>
+                            <!-- Custom Date Range Inputs for Finance -->
+                            <div id="finance-custom-date-container" style="display: none; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                <div style="display: flex; align-items: center; gap: 5px;">
+                                    <label for="finance-custom-start" style="font-size: 0.78rem; font-weight: 600; color: #64748b;">Desde:</label>
+                                    <input type="date" id="finance-custom-start" class="form-control" style="padding: 4px 8px; font-size: 0.8rem; height: 32px; width: 140px;">
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 5px;">
+                                    <label for="finance-custom-end" style="font-size: 0.78rem; font-weight: 600; color: #64748b;">Hasta:</label>
+                                    <input type="date" id="finance-custom-end" class="form-control" style="padding: 4px 8px; font-size: 0.8rem; height: 32px; width: 140px;">
+                                </div>
+                                <button type="button" id="btn-apply-finance-custom-date" class="btn btn-xs btn-primary" style="height: 32px; padding: 0 12px; font-weight: 600;">
+                                    <i class="fa-solid fa-check"></i> Filtrar
+                                </button>
+                            </div>
+                            <div id="finance-current-range-badge" style="font-size: 0.78rem; font-weight: 700; color: #0d9488; background: rgba(13, 148, 136, 0.08); padding: 5px 10px; border-radius: 6px; border: 1px solid rgba(13, 148, 136, 0.2);">
+                                <i class="fa-solid fa-chart-pie"></i> <span id="finance-range-text">Mes en curso</span>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Finance Tabs -->
                     <div class="card mb-20">
                         <div class="subtabs">
@@ -2314,10 +2386,10 @@
 
                     <!-- SUBTAB: Cuentas por Pagar -->
                     <div id="subtab-bills-payable" class="subtab-content active">
-                        <div class="grid-2-col">
-                            <!-- Registrar Gasto / Proveedor -->
+                        <div style="display: flex; flex-direction: column; gap: 20px;">
+                            <!-- Registrar Gasto / Proveedor (Tarjeta Superior de Ancho Completo) -->
                             <div class="card">
-                                <div class="card-header">
+                                <div class="card-header border-bottom">
                                     <h3 id="payable-form-title"><i class="fa-solid fa-plus-circle text-cyan"></i> Registrar Gasto / Cuenta por Pagar</h3>
                                 </div>
                                 <div class="card-body">
@@ -2332,7 +2404,7 @@
                                             <input type="text" id="pay-service" class="form-control" required placeholder="ej: Electricidad del consultorio, Internet de fibra, Resinas 3M">
                                         </div>
 
-                                        <!-- Módulo Bimonetario de Importe del Gasto -->
+                                        <!-- Módulo Bimonetario de Importe del Gasto (Ancho Completo) -->
                                         <div class="form-group span-2" style="background: rgba(13, 148, 136, 0.05); padding: 12px; border-radius: 8px; border: 1px dashed var(--border-color);">
                                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                                 <span style="font-weight: 700; color: var(--primary-cyan); font-size: 0.85rem;">
@@ -2367,16 +2439,41 @@
                                             </small>
                                         </div>
 
-                                        <div class="form-group">
-                                            <label class="form-label" for="pay-due-date">Fecha de Vencimiento *</label>
-                                            <input type="date" id="pay-due-date" class="form-control" required>
-                                        </div>
-                                        <div class="form-group">
-                                            <label class="form-label" for="pay-status">Estado del Gasto</label>
-                                            <select id="pay-status" class="form-control">
-                                                <option value="Pendiente">Pendiente por Pagar</option>
-                                                <option value="Pagado">Pagado / Liquidado</option>
-                                            </select>
+                                        <!-- Fila de Configuración: Vencimiento, Recurrencia, Recordatorio y Estado -->
+                                        <div class="form-group span-2" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 0;">
+                                            <div>
+                                                <label class="form-label" for="pay-due-date">Fecha de Vencimiento *</label>
+                                                <input type="date" id="pay-due-date" class="form-control" required>
+                                            </div>
+                                            <div>
+                                                <label class="form-label" for="pay-recurrence">
+                                                    <i class="fa-solid fa-repeat text-cyan"></i> Frecuencia / Recurrencia
+                                                </label>
+                                                <select id="pay-recurrence" class="form-control">
+                                                    <option value="monthly" selected>🔄 Mensual (Recurrente)</option>
+                                                    <option value="unique">⚡ Gasto Único / No Recurrente</option>
+                                                    <option value="weekly">📅 Semanal</option>
+                                                    <option value="biweekly">📅 Quincenal</option>
+                                                    <option value="quarterly">📅 Trimestral</option>
+                                                    <option value="annual">📅 Anual</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label class="form-label" for="pay-reminder-days">
+                                                    <i class="fa-solid fa-bell text-amber"></i> Recordar con Antelación
+                                                </label>
+                                                <div style="position: relative;">
+                                                    <input type="number" id="pay-reminder-days" class="form-control" min="1" max="60" value="3" placeholder="3" style="padding-right: 48px;">
+                                                    <span style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 0.75rem; color: #64748b; font-weight: 600;">días</span>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label class="form-label" for="pay-status">Estado del Gasto</label>
+                                                <select id="pay-status" class="form-control">
+                                                    <option value="Pendiente">Pendiente por Pagar</option>
+                                                    <option value="Pagado">Pagado / Liquidado</option>
+                                                </select>
+                                            </div>
                                         </div>
 
                                         <!-- Campos de Liquidación cuando el estado es Pagado -->
@@ -2417,17 +2514,35 @@
                                 </div>
                             </div>
 
-                            <!-- Listado de Cuentas por Pagar -->
+                            <!-- Listado de Cuentas por Pagar (Tarjeta Inferior de Ancho Completo con Etiquetas de Estado) -->
                             <div class="card">
-                                <div class="card-header border-bottom">
-                                    <h3><i class="fa-solid fa-money-bill-transfer text-purple"></i> Cuentas por Pagar (Honorarios Médicos y Proveedores)</h3>
+                                <div class="card-header border-bottom" style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px;">
+                                    <div>
+                                        <h3 style="margin: 0;"><i class="fa-solid fa-money-bill-transfer text-purple"></i> Cuentas por Pagar (Honorarios Médicos y Proveedores)</h3>
+                                        <small class="text-muted">Consolidado operativo de facturas a proveedores y honorarios pendientes de liquidación.</small>
+                                    </div>
+                                    <!-- Etiquetas de Estado -->
+                                    <div id="payables-status-filter-pills" style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
+                                        <button type="button" class="btn btn-xs btn-outline active-payable-filter" data-status-filter="all" style="padding: 4px 12px; font-weight: 700; border-radius: 20px; background: #0d9488; color: #ffffff; border-color: #0d9488;">
+                                            <i class="fa-solid fa-list-ul"></i> Todas
+                                        </button>
+                                        <button type="button" class="btn btn-xs btn-outline" data-status-filter="pending" style="padding: 4px 12px; font-weight: 600; border-radius: 20px; border-color: #f59e0b; color: #b45309;">
+                                            <i class="fa-solid fa-clock"></i> Pendientes por Pagar
+                                        </button>
+                                        <button type="button" class="btn btn-xs btn-outline" data-status-filter="paid" style="padding: 4px 12px; font-weight: 600; border-radius: 20px; border-color: #10b981; color: #047857;">
+                                            <i class="fa-solid fa-circle-check"></i> Ya Pagadas
+                                        </button>
+                                        <button type="button" class="btn btn-xs btn-outline" data-status-filter="overdue" style="padding: 4px 12px; font-weight: 600; border-radius: 20px; border-color: #ef4444; color: #b91c1c;">
+                                            <i class="fa-solid fa-triangle-exclamation"></i> Vencidas
+                                        </button>
+                                    </div>
                                 </div>
                                 <div class="card-body p-0">
                                     <!-- Alert notifications for due dates -->
                                     <div id="payable-reminders" style="padding: 10px; background: rgba(239, 68, 68, 0.08); border-bottom: 1px solid var(--border-color);">
                                         <!-- Filled dynamically -->
                                     </div>
-                                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                                    <div class="table-responsive" style="max-height: 520px; overflow-y: auto;">
                                         <table class="table table-compact">
                                             <thead>
                                                 <tr>
@@ -8820,14 +8935,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=383"></script>
-    <script src="supabaseClient.js?v=383"></script>
-    <script src="odontogram.js?v=383"></script>
-    <script src="signature.js?v=383"></script>
-    <script src="whatsapp.js?v=383"></script>
-    <script src="kardex.js?v=383"></script>
-    <script src="app.js?v=383"></script>
-    <script src="clinicalERP.js?v=383"></script>
-    <script src="tutorial.js?v=383"></script>
+    <script src="seededData.js?v=384"></script>
+    <script src="supabaseClient.js?v=384"></script>
+    <script src="odontogram.js?v=384"></script>
+    <script src="signature.js?v=384"></script>
+    <script src="whatsapp.js?v=384"></script>
+    <script src="kardex.js?v=384"></script>
+    <script src="app.js?v=384"></script>
+    <script src="clinicalERP.js?v=384"></script>
+    <script src="tutorial.js?v=384"></script>
 </body>
 </html>
