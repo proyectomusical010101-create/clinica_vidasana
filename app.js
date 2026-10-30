@@ -28537,6 +28537,38 @@ window.renderDailyClosingView = async function() {
         }
     };
 
+    // Pre-cargar todas las cuentas bancarias y terminales configurados en el sistema
+    const allFinancialAccounts = (typeof window.getFinancialAccounts === 'function') ? window.getFinancialAccounts() : [];
+    const getAccountCategory = (acc) => {
+        const t = (acc.type || '').toLowerCase();
+        const n = (acc.name || '').toLowerCase();
+        if (t === 'pos' || t.includes('punto') || t.includes('terminal') || n.includes('punto') || n.includes('pos') || n.includes('terminal')) return 'pos';
+        if (t === 'pagomovil' || t === 'pago_movil' || t === 'transferencia' || n.includes('pago') || n.includes('movil') || n.includes('móvil') || n.includes('transferencia')) return 'pagomovil';
+        if (t === 'zelle' || n.includes('zelle')) return 'zelle';
+        if (t === 'cash' || t === 'cash_bs' || t.includes('efectivo') || n.includes('efectivo') || n.includes('caja')) return 'cash';
+        return 'other';
+    };
+
+    allFinancialAccounts.forEach(acc => {
+        const cat = getAccountCategory(acc);
+        if (methodBreakdown[cat]) {
+            methodBreakdown[cat].accounts[acc.id] = {
+                id: acc.id,
+                name: acc.name,
+                bank: acc.bank || '',
+                type: acc.type,
+                currency: acc.currency || (cat === 'zelle' ? 'USD' : 'BS'),
+                commission: acc.commission || 0,
+                status: acc.status || 'active',
+                totalUSD: 0,
+                totalBs: 0,
+                count: 0,
+                transactions: [],
+                isConfigured: true
+            };
+        }
+    });
+
     const categorizeMethod = (rawMethodStr, isCashea) => {
         const m = (rawMethodStr || '').toLowerCase();
         if (isCashea || m.includes('cashea')) return 'other';
@@ -28547,6 +28579,88 @@ window.renderDailyClosingView = async function() {
         return 'other';
     };
 
+    const resolveAccountInBucket = (bucket, t, subMethodKey) => {
+        const accounts = bucket.accounts;
+        const accKeys = Object.keys(accounts);
+
+        // 1. Por coincidencia exacta de ID
+        if (t.accountId && accounts[t.accountId]) {
+            return accounts[t.accountId];
+        }
+
+        // 2. Por coincidencia de ID insensible a mayúsculas
+        if (t.accountId) {
+            const foundById = accKeys.find(k => k.toLowerCase() === t.accountId.toLowerCase());
+            if (foundById) return accounts[foundById];
+        }
+
+        // 3. Por coincidencia exacta de nombre de cuenta
+        const searchName = (t.accountName || '').trim().toLowerCase();
+        if (searchName) {
+            const foundByName = accKeys.find(k => (accounts[k].name || '').trim().toLowerCase() === searchName);
+            if (foundByName) return accounts[foundByName];
+        }
+
+        // 4. Por clave de método fraccionado (subMethodKey, ej. "Pago Móvil Banesco", "Punto Bancamiga")
+        const searchSub = (subMethodKey || '').trim().toLowerCase();
+        if (searchSub) {
+            const foundBySub = accKeys.find(k => {
+                const accN = (accounts[k].name || '').toLowerCase();
+                const accB = (accounts[k].bank || '').toLowerCase();
+                return (accN && searchSub.includes(accN)) || (accB && searchSub.includes(accB));
+            });
+            if (foundBySub) return accounts[foundBySub];
+        }
+
+        // 5. Por banco asignado (ej. t.bank = 'Mercantil' o 'Banesco')
+        const searchBank = (t.bank || '').trim().toLowerCase();
+        if (searchBank) {
+            const foundByBank = accKeys.find(k => {
+                const accB = (accounts[k].bank || '').trim().toLowerCase();
+                const accN = (accounts[k].name || '').trim().toLowerCase();
+                return (accB && (accB === searchBank || accB.includes(searchBank) || searchBank.includes(accB))) ||
+                       (accN && accN.includes(searchBank));
+            });
+            if (foundByBank) return accounts[foundByBank];
+        }
+
+        // 6. Por coincidencia parcial de nombre
+        if (searchName) {
+            const foundPartial = accKeys.find(k => {
+                const accN = (accounts[k].name || '').toLowerCase();
+                return accN && (accN.includes(searchName) || searchName.includes(accN));
+            });
+            if (foundPartial) return accounts[foundPartial];
+        }
+
+        // 7. Si este método solo tiene 1 cuenta configurada en la clínica, asignarla directamente
+        const configuredKeys = accKeys.filter(k => accounts[k].isConfigured);
+        if (configuredKeys.length === 1) {
+            return accounts[configuredKeys[0]];
+        }
+
+        // 8. Entrada dinámica fallback para cuentas no registradas previamente
+        const fallbackLabel = t.accountName || t.bank || `${bucket.label} General`;
+        const fallbackId = 'acc_dyn_' + fallbackLabel.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+        if (!accounts[fallbackId]) {
+            accounts[fallbackId] = {
+                id: fallbackId,
+                name: fallbackLabel,
+                bank: t.bank || '',
+                type: bucket.key,
+                currency: bucket.key === 'zelle' ? 'USD' : 'BS',
+                commission: 0,
+                status: 'active',
+                totalUSD: 0,
+                totalBs: 0,
+                count: 0,
+                transactions: [],
+                isConfigured: false
+            };
+        }
+        return accounts[fallbackId];
+    };
+
     const addDirectToBucket = (t) => {
         const cat = categorizeMethod(t.rawMethod || t.method, t.is_cashea);
         const bucket = methodBreakdown[cat] || methodBreakdown.other;
@@ -28554,21 +28668,23 @@ window.renderDailyClosingView = async function() {
         bucket.totalBs += t.amountBs;
         bucket.count++;
 
-        const accName = t.accountName || t.bank || `${bucket.label} General`;
-        if (!bucket.accounts[accName]) {
-            bucket.accounts[accName] = { name: accName, totalUSD: 0, totalBs: 0, count: 0 };
-        }
-        bucket.accounts[accName].totalUSD += t.amountUSD;
-        bucket.accounts[accName].totalBs += t.amountBs;
-        bucket.accounts[accName].count++;
+        const targetAcc = resolveAccountInBucket(bucket, t, null);
+        targetAcc.totalUSD += t.amountUSD;
+        targetAcc.totalBs += t.amountBs;
+        targetAcc.count++;
 
-        bucket.transactions.push({
+        const txObj = {
             ...t,
             methodSubAmountUSD: t.amountUSD,
             methodSubAmountBs: t.amountBs,
             methodCategory: cat,
+            matchedAccountId: targetAcc.id,
+            matchedAccountName: targetAcc.name,
             splitNote: null
-        });
+        };
+
+        targetAcc.transactions.push(txObj);
+        bucket.transactions.push(txObj);
     };
 
     dailyTransactions.forEach(t => {
@@ -28585,21 +28701,23 @@ window.renderDailyClosingView = async function() {
                     bucket.totalBs += subBs;
                     bucket.count++;
 
-                    const accName = t.accountName || t.bank || `${bucket.label} General`;
-                    if (!bucket.accounts[accName]) {
-                        bucket.accounts[accName] = { name: accName, totalUSD: 0, totalBs: 0, count: 0 };
-                    }
-                    bucket.accounts[accName].totalUSD += subUSD;
-                    bucket.accounts[accName].totalBs += subBs;
-                    bucket.accounts[accName].count++;
+                    const targetAcc = resolveAccountInBucket(bucket, t, sm);
+                    targetAcc.totalUSD += subUSD;
+                    targetAcc.totalBs += subBs;
+                    targetAcc.count++;
 
-                    bucket.transactions.push({
+                    const txObj = {
                         ...t,
                         methodSubAmountUSD: subUSD,
                         methodSubAmountBs: subBs,
                         methodCategory: cat,
+                        matchedAccountId: targetAcc.id,
+                        matchedAccountName: targetAcc.name,
                         splitNote: `Parte de Pago Mixto: $${subUSD.toFixed(2)} de $${t.amountUSD.toFixed(2)}`
-                    });
+                    };
+
+                    targetAcc.transactions.push(txObj);
+                    bucket.transactions.push(txObj);
                 }
             }
             if (!hasValidSplit) {
@@ -32281,6 +32399,8 @@ function saveStoredDailyClosing(record) {
 // 1. Abrir modal de arqueo detallado por método de pago (Pago Móvil, Punto, Zelle, Efectivo, etc.)
 window.openDailyClosingMethodDetail = function(methodKey) {
     window._currentDetailMethodKey = methodKey;
+    window._currentDetailAccountFilter = 'all';
+
     const mb = window._dailyClosingMethodBreakdown && window._dailyClosingMethodBreakdown[methodKey];
     if (!mb) {
         console.warn('No method breakdown found for:', methodKey);
@@ -32322,33 +32442,77 @@ window.openDailyClosingMethodDetail = function(methodKey) {
             <div style="flex: 1; min-width: 180px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 14px;">
                 <span style="font-size: 0.72rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Operaciones Registradas</span>
                 <div style="font-size: 1.25rem; font-weight: 800; color: #0284c7; margin-top: 2px;">
-                    ${mb.count} transacciones
+                    ${mb.count} ${mb.count === 1 ? 'transacción' : 'transacciones'}
                 </div>
             </div>
         `;
     }
 
-    // Accounts summary (by bank/terminal)
+    // Interactive Accounts Cards Grid (Desglose de todas las cuentas configuradas y terminales)
     const accountsSummary = document.getElementById('dc-method-modal-accounts-summary');
     if (accountsSummary) {
         const accKeys = Object.keys(mb.accounts || {});
         if (accKeys.length > 0) {
             accountsSummary.innerHTML = `
-                <div style="font-size: 0.78rem; font-weight: 700; color: #475569; margin-bottom: 6px; text-transform: uppercase;">
-                    <i class="fa-solid fa-building-columns"></i> Desglose por Banco / Terminal / Cuenta Destino:
-                </div>
-                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                    ${accKeys.map(k => {
-                        const acc = mb.accounts[k];
-                        return `
-                            <div style="background: #ffffff; border: 1.5px solid #cbd5e1; border-left: 3px solid ${mb.color}; border-radius: 6px; padding: 6px 12px; font-size: 0.8rem; display: flex; align-items: center; gap: 8px;">
-                                <strong style="color: #0f172a;">${acc.name}:</strong>
-                                <span style="color: #059669; font-weight: 800;">Bs. ${acc.totalBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                <span style="color: #64748b; font-size: 0.75rem;">($${acc.totalUSD.toFixed(2)})</span>
-                                <span class="badge-tag" style="padding: 1px 6px; font-size: 0.7rem; background: #f1f5f9;">${acc.count} ops</span>
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 16px; margin-bottom: 18px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <i class="fa-solid fa-building-columns" style="color: ${mb.color}; font-size: 1rem;"></i>
+                            <span style="font-size: 0.82rem; font-weight: 800; color: #1e293b; text-transform: uppercase; letter-spacing: 0.5px;">
+                                Cuentas Bancarias y Terminales (${accKeys.length})
+                            </span>
+                        </div>
+                        <span style="font-size: 0.75rem; color: #64748b; font-weight: 600;">
+                            <i class="fa-solid fa-hand-pointer"></i> Haga clic en una cuenta para ver solo sus movimientos
+                        </span>
+                    </div>
+
+                    <div id="dc-method-modal-accounts-cards-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px;">
+                        <!-- Tarjeta Todas las Cuentas -->
+                        <div class="dc-account-card active" data-account-id="all" onclick="window.filterDailyClosingAccount('all', this)"
+                             style="cursor: pointer; background: #f0f9ff; border: 2px solid #0284c7; border-radius: 8px; padding: 10px 12px; transition: all 0.15s ease; box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.18);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                <strong style="font-size: 0.84rem; color: #0f172a;"><i class="fa-solid fa-layer-group"></i> Todas las Cuentas</strong>
+                                <span class="badge-tag blue" style="font-size: 0.7rem; font-weight: 700;">${mb.count} ops</span>
                             </div>
-                        `;
-                    }).join('')}
+                            <div style="font-size: 1.05rem; font-weight: 800; color: #059669; line-height: 1.2;">
+                                Bs. ${mb.totalBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                            <div style="font-size: 0.75rem; font-weight: 700; color: #64748b; margin-top: 2px;">
+                                $${mb.totalUSD.toFixed(2)} USD
+                            </div>
+                            <div style="margin-top: 6px; font-size: 0.7rem; color: #0284c7; font-weight: 700; display: flex; align-items: center; gap: 4px;">
+                                <i class="fa-solid fa-check-circle"></i> Mostrando todo el método
+                            </div>
+                        </div>
+
+                        <!-- Tarjetas de cada cuenta o terminal configurado -->
+                        ${accKeys.map(k => {
+                            const acc = mb.accounts[k];
+                            const hasMoves = acc.count > 0;
+                            return `
+                                <div class="dc-account-card" data-account-id="${acc.id}" onclick="window.filterDailyClosingAccount('${acc.id}', this)"
+                                     style="cursor: pointer; background: ${hasMoves ? '#ffffff' : '#fcfdfe'}; border: 1.5px solid ${hasMoves ? '#cbd5e1' : '#e2e8f0'}; border-top: 3px solid ${hasMoves ? mb.color : '#94a3b8'}; border-radius: 8px; padding: 10px 12px; transition: all 0.15s ease;"
+                                     onmouseover="if (!this.classList.contains('active')) { this.style.borderColor='${mb.color}'; this.style.transform='translateY(-2px)'; }"
+                                     onmouseout="if (!this.classList.contains('active')) { this.style.borderColor='${hasMoves ? '#cbd5e1' : '#e2e8f0'}'; this.style.transform='none'; }">
+                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 3px; gap: 4px;">
+                                        <strong style="font-size: 0.82rem; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${acc.name}">${acc.name}</strong>
+                                        <span class="badge-tag ${hasMoves ? 'green' : 'gray'}" style="font-size: 0.68rem; font-weight: 700; flex-shrink: 0;">${acc.count} ops</span>
+                                    </div>
+                                    ${acc.bank ? `<div style="font-size: 0.7rem; color: #64748b; margin-bottom: 4px;">${acc.bank}</div>` : ''}
+                                    <div style="font-size: 1.05rem; font-weight: 800; color: ${hasMoves ? '#059669' : '#94a3b8'}; line-height: 1.2;">
+                                        Bs. ${acc.totalBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </div>
+                                    <div style="font-size: 0.75rem; font-weight: 700; color: ${hasMoves ? '#0284c7' : '#94a3b8'}; margin-top: 2px;">
+                                        $${acc.totalUSD.toFixed(2)} USD
+                                    </div>
+                                    <div style="margin-top: 6px; font-size: 0.7rem; color: ${hasMoves ? '#10b981' : '#64748b'}; font-weight: ${hasMoves ? '700' : 'normal'};">
+                                        ${hasMoves ? '<i class="fa-solid fa-circle-check"></i> Fondos recibidos' : '<i class="fa-regular fa-circle"></i> Sin movimientos hoy'}
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
                 </div>
             `;
         } else {
@@ -32356,68 +32520,139 @@ window.openDailyClosingMethodDetail = function(methodKey) {
         }
     }
 
-    // Detail Transactions Table
-    const tbody = document.getElementById('dc-method-modal-tbody');
-    if (tbody) {
-        if (!mb.transactions || mb.transactions.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted" style="padding: 30px;">No hay pagos registrados con ${mb.label} para esta fecha.</td></tr>`;
-        } else {
-            tbody.innerHTML = mb.transactions.map((t, idx) => {
-                const subUSD = t.methodSubAmountUSD !== undefined ? t.methodSubAmountUSD : t.amountUSD;
-                const subBs = t.methodSubAmountBs !== undefined ? t.methodSubAmountBs : t.amountBs;
+    // Render transactions table (all by default)
+    window.renderDailyClosingMethodTransactionsTable('all');
 
-                return `
-                    <tr style="border-bottom: 1px solid #f1f5f9;">
-                        <td style="padding: 10px 12px; font-size: 0.82rem; color: #334155;">
-                            ${t.time} <br><small style="color: #64748b;">(${t.shift === 'afternoon' ? 'Tarde' : 'Mañana'})</small>
-                        </td>
-                        <td style="padding: 10px 12px; font-size: 0.82rem;">
-                            <strong style="color: #0f172a;">${t.patientName}</strong>
-                            <div style="font-size: 0.72rem; color: #64748b;">C.I. ${t.patientCedula || t.patientId || 'S/D'}</div>
-                        </td>
-                        <td style="padding: 10px 12px; font-size: 0.82rem; color: #334155;">
-                            ${t.concept}
-                            ${t.splitNote ? `<div style="font-size: 0.72rem; color: #d97706; font-weight: 700; margin-top: 2px;"><i class="fa-solid fa-shuffle"></i> ${t.splitNote}</div>` : ''}
-                        </td>
-                        <td style="padding: 10px 12px; font-size: 0.82rem;">
-                            <span class="badge-tag cyan" style="font-size: 0.75rem; font-weight: 700;">
-                                ${t.accountName || t.bank || mb.label}
-                            </span>
-                        </td>
-                        <td style="padding: 10px 12px; font-size: 0.82rem;">
-                            <strong style="font-family: monospace; font-size: 0.88rem; color: #0f172a; background: #f8fafc; border: 1px solid #e2e8f0; padding: 2px 6px; border-radius: 4px;">
-                                ${t.reference && t.reference !== '-' ? t.reference : (t.id || 'N/A')}
-                            </strong>
-                        </td>
-                        <td style="padding: 10px 12px; font-size: 0.85rem; text-align: right;">
-                            <strong style="color: #059669;">
-                                Bs. ${subBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </strong>
-                        </td>
-                        <td style="padding: 10px 12px; font-size: 0.85rem; text-align: right;">
-                            <strong style="color: #0f172a;">
-                                $${subUSD.toFixed(2)}
-                            </strong>
-                        </td>
-                    </tr>
-                `;
-            }).join('') + `
-                <tr style="background: #f8fafc; border-top: 2px solid #cbd5e1; font-weight: 800;">
-                    <td colspan="5" style="padding: 10px 12px; text-align: right; font-size: 0.85rem; color: #0f172a;">
-                        TOTAL ${mb.label.toUpperCase()}:
-                    </td>
-                    <td style="padding: 10px 12px; text-align: right; font-size: 0.95rem; color: #059669;">
-                        Bs. ${mb.totalBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </td>
-                    <td style="padding: 10px 12px; text-align: right; font-size: 0.95rem; color: #0f172a;">
-                        $${mb.totalUSD.toFixed(2)}
-                    </td>
-                </tr>
-            `;
+    openModal('modal-daily-closing-method-detail');
+};
+
+// 1.1 Filtrar transacciones por cuenta al hacer clic en una tarjeta
+window.filterDailyClosingAccount = function(accountId, cardEl) {
+    window._currentDetailAccountFilter = accountId;
+
+    const grid = document.getElementById('dc-method-modal-accounts-cards-grid');
+    if (grid) {
+        const cards = grid.querySelectorAll('.dc-account-card');
+        cards.forEach(c => {
+            c.classList.remove('active');
+            c.style.boxShadow = 'none';
+            c.style.transform = 'none';
+            c.style.borderWidth = '1.5px';
+            const isZero = c.querySelector('.badge-tag.gray') !== null;
+            c.style.borderColor = isZero ? '#e2e8f0' : '#cbd5e1';
+            c.style.background = isZero ? '#fcfdfe' : '#ffffff';
+        });
+    }
+
+    if (cardEl) {
+        cardEl.classList.add('active');
+        cardEl.style.borderColor = '#0284c7';
+        cardEl.style.borderWidth = '2px';
+        cardEl.style.boxShadow = '0 0 0 3px rgba(2, 132, 199, 0.18)';
+        cardEl.style.background = '#f0f9ff';
+    }
+
+    window.renderDailyClosingMethodTransactionsTable(accountId);
+};
+
+// 1.2 Renderizar tabla de transacciones filtrada
+window.renderDailyClosingMethodTransactionsTable = function(accountIdFilter) {
+    const key = window._currentDetailMethodKey;
+    const mb = window._dailyClosingMethodBreakdown && window._dailyClosingMethodBreakdown[key];
+    if (!mb) return;
+
+    const tbody = document.getElementById('dc-method-modal-tbody');
+    if (!tbody) return;
+
+    const filter = accountIdFilter || window._currentDetailAccountFilter || 'all';
+
+    let txList = mb.transactions || [];
+    let filterAccountName = 'Todas las Cuentas';
+
+    if (filter !== 'all') {
+        const targetAcc = mb.accounts && mb.accounts[filter];
+        if (targetAcc) {
+            filterAccountName = targetAcc.name;
+            txList = txList.filter(t => t.matchedAccountId === filter || (t.accountName && t.accountName.toLowerCase() === targetAcc.name.toLowerCase()));
         }
     }
 
-    openModal('modal-daily-closing-method-detail');
+    if (txList.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" class="text-center text-muted" style="padding: 35px 20px;">
+                    <div style="font-size: 2rem; color: #cbd5e1; margin-bottom: 8px;"><i class="fa-solid fa-receipt"></i></div>
+                    <strong style="color: #475569; display: block; font-size: 0.95rem;">No hay transacciones registradas para ${filterAccountName}</strong>
+                    <span style="font-size: 0.8rem; color: #94a3b8;">${filter === 'all' ? 'No se recibieron pagos con este método en la fecha seleccionada.' : 'Esta cuenta o terminal no tuvo cobros en esta fecha operativa.'}</span>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    let subTotalBs = 0;
+    let subTotalUSD = 0;
+
+    const rowsHtml = txList.map(t => {
+        const sBs = t.methodSubAmountBs !== undefined ? t.methodSubAmountBs : t.amountBs;
+        const sUSD = t.methodSubAmountUSD !== undefined ? t.methodSubAmountUSD : t.amountUSD;
+        subTotalBs += sBs;
+        subTotalUSD += sUSD;
+
+        const badgeAccount = t.matchedAccountName || t.accountName || t.bank || mb.label;
+
+        return `
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 10px 12px; font-size: 0.82rem; color: #334155;">
+                    ${t.time || '--'} <br><small style="color: #64748b;">(${t.shift === 'afternoon' ? 'Tarde' : 'Mañana'})</small>
+                </td>
+                <td style="padding: 10px 12px; font-size: 0.82rem;">
+                    <strong style="color: #0f172a;">${t.patientName || 'Cliente General'}</strong>
+                    <div style="font-size: 0.72rem; color: #64748b;">C.I. ${t.patientCedula || t.patientId || 'S/D'}</div>
+                </td>
+                <td style="padding: 10px 12px; font-size: 0.82rem; color: #334155;">
+                    ${t.concept || 'Servicio Médico / Odontológico'}
+                    ${t.splitNote ? `<div style="font-size: 0.72rem; color: #d97706; font-weight: 700; margin-top: 2px;"><i class="fa-solid fa-shuffle"></i> ${t.splitNote}</div>` : ''}
+                </td>
+                <td style="padding: 10px 12px; font-size: 0.82rem;">
+                    <span class="badge-tag cyan" style="font-size: 0.75rem; font-weight: 700;" title="Cuenta asignada">
+                        ${badgeAccount}
+                    </span>
+                </td>
+                <td style="padding: 10px 12px; font-size: 0.82rem;">
+                    <strong style="font-family: monospace; font-size: 0.88rem; color: #0f172a; background: #f8fafc; border: 1px solid #e2e8f0; padding: 2px 6px; border-radius: 4px;">
+                        ${t.reference && t.reference !== '-' ? t.reference : (t.id || 'N/A')}
+                    </strong>
+                </td>
+                <td style="padding: 10px 12px; font-size: 0.85rem; text-align: right;">
+                    <strong style="color: #059669;">
+                        Bs. ${sBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </strong>
+                </td>
+                <td style="padding: 10px 12px; font-size: 0.85rem; text-align: right;">
+                    <strong style="color: #0f172a;">
+                        $${sUSD.toFixed(2)}
+                    </strong>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    const totalLabel = filter === 'all' ? `TOTAL ${mb.label.toUpperCase()}` : `SUBTOTAL (${filterAccountName.toUpperCase()})`;
+
+    tbody.innerHTML = rowsHtml + `
+        <tr style="background: #f8fafc; border-top: 2px solid #cbd5e1; font-weight: 800;">
+            <td colspan="5" style="padding: 10px 12px; text-align: right; font-size: 0.85rem; color: #0f172a;">
+                ${totalLabel} (${txList.length} ${txList.length === 1 ? 'operación' : 'operaciones'}):
+            </td>
+            <td style="padding: 10px 12px; text-align: right; font-size: 0.95rem; color: #059669;">
+                Bs. ${subTotalBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </td>
+            <td style="padding: 10px 12px; text-align: right; font-size: 0.95rem; color: #0f172a;">
+                $${subTotalUSD.toFixed(2)}
+            </td>
+        </tr>
+    `;
 };
 
 // 2. Imprimir informe/voucher de un método específico (Auditoría de lote)
@@ -32428,6 +32663,7 @@ window.printMethodDetailReport = function() {
 
     const date = window.dailyClosingSelectedDate;
     const rate = getExchangeRate();
+    const accountsList = Object.values(mb.accounts || {});
 
     const voucherHtml = `
         <div style="font-family: Arial, sans-serif; padding: 20px; color: #1e293b; font-size: 11px; background: #fff; max-width: 800px; margin: 0 auto;">
@@ -32463,6 +32699,43 @@ window.printMethodDetailReport = function() {
                 </div>
             </div>
 
+            ${accountsList.length > 0 ? `
+                <div style="margin-bottom: 16px;">
+                    <div style="font-size: 11px; font-weight: bold; color: #1e293b; text-transform: uppercase; margin-bottom: 6px;">
+                        Cuadre Desglosado por Cuenta / Terminal Bancario:
+                    </div>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 14px; border: 1px solid #cbd5e1;">
+                        <thead>
+                            <tr style="background: #f1f5f9; border-bottom: 1.5px solid #cbd5e1;">
+                                <th style="padding: 5px 8px; text-align: left; border: 1px solid #cbd5e1;">Cuenta / Terminal</th>
+                                <th style="padding: 5px 8px; text-align: left; border: 1px solid #cbd5e1;">Banco</th>
+                                <th style="padding: 5px 8px; text-align: center; border: 1px solid #cbd5e1;">Operaciones</th>
+                                <th style="padding: 5px 8px; text-align: right; border: 1px solid #cbd5e1;">Total Bolívares (VES)</th>
+                                <th style="padding: 5px 8px; text-align: right; border: 1px solid #cbd5e1;">Total Divisas ($)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${accountsList.map(acc => `
+                                <tr style="border-bottom: 1px solid #e2e8f0; ${acc.count === 0 ? 'color: #94a3b8;' : ''}">
+                                    <td style="padding: 5px 8px; border: 1px solid #cbd5e1; font-weight: ${acc.count > 0 ? 'bold' : 'normal'};">${acc.name}</td>
+                                    <td style="padding: 5px 8px; border: 1px solid #cbd5e1;">${acc.bank || '-'}</td>
+                                    <td style="padding: 5px 8px; text-align: center; border: 1px solid #cbd5e1;">${acc.count}</td>
+                                    <td style="padding: 5px 8px; text-align: right; border: 1px solid #cbd5e1; font-weight: bold; color: ${acc.count > 0 ? '#059669' : '#94a3b8'};">
+                                        Bs. ${acc.totalBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </td>
+                                    <td style="padding: 5px 8px; text-align: right; border: 1px solid #cbd5e1; font-weight: bold; color: ${acc.count > 0 ? '#0f172a' : '#94a3b8'};">
+                                        $${acc.totalUSD.toFixed(2)}
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            ` : ''}
+
+            <div style="font-size: 11px; font-weight: bold; color: #1e293b; text-transform: uppercase; margin-bottom: 6px;">
+                Detalle de Transacciones:
+            </div>
             <table style="width: 100%; border-collapse: collapse; font-size: 10.5px; margin-bottom: 20px;">
                 <thead>
                     <tr style="background: #f1f5f9; border-bottom: 1.5px solid #cbd5e1;">
@@ -32479,12 +32752,13 @@ window.printMethodDetailReport = function() {
                     ${(mb.transactions || []).map(t => {
                         const subUSD = t.methodSubAmountUSD !== undefined ? t.methodSubAmountUSD : t.amountUSD;
                         const subBs = t.methodSubAmountBs !== undefined ? t.methodSubAmountBs : t.amountBs;
+                        const accountLabel = t.matchedAccountName || t.accountName || t.bank || mb.label;
                         return `
                             <tr style="border-bottom: 1px solid #e2e8f0;">
                                 <td style="padding: 6px 8px;">${t.time}</td>
                                 <td style="padding: 6px 8px;">${t.patientName} (${t.patientCedula || t.patientId})</td>
                                 <td style="padding: 6px 8px;">${t.concept}</td>
-                                <td style="padding: 6px 8px;">${t.accountName || t.bank || mb.label}</td>
+                                <td style="padding: 6px 8px;">${accountLabel}</td>
                                 <td style="padding: 6px 8px; font-family: monospace;">${t.reference || t.id}</td>
                                 <td style="padding: 6px 8px; text-align: right; color: #059669; font-weight: bold;">
                                     Bs. ${subBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
