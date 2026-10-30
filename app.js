@@ -823,6 +823,37 @@ function isDentalDoctor(user) {
     return r.includes('odont') || r.includes('dentist') || spec.includes('odont') || spec.includes('dental') || spec.includes('ortodon') || spec.includes('endodon') || spec.includes('periodon');
 }
 
+function canCurrentUserDelete(user) {
+    const u = user || (typeof getCurrentUser === 'function' ? getCurrentUser() : null);
+    if (!u) return false;
+    const r = (u.role || '').toLowerCase();
+    const isAdmin = r.includes('admin') || r.includes('super') || r.includes('director');
+    if (isAdmin) return true;
+    if (typeof isDoctorUser === 'function' && isDoctorUser(u)) return false;
+    if (r.includes('asistente') || r.includes('asist')) return false;
+    return true;
+}
+window.canCurrentUserDelete = canCurrentUserDelete;
+
+// Global fallback to prevent any unhandled 'canDelete is not defined' ReferenceError anywhere
+if (typeof window.canDelete === 'undefined') {
+    try {
+        Object.defineProperty(window, 'canDelete', {
+            get() {
+                try {
+                    return canCurrentUserDelete();
+                } catch (e) {
+                    return false;
+                }
+            },
+            configurable: true,
+            enumerable: true
+        });
+    } catch (e) {
+        window.canDelete = false;
+    }
+}
+
 function isPatientAssignedToDoctor(patient, doctorUser, appointments = [], invoices = []) {
     if (!doctorUser || !patient) return false;
     const docId = String(doctorUser.id || '').trim();
@@ -6616,32 +6647,49 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
 
                     const reader = new FileReader();
                     reader.onload = async (event) => {
-                        const photoBase64 = event.target.result;
-                        const newPhoto = {
-                            id: 'photo_' + Date.now(),
-                            url: photoBase64,
-                            category,
-                            title,
-                            notes,
-                            date: new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
-                        };
+                        try {
+                            const photoBase64 = event.target.result;
+                            const newPhoto = {
+                                id: 'photo_' + Date.now(),
+                                url: photoBase64,
+                                category,
+                                title,
+                                notes,
+                                date: new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
+                            };
 
-                        activePatient.metadata = activePatient.metadata || {};
-                        activePatient.metadata.photos = activePatient.metadata.photos || [];
-                        activePatient.metadata.photos.unshift(newPhoto);
+                            activePatient.metadata = activePatient.metadata || {};
+                            activePatient.metadata.photos = activePatient.metadata.photos || [];
+                            activePatient.metadata.photos.unshift(newPhoto);
 
-                        await SupabaseDataService.updatePatient(activePatient.id, activePatient);
-                        closeModal('modal-ehr-photo-upload');
+                            activePatient.photos = activePatient.photos || [];
+                            activePatient.photos.unshift(newPhoto);
 
-                        Swal.fire({
-                            icon: 'success',
-                            title: '¡Foto / Rayos X Guardado!',
-                            text: 'El estudio se añadió al álbum clínico del paciente.',
-                            timer: 1800,
-                            showConfirmButton: false
-                        });
+                            if (typeof SupabaseDataService !== 'undefined' && SupabaseDataService.addPatientPhoto) {
+                                await SupabaseDataService.addPatientPhoto(activePatient.id, newPhoto);
+                            } else if (typeof SupabaseDataService !== 'undefined' && SupabaseDataService.updatePatient) {
+                                await SupabaseDataService.updatePatient(activePatient.id, activePatient);
+                            }
 
-                        renderEHRGallery(activePatient, window.currentEHRGalleryFilter || 'all');
+                            closeModal('modal-ehr-photo-upload');
+
+                            Swal.fire({
+                                icon: 'success',
+                                title: '¡Foto / Rayos X Guardado!',
+                                text: 'El estudio se añadió al álbum clínico del paciente.',
+                                timer: 1800,
+                                showConfirmButton: false
+                            });
+
+                            renderEHRGallery(activePatient, window.currentEHRGalleryFilter || 'all');
+                        } catch (err) {
+                            console.error('Error al guardar imagen:', err);
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Error al guardar imagen',
+                                text: err.message || err
+                            });
+                        }
                     };
                     reader.readAsDataURL(fileInput.files[0]);
                 };
@@ -6698,6 +6746,10 @@ function renderEHRGallery(patient, filter = 'all') {
     const container = document.getElementById('ehr-gallery-photos-grid');
     if (!container) return;
     container.innerHTML = '';
+
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const isAssist = curUser && (typeof isAssistantUser === 'function' ? isAssistantUser(curUser) : (curUser.role && curUser.role.toLowerCase().includes('asistente')));
+    const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(curUser) : (!isAssist);
 
     const photos = (patient.metadata && patient.metadata.photos) || patient.photos || [];
     let filteredPhotos = [...photos];
@@ -6757,9 +6809,7 @@ function renderEHRGallery(patient, filter = 'all') {
                     <button class="btn btn-xs btn-outline" style="font-size: 0.75rem; padding: 2px 8px;" onclick="window.openEHRPhotoLightbox('${p.url}', '${safeTitle}', '${safeCat}', '${safeDate}', '${safeNotes}')">
                         <i class="fa-solid fa-expand"></i> Ver
                     </button>
-                    <button class="btn btn-xs btn-outline text-red" style="font-size: 0.75rem; padding: 2px 6px;" onclick="window.deleteEHRPhoto('${p.id}')" title="Eliminar Imagen">
-                        <i class="fa-solid fa-trash"></i>
-                    </button>
+                    ${canDelete ? `<button class="btn btn-xs btn-outline text-red" style="font-size: 0.75rem; padding: 2px 6px;" onclick="window.deleteEHRPhoto('${p.id}')" title="Eliminar Imagen"><i class="fa-solid fa-trash"></i></button>` : ''}
                 </div>
             </div>
         `;
@@ -6784,6 +6834,13 @@ window.openEHRPhotoLightbox = function(url, title, category, date, notes) {
 };
 
 window.deleteEHRPhoto = async function(photoId) {
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const isAssist = curUser && (typeof isAssistantUser === 'function' ? isAssistantUser(curUser) : (curUser.role && curUser.role.toLowerCase().includes('asistente')));
+    const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(curUser) : (!isAssist);
+    if (!canDelete) {
+        Swal.fire({ icon: 'warning', title: 'Acción no permitida', text: 'No tiene permisos para eliminar imágenes clínicas del expediente.' });
+        return;
+    }
     Swal.fire({
         title: '¿Eliminar imagen clínica?',
         text: 'Esta fotografía o radiografía será eliminada del expediente del paciente.',
@@ -6799,10 +6856,21 @@ window.deleteEHRPhoto = async function(photoId) {
             if (!activeId) return;
             const patients = await SupabaseDataService.getPatients();
             const patient = patients.find(p => p.id === activeId);
-            if (patient && patient.metadata && patient.metadata.photos) {
-                patient.metadata.photos = patient.metadata.photos.filter(p => p.id !== photoId);
-                await SupabaseDataService.updatePatient(patient.id, patient);
-                renderEHRGallery(patient, window.currentEHRGalleryFilter || 'all');
+            if (patient) {
+                if (typeof SupabaseDataService !== 'undefined' && SupabaseDataService.deletePatientPhoto) {
+                    await SupabaseDataService.deletePatientPhoto(patient.id, photoId);
+                } else {
+                    if (patient.metadata && patient.metadata.photos) {
+                        patient.metadata.photos = patient.metadata.photos.filter(p => p.id !== photoId);
+                    }
+                    if (patient.photos) {
+                        patient.photos = patient.photos.filter(p => p.id !== photoId);
+                    }
+                    await SupabaseDataService.updatePatient(patient.id, patient);
+                }
+                const updatedPatients = await SupabaseDataService.getPatients();
+                const freshPatient = updatedPatients.find(p => p.id === activeId) || patient;
+                renderEHRGallery(freshPatient, window.currentEHRGalleryFilter || 'all');
                 Swal.fire({ icon: 'success', title: 'Imagen eliminada', timer: 1500, showConfirmButton: false });
             }
         }
