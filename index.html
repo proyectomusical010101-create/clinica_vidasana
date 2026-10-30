@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=266">
+    <link rel="stylesheet" href="styles.css?v=267">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -3615,6 +3615,7 @@
                         <label>Rol / Especialidad Clínica *</label>
                         <select id="u-role" required>
                             <option value="Odontólogo Principal">Odontólogo Principal (Médico / Dental)</option>
+                            <option value="Higienista Dental">Higienista Dental (Limpiezas, Profilaxis y Asistencia)</option>
                             <option value="Odontólogo General">Odontólogo General (Médico / Dental)</option>
                             <option value="Especialista en Ortodoncia">Especialista en Ortodoncia</option>
                             <option value="Especialista en Endodoncia">Especialista en Endodoncia</option>
@@ -3654,6 +3655,69 @@
                             <div class="form-group span-2">
                                 <label>Disponibilidad por Servicio / Observaciones:</label>
                                 <input type="text" id="u-availability" placeholder="ej: Consultas los Miércoles por la tarde">
+                            </div>
+                        </div>
+                    </div>
+                    <!-- PERFIL DE REMUNERACIÓN Y COMISIONES DE HIGIENISTA -->
+                    <div id="hygienist-profile-fields" class="span-2 hidden" style="border: 1.5px solid #10b981; padding: 16px; border-radius: 8px; background-color: rgba(16, 185, 129, 0.03); margin-top: 10px;">
+                        <h4 style="margin-top: 0; margin-bottom: 12px; color: #047857; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
+                            <i class="fa-solid fa-tooth text-green"></i> Esquema de Remuneración y Comisiones de la Higienista
+                        </h4>
+                        <div class="grid-form" style="grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <div class="form-group">
+                                <label>Sueldo Base Mensual / Quincenal ($ USD) *</label>
+                                <input type="number" id="u-hyg-base-salary" min="0" step="0.01" placeholder="ej: 250.00">
+                                <small class="text-muted" style="font-size:0.75rem;">Sueldo fijo base garantizado.</small>
+                            </div>
+                            <div class="form-group">
+                                <label>Bono Fijo Adicional ($ USD)</label>
+                                <input type="number" id="u-hyg-fixed-bonus" min="0" step="0.01" placeholder="ej: 50.00">
+                                <small class="text-muted" style="font-size:0.75rem;">Bono fijo regular por asistencia o transporte.</small>
+                            </div>
+                            <div class="form-group span-2">
+                                <label>Comisión General de Respaldo (% por procedimiento)</label>
+                                <input type="number" id="u-hyg-general-commission" min="0" max="100" step="0.5" placeholder="ej: 10">
+                                <small class="text-muted" style="font-size:0.75rem;">Porcentaje aplicable a procedimientos generales que no estén en la lista específica inferior.</small>
+                            </div>
+
+                            <!-- Asignación Específica por Servicio del Baremo -->
+                            <div class="form-group span-2" style="border-top: 1px dashed #cbd5e1; padding-top: 12px; margin-top: 6px;">
+                                <label style="font-weight: 700; color: #1e293b; display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                    <span><i class="fa-solid fa-tags text-cyan"></i> Comisiones Específicas por Servicio del Baremo</span>
+                                </label>
+                                <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center; background: #ffffff; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                                    <select id="u-hyg-service-select" class="form-control" style="flex: 2; min-width: 200px;">
+                                        <option value="">-- Seleccionar servicio del Baremo --</option>
+                                    </select>
+                                    <select id="u-hyg-service-comm-type" class="form-control" style="flex: 1; min-width: 140px;">
+                                        <option value="fixed">Monto Fijo ($ USD)</option>
+                                        <option value="percent">Porcentaje (%)</option>
+                                    </select>
+                                    <input type="number" id="u-hyg-service-comm-value" class="form-control" min="0" step="0.5" placeholder="Monto o %" style="flex: 1; min-width: 100px;">
+                                    <button type="button" class="btn btn-primary btn-sm" id="btn-add-hyg-service-comm" style="display: flex; align-items: center; gap: 4px; padding: 7px 12px;">
+                                        <i class="fa-solid fa-plus"></i> Asignar
+                                    </button>
+                                </div>
+
+                                <!-- Tabla de Servicios Asignados a la Higienista -->
+                                <div class="table-responsive" style="margin-top: 10px; max-height: 190px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; background: #ffffff;">
+                                    <table class="table" style="font-size: 0.82rem; margin: 0;">
+                                        <thead style="background: #f8fafc; position: sticky; top: 0; z-index: 2;">
+                                            <tr style="border-bottom: 1.5px solid #e2e8f0;">
+                                                <th style="padding: 7px 10px;">Servicio</th>
+                                                <th style="padding: 7px 10px; text-align: right;">Precio Baremo</th>
+                                                <th style="padding: 7px 10px;">Tipo Comisión</th>
+                                                <th style="padding: 7px 10px; text-align: right;">Comisión Higienista</th>
+                                                <th style="padding: 7px 10px; text-align: center;">Acción</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="u-hyg-services-comm-tbody">
+                                            <tr>
+                                                <td colspan="5" class="text-center text-muted" style="padding: 14px;">No hay comisiones específicas asignadas. Use el selector superior para agregar.</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -6717,14 +6781,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=266"></script>
-    <script src="supabaseClient.js?v=266"></script>
-    <script src="odontogram.js?v=266"></script>
-    <script src="signature.js?v=266"></script>
-    <script src="whatsapp.js?v=266"></script>
-    <script src="kardex.js?v=266"></script>
-    <script src="app.js?v=266"></script>
-    <script src="clinicalERP.js?v=266"></script>
-    <script src="tutorial.js?v=266"></script>
+    <script src="seededData.js?v=267"></script>
+    <script src="supabaseClient.js?v=267"></script>
+    <script src="odontogram.js?v=267"></script>
+    <script src="signature.js?v=267"></script>
+    <script src="whatsapp.js?v=267"></script>
+    <script src="kardex.js?v=267"></script>
+    <script src="app.js?v=267"></script>
+    <script src="clinicalERP.js?v=267"></script>
+    <script src="tutorial.js?v=267"></script>
 </body>
 </html>
