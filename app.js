@@ -10883,7 +10883,10 @@ function initGlobalEvents() {
         const type = getVal('p-type') || 'Adulto';
         const age = parseInt(getVal('p-age')) || 0;
 
-        if (!id || !firstname || !lastname || !birthdate || !phone || !address) {
+        const curUserSave = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+        const isDocSave = curUserSave && typeof isDoctorUser === 'function' && isDoctorUser(curUserSave);
+
+        if (!id || !firstname || !lastname || !birthdate || (!isDocSave && !phone) || !address) {
             Swal.fire({ 
                 icon: 'warning', 
                 title: 'Campos Requeridos Incompletos', 
@@ -11005,12 +11008,13 @@ function initGlobalEvents() {
 
             if (existing) {
                 // MODO EDICIÓN: Actualizar todos los datos clínicos y personales preservando historial
+                const preservedPhone = (isDocSave && !phone && existing.phone) ? existing.phone : (phone || existing.phone || '');
                 patientToSave = {
                     ...existing,
                     id: existing.id,
                     fullname,
                     birthdate,
-                    phone,
+                    phone: preservedPhone,
                     email: getVal('p-email'),
                     occupation: profession,
                     address: address,
@@ -13547,7 +13551,10 @@ function initPatientStepperWizard() {
                 const birthdate = document.getElementById('p-birthdate') ? document.getElementById('p-birthdate').value : '';
                 const phone = document.getElementById('p-mobile-phone') ? document.getElementById('p-mobile-phone').value.trim() : '';
 
-                if (!firstname || !lastname || !id || !birthdate || !phone) {
+                const curUserStep = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+                const isDocStep = curUserStep && typeof isDoctorUser === 'function' && isDoctorUser(curUserStep);
+
+                if (!firstname || !lastname || !id || !birthdate || (!isDocStep && !phone)) {
                     Swal.fire({ icon: 'warning', title: 'Campos Incompletos', text: 'Por favor complete los campos obligatorios del Paso 1 (Filiación) antes de avanzar.' });
                     return;
                 }
@@ -13592,7 +13599,10 @@ function initPatientStepperWizard() {
                 const birthdate = document.getElementById('p-birthdate').value;
                 const phone = document.getElementById('p-mobile-phone').value.trim();
 
-                if (!firstname || !lastname || !id || !birthdate || !phone) {
+                const curUserStep = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+                const isDocStep = curUserStep && typeof isDoctorUser === 'function' && isDoctorUser(curUserStep);
+
+                if (!firstname || !lastname || !id || !birthdate || (!isDocStep && !phone)) {
                     Swal.fire({ icon: 'warning', title: 'Campos Incompletos', text: 'Por favor complete todos los campos obligatorios del Paso 1.' });
                     return;
                 }
