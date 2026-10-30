@@ -1444,6 +1444,11 @@ class SupabaseDataService {
         return local;
     }
 
+    static async getBudgets(forceRefresh = false) {
+        const invoices = await this.getInvoices(forceRefresh);
+        return (invoices || []).filter(inv => inv.id && (String(inv.id).startsWith('PRE-') || String(inv.id).startsWith('FAC-') || String(inv.id).startsWith('REC-') || inv.isDirectSale || inv._is_budget));
+    }
+
     static async saveInvoice(invoiceObj) {
         if (!invoiceObj.createdAt) {
             invoiceObj.createdAt = new Date().toISOString();
@@ -1622,13 +1627,19 @@ class SupabaseDataService {
                 payoutNotes: null
             } : null,
             docType: isCashea ? 'Factura Cashea' : (isFull ? 'Factura' : 'Recibo de Abono'),
+            doctorId: saleData.doctorId || null,
+            doctorName: saleData.doctor || '',
+            assistantId: saleData.assistantId || null,
+            assistantName: saleData.assistant || '',
             splitDetails: saleData.splitDetails || null,
             metadata: {
                 isDirectSale: true,
                 docType: isCashea ? 'Factura Cashea' : (isFull ? 'Factura' : 'Recibo de Abono'),
                 paidUSD: parseFloat(saleData.paidUSD || 0),
                 balanceUSD: isCashea ? 0 : Math.max(0, parseFloat(saleData.totalUSD || 0) - parseFloat(saleData.paidUSD || 0)),
+                doctorId: saleData.doctorId || null,
                 doctor: saleData.doctor || '',
+                assistantId: saleData.assistantId || null,
                 assistant: saleData.assistant || '',
                 splitDetails: saleData.splitDetails || null,
                 notes: saleData.notes || '',
@@ -1704,7 +1715,9 @@ class SupabaseDataService {
                         servicePrice: itemPrice,
                         patientId: saleData.patientId || '',
                         patientName: saleData.patientName || 'Paciente Clínico',
+                        doctorId: saleData.doctorId || '',
                         doctorName: docName,
+                        assistantId: saleData.assistantId || '',
                         assistantName: saleData.assistant || '',
                         hasAssistant: !!saleData.assistant,
                         sourceType: 'direct_sale',

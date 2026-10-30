@@ -282,13 +282,17 @@ window.isDentalSpecialtyOrArea = isDentalSpecialtyOrArea;
 
 function isPatientAssignedToHygienist(patient, appointments = null, budgets = null) {
     if (!patient) return false;
+    // 1. Direct Dental fields
     if (isDentalSpecialtyOrArea(patient.specialty) || isDentalSpecialtyOrArea(patient.area) || isDentalSpecialtyOrArea(patient.department)) {
         return true;
     }
+    // 2. Active Odontogram
     if (patient.odontogram && Object.keys(patient.odontogram).length > 0) return true;
-    if (Array.isArray(patient.treatments) && patient.treatments.length > 0) return true;
-    if (Array.isArray(patient.sessions) && patient.sessions.length > 0) return true;
+    // 3. Dental treatments or sessions
+    if (Array.isArray(patient.treatments) && patient.treatments.some(t => isDentalSpecialtyOrArea(t.specialty || t.name || t.area || 'odontologia'))) return true;
+    if (Array.isArray(patient.sessions) && patient.sessions.some(s => isDentalSpecialtyOrArea(s.specialty || s.procedure || s.notes || 'odontologia'))) return true;
 
+    // 4. Appointments strictly matching Odontology
     if (Array.isArray(appointments) && appointments.length > 0) {
         const patId = String(patient.id || '').trim();
         const hasDentalAppt = appointments.some(a => {
@@ -298,6 +302,7 @@ function isPatientAssignedToHygienist(patient, appointments = null, budgets = nu
         if (hasDentalAppt) return true;
     }
 
+    // 5. Budgets / Invoices strictly matching Odontology
     if (Array.isArray(budgets) && budgets.length > 0) {
         const patId = String(patient.id || '').trim();
         const hasDentalBudget = budgets.some(b => {
@@ -307,12 +312,8 @@ function isPatientAssignedToHygienist(patient, appointments = null, budgets = nu
         if (hasDentalBudget) return true;
     }
 
-    const spec = String(patient.specialty || (patient.metadata && patient.metadata.specialty) || '').toLowerCase();
-    if (spec && !isDentalSpecialtyOrArea(spec) && (spec.includes('ginec') || spec.includes('pediat') || spec.includes('cardio') || spec.includes('trauma') || spec.includes('dermat') || spec.includes('oftalm') || spec.includes('otorrino') || spec.includes('urolog') || spec.includes('medicina'))) {
-        return false;
-    }
-
-    return true;
+    // No dental history or cases -> Hygienist / Assistant should NOT see non-dental patients
+    return false;
 }
 window.isPatientAssignedToHygienist = isPatientAssignedToHygienist;
 
@@ -7300,12 +7301,28 @@ window.setDirectSaleSaleType = function(type) {
 };
 
 window.openDirectSaleModal = async function(preselectedPatientId = null) {
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Acceso Restringido a Caja',
+            text: 'El rol Médico no puede realizar ventas o facturación. La Caja o Recepción es la única encargada de generar las órdenes y ventas para el paciente.'
+        });
+        return;
+    }
+
     window.currentDirectSaleItems = [];
     window.lastProcessedDirectSaleDoc = null;
 
     // Reset UI
     const overlay = document.getElementById('ds-success-overlay');
     if (overlay) overlay.style.display = 'none';
+
+    // Ensure Assistant selector is hidden by default (only visible for dental services)
+    const asstGroup = document.getElementById('ds-assistant-group');
+    if (asstGroup) asstGroup.style.display = 'none';
+    const asstSelect = document.getElementById('ds-assistant-select');
+    if (asstSelect) asstSelect.value = '';
 
     // Ensure Section 1 is expanded
     const sec1Body = document.getElementById('ds-sec1-body');
@@ -8373,6 +8390,22 @@ window.renderDirectSaleItems = function() {
 
     if (countLabel) countLabel.innerText = window.currentDirectSaleItems.length;
 
+    // Assistant / Higienista is strictly reserved for Odontology cases
+    const hasDentalServices = window.currentDirectSaleItems.some(i => {
+        const s = String((i.specialty || '') + ' ' + (i.name || '')).toLowerCase();
+        return typeof isDentalSpecialtyOrArea === 'function' ? isDentalSpecialtyOrArea(s) : (s.includes('odont') || s.includes('dental') || s.includes('diente') || s.includes('muela'));
+    });
+    const asstGroup = document.getElementById('ds-assistant-group');
+    if (asstGroup) {
+        if (hasDentalServices) {
+            asstGroup.style.display = 'block';
+        } else {
+            asstGroup.style.display = 'none';
+            const asstSelect = document.getElementById('ds-assistant-select');
+            if (asstSelect) asstSelect.value = '';
+        }
+    }
+
     if (window.currentDirectSaleItems.length === 0) {
         tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding: 24px;">No hay servicios agregados a la venta todavía.</td></tr>';
         return;
@@ -9133,10 +9166,36 @@ window.processDirectSale = async function() {
 
     let doctor = document.getElementById('ds-doctor-select')?.value;
     const isOnlyConsumables = window.currentDirectSaleItems.every(i => i.isConsumable);
+    if (!isOnlyConsumables && (!doctor || doctor === 'Dr. Médico Tratante' || doctor.trim() === '')) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Médico Tratante Requerido',
+            text: 'Por favor seleccione el médico o especialista que atenderá la orden del paciente.'
+        });
+        return;
+    }
     if (!doctor || doctor === 'Dr. Médico Tratante') {
         doctor = isOnlyConsumables ? 'Mostrador / Cafetería' : (doctor || 'Dr. Médico Tratante');
     }
-    const assistant = document.getElementById('ds-assistant-select')?.value || '';
+
+    const cachedDoctors = window._cachedDirectSaleDoctors || [];
+    const foundDoc = cachedDoctors.find(d => (d.fullname || d.name) === doctor || String(d.id) === String(doctor));
+    const docIdFinal = foundDoc ? foundDoc.id : null;
+    const docNameFinal = foundDoc ? (foundDoc.fullname || foundDoc.name) : doctor;
+
+    const isDentalSale = window.currentDirectSaleItems.some(i => {
+        const s = String((i.specialty || '') + ' ' + (i.name || '')).toLowerCase();
+        return typeof isDentalSpecialtyOrArea === 'function' ? isDentalSpecialtyOrArea(s) : (s.includes('odont') || s.includes('dental') || s.includes('diente') || s.includes('muela'));
+    });
+
+    // Assistant / Higienista is strictly reserved for Odontology cases
+    const assistant = isDentalSale ? (document.getElementById('ds-assistant-select')?.value || '') : '';
+    let assistantIdFinal = null;
+    if (assistant) {
+        const usersList = await SupabaseDataService.getUsers();
+        const foundAst = usersList.find(u => (u.fullname || u.name) === assistant || String(u.id) === String(assistant));
+        if (foundAst) assistantIdFinal = foundAst.id;
+    }
     const notes = document.getElementById('ds-notes')?.value || '';
 
     let splitDetails = null;
@@ -9181,8 +9240,10 @@ window.processDirectSale = async function() {
         paidUSD,
         paidBs,
         isFullPayment: isFull,
-        doctor,
-        assistant,
+        doctorId: docIdFinal,
+        doctor: docNameFinal,
+        assistantId: assistantIdFinal,
+        assistant: assistant,
         specialty: specialtyPrimary,
         notes,
         splitDetails,
@@ -9204,6 +9265,49 @@ window.processDirectSale = async function() {
 
         const invoiceDoc = await SupabaseDataService.registerDirectSale(salePayload);
         window.lastProcessedDirectSaleDoc = invoiceDoc;
+
+        // Auto-assign doctor to patient profile if not already set
+        if (patientId && docIdFinal) {
+            try {
+                const allPats = await SupabaseDataService.getPatients();
+                const foundP = allPats.find(p => String(p.id) === String(patientId));
+                if (foundP && (!foundP.assignedDoctorId || !foundP.assignedDoctor)) {
+                    foundP.assignedDoctorId = docIdFinal;
+                    foundP.assignedDoctor = docNameFinal;
+                    await SupabaseDataService.savePatient(foundP);
+                }
+            } catch(patLinkErr) {
+                console.warn('Notice linking assigned doctor to patient:', patLinkErr);
+            }
+        }
+
+        // Auto-generate clinical order appointment for doctor today
+        if (!isOnlyConsumables && docIdFinal) {
+            try {
+                const todayISO = new Date().toISOString().split('T')[0];
+                const nowTime = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+                const orderAppt = {
+                    id: 'ORD-' + Date.now().toString().slice(-6),
+                    patientId: patientId,
+                    patientName: patientName,
+                    doctorId: docIdFinal,
+                    doctorName: docNameFinal,
+                    assistantId: assistantIdFinal,
+                    assistantName: assistant || null,
+                    date: todayISO,
+                    time: nowTime,
+                    treatment: window.currentDirectSaleItems.map(i => i.name).join(', ') || 'Consulta / Procedimiento',
+                    specialty: isDentalSale ? 'Odontología' : (foundDoc?.doctorProfile?.specialty || foundDoc?.doctor_profile?.specialty || specialtyPrimary),
+                    status: 'Programada',
+                    notes: `Orden generada en Caja (${docId})`,
+                    sourceType: 'direct_sale',
+                    invoiceId: docId
+                };
+                await SupabaseDataService.saveAppointment(orderAppt);
+            } catch(ordErr) {
+                console.warn('Notice: Error creating automated order from direct sale:', ordErr);
+            }
+        }
 
         // Decrement stock for sold consumables automatically
         const soldConsumables = (salePayload.items || []).filter(it => it.isConsumable);
@@ -9610,6 +9714,14 @@ window.openPatientReceiptsHub = async function(patientId) {
 
     openModal('modal-patient-receipts-hub');
 
+    // Hide New Sale button if logged in as Doctor
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const isDoc = curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser);
+    const newSaleBtn = document.getElementById('prh-btn-new-sale');
+    if (newSaleBtn) {
+        newSaleBtn.style.display = isDoc ? 'none' : 'inline-flex';
+    }
+
     // Reset filter active
     const btnAll = document.getElementById('prh-filter-all');
     if (btnAll) {
@@ -9724,6 +9836,15 @@ window.renderPatientReceiptsHub = async function(patientId, filter = 'all') {
 };
 
 window.openDirectSaleForCurrentReceiptPatient = function() {
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Acceso Restringido a Caja',
+            text: 'El rol Médico no puede realizar ventas o facturación. Las ventas y cobros deben ser gestionados exclusivamente por Recepción y Caja.'
+        });
+        return;
+    }
     const patId = window.currentReceiptsHubPatientId;
     closeModal('modal-patient-receipts-hub');
     if (patId) {
@@ -21109,7 +21230,20 @@ if (patientSameDay.length === 0) {
 
     const btnBillBudgetDirect = document.getElementById('btn-bill-budget-direct');
     if (btnBillBudgetDirect) {
+        const curDocCheck = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+        if (curDocCheck && typeof isDoctorUser === 'function' && isDoctorUser(curDocCheck)) {
+            btnBillBudgetDirect.style.display = 'none';
+        }
         btnBillBudgetDirect.onclick = async () => {
+            const curCheck = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+            if (curCheck && typeof isDoctorUser === 'function' && isDoctorUser(curCheck)) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Acceso Restringido a Caja',
+                    text: 'El rol Médico no puede realizar ventas o facturación. Las ventas y cobros deben ser gestionados exclusivamente por Caja y Recepción.'
+                });
+                return;
+            }
             const activeId = getActivePatientId();
             if (!activeId) {
                 Swal.fire({ icon: 'warning', title: 'Seleccione un paciente', text: 'Por favor active un paciente antes de facturar.' });
@@ -25008,6 +25142,7 @@ async function loadPatientBillingItems(pId) {
 
 async function renderBillingView() {
     const patientSelect = document.getElementById('bill-patient-select');
+    const doctorSelect = document.getElementById('bill-doctor-select');
     const assistantSelect = document.getElementById('bill-assistant');
     if (!patientSelect) return;
 
@@ -25023,19 +25158,55 @@ async function renderBillingView() {
         patientSelect.appendChild(opt);
     });
 
-    // Load assistants / hygienists (users whose role includes "asistente" or "higienista")
     const users = await SupabaseDataService.getUsers();
-    assistantSelect.innerHTML = '<option value="">-- Sin Higienista / No Aplica --</option>';
-    users.forEach(u => {
-        const role = (u.role || '').toLowerCase();
-        if (role.includes('asistente') || role.includes('higienista')) {
+
+    // Load doctors (Médicos tratantes)
+    if (doctorSelect) {
+        doctorSelect.innerHTML = '<option value="">-- Seleccionar Médico Tratante * --</option>';
+        const doctors = users.filter(u => typeof isDoctorUser === 'function' ? isDoctorUser(u) : false);
+        doctors.forEach(d => {
             const opt = document.createElement('option');
-            opt.value = u.id;
-            opt.innerText = `${u.fullname} (${u.role})`;
-            assistantSelect.appendChild(opt);
+            opt.value = d.id;
+            const spec = d.doctorProfile?.specialty || d.doctor_profile?.specialty || d.role || 'Médico Especialista';
+            opt.innerText = `${d.fullname || d.name} (${spec})`;
+            opt.setAttribute('data-name', d.fullname || d.name);
+            opt.setAttribute('data-specialty', spec);
+            doctorSelect.appendChild(opt);
+        });
+        doctorSelect.onchange = () => refreshBillingLivePreview();
+    }
+
+    const syncDoctorForPatient = (pId) => {
+        if (!pId || !doctorSelect) return;
+        const pat = patients.find(p => String(p.id) === String(pId));
+        if (pat && (pat.assignedDoctorId || pat.assignedDoctor)) {
+            const docIdMatch = pat.assignedDoctorId ? Array.from(doctorSelect.options).find(o => String(o.value) === String(pat.assignedDoctorId)) : null;
+            if (docIdMatch) {
+                doctorSelect.value = docIdMatch.value;
+            } else if (pat.assignedDoctor) {
+                const cleanName = pat.assignedDoctor.replace(/^dr\.\s*|^dra\.\s*/i, '').trim().toLowerCase();
+                const nameMatch = Array.from(doctorSelect.options).find(o => (o.getAttribute('data-name') || o.text || '').toLowerCase().includes(cleanName));
+                if (nameMatch) {
+                    doctorSelect.value = nameMatch.value;
+                }
+            }
         }
-    });
-    assistantSelect.onchange = () => refreshBillingLivePreview();
+    };
+
+    // Load assistants / hygienists (users whose role includes "asistente" or "higienista")
+    if (assistantSelect) {
+        assistantSelect.innerHTML = '<option value="">-- Sin Higienista / No Aplica --</option>';
+        users.forEach(u => {
+            const role = (u.role || '').toLowerCase();
+            if (role.includes('asistente') || role.includes('higienista')) {
+                const opt = document.createElement('option');
+                opt.value = u.id;
+                opt.innerText = `${u.fullname} (${u.role})`;
+                assistantSelect.appendChild(opt);
+            }
+        });
+        assistantSelect.onchange = () => refreshBillingLivePreview();
+    }
 
     // Load BCV Rate
     const rate = getExchangeRate();
@@ -25044,6 +25215,7 @@ async function renderBillingView() {
     // Auto-load items on change
     patientSelect.onchange = async () => {
         const pId = patientSelect.value;
+        syncDoctorForPatient(pId);
         if (pId) {
             setActivePatientId(pId);
             await loadPatientBillingItems(pId);
@@ -25055,6 +25227,7 @@ async function renderBillingView() {
 
     // Initial load if patient already selected
     if (patientSelect.value) {
+        syncDoctorForPatient(patientSelect.value);
         await loadPatientBillingItems(patientSelect.value);
     } else {
         billingItems = [];
@@ -25280,6 +25453,7 @@ async function renderBillingView() {
     // Listeners for selectors to update live preview
     patientSelect.onchange = async () => {
         const pId = patientSelect.value;
+        syncDoctorForPatient(pId);
         if (pId) {
             const invoices = await SupabaseDataService.getInvoices();
             const patientInvoices = invoices.filter(i => String(i.patientId) === String(pId));
@@ -25326,9 +25500,18 @@ async function renderBillingView() {
     // Process Invoice
     document.getElementById('btn-process-invoice').onclick = async () => {
         const pId = patientSelect.value;
-        const assistantId = assistantSelect.value;
+        const selectedDocId = doctorSelect ? doctorSelect.value : '';
+        const assistantId = assistantSelect ? assistantSelect.value : '';
         if (!pId) {
             Swal.fire({ icon: 'warning', title: 'Paciente requerido', text: 'Debe seleccionar un paciente para emitir la factura.' });
+            return;
+        }
+        if (!selectedDocId) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Médico Tratante Requerido',
+                text: 'Debe seleccionar el médico tratante que atenderá al paciente para derivarle la orden clínica.'
+            });
             return;
         }
         if (billingItems.length === 0) {
@@ -25337,7 +25520,20 @@ async function renderBillingView() {
         }
 
         const activePatient = patients.find(p => p.id === pId);
-        const selectedAssistant = assistantId ? users.find(u => u.id === assistantId) : null;
+        const selectedDoctor = users.find(u => String(u.id) === String(selectedDocId));
+        const selectedDocName = selectedDoctor ? (selectedDoctor.fullname || selectedDoctor.name) : 'Médico Tratante';
+        const docSpecialty = selectedDoctor?.doctorProfile?.specialty || selectedDoctor?.doctor_profile?.specialty || selectedDoctor?.role || 'Consultas Médicas';
+
+        // Check if order has dental services
+        const isDentalOrder = billingItems.some(item => {
+            const str = String((item.code || '') + ' ' + (item.name || '') + ' ' + (item.category || '')).toLowerCase();
+            return typeof isDentalSpecialtyOrArea === 'function' ? isDentalSpecialtyOrArea(str) : (str.includes('odont') || str.includes('dental') || str.includes('diente') || str.includes('muela') || str.includes('pza-'));
+        });
+
+        // Assistant is assigned ONLY if order contains dental services
+        const selectedAssistant = (isDentalOrder && assistantId) ? users.find(u => u.id === assistantId) : null;
+        const selectedAssistantId = selectedAssistant ? selectedAssistant.id : null;
+        const selectedAssistantName = selectedAssistant ? (selectedAssistant.fullname || selectedAssistant.name) : '';
 
         const currency = document.getElementById('bill-currency').value;
         const terms = document.getElementById('bill-terms').value;
@@ -25368,8 +25564,8 @@ async function renderBillingView() {
         const rate = getExchangeRate();
         const totalBcv = totalRef * rate;
 
-        // Process hygienist bonus
-        if (totalHygienistBonus > 0 && selectedAssistant) {
+        // Process hygienist bonus (ONLY for dental services with assistant)
+        if (isDentalOrder && totalHygienistBonus > 0 && selectedAssistant) {
             if (!selectedAssistant.doctorProfile) selectedAssistant.doctorProfile = {};
             selectedAssistant.doctorProfile.accumulatedBonus = (selectedAssistant.doctorProfile.accumulatedBonus || 0) + totalHygienistBonus;
             await SupabaseDataService.saveUser(selectedAssistant);
@@ -25381,7 +25577,7 @@ async function renderBillingView() {
 
         let docSig = (window.doctorSigPad && !window.doctorSigPad.isEmpty()) ? window.doctorSigPad.toDataURL() : '';
         if (!docSig) {
-            const u = getCurrentUser();
+            const u = selectedDoctor || getCurrentUser();
             if (u) docSig = (u.doctorProfile && u.doctorProfile.signature) || (u.doctor_profile && u.doctor_profile.signature) || '';
         }
         let patSig = (window.patientSigPad && !window.patientSigPad.isEmpty()) ? window.patientSigPad.toDataURL() : '';
@@ -25404,6 +25600,10 @@ async function renderBillingView() {
         const invoiceObj = {
             id: invoiceId,
             patientId: pId,
+            doctorId: selectedDocId,
+            doctorName: selectedDocName,
+            assistantId: selectedAssistantId,
+            assistantName: selectedAssistantName,
             invoiceDate: new Date().toISOString().split('T')[0],
             paymentMethod: method,
             accountId: billAccountId,
@@ -25417,19 +25617,58 @@ async function renderBillingView() {
             status: 'Emitida',
             doctorSignature: docSig,
             patientSignature: patSig,
-            footerText: footerNote
+            footerText: footerNote,
+            metadata: {
+                doctorId: selectedDocId,
+                doctorName: selectedDocName,
+                assistantId: selectedAssistantId,
+                assistantName: selectedAssistantName,
+                isDental: isDentalOrder
+            }
         };
 
         // Save in DB
         await SupabaseDataService.saveInvoice(invoiceObj);
 
+        // Auto-assign doctor to patient profile if not already set
+        if (activePatient && (!activePatient.assignedDoctorId || !activePatient.assignedDoctor)) {
+            activePatient.assignedDoctorId = selectedDocId;
+            activePatient.assignedDoctor = selectedDocName;
+            await SupabaseDataService.savePatient(activePatient);
+        }
+
+        // Auto-create clinical order appointment for doctor today
+        try {
+            const todayISO = new Date().toISOString().split('T')[0];
+            const nowTime = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+            const orderAppt = {
+                id: 'ORD-' + Date.now().toString().slice(-6),
+                patientId: pId,
+                patientName: activePatient ? activePatient.fullname : 'Paciente Clínico',
+                doctorId: selectedDocId,
+                doctorName: selectedDocName,
+                assistantId: selectedAssistantId,
+                assistantName: selectedAssistantName,
+                date: todayISO,
+                time: nowTime,
+                treatment: billingItems.map(i => i.name).join(', '),
+                specialty: isDentalOrder ? 'Odontología' : docSpecialty,
+                status: 'Programada',
+                notes: `Orden generada en Caja (Factura: ${invoiceId})`,
+                sourceType: 'billing_order',
+                invoiceId: invoiceId
+            };
+            await SupabaseDataService.saveAppointment(orderAppt);
+        } catch(apptErr) {
+            console.warn('Notice: Error creating automated order appointment:', apptErr);
+        }
+
         // Auto-record medical liquidation for billed services
         try {
-            const currentUser = getCurrentUser();
-            const docName = (currentUser ? currentUser.fullname : '') || (activePatient && activePatient.assignedDoctor) || 'Médico Tratante';
-            const docId = currentUser ? currentUser.id : null;
-            const astName = selectedAssistant ? selectedAssistant.fullname : '';
-            const astId = selectedAssistant ? selectedAssistant.id : null;
+            const docName = selectedDocName;
+            const docId = selectedDocId;
+            const astName = selectedAssistantName;
+            const astId = selectedAssistantId;
             const isCasheaInvoice = (method || '').toLowerCase().includes('cashea');
             const isCreditInvoice = (terms === 'Crédito') || (method || '').toLowerCase().includes('credito') || (method || '').toLowerCase().includes('crédito');
 
@@ -25453,7 +25692,7 @@ async function renderBillingView() {
                     paymentMethod: method,
                     paymentTerms: terms,
                     date: invoiceObj.invoiceDate,
-                    notes: `Facturado en Caja (${invoiceId}) - Método: ${method}${isCasheaInvoice ? ' (Cashea)' : isCreditInvoice ? ' (Crédito Interno)' : ''}`
+                    notes: `Facturado en Caja (${invoiceId}) - Médico: ${docName}${astName ? ' | Asist: ' + astName : ''}`
                 });
             }
             if (window.ClinicalERP && window.ClinicalERP.loadAll) {
@@ -25557,6 +25796,22 @@ function renderBillingItemsTable() {
     const tbody = document.getElementById('billing-items-tbody');
     if (!tbody) return;
     tbody.innerHTML = '';
+
+    // Check if any items belong to Odontology (Assistant is strictly reserved for Odontology)
+    const hasDentalItem = billingItems.some(item => {
+        const str = String((item.code || '') + ' ' + (item.name || '') + ' ' + (item.category || '')).toLowerCase();
+        return typeof isDentalSpecialtyOrArea === 'function' ? isDentalSpecialtyOrArea(str) : (str.includes('odont') || str.includes('dental') || str.includes('diente') || str.includes('muela') || str.includes('pza-'));
+    });
+    const assistantGroup = document.getElementById('bill-assistant-group');
+    if (assistantGroup) {
+        if (hasDentalItem) {
+            assistantGroup.style.display = 'block';
+        } else {
+            assistantGroup.style.display = 'none';
+            const billAssistant = document.getElementById('bill-assistant');
+            if (billAssistant) billAssistant.value = '';
+        }
+    }
 
     if (billingItems.length === 0) {
         tbody.innerHTML = '<tr class="empty-row"><td colspan="7" class="text-center text-muted">Cargue items del presupuesto o del baremo.</td></tr>';
