@@ -916,6 +916,68 @@ function isServiceMatchingDoctor(service, doctorUser) {
     });
 }
 
+function isHygienistUser(user) {
+    const u = user || getCurrentUser();
+    if (!u) return false;
+    const r = (u.role || '').toLowerCase();
+    return r.includes('higien');
+}
+window.isHygienistUser = isHygienistUser;
+
+function isPatientDentalRelated(patient, appointments = [], invoices = []) {
+    if (!patient) return false;
+
+    // 1. Odontograma registrado con datos
+    if (patient.odontogramData && Object.keys(patient.odontogramData).length > 0) return true;
+    if (patient.odontogram_data && Object.keys(patient.odontogram_data).length > 0 && !patient.odontogram_data._is_consumables_config) return true;
+
+    // 2. Presupuestos o facturas de Odontología
+    const hasDentalInvoice = (invoices || []).some(inv => {
+        if (String(inv.patientId) !== String(patient.id)) return false;
+        const cat = (inv.category || inv.specialty || '').toLowerCase();
+        if (cat.includes('odont') || cat.includes('dental')) return true;
+        if (Array.isArray(inv.items)) {
+            return inv.items.some(it => {
+                const itName = (it.name || it.description || '').toLowerCase();
+                const itCat = (it.category || '').toLowerCase();
+                return itCat.includes('odont') || itName.includes('limpieza') || itName.includes('profilaxis') || itName.includes('diente') || itName.includes('pieza') || itName.includes('caries') || itName.includes('resina') || itName.includes('extracción') || itName.includes('blanquea') || itName.includes('corona');
+            });
+        }
+        return false;
+    });
+    if (hasDentalInvoice) return true;
+
+    // 3. Citas de Odontología
+    const hasDentalAppt = (appointments || []).some(app => {
+        if (String(app.patientId) !== String(patient.id)) return false;
+        const spec = (app.specialty || app.area || '').toLowerCase();
+        const trt = (app.treatment || app.reason || '').toLowerCase();
+        return spec.includes('odont') || spec.includes('dental') || trt.includes('odont') || trt.includes('limpieza') || trt.includes('profilaxis') || trt.includes('muela') || trt.includes('diente');
+    });
+    if (hasDentalAppt) return true;
+
+    // 4. Sesiones clínicas dentales
+    if (patient.sessions && patient.sessions.length > 0) {
+        const hasDentalSession = patient.sessions.some(s => {
+            const proc = (s.procedure || s.treatmentLinked || '').toLowerCase();
+            return proc.includes('pieza') || proc.includes('diente') || proc.includes('odont') || proc.includes('profilaxis') || proc.includes('limpieza') || proc.includes('resina') || proc.includes('endodon') || proc.includes('ortodon') || s.tooth || s.surface;
+        });
+        if (hasDentalSession) return true;
+    }
+
+    // 5. Interconsultas vinculadas a Odontología
+    const meta = patient.metadata || {};
+    const ics = meta.interconsultations || [];
+    const hasDentalIC = ics.some(ic => {
+        const icText = ((ic.id || '') + ' ' + (ic.notes || '') + ' ' + (ic.treatmentLinked || '') + ' ' + JSON.stringify(ic.studies || [])).toLowerCase();
+        return icText.includes('odont') || icText.includes('dental') || icText.includes('bucal') || icText.includes('profilaxis') || icText.includes('maxil') || icText.includes('diente');
+    });
+    if (hasDentalIC) return true;
+
+    return false;
+}
+window.isPatientDentalRelated = isPatientDentalRelated;
+
 function isDentalDoctor(user) {
     const u = user || getCurrentUser();
     if (!u) return false;
@@ -1149,6 +1211,7 @@ function applyRolePermissionsUI(role) {
     const permissions = {
         admin: ['dashboard', 'doctor-finances', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll'],
         doctor: ['dashboard', 'doctor-finances', 'agenda', 'ehr', 'pricing', 'settings', 'help', 'specialties', 'rooms'],
+        hygienist: ['dashboard', 'agenda', 'odontogram', 'ehr', 'pricing', 'settings', 'help'],
         assistant: ['dashboard', 'patients', 'agenda', 'billing', 'finance', 'pricing', 'settings', 'help']
     };
 
@@ -1477,6 +1540,7 @@ window.navigateToTab = async function(tabName) {
         const allowedTabs = {
             admin: ['dashboard', 'doctor-finances', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll'],
             doctor: ['dashboard', 'doctor-finances', 'agenda', 'ehr', 'pricing', 'settings', 'help', 'specialties', 'rooms'],
+            hygienist: ['dashboard', 'agenda', 'odontogram', 'ehr', 'pricing', 'settings', 'help'],
             assistant: ['dashboard', 'patients', 'agenda', 'billing', 'finance', 'pricing', 'settings', 'help']
         }[roleType] || ['dashboard', 'help'];
 
@@ -2593,6 +2657,18 @@ window.startBudgetCreation = async function(category) {
         Swal.fire({ icon: 'warning', title: 'Acceso Restringido', text: 'Los médicos no tienen permisos para crear ni editar presupuestos.' });
         return;
     }
+
+    if (typeof isHygienistUser === 'function' && isHygienistUser()) {
+        if (category !== 'Odontología') {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Especialidad No Autorizada',
+                text: 'El rol de Higienista Dental únicamente está habilitado para formular presupuestos odontológicos.'
+            });
+            return;
+        }
+    }
+
     closeModal('modal-select-budget-type');
     if (category === 'Odontología') {
         await window.selectPatientAndLoadApprovedBudget(null);
@@ -2605,6 +2681,10 @@ window.openMedicalBudgetEditor = async function({ budgetId = null, specialtyCate
     if (typeof isDoctorUser === 'function' && isDoctorUser()) {
         Swal.fire({ icon: 'warning', title: 'Acceso Restringido', text: 'Los médicos no tienen permisos para crear ni editar presupuestos.' });
         return;
+    }
+
+    if (typeof isHygienistUser === 'function' && isHygienistUser()) {
+        specialtyCategory = 'Odontología';
     }
     localStorage.setItem('dental_odontogram_subview', 'medical-editor');
     document.documentElement.setAttribute('data-odontogram-subview', 'medical-editor');
@@ -2858,7 +2938,30 @@ window.refreshMedicalBaremoSelect = async function() {
         const currentDept = document.getElementById('med-budget-department-select')?.value || 'Consultas Médicas';
 
         let filtered = baremo;
-        if (!showAll) {
+        const isHyg = typeof isHygienistUser === 'function' && isHygienistUser();
+        if (isHyg) {
+            currentDept = 'Odontología';
+            showAll = false;
+            const deptSel = document.getElementById('med-budget-department-select');
+            if (deptSel) {
+                deptSel.value = 'Odontología';
+                deptSel.disabled = true;
+            }
+            const showAllCb = document.getElementById('med-budget-show-all-baremo');
+            if (showAllCb) {
+                showAllCb.checked = false;
+                showAllCb.disabled = true;
+            }
+        }
+
+        if (isHyg) {
+            filtered = baremo.filter(b => {
+                const cat = (b.category || '').toLowerCase();
+                const area = (b.area || '').toLowerCase();
+                const name = (b.name || '').toLowerCase();
+                return area.includes('odont') || cat.includes('odont') || ['operatoria', 'endodoncia', 'cirugía', 'ortodoncia', 'estética', 'prótesis', 'prevención', 'diagnóstico'].includes(cat) || name.includes('profilaxis') || name.includes('limpieza') || name.includes('blanquea') || name.includes('destartraje');
+            });
+        } else if (!showAll) {
             const deptLow = currentDept.toLowerCase();
             filtered = baremo.filter(b => {
                 const cat = (b.category || '').toLowerCase();
@@ -6081,13 +6184,35 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
     listGroup.innerHTML = '';
     const allPatients = await SupabaseDataService.getPatients();
     let patients = [...allPatients];
+    const currentUser = getCurrentUser();
+    const isAssistant = currentUser && currentUser.role.toLowerCase().includes('asistente');
+    const isDoctor = typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false;
+    const isHygienist = typeof isHygienistUser === 'function' ? isHygienistUser(currentUser) : false;
+
+    // RESTRICCIÓN MÉDICA Y DE HIGIENISTA EN LA LISTA DE PACIENTES
+    if (isDoctor) {
+        let [allAppts, allBudgets] = await Promise.all([
+            SupabaseDataService.getAppointments().catch(() => []),
+            SupabaseDataService.getInvoices().catch(() => [])
+        ]);
+        patients = patients.filter(p => isPatientAssignedToDoctor(p, currentUser, allAppts, allBudgets));
+    } else if (isHygienist) {
+        // La Higienista SOLO puede ver pacientes relacionados con Odontología o con interconsultas odontológicas
+        let [allAppts, allBudgets] = await Promise.all([
+            SupabaseDataService.getAppointments().catch(() => []),
+            SupabaseDataService.getInvoices().catch(() => [])
+        ]);
+        patients = patients.filter(p => isPatientDentalRelated(p, allAppts, allBudgets));
+    }
+
     let activeId = getActivePatientId();
-    if (!activeId && patients.length > 0) {
+    if (activeId && !patients.some(p => p.id === activeId)) {
+        activeId = patients.length > 0 ? patients[0].id : null;
+        setActivePatientId(activeId);
+    } else if (!activeId && patients.length > 0) {
         activeId = patients[0].id;
         setActivePatientId(activeId);
     }
-    const currentUser = getCurrentUser();
-    const isAssistant = currentUser && currentUser.role.toLowerCase().includes('asistente');
 
     // Apply Filter
     if (filter !== 'all') {
@@ -6643,8 +6768,16 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
             // 5. Interconsultas, Récipes e Indicaciones Tab
             const interconsultationsContainer = document.getElementById('ehr-interconsultations-list');
             if (interconsultationsContainer) {
-                const ics = (meta.interconsultations) || [];
-                const rcs = (meta.recipes) || [];
+                let ics = (meta.interconsultations) || [];
+                let rcs = (meta.recipes) || [];
+
+                // Si es higienista, filtrar para ver únicamente interconsultas relacionadas con Odontología
+                if (typeof isHygienistUser === 'function' && isHygienistUser(currentUser)) {
+                    ics = ics.filter(ic => {
+                        const icStr = ((ic.id || '') + ' ' + (ic.notes || '') + ' ' + (ic.treatmentLinked || '') + ' ' + JSON.stringify(ic.studies || [])).toLowerCase();
+                        return icStr.includes('odont') || icStr.includes('dental') || icStr.includes('bucal') || icStr.includes('maxil') || icStr.includes('diente') || icStr.includes('limpieza') || icStr.includes('profilaxis');
+                    });
+                }
 
                 if (ics.length === 0 && rcs.length === 0) {
                     interconsultationsContainer.innerHTML = `
