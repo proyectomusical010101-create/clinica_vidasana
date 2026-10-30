@@ -3126,7 +3126,7 @@ window.renderMedicalBudgetItems = function() {
     if (elBs) elBs.innerText = `${totalFinalBs.toFixed(2)} Bs.`;
 };
 
-window.saveMedicalBudget = async function(status = 'Presupuesto') {
+window.saveMedicalBudget = async function(status = 'Presupuesto', sendToCashier = false) {
     const patientSelect = document.getElementById('med-budget-patient-select');
     const patientId = patientSelect ? patientSelect.value : null;
 
@@ -3180,7 +3180,11 @@ window.saveMedicalBudget = async function(status = 'Presupuesto') {
         status: status, // 'Presupuesto' | 'Aprobado'
         notes: notes,
         validUntil: validityDays,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        sentToCashier: !!sendToCashier,
+        sentToCashierAt: sendToCashier ? new Date().toISOString() : null,
+        sentBy: sendToCashier ? ((typeof getCurrentUser === 'function' && (getCurrentUser()?.fullname || getCurrentUser()?.username)) || 'Consultorio') : null,
+        checkoutStatus: sendToCashier ? 'pending_payment' : 'draft'
     };
 
     try {
@@ -3209,13 +3213,24 @@ window.saveMedicalBudget = async function(status = 'Presupuesto') {
             idBadge.className = status === 'Aprobado' ? 'badge-tag green' : 'badge-tag orange';
         }
 
-        Swal.fire({
-            icon: 'success',
-            title: status === 'Aprobado' ? '¡Presupuesto Aprobado!' : '¡Borrador Guardado!',
-            text: `Presupuesto ${budgetId} guardado exitosamente en la base de datos.`,
-            timer: 2000,
-            showConfirmButton: false
-        });
+        if (sendToCashier) {
+            Swal.fire({
+                icon: 'success',
+                title: '¡Enviado a Caja para Cobro! 🛒',
+                html: `Presupuesto <strong>${budgetId}</strong> guardado y enviado inmediatamente a recepción.<br><br>Total por cobrar: <strong style="color:#059669; font-size:1.25rem;">${totalRef.toFixed(2)}</strong> (${totalBcv.toFixed(2)} Bs.).<br><br><small style="color:#64748b;">La caja ya tiene al paciente en su bandeja de cobranza.</small>`,
+                confirmButtonText: 'Entendido'
+            });
+            if (typeof window.updateCheckoutBadge === 'function') await window.updateCheckoutBadge();
+            if (typeof window.renderCheckoutQueue === 'function') await window.renderCheckoutQueue();
+        } else {
+            Swal.fire({
+                icon: 'success',
+                title: status === 'Aprobado' ? '¡Presupuesto Aprobado!' : '¡Borrador Guardado!',
+                text: `Presupuesto ${budgetId} guardado exitosamente en la base de datos.`,
+                timer: 2000,
+                showConfirmButton: false
+            });
+        }
     } catch(err) {
         console.error('Error saving medical budget:', err);
         Swal.fire({ icon: 'error', title: 'Error al Guardar', text: err.message || err });
@@ -7715,10 +7730,16 @@ async function renderDashboard() {
                     `;
                 }
 
-                const abonoBtn = (isAttended || isDoctor) ? '' : `
+                const cartBtn = isDoctor ? '' : `
+                    <button class="btn btn-xs btn-outline btn-patient-cart" style="border-color: #f59e0b; color: #d97706; font-weight: 700; background: #fffbeb;" onclick="window.openPatientBillingCart('${app.patientId}')" title="Abrir Carrito / Pase a Caja del Paciente">
+                        <i class="fa-solid fa-cart-shopping"></i> <span class="btn-text-full">Carrito</span>
+                    </button>
+                `;
+                const abonoBtn = (isAttended || isDoctor) ? cartBtn : `
                     <button class="btn btn-xs btn-outline" style="border-color: #10b981; color: #059669; font-weight: 600;" onclick="window.openPaymentModalForAppointment('${app.patientId}', '${app.patientName}', '${app.treatment}')" title="Registrar Abono Anticipado">
                         <i class="fa-solid fa-hand-holding-dollar"></i> <span class="btn-text-full">Abonar</span>
                     </button>
+                    ${cartBtn}
                 `;
 
                 const editApptBtn = isDoctor ? '' : `<button class="btn btn-xs btn-outline btn-appt-edit" style="border-color: #0891b2; color: #0891b2;" onclick="window.editAppointment('${app.id}')" title="Editar Cita"><i class="fa-solid fa-pen-to-square"></i> <span class="btn-text-full">Editar</span></button>`;
@@ -8069,10 +8090,16 @@ async function renderAgendaView(filter = 'pending', searchQuery = '') {
         const curUserAgenda = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
         const isDoctorAgenda = curUserAgenda && typeof isDoctorUser === 'function' && isDoctorUser(curUserAgenda);
 
-        const abonoBtn = (isAttended || isDoctorAgenda) ? '' : `
+        const cartBtn = isDoctorAgenda ? '' : `
+            <button class="btn btn-xs btn-outline btn-patient-cart" style="border-color: #f59e0b; color: #d97706; font-weight: 700; background: #fffbeb;" onclick="window.openPatientBillingCart('${app.patientId}')" title="Abrir Carrito / Pase a Caja del Paciente">
+                <i class="fa-solid fa-cart-shopping"></i> <span class="btn-text-full">Carrito</span>
+            </button>
+        `;
+        const abonoBtn = (isAttended || isDoctorAgenda) ? cartBtn : `
             <button class="btn btn-xs btn-outline" style="border-color: #10b981; color: #059669; font-weight: 600;" onclick="window.openPaymentModalForAppointment('${app.patientId}', '${app.patientName}', '${app.treatment}')" title="Registrar Abono Anticipado">
                 <i class="fa-solid fa-hand-holding-dollar"></i> <span class="btn-text-full">Abonar</span>
             </button>
+            ${cartBtn}
         `;
 
         const deleteApptBtn = (isAssistant || isDoctorAgenda) ? '' : `<button class="btn btn-xs btn-outline text-red" onclick="deleteAppointment('${app.id}')" title="Eliminar Cita"><i class="fa-solid fa-trash"></i></button>`;
@@ -10023,7 +10050,30 @@ function initGlobalEvents() {
                 });
 
                 await SupabaseDataService.savePatient(p);
+
+                // Si viene del Carrito Clínico, actualizar las facturas/presupuestos correspondientes a Pagado
+                if (window.activeCartCheckoutSession && String(window.activeCartCheckoutSession.patientId) === String(activeId)) {
+                    try {
+                        const allInvoices = await SupabaseDataService.getInvoices();
+                        const relInvs = allInvoices.filter(inv => 
+                            String(inv.patientId) === String(activeId) && 
+                            (inv.sentToCashier || inv.checkoutStatus === 'pending_payment' || (window.activeCartCheckoutSession.invoiceIds && window.activeCartCheckoutSession.invoiceIds.includes(String(inv.id))))
+                        );
+                        for (const inv of relInvs) {
+                            inv.status = balanceUSD === 0 ? 'Pagado' : 'Parcial';
+                            inv.checkoutStatus = balanceUSD === 0 ? 'completed' : 'partial';
+                            inv.paidAt = new Date().toISOString();
+                            await SupabaseDataService.saveInvoice(inv);
+                        }
+                    } catch(invErr) {
+                        console.error("Error updating invoices after cart checkout:", invErr);
+                    }
+                    window.activeCartCheckoutSession = null;
+                }
+
                 closeModal('modal-payment');
+                if (typeof window.updateCheckoutBadge === 'function') await window.updateCheckoutBadge();
+                if (typeof window.renderCheckoutQueue === 'function') await window.renderCheckoutQueue();
                 await renderEHRView();
                 await renderDashboard();
                 await renderCashFlow();
@@ -16494,6 +16544,7 @@ async function renderFinanceView() {
         };
     });
 
+    if (typeof window.renderCheckoutQueue === 'function') await window.renderCheckoutQueue();
     await renderProviderBills();
     await renderReceivables();
     await renderCashFlow();
@@ -16909,6 +16960,7 @@ async function renderReceivables() {
                     <td class="text-red"><strong>$${pay.balanceUSD.toFixed(2)}</strong></td>
                     <td>
                         <div class="actions-cell-group">
+                            <button class="btn btn-xs btn-warning" style="background: #f59e0b; color: white; border: none; font-weight: 600;" onclick="window.openPatientBillingCart('${p.id}')" title="Ver Carrito y Cobros del Paciente"><i class="fa-solid fa-cart-shopping"></i> Carrito</button>
                             <button class="btn btn-xs btn-success" onclick="openEHRForPatient('${p.id}')" title="Abonar en EHR"><i class="fa-solid fa-hand-holding-dollar"></i> Cobrar / EHR</button>
                         </div>
                     </td>
@@ -20839,3 +20891,759 @@ window.renderDoctorFinancesActiveSubtab = function() {
 window.printDoctorFinancesReport = function() {
     window.print();
 };
+
+
+// ==============================================================================
+// === PACIENTE BILLING CART & CHECKOUT QUEUE ENGINE ============================
+// ==============================================================================
+
+window.activeBillingCartPatientId = null;
+window.activeCartCheckoutSession = null;
+window.cachedCartItems = [];
+
+// Actualizar badges de pacientes en espera de cobro
+window.updateCheckoutBadge = async function() {
+    try {
+        const invoices = await SupabaseDataService.getInvoices();
+        const todayStr = new Date().toISOString().split('T')[0];
+
+        // Facturas enviadas a caja o presupuestos aprobados hoy pendientes
+        const pendingInvs = invoices.filter(inv => {
+            if (inv.checkoutStatus === 'completed' || inv.status === 'Pagado') return false;
+            if (inv.sentToCashier && inv.checkoutStatus !== 'completed') return true;
+            const isToday = (inv.invoiceDate && inv.invoiceDate.startsWith(todayStr)) || (inv.createdAt && inv.createdAt.startsWith(todayStr));
+            return isToday && (inv.status === 'Aprobado' || inv.status === 'Pendiente' || inv.checkoutStatus === 'pending_payment');
+        });
+
+        // Contar pacientes únicos
+        const uniquePatients = new Set(pendingInvs.map(i => String(i.patientId)));
+        const count = uniquePatients.size;
+
+        const badgeSubtab = document.getElementById('badge-checkout-count');
+        if (badgeSubtab) {
+            badgeSubtab.innerText = count;
+            badgeSubtab.style.display = count > 0 ? 'inline-block' : 'none';
+        }
+
+        const badgeTopbar = document.getElementById('topbar-checkout-badge-count');
+        if (badgeTopbar) {
+            badgeTopbar.innerText = count;
+            badgeTopbar.style.display = count > 0 ? 'inline-block' : 'none';
+        }
+        return count;
+    } catch(err) {
+        console.error("Error updating checkout badge:", err);
+        return 0;
+    }
+};
+
+// Navegación directa a la Bandeja de Pase a Caja
+window.navigateToCheckoutQueue = async function() {
+    if (typeof navigateToTab === 'function') {
+        navigateToTab('finance');
+    }
+    const subtabs = document.querySelectorAll('#view-finance .subtab-btn');
+    const subcontents = document.querySelectorAll('#view-finance .subtab-content');
+    subtabs.forEach(b => b.classList.remove('active'));
+    subcontents.forEach(c => c.classList.remove('active'));
+    const btn = document.getElementById('btn-subtab-checkout-queue');
+    const content = document.getElementById('subtab-checkout-queue');
+    if (btn) btn.classList.add('active');
+    if (content) content.classList.add('active');
+    if (typeof window.renderCheckoutQueue === 'function') await window.renderCheckoutQueue();
+};
+
+// Renderizar la tabla de la bandeja de Pase a Caja
+window.renderCheckoutQueue = async function() {
+    const tbody = document.getElementById('checkout-queue-tbody');
+    if (!tbody) return;
+
+    try {
+        const [patients, invoices, appts] = await Promise.all([
+            SupabaseDataService.getPatients(),
+            SupabaseDataService.getInvoices(),
+            SupabaseDataService.getAppointments()
+        ]);
+
+        const todayStr = new Date().toISOString().split('T')[0];
+        const rate = getExchangeRate();
+
+        // Filtrar facturas/órdenes pendientes de hoy
+        const pendingInvs = invoices.filter(inv => {
+            if (inv.checkoutStatus === 'completed' || inv.status === 'Pagado') return false;
+            if (inv.sentToCashier && inv.checkoutStatus !== 'completed') return true;
+            const isToday = (inv.invoiceDate && inv.invoiceDate.startsWith(todayStr)) || (inv.createdAt && inv.createdAt.startsWith(todayStr));
+            return isToday && (inv.status === 'Aprobado' || inv.status === 'Pendiente' || inv.checkoutStatus === 'pending_payment');
+        });
+
+        // Agrupar por paciente
+        const patientGroups = {};
+        pendingInvs.forEach(inv => {
+            const pid = String(inv.patientId);
+            if (!patientGroups[pid]) {
+                patientGroups[pid] = {
+                    patientId: pid,
+                    invoices: [],
+                    doctor: inv.doctor || inv.sentBy || 'Consultorio',
+                    sentAt: inv.sentToCashierAt || inv.createdAt || inv.invoiceDate,
+                    totalUSD: 0
+                };
+            }
+            patientGroups[pid].invoices.push(inv);
+            patientGroups[pid].totalUSD += (inv.totalRef || 0);
+        });
+
+        const groupList = Object.values(patientGroups);
+
+        // Actualizar badges
+        await window.updateCheckoutBadge();
+
+        if (groupList.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="9" class="text-center text-muted" style="padding: 32px;">
+                        <i class="fa-solid fa-circle-check text-green" style="font-size: 2rem; display: block; margin-bottom: 8px;"></i>
+                        <strong>No hay pacientes en espera de cobro en este momento.</strong><br>
+                        <small>Todos los procedimientos enviados desde los consultorios han sido liquidados.</small>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        // Ordenar por hora (los más recientes primero)
+        groupList.sort((a, b) => new Date(b.sentAt || 0) - new Date(a.sentAt || 0));
+
+        let html = '';
+        groupList.forEach(grp => {
+            const pat = patients.find(p => String(p.id) === grp.patientId) || { fullname: 'Paciente Desconocido', phone: '' };
+            const timeStr = grp.sentAt ? new Date(grp.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--';
+            const totalBs = grp.totalUSD * rate;
+
+            // Resumen de procedimientos
+            const allItems = [];
+            grp.invoices.forEach(inv => {
+                (inv.items || []).forEach(it => {
+                    allItems.push(`${it.qty || 1}x ${it.name || it.concept || it.service}`);
+                });
+            });
+            const proceduresPreview = allItems.length > 0 ? allItems.join(', ') : 'Servicios Odontológicos / Médicos';
+
+            const cleanPhone = (pat.phone || '').replace(/[^0-9]/g, '');
+            const phoneHtml = cleanPhone ? `
+                <a href="https://wa.me/${cleanPhone}" target="_blank" class="whatsapp-pill-link" style="display:inline-flex; align-items:center; gap:4px; font-size:0.78rem; color:#16a34a; font-weight:600; text-decoration:none;">
+                    <i class="fa-brands fa-whatsapp"></i> ${pat.phone}
+                </a>
+            ` : '<span class="text-muted" style="font-size:0.75rem;">Sin teléfono</span>';
+
+            html += `
+                <tr style="border-bottom: 1px solid #f1f5f9;">
+                    <td style="font-weight: 700; color: #64748b; font-size: 0.85rem;">
+                        <i class="fa-regular fa-clock"></i> ${timeStr}
+                    </td>
+                    <td>
+                        <strong class="badge-tag blue" style="font-size: 0.78rem;">${grp.patientId}</strong>
+                    </td>
+                    <td>
+                        <div style="font-weight: 700; color: #0f172a; font-size: 0.92rem;">${pat.fullname}</div>
+                        ${phoneHtml}
+                    </td>
+                    <td>
+                        <span style="font-size: 0.82rem; color: #334155; font-weight: 600;">
+                            <i class="fa-solid fa-user-doctor text-cyan"></i> ${grp.doctor}
+                        </span>
+                    </td>
+                    <td style="max-width: 280px;">
+                        <div style="font-size: 0.82rem; color: #475569; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${proceduresPreview}">
+                            ${proceduresPreview}
+                        </div>
+                    </td>
+                    <td style="text-align: right; font-weight: 800; color: #059669; font-size: 0.95rem;">
+                        $${grp.totalUSD.toFixed(2)}
+                    </td>
+                    <td style="text-align: right; font-weight: 700; color: #64748b; font-size: 0.85rem;">
+                        ${totalBs.toFixed(2)} Bs.
+                    </td>
+                    <td style="text-align: center;">
+                        <span class="badge-tag orange" style="font-size: 0.75rem; background: #fef3c7; color: #b45309; border: 1px solid #fde68a;">
+                            <i class="fa-solid fa-bell"></i> Por Cobrar
+                        </span>
+                    </td>
+                    <td style="text-align: center;">
+                        <button type="button" class="btn btn-sm btn-primary" onclick="window.openPatientBillingCart('${grp.patientId}')" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important; border: none !important; color: white !important; font-weight: 700; padding: 6px 14px; border-radius: 6px; box-shadow: 0 2px 4px rgba(217, 119, 6, 0.25);" title="Abrir Carrito y Liquidar en Caja">
+                            <i class="fa-solid fa-cart-shopping"></i> Cobrar ($${grp.totalUSD.toFixed(2)})
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+
+        tbody.innerHTML = html;
+    } catch(err) {
+        console.error("Error rendering checkout queue:", err);
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-red">Error al cargar la bandeja de cobros.</td></tr>';
+    }
+};
+
+// Filtrar la tabla de Pase a Caja
+window.filterCheckoutQueue = function(query) {
+    const q = (query || '').toLowerCase().trim();
+    const rows = document.querySelectorAll('#checkout-queue-tbody tr');
+    rows.forEach(r => {
+        const text = r.innerText.toLowerCase();
+        r.style.display = text.includes(q) ? '' : 'none';
+    });
+};
+
+// Alternar secciones en el modal del carrito
+window.toggleCartSection = function(sectionId) {
+    const sec = document.getElementById(sectionId);
+    if (!sec) return;
+    const isHidden = sec.style.display === 'none';
+    sec.style.display = isHidden ? 'block' : 'none';
+    const iconId = sectionId.includes('budgets') ? 'cart-budgets-toggle-icon' : 'cart-payments-toggle-icon';
+    const icon = document.getElementById(iconId);
+    if (icon) {
+        icon.className = isHidden ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down';
+    }
+};
+
+// Marcar / desmarcar todos los ítems del carrito
+window.toggleAllCartItems = function(check) {
+    const checkboxes = document.querySelectorAll('.cart-item-check');
+    checkboxes.forEach(cb => {
+        cb.checked = check;
+    });
+    window.updateCartTotals();
+};
+
+// Actualizar totales calculados del carrito
+window.updateCartTotals = function() {
+    const checkboxes = document.querySelectorAll('.cart-item-check:checked');
+    let totalUSD = 0;
+    checkboxes.forEach(cb => {
+        totalUSD += parseFloat(cb.dataset.price || 0);
+    });
+    const rate = getExchangeRate();
+    const totalBs = totalUSD * rate;
+
+    const elTotalUsd = document.getElementById('cart-checkout-total-usd');
+    if (elTotalUsd) elTotalUsd.innerText = `$${totalUSD.toFixed(2)}`;
+
+    const elTotalBs = document.getElementById('cart-checkout-total-bs');
+    if (elTotalBs) elTotalBs.innerText = `(${totalBs.toFixed(2)} Bs.)`;
+
+    const btnProceed = document.getElementById('btn-cart-proceed-payment');
+    if (btnProceed) {
+        btnProceed.innerHTML = `<i class="fa-solid fa-cash-register"></i> Cobrar Seleccionados ($${totalUSD.toFixed(2)})`;
+    }
+};
+
+// ABRIR EL CARRITO CLÍNICO / ESTADO DE COBRO DE UN PACIENTE
+window.openPatientBillingCart = async function(patientId) {
+    if (!patientId) {
+        Swal.fire({ icon: 'warning', title: 'Paciente no seleccionado', text: 'Debe especificar un paciente para abrir su carrito.' });
+        return;
+    }
+
+    window.activeBillingCartPatientId = String(patientId);
+
+    try {
+        const [patients, invoices, appts] = await Promise.all([
+            SupabaseDataService.getPatients(),
+            SupabaseDataService.getInvoices(),
+            SupabaseDataService.getAppointments()
+        ]);
+
+        const pat = patients.find(p => String(p.id) === String(patientId));
+        if (!pat) {
+            Swal.fire({ icon: 'error', title: 'Paciente no encontrado', text: 'No se encontró la ficha del paciente en la base de datos.' });
+            return;
+        }
+
+        const rate = getExchangeRate();
+        const todayStr = new Date().toISOString().split('T')[0];
+
+        // 1. Llenar cabecera del paciente
+        const elName = document.getElementById('cart-modal-patient-name');
+        if (elName) elName.innerText = pat.fullname;
+
+        const elId = document.getElementById('cart-modal-patient-id');
+        if (elId) elId.innerText = pat.id;
+
+        const cleanPhone = (pat.phone || '').replace(/[^0-9]/g, '');
+        const elPhone = document.getElementById('cart-modal-patient-phone');
+        if (elPhone) {
+            elPhone.innerHTML = cleanPhone ? `<i class="fa-brands fa-whatsapp text-green"></i> ${pat.phone}` : '<i class="fa-solid fa-phone"></i> Sin teléfono';
+        }
+
+        // Cita de hoy si existe
+        const todayAppt = appts.find(a => String(a.patientId) === String(patientId) && a.date === todayStr);
+        const elDoctor = document.getElementById('cart-modal-patient-doctor');
+        if (elDoctor) {
+            elDoctor.innerHTML = `<i class="fa-solid fa-user-doctor text-cyan"></i> ${todayAppt?.doctor || pat.assignedDoctor || 'Atención General'}`;
+        }
+
+        // 2. Facturas y Presupuestos del Paciente
+        const patInvoices = invoices.filter(inv => String(inv.patientId) === String(patientId));
+
+        // Procedimientos de hoy / órdenes pendientes de cobro
+        const todayInvs = patInvoices.filter(inv => {
+            if (inv.checkoutStatus === 'completed' || inv.status === 'Pagado') return false;
+            if (inv.sentToCashier && inv.checkoutStatus !== 'completed') return true;
+            const isToday = (inv.invoiceDate && inv.invoiceDate.startsWith(todayStr)) || (inv.createdAt && inv.createdAt.startsWith(todayStr));
+            return isToday && (inv.status === 'Aprobado' || inv.status === 'Pendiente' || inv.checkoutStatus === 'pending_payment');
+        });
+
+        // Desglosar ítems individuales para la tabla de cobro de hoy
+        window.cachedCartItems = [];
+        let todayDueUSD = 0;
+
+        todayInvs.forEach(inv => {
+            const items = inv.items || [];
+            items.forEach((it, idx) => {
+                const price = parseFloat(it.price || it.totalUSD || 0);
+                const qty = parseInt(it.qty || 1, 10);
+                const subtotal = price * qty;
+                todayDueUSD += subtotal;
+
+                window.cachedCartItems.push({
+                    invoiceId: inv.id,
+                    itemIndex: idx,
+                    name: it.name || it.concept || it.service || 'Procedimiento Clínico',
+                    doctor: inv.doctor || inv.sentBy || 'Consultorio',
+                    qty: qty,
+                    price: price,
+                    subtotal: subtotal,
+                    subtotalBs: subtotal * rate
+                });
+            });
+        });
+
+        // 3. KPIs del Paciente
+        let totalPaidUSD = 0;
+        (pat.payments || []).forEach(pay => {
+            totalPaidUSD += (pay.paidUSD || 0);
+        });
+
+        let pastDebtUSD = 0;
+        (pat.payments || []).forEach(pay => {
+            if (pay.status === 'Pendiente' || (pay.balanceUSD && pay.balanceUSD > 0.01)) {
+                pastDebtUSD += pay.balanceUSD;
+            }
+        });
+
+        const elTodayDue = document.getElementById('cart-kpi-today-due');
+        if (elTodayDue) elTodayDue.innerText = `$${todayDueUSD.toFixed(2)}`;
+
+        const elTodayDueBs = document.getElementById('cart-kpi-today-due-bs');
+        if (elTodayDueBs) elTodayDueBs.innerText = `${(todayDueUSD * rate).toFixed(2)} Bs.`;
+
+        const elTotalPaid = document.getElementById('cart-kpi-total-paid');
+        if (elTotalPaid) elTotalPaid.innerText = `$${totalPaidUSD.toFixed(2)}`;
+
+        const elPastDebt = document.getElementById('cart-kpi-past-debt');
+        if (elPastDebt) elPastDebt.innerText = `$${pastDebtUSD.toFixed(2)}`;
+
+        // 4. Renderizar Tabla de Procedimientos de Hoy (Por Cobrar)
+        const tbodyPending = document.getElementById('cart-pending-items-tbody');
+        const badgePendingCount = document.getElementById('cart-pending-items-count');
+        if (badgePendingCount) badgePendingCount.innerText = `${window.cachedCartItems.length} ítems`;
+
+        if (tbodyPending) {
+            if (window.cachedCartItems.length === 0) {
+                // Si no hay procedimientos nuevos de hoy, chequear si tiene deuda previa para sugerir cobro
+                if (pastDebtUSD > 0) {
+                    tbodyPending.innerHTML = `
+                        <tr>
+                            <td colspan="7" class="text-center" style="padding: 20px; background: #fffbeb;">
+                                <strong class="text-amber"><i class="fa-solid fa-triangle-exclamation"></i> No hay nuevos procedimientos de hoy, pero el paciente tiene saldos pendientes anteriores: $${pastDebtUSD.toFixed(2)}</strong>
+                            </td>
+                        </tr>
+                    `;
+                } else {
+                    tbodyPending.innerHTML = `
+                        <tr>
+                            <td colspan="7" class="text-center text-muted" style="padding: 24px;">
+                                <i class="fa-solid fa-circle-check text-green" style="font-size: 1.5rem; display: block; margin-bottom: 6px;"></i>
+                                No hay procedimientos pendientes de cobro para hoy.
+                            </td>
+                        </tr>
+                    `;
+                }
+            } else {
+                let html = '';
+                window.cachedCartItems.forEach((it, idx) => {
+                    html += `
+                        <tr style="border-bottom: 1px solid #f1f5f9;">
+                            <td style="text-align: center;">
+                                <input type="checkbox" class="cart-item-check" data-idx="${idx}" data-price="${it.subtotal}" checked onchange="window.updateCartTotals()" style="width: 18px; height: 18px; cursor: pointer;">
+                            </td>
+                            <td>
+                                <strong style="color: #0f172a;">${it.name}</strong>
+                            </td>
+                            <td>
+                                <span style="font-size: 0.8rem; color: #64748b;"><i class="fa-solid fa-user-doctor text-cyan"></i> ${it.doctor}</span>
+                            </td>
+                            <td style="text-align: center; font-weight: 700;">${it.qty}</td>
+                            <td style="text-align: right; color: #475569;">$${it.price.toFixed(2)}</td>
+                            <td style="text-align: right; font-weight: 800; color: #059669;">$${it.subtotal.toFixed(2)}</td>
+                            <td style="text-align: right; font-weight: 700; color: #64748b;">${it.subtotalBs.toFixed(2)} Bs.</td>
+                        </tr>
+                    `;
+                });
+                tbodyPending.innerHTML = html;
+            }
+        }
+
+        // 5. Renderizar Presupuestos y Tratamientos Cotizados
+        const budgetsContainer = document.getElementById('cart-budgets-container');
+        const badgeBudgetsCount = document.getElementById('cart-budgets-count');
+        const activeBudgets = patInvoices.filter(inv => inv.status === 'Presupuesto' || inv.status === 'Aprobado');
+        if (badgeBudgetsCount) badgeBudgetsCount.innerText = `${activeBudgets.length} presupuestos`;
+
+        if (budgetsContainer) {
+            if (activeBudgets.length === 0) {
+                budgetsContainer.innerHTML = '<div class="text-center text-muted" style="padding: 12px;">No tiene presupuestos guardados.</div>';
+            } else {
+                let bHtml = '';
+                activeBudgets.forEach(b => {
+                    const bItems = (b.items || []).map(i => `${i.qty || 1}x ${i.name || i.concept}`).join(', ');
+                    bHtml += `
+                        <div style="background: #ffffff; border: 1px solid #dcfce7; border-radius: 8px; padding: 12px 14px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                            <div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <strong style="color: #166534; font-size: 0.9rem;">${b.id}</strong>
+                                    <span class="badge-tag ${b.status === 'Aprobado' ? 'green' : 'orange'}" style="font-size: 0.72rem;">${b.status}</span>
+                                    <small style="color: #64748b;">(${b.invoiceDate || 'Sin fecha'})</small>
+                                </div>
+                                <div style="font-size: 0.8rem; color: #475569; margin-top: 4px; max-width: 450px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                    ${bItems}
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <strong style="font-size: 1.05rem; color: #166534;">$${(b.totalRef || 0).toFixed(2)}</strong>
+                                <button type="button" class="btn btn-xs btn-outline" onclick="window.addBudgetItemsToTodayCart('${b.id}')" style="border-color: #16a34a; color: #16a34a; font-weight: 700;" title="Agregar ítems de este presupuesto a la liquidación de hoy">
+                                    <i class="fa-solid fa-cart-plus"></i> Cargar a Liquidación
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                });
+                budgetsContainer.innerHTML = bHtml;
+            }
+        }
+
+        // 6. Renderizar Historial de Pagos y Abonos
+        const tbodyPayments = document.getElementById('cart-payments-history-tbody');
+        const badgePaymentsCount = document.getElementById('cart-payments-count');
+        const paymentsList = pat.payments || [];
+        if (badgePaymentsCount) badgePaymentsCount.innerText = `${paymentsList.length} pagos`;
+
+        if (tbodyPayments) {
+            if (paymentsList.length === 0) {
+                tbodyPayments.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding: 16px;">Sin pagos registrados.</td></tr>';
+            } else {
+                let pHtml = '';
+                paymentsList.forEach(p => {
+                    const methodLabel = p.method ? (p.method === 'cash' ? 'Efectivo' : (p.method === 'pagomovil' ? 'Pago Móvil' : p.method.toUpperCase())) : 'Efectivo';
+                    pHtml += `
+                        <tr>
+                            <td>${p.date || '--'}</td>
+                            <td><strong>${p.concept}</strong></td>
+                            <td>${methodLabel} (${p.bank || 'Caja'})</td>
+                            <td><code>${p.reference || 'N/A'}</code></td>
+                            <td style="text-align: right; color: #059669; font-weight: 700;">$${(p.paidUSD || 0).toFixed(2)}</td>
+                            <td style="text-align: right; color: ${p.balanceUSD > 0 ? '#dc2626' : '#64748b'}; font-weight: 700;">$${(p.balanceUSD || 0).toFixed(2)}</td>
+                        </tr>
+                    `;
+                });
+                tbodyPayments.innerHTML = pHtml;
+            }
+        }
+
+        // 7. Calcular totales iniciales y abrir modal
+        window.updateCartTotals();
+        openModal('modal-patient-billing-cart');
+
+    } catch(err) {
+        console.error("Error opening patient billing cart:", err);
+        Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo abrir el carrito del paciente.' });
+    }
+};
+
+// Cargar ítems de un presupuesto previo al carrito de hoy
+window.addBudgetItemsToTodayCart = async function(budgetId) {
+    try {
+        const invoices = await SupabaseDataService.getInvoices();
+        const budget = invoices.find(inv => String(inv.id) === String(budgetId));
+        if (!budget || !budget.items || budget.items.length === 0) {
+            Swal.fire({ icon: 'warning', text: 'El presupuesto no contiene ítems para cargar.' });
+            return;
+        }
+
+        const rate = getExchangeRate();
+        budget.items.forEach((it, idx) => {
+            const price = parseFloat(it.price || it.totalUSD || 0);
+            const qty = parseInt(it.qty || 1, 10);
+            const subtotal = price * qty;
+            window.cachedCartItems.push({
+                invoiceId: budget.id,
+                itemIndex: idx,
+                name: it.name || it.concept || it.service,
+                doctor: budget.doctor || 'Consultorio',
+                qty: qty,
+                price: price,
+                subtotal: subtotal,
+                subtotalBs: subtotal * rate
+            });
+        });
+
+        // Re-renderizar tabla de ítems de hoy
+        const tbodyPending = document.getElementById('cart-pending-items-tbody');
+        const badgePendingCount = document.getElementById('cart-pending-items-count');
+        if (badgePendingCount) badgePendingCount.innerText = `${window.cachedCartItems.length} ítems`;
+
+        let html = '';
+        window.cachedCartItems.forEach((it, idx) => {
+            html += `
+                <tr style="border-bottom: 1px solid #f1f5f9;">
+                    <td style="text-align: center;">
+                        <input type="checkbox" class="cart-item-check" data-idx="${idx}" data-price="${it.subtotal}" checked onchange="window.updateCartTotals()" style="width: 18px; height: 18px; cursor: pointer;">
+                    </td>
+                    <td>
+                        <strong style="color: #0f172a;">${it.name}</strong>
+                    </td>
+                    <td>
+                        <span style="font-size: 0.8rem; color: #64748b;"><i class="fa-solid fa-user-doctor text-cyan"></i> ${it.doctor}</span>
+                    </td>
+                    <td style="text-align: center; font-weight: 700;">${it.qty}</td>
+                    <td style="text-align: right; color: #475569;">$${it.price.toFixed(2)}</td>
+                    <td style="text-align: right; font-weight: 800; color: #059669;">$${it.subtotal.toFixed(2)}</td>
+                    <td style="text-align: right; font-weight: 700; color: #64748b;">${it.subtotalBs.toFixed(2)} Bs.</td>
+                </tr>
+            `;
+        });
+        if (tbodyPending) tbodyPending.innerHTML = html;
+
+        window.updateCartTotals();
+
+        Swal.fire({
+            icon: 'success',
+            title: 'Ítems Agregados',
+            text: `Se cargaron los procedimientos del presupuesto ${budgetId} al carrito de cobro de hoy.`,
+            timer: 1500,
+            showConfirmButton: false
+        });
+    } catch(err) {
+        console.error("Error loading budget items to cart:", err);
+    }
+};
+
+// PROCEDER AL COBRO EN CAJA DE LOS ÍTEMS SELECCIONADOS
+window.proceedPaymentFromCart = async function() {
+    const checkboxes = document.querySelectorAll('.cart-item-check:checked');
+    if (checkboxes.length === 0) {
+        Swal.fire({ icon: 'warning', title: 'Selección Vacía', text: 'Debe marcar al menos un procedimiento para proceder al cobro en caja.' });
+        return;
+    }
+
+    const selectedItems = [];
+    const invoiceIdSet = new Set();
+    let totalToPay = 0;
+
+    checkboxes.forEach(cb => {
+        const idx = parseInt(cb.dataset.idx, 10);
+        const item = window.cachedCartItems[idx];
+        if (item) {
+            selectedItems.push(item);
+            totalToPay += item.subtotal;
+            if (item.invoiceId) invoiceIdSet.add(item.invoiceId);
+        }
+    });
+
+    const patientId = window.activeBillingCartPatientId;
+    if (!patientId) return;
+
+    // Construir concepto unificado para el cobro
+    const itemNames = selectedItems.map(it => `${it.qty > 1 ? it.qty + 'x ' : ''}${it.name}`);
+    const conceptText = 'Cobro: ' + itemNames.join(' + ');
+
+    // Guardar sesión de cobro para cuando se confirme en modal-payment
+    window.activeCartCheckoutSession = {
+        patientId: patientId,
+        invoiceIds: Array.from(invoiceIdSet),
+        items: selectedItems,
+        totalUSD: totalToPay
+    };
+
+    // Prellenar modal-payment
+    setActivePatientId(patientId);
+
+    const inputConcept = document.getElementById('pay-concept');
+    if (inputConcept) inputConcept.value = conceptText;
+
+    const inputTotalUsd = document.getElementById('pay-total-usd');
+    if (inputTotalUsd) inputTotalUsd.value = totalToPay.toFixed(2);
+
+    const inputPaidUsd = document.getElementById('pay-paid-usd');
+    if (inputPaidUsd) inputPaidUsd.value = totalToPay.toFixed(2);
+
+    const inputDate = document.getElementById('pay-date');
+    if (inputDate) inputDate.value = new Date().toISOString().split('T')[0];
+
+    // Cerrar carrito y abrir modal de pago oficial
+    closeModal('modal-patient-billing-cart');
+    openModal('modal-payment');
+};
+
+// ENVIAR DETALLE DEL CARRITO POR WHATSAPP
+window.sendCartWhatsAppDetails = async function() {
+    const patientId = window.activeBillingCartPatientId;
+    if (!patientId) return;
+
+    try {
+        const patients = await SupabaseDataService.getPatients();
+        const pat = patients.find(p => String(p.id) === String(patientId));
+        if (!pat) return;
+
+        const cleanPhone = (pat.phone || '').replace(/[^0-9]/g, '');
+        if (!cleanPhone) {
+            Swal.fire({ icon: 'warning', title: 'Sin teléfono', text: 'El paciente no tiene un número de WhatsApp registrado.' });
+            return;
+        }
+
+        const rate = getExchangeRate();
+        const checkboxes = document.querySelectorAll('.cart-item-check:checked');
+        const itemsList = [];
+        let totalUSD = 0;
+
+        checkboxes.forEach(cb => {
+            const idx = parseInt(cb.dataset.idx, 10);
+            const item = window.cachedCartItems[idx];
+            if (item) {
+                itemsList.push(`• ${item.name} (${item.qty}x) - $${item.subtotal.toFixed(2)}`);
+                totalUSD += item.subtotal;
+            }
+        });
+
+        const totalBs = totalUSD * rate;
+        const msg = `🏥 *CLÍNICA VIDASANA - ESTADO DE ATENCIÓN Y COBRO* 🏥\n\nEstimado(a) *${pat.fullname}* (C.I: ${pat.id}):\n\nLe compartimos el desglose de los procedimientos correspondientes a su atención:\n\n${itemsList.length > 0 ? itemsList.join('\n') : '• Consulta y Evaluación Odontológica / Médica'}\n\n💰 *Total a Liquidar:* $${totalUSD.toFixed(2)} (${totalBs.toFixed(2)} Bs.)\n\n*Datos para Pago Móvil / Transferencia:*\nBanesco (0134) - C.I / RIF: J-50000000-0 - Tlf: 0414-0000000\n\n¡Muchas gracias por confiar en nuestra atención clínica!`;
+
+        const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
+        window.open(waUrl, '_blank');
+    } catch(err) {
+        console.error("Error sending cart WhatsApp:", err);
+    }
+};
+
+// IMPRIMIR TICKET / PASE A CAJA
+window.printCartTicket = async function() {
+    const patientId = window.activeBillingCartPatientId;
+    if (!patientId) return;
+
+    try {
+        const patients = await SupabaseDataService.getPatients();
+        const pat = patients.find(p => String(p.id) === String(patientId));
+        if (!pat) return;
+
+        const rate = getExchangeRate();
+        const checkboxes = document.querySelectorAll('.cart-item-check:checked');
+        const items = [];
+        let totalUSD = 0;
+
+        checkboxes.forEach(cb => {
+            const idx = parseInt(cb.dataset.idx, 10);
+            const it = window.cachedCartItems[idx];
+            if (it) {
+                items.push(it);
+                totalUSD += it.subtotal;
+            }
+        });
+
+        const totalBs = totalUSD * rate;
+        const printWindow = window.open('', '_blank', 'width=750,height=800');
+        if (!printWindow) {
+            Swal.fire({ icon: 'warning', title: 'Ventana bloqueada', text: 'Por favor habilite las ventanas emergentes en su navegador.' });
+            return;
+        }
+
+        let itemsRows = '';
+        items.forEach(it => {
+            itemsRows += `
+                <tr>
+                    <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${it.name}</td>
+                    <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: center;">${it.qty}</td>
+                    <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right;">$${it.price.toFixed(2)}</td>
+                    <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: bold;">$${it.subtotal.toFixed(2)}</td>
+                </tr>
+            `;
+        });
+
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Pase a Caja - ${pat.fullname}</title>
+                <style>
+                    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 25px; color: #0f172a; margin: 0; }
+                    .header { text-align: center; border-bottom: 2px dashed #94a3b8; padding-bottom: 15px; margin-bottom: 15px; }
+                    .header h2 { margin: 0; color: #0f172a; font-size: 1.3rem; }
+                    .header p { margin: 4px 0 0 0; color: #64748b; font-size: 0.85rem; }
+                    .patient-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 15px; font-size: 0.85rem; }
+                    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-bottom: 15px; }
+                    th { background: #f1f5f9; padding: 8px; text-align: left; }
+                    .totals { text-align: right; margin-top: 15px; font-size: 0.95rem; }
+                    .totals strong { font-size: 1.25rem; color: #059669; }
+                    .footer { text-align: center; margin-top: 25px; font-size: 0.75rem; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 10px; }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h2>CLÍNICA VIDASANA</h2>
+                    <p>Centro Médico y Odontológico Especializado</p>
+                    <p><strong>PASE A CAJA / ORDEN DE LIQUIDACIÓN</strong></p>
+                </div>
+                <div class="patient-box">
+                    <div><strong>Paciente:</strong> ${pat.fullname}</div>
+                    <div><strong>Cédula / Documento:</strong> ${pat.id}</div>
+                    <div><strong>Fecha y Hora:</strong> ${new Date().toLocaleString()}</div>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Procedimiento / Servicio</th>
+                            <th style="text-align: center;">Cant.</th>
+                            <th style="text-align: right;">Unitario</th>
+                            <th style="text-align: right;">Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itemsRows}
+                    </tbody>
+                </table>
+                <div class="totals">
+                    <div>Total a Liquidar: <strong>$${totalUSD.toFixed(2)}</strong></div>
+                    <div style="font-size: 0.85rem; color: #64748b; margin-top: 4px;">Equivalente Oficial: ${totalBs.toFixed(2)} Bs. (Tasa BCV: ${rate.toFixed(2)} Bs/$)</div>
+                </div>
+                <div class="footer">
+                    Presente este comprobante en la recepción de Caja para efectuar su pago.<br>
+                    ¡Gracias por su visita!
+                </div>
+                <script>
+                    window.onload = function() { window.print(); };
+                </script>
+            </body>
+            </html>
+        `);
+        printWindow.document.close();
+    } catch(err) {
+        console.error("Error printing cart ticket:", err);
+    }
+};
+
+// Auto-inicializar badges al cargar el sistema
+setTimeout(() => {
+    if (typeof window.updateCheckoutBadge === 'function') window.updateCheckoutBadge();
+}, 2500);
+
