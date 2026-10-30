@@ -513,6 +513,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         dateBadge.textContent = todayStr.charAt(0).toUpperCase() + todayStr.slice(1);
     }
 
+    if (typeof window.initDashboardPeriodFilters === 'function') {
+        window.initDashboardPeriodFilters();
+    }
+
     // 3. Check Authentication & Session
     checkAuthSession();
     initInactivityTracker();
@@ -1651,11 +1655,21 @@ function applyRolePermissionsUI(role) {
             const navStockBadge = document.getElementById('nav-stock-alerts-badge');
             if (navStockBadge) navStockBadge.style.display = 'none';
 
-            // Lock down Charging / Cobrar
+            // Lock down Charging / Cobrar / Ventas / Abonos / Facturación
             const directSaleBtn = document.getElementById('btn-header-direct-sale');
             if (directSaleBtn) directSaleBtn.style.display = 'none';
+            const headerActionDirectSale = document.getElementById('header-action-direct-sale');
+            if (headerActionDirectSale) headerActionDirectSale.style.display = 'none';
             const ehrAbonoBtn = document.getElementById('btn-ehr-add-abono');
             if (ehrAbonoBtn) ehrAbonoBtn.style.display = 'none';
+            const btnBillDirect = document.getElementById('btn-bill-budget-direct');
+            if (btnBillDirect) btnBillDirect.style.display = 'none';
+            const fabActDirectSale = document.getElementById('fab-act-direct-sale');
+            if (fabActDirectSale) fabActDirectSale.style.display = 'none';
+            const fabActBilling = document.getElementById('fab-act-billing');
+            if (fabActBilling) fabActBilling.style.display = 'none';
+            const fabActIncome = document.getElementById('fab-act-income');
+            if (fabActIncome) fabActIncome.style.display = 'none';
 
             // Lock down Import / Export / Templates
             const exportBtns = document.querySelectorAll('.btn-export-excel, .btn-import, .btn-download-template, #btn-export-patients-excel, #btn-import-patients, #btn-export-services-excel, #btn-import-services, #btn-export-inventory-excel, #btn-import-inventory');
@@ -1676,8 +1690,12 @@ function applyRolePermissionsUI(role) {
             // Hygienist specific feature locks
             const directSaleBtn = document.getElementById('btn-header-direct-sale');
             if (directSaleBtn) directSaleBtn.style.display = 'none';
+            const headerActionDirectSale = document.getElementById('header-action-direct-sale');
+            if (headerActionDirectSale) headerActionDirectSale.style.display = 'none';
             const ehrAbonoBtn = document.getElementById('btn-ehr-add-abono');
             if (ehrAbonoBtn) ehrAbonoBtn.style.display = 'none';
+            const btnBillDirect = document.getElementById('btn-bill-budget-direct');
+            if (btnBillDirect) btnBillDirect.style.display = 'none';
             const casheaBtn = document.getElementById('btn-header-cashea');
             if (casheaBtn) casheaBtn.style.display = 'none';
 
@@ -1795,18 +1813,21 @@ function renderMobileNavigationForRole(roleType) {
     const fabIncome = document.getElementById('fab-act-income');
     const fabTransfer = document.getElementById('fab-act-transfer');
     const fabBilling = document.getElementById('fab-act-billing');
+    const fabDirectSale = document.getElementById('fab-act-direct-sale');
 
     if (roleType === 'doctor') {
         if (fabPatient) fabPatient.style.display = 'none'; // Doctors don't handle frontdesk patient creation
+        if (fabDirectSale) fabDirectSale.style.display = 'none'; // Doctors cannot make direct sales
         if (fabAppt) fabAppt.style.display = 'flex';
         if (fabBudget) fabBudget.style.display = 'flex';
         if (fabEvol) fabEvol.style.display = 'flex';
         if (fabExpense) fabExpense.style.display = 'none';
-        if (fabIncome) fabIncome.style.display = 'none';
+        if (fabIncome) fabIncome.style.display = 'none'; // Doctors cannot make abonos
         if (fabTransfer) fabTransfer.style.display = 'none';
-        if (fabBilling) fabBilling.style.display = 'flex';
+        if (fabBilling) fabBilling.style.display = 'none'; // Doctors cannot invoice / charge
     } else if (roleType === 'hygienist') {
         if (fabPatient) fabPatient.style.display = 'none'; // Hygienist doesn't register new patients
+        if (fabDirectSale) fabDirectSale.style.display = 'none';
         if (fabAppt) fabAppt.style.display = 'flex';
         if (fabBudget) fabBudget.style.display = 'flex';
         if (fabEvol) fabEvol.style.display = 'flex';
@@ -1816,6 +1837,7 @@ function renderMobileNavigationForRole(roleType) {
         if (fabBilling) fabBilling.style.display = 'none'; // Hygienist doesn't invoice / charge
     } else if (roleType === 'assistant') {
         if (fabPatient) fabPatient.style.display = 'flex';
+        if (fabDirectSale) fabDirectSale.style.display = 'flex';
         if (fabAppt) fabAppt.style.display = 'flex';
         if (fabBudget) fabBudget.style.display = 'none'; // Doctors formulate clinical budgets
         if (fabEvol) fabEvol.style.display = 'none'; // Doctors formulate clinical notes
@@ -1826,6 +1848,7 @@ function renderMobileNavigationForRole(roleType) {
     } else {
         // Admin: all actions enabled
         if (fabPatient) fabPatient.style.display = 'flex';
+        if (fabDirectSale) fabDirectSale.style.display = 'flex';
         if (fabAppt) fabAppt.style.display = 'flex';
         if (fabBudget) fabBudget.style.display = 'flex';
         if (fabEvol) fabEvol.style.display = 'flex';
@@ -7168,6 +7191,15 @@ window.closeHeaderNewMenu = function() {
 window.triggerHeaderNewAction = async function(action) {
     window.closeHeaderNewMenu();
     if (action === 'direct-sale') {
+        const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+        if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Acceso Restringido a Caja',
+                text: 'El rol médico no puede realizar ventas o facturación. La Caja o Recepción es la encargada de generar las órdenes y ventas.'
+            });
+            return;
+        }
         if (typeof window.openDirectSaleModal === 'function') {
             await window.openDirectSaleModal();
         } else if (typeof openModal === 'function') {
@@ -11605,15 +11637,57 @@ window.financeCustomEnd = '';
 window.currentPayableStatusFilter = 'all';
 
 window.formatDateToISO = function(d) {
+    if (!d || isNaN(d.getTime())) return '';
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
 };
 
+window.normalizeDateToISO = function(rawDate) {
+    if (!rawDate) return '';
+    if (rawDate instanceof Date && !isNaN(rawDate.getTime())) {
+        return window.formatDateToISO(rawDate);
+    }
+    if (typeof rawDate === 'number') {
+        const d = new Date(rawDate);
+        return !isNaN(d.getTime()) ? window.formatDateToISO(d) : '';
+    }
+    if (typeof rawDate === 'string') {
+        const trimmed = rawDate.trim();
+        if (trimmed === 'today' || trimmed === 'today-appt') {
+            return window.formatDateToISO(new Date());
+        }
+        if (trimmed === 'tomorrow') {
+            const tom = new Date();
+            tom.setDate(tom.getDate() + 1);
+            return window.formatDateToISO(tom);
+        }
+        // Match YYYY-MM-DD
+        const isoMatch = trimmed.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+        if (isoMatch) {
+            return `${isoMatch[1]}-${String(isoMatch[2]).padStart(2, '0')}-${String(isoMatch[3]).padStart(2, '0')}`;
+        }
+        // Match DD/MM/YYYY or DD-MM-YYYY
+        const dmyMatch = trimmed.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+        if (dmyMatch) {
+            return `${dmyMatch[3]}-${String(dmyMatch[2]).padStart(2, '0')}-${String(dmyMatch[1]).padStart(2, '0')}`;
+        }
+        // Fallback Date parser
+        const parsed = new Date(trimmed);
+        if (!isNaN(parsed.getTime())) {
+            return window.formatDateToISO(parsed);
+        }
+    }
+    return '';
+};
+
 window.getDateRangeFromPreset = function(preset, customStart, customEnd) {
     const now = new Date();
-    if (preset === 'week') {
+    if (preset === 'day' || preset === 'today') {
+        const iso = window.formatDateToISO(now);
+        return { start: iso, end: iso, label: 'Hoy' };
+    } else if (preset === 'week') {
         const dayOfWeek = (now.getDay() + 6) % 7; // Monday = 0, Sunday = 6
         const start = new Date(now);
         start.setDate(now.getDate() - dayOfWeek);
@@ -11650,7 +11724,8 @@ window.getDateRangeFromPreset = function(preset, customStart, customEnd) {
 
 window.initDashboardPeriodFilters = function() {
     const group = document.getElementById('dashboard-date-filter-group');
-    if (!group || group._hasPeriodListeners) return;
+    if (!group) return;
+    if (group._hasPeriodListeners) return;
     group._hasPeriodListeners = true;
 
     const buttons = group.querySelectorAll('.btn-period-filter');
@@ -11658,7 +11733,8 @@ window.initDashboardPeriodFilters = function() {
     const btnApply = document.getElementById('btn-apply-dashboard-custom-date');
 
     buttons.forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
             buttons.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             const period = btn.dataset.period;
@@ -11674,7 +11750,8 @@ window.initDashboardPeriodFilters = function() {
     });
 
     if (btnApply) {
-        btnApply.addEventListener('click', () => {
+        btnApply.addEventListener('click', (e) => {
+            e.preventDefault();
             const startVal = document.getElementById('dashboard-custom-start')?.value;
             const endVal = document.getElementById('dashboard-custom-end')?.value;
             if (!startVal || !endVal) {
@@ -11697,6 +11774,30 @@ window.initDashboardPeriodFilters = function() {
 // DASHBOARD & METRICS VIEW WITH APPOINTMENT DELETE
 // ==========================================
 async function renderDashboard(preset, customStart, customEnd) {
+    if (typeof window.initDashboardPeriodFilters === 'function') {
+        window.initDashboardPeriodFilters();
+    }
+
+    const todayStr = window.formatDateToISO ? window.formatDateToISO(new Date()) : new Date().toISOString().split('T')[0];
+    const activePreset = preset || window.currentDashboardPeriod || 'month';
+    window.currentDashboardPeriod = activePreset;
+
+    const range = (typeof window.getDateRangeFromPreset === 'function')
+        ? window.getDateRangeFromPreset(activePreset, customStart || window.dashboardCustomStart, customEnd || window.dashboardCustomEnd)
+        : { start: todayStr.substring(0, 7) + '-01', end: todayStr, label: 'Este Mes' };
+
+    const filterGroup = document.getElementById('dashboard-date-filter-group');
+    if (filterGroup) {
+        filterGroup.querySelectorAll('.btn-period-filter').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.period === activePreset);
+        });
+    }
+
+    const rangeBadge = document.getElementById('dashboard-range-text');
+    if (rangeBadge) {
+        rangeBadge.innerText = `${range.label} (${range.start} al ${range.end})`;
+    }
+
     const agendaList = document.getElementById('dashboard-agenda-list');
     if (agendaList) {
         agendaList.innerHTML = '';
@@ -11728,13 +11829,35 @@ async function renderDashboard(preset, customStart, customEnd) {
             });
         }
 
-        const todayISO = new Date().toISOString().split('T')[0];
         let todayCount = 0;
+        let periodCount = 0;
+
+        appointments.forEach(app => {
+            const aDate = typeof getNormalizedAppointmentDate === 'function' ? getNormalizedAppointmentDate(app) : (window.normalizeDateToISO ? window.normalizeDateToISO(app.date) : (app.date || ''));
+            if (aDate === todayStr || app.date === 'today') todayCount++;
+            if (aDate >= range.start && aDate <= range.end) periodCount++;
+        });
+
+        // Filter appointments dynamically according to selected dashboard period
+        let displayAppointments = appointments;
+        if (activePreset === 'day' || activePreset === 'today') {
+            displayAppointments = appointments.filter(app => {
+                const aDate = typeof getNormalizedAppointmentDate === 'function' ? getNormalizedAppointmentDate(app) : (window.normalizeDateToISO ? window.normalizeDateToISO(app.date) : (app.date || ''));
+                return aDate === todayStr || app.date === 'today';
+            });
+        } else if (activePreset === 'week' || activePreset === 'month' || activePreset === 'quarter' || activePreset === 'semester' || activePreset === 'year' || activePreset === 'custom') {
+            displayAppointments = appointments.filter(app => {
+                const aDate = typeof getNormalizedAppointmentDate === 'function' ? getNormalizedAppointmentDate(app) : (window.normalizeDateToISO ? window.normalizeDateToISO(app.date) : (app.date || ''));
+                return aDate >= range.start && aDate <= range.end;
+            });
+        }
 
         // Sort appointments: Today's pending/scheduled first, then future, then completed
-        const sortedAppointments = [...appointments].sort((a, b) => {
-            const aIsToday = (a.date === 'today' || a.date === todayISO);
-            const bIsToday = (b.date === 'today' || b.date === todayISO);
+        const sortedAppointments = [...displayAppointments].sort((a, b) => {
+            const aDate = typeof getNormalizedAppointmentDate === 'function' ? getNormalizedAppointmentDate(a) : (window.normalizeDateToISO ? window.normalizeDateToISO(a.date) : (a.date || ''));
+            const bDate = typeof getNormalizedAppointmentDate === 'function' ? getNormalizedAppointmentDate(b) : (window.normalizeDateToISO ? window.normalizeDateToISO(b.date) : (b.date || ''));
+            const aIsToday = (aDate === todayStr || a.date === 'today');
+            const bIsToday = (bDate === todayStr || b.date === 'today');
             const aAttended = (a.status === 'Completada' || a.status === 'Atendida');
             const bAttended = (b.status === 'Completada' || b.status === 'Atendida');
 
@@ -11742,24 +11865,19 @@ async function renderDashboard(preset, customStart, customEnd) {
             if (!aIsToday && bIsToday) return 1;
             if (!aAttended && bAttended) return -1;
             if (aAttended && !bAttended) return 1;
-            return 0;
-        });
-
-        sortedAppointments.forEach(app => {
-            const isTodayAppt = (app.date === 'today' || app.date === todayISO);
-            if (isTodayAppt) todayCount++;
+            return (aDate || '').localeCompare(bDate || '');
         });
 
         const counterBadge = document.getElementById('dashboard-agenda-counter');
         if (counterBadge) {
-            counterBadge.innerHTML = `<i class="fa-solid fa-calendar-check"></i> ${todayCount} hoy (${appointments.length} total)`;
+            counterBadge.innerHTML = `<i class="fa-solid fa-calendar-check"></i> ${displayAppointments.length} citas (${range.label})`;
         }
 
         if (sortedAppointments.length === 0) {
             agendaList.innerHTML = `
                 <div style="text-align: center; color: var(--text-muted); padding: 35px 20px;">
                     <i class="fa-solid fa-calendar-check" style="font-size: 2.4rem; color: #cbd5e1; margin-bottom: 10px; display: block;"></i>
-                    <strong style="font-size: 0.95rem; color: var(--text-main); display: block;">No hay citas agendadas</strong>
+                    <strong style="font-size: 0.95rem; color: var(--text-main); display: block;">No hay citas agendadas para ${range.label.toLowerCase()}</strong>
                     <small style="color: var(--text-muted);">Haga clic en "+ Agregar Cita" para agendar a un paciente.</small>
                 </div>
             `;
@@ -11898,21 +12016,6 @@ async function renderDashboard(preset, customStart, customEnd) {
             });
         }
 
-        if (typeof window.initDashboardPeriodFilters === 'function') {
-            window.initDashboardPeriodFilters();
-        }
-
-        const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local format
-        const activePreset = preset || window.currentDashboardPeriod || 'month';
-        const range = (typeof window.getDateRangeFromPreset === 'function')
-            ? window.getDateRangeFromPreset(activePreset, customStart || window.dashboardCustomStart, customEnd || window.dashboardCustomEnd)
-            : { start: todayStr.substring(0, 7) + '-01', end: todayStr, label: 'Este Mes' };
-
-        const rangeBadge = document.getElementById('dashboard-range-text');
-        if (rangeBadge) {
-            rangeBadge.innerText = `${range.label} (${range.start} al ${range.end})`;
-        }
-
         let todayIncome = 0;
         let periodIncome = 0;
         let totalReceivables = 0;
@@ -11923,7 +12026,7 @@ async function renderDashboard(preset, customStart, customEnd) {
         allPatients.forEach(p => {
             // 1. Pagos y abonos del paciente
             (p.payments || []).forEach(pay => {
-                const payDate = pay.date ? pay.date.split('T')[0] : '';
+                const payDate = window.normalizeDateToISO ? window.normalizeDateToISO(pay.date) : (pay.date ? pay.date.split('T')[0] : '');
                 const paid = parseFloat(pay.paidUSD || 0);
                 const debt = parseFloat(pay.balanceUSD || 0);
 
@@ -11944,7 +12047,10 @@ async function renderDashboard(preset, customStart, customEnd) {
                 if (s.procedure) {
                     const procName = s.procedure.split('(')[0].trim();
                     if (procName) {
-                        procedureCounts[procName] = (procedureCounts[procName] || 0) + 1;
+                        const sDate = window.normalizeDateToISO ? window.normalizeDateToISO(s.datetime || s.date) : (s.datetime || '').split('T')[0];
+                        if (!sDate || (sDate >= range.start && sDate <= range.end)) {
+                            procedureCounts[procName] = (procedureCounts[procName] || 0) + 1;
+                        }
                     }
                 }
             });
@@ -11953,14 +12059,14 @@ async function renderDashboard(preset, customStart, customEnd) {
             let hasSessionInRange = false;
             if (p.sessions && p.sessions.length > 0) {
                 hasSessionInRange = p.sessions.some(s => {
-                    const sDate = (s.datetime || '').split('T')[0];
+                    const sDate = window.normalizeDateToISO ? window.normalizeDateToISO(s.datetime || s.date) : (s.datetime || '').split('T')[0];
                     return sDate >= range.start && sDate <= range.end;
                 });
             }
             let hasNoteInRange = false;
             if (p.clinicalNotes && p.clinicalNotes.length > 0) {
                 hasNoteInRange = p.clinicalNotes.some(n => {
-                    const nDate = (n.datetime || '').replace('T', ' ').split(' ')[0];
+                    const nDate = window.normalizeDateToISO ? window.normalizeDateToISO(n.datetime || n.date) : (n.datetime || '').replace('T', ' ').split(' ')[0];
                     return nDate >= range.start && nDate <= range.end;
                 });
             }
@@ -11981,7 +12087,7 @@ async function renderDashboard(preset, customStart, customEnd) {
 
         (allInvoices || []).forEach(inv => {
             if (!countedPayIds.has(inv.id)) {
-                const invDate = (inv.invoiceDate || '').split('T')[0];
+                const invDate = window.normalizeDateToISO ? window.normalizeDateToISO(inv.invoiceDate || inv.date) : (inv.invoiceDate || '').split('T')[0];
                 const paid = parseFloat(inv.paidRef !== undefined ? inv.paidRef : (inv.metadata?.paidUSD !== undefined ? inv.metadata.paidUSD : (inv.status === 'Pagado' ? (inv.totalRef || 0) : 0)));
                 const debt = parseFloat(inv.balanceRef !== undefined ? inv.balanceRef : (inv.metadata?.balanceUSD !== undefined ? inv.metadata.balanceUSD : 0));
 
@@ -12004,7 +12110,7 @@ async function renderDashboard(preset, customStart, customEnd) {
         (allInvoices || []).forEach(inv => {
             const isBudget = inv.id.startsWith('PRE-') || (inv.items && inv.items.length > 0);
             if (isBudget) {
-                const invDate = (inv.invoiceDate || inv.date || '').split('T')[0];
+                const invDate = window.normalizeDateToISO ? window.normalizeDateToISO(inv.invoiceDate || inv.date) : (inv.invoiceDate || inv.date || '').split('T')[0];
                 if (!invDate || (invDate >= range.start && invDate <= range.end)) {
                     totalBudgets++;
                     if (inv.status === 'Aprobado' || inv.status === 'Pagada' || inv.status === 'Pagado') {
@@ -12057,7 +12163,7 @@ async function renderDashboard(preset, customStart, customEnd) {
                 const docSubEl = document.getElementById('metric-top-doctor-sub');
                 if (docNameEl) {
                     docNameEl.textContent = currentUser.fullname;
-                    if (docSubEl) docSubEl.innerHTML = `<i class="fa-solid fa-crown text-amber"></i> ${curSymbol}${monthIncome.toFixed(2)} mes (${attendedCount} aten.)`;
+                    if (docSubEl) docSubEl.innerHTML = `<i class="fa-solid fa-crown text-amber"></i> ${curSymbol}${periodIncome.toFixed(2)} (${range.label}) • ${attendedCount} aten.`;
                 }
                 const specNameEl = document.getElementById('metric-top-specialty-name');
                 const specSubEl = document.getElementById('metric-top-specialty-sub');
@@ -12067,7 +12173,7 @@ async function renderDashboard(preset, customStart, customEnd) {
                     if (specSubEl) specSubEl.innerHTML = `<i class="fa-solid fa-stethoscope text-cyan"></i> Mi Especialidad`;
                 }
             } else if (window.getClinicPerformanceSummary) {
-                const perf = await window.getClinicPerformanceSummary();
+                const perf = await window.getClinicPerformanceSummary(false, range);
                 const docNameEl = document.getElementById('metric-top-doctor-name');
                 const docSubEl = document.getElementById('metric-top-doctor-sub');
                 if (docNameEl) {
@@ -13292,6 +13398,16 @@ window.openSessionModalForPatient = async function(patientId, sessionNum, proced
 
 window.openPaymentModalForAppointment = async function(patientId, patientName, treatment) {
     try {
+        const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+        if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Acceso Restringido a Caja',
+                text: 'El rol médico no está autorizado para registrar abonos ni cobros. Las cobranzas deben realizarse exclusivamente por Recepción / Caja.'
+            });
+            return;
+        }
+
         setActivePatientId(patientId);
         const modal = document.getElementById('modal-payment');
         if (modal) {
@@ -14608,9 +14724,9 @@ window.deletePricingService = async function(code) {
 let _clinicPerfCache = null;
 let _clinicPerfCacheTime = 0;
 
-window.getClinicPerformanceSummary = async function(forceRefresh = false) {
+window.getClinicPerformanceSummary = async function(forceRefresh = false, dateRange = null) {
     const now = Date.now();
-    if (!forceRefresh && _clinicPerfCache && (now - _clinicPerfCacheTime < 4000)) {
+    if (!dateRange && !forceRefresh && _clinicPerfCache && (now - _clinicPerfCacheTime < 4000)) {
         return _clinicPerfCache;
     }
 
@@ -14668,6 +14784,11 @@ window.getClinicPerformanceSummary = async function(forceRefresh = false) {
     patients.forEach(p => {
         const payments = (p.metadata && p.metadata.payments) || p.payments || [];
         payments.forEach(pay => {
+            if (dateRange) {
+                const payDate = window.normalizeDateToISO ? window.normalizeDateToISO(pay.date) : (pay.date ? pay.date.split('T')[0] : '');
+                if (payDate && (payDate < dateRange.start || payDate > dateRange.end)) return;
+            }
+
             const payId = pay.id || pay.docId || `${p.id}-${pay.date}-${pay.paidUSD}`;
             if (processedPaymentIds.has(payId)) return;
             processedPaymentIds.add(payId);
@@ -14692,6 +14813,11 @@ window.getClinicPerformanceSummary = async function(forceRefresh = false) {
 
     // 2. Ingresos por facturas clínicas
     invoices.forEach(inv => {
+        if (dateRange) {
+            const invDate = window.normalizeDateToISO ? window.normalizeDateToISO(inv.invoiceDate || inv.date) : (inv.invoiceDate || '').split('T')[0];
+            if (invDate && (invDate < dateRange.start || invDate > dateRange.end)) return;
+        }
+
         if (processedPaymentIds.has(inv.id)) return;
         processedPaymentIds.add(inv.id);
 
@@ -14716,6 +14842,11 @@ window.getClinicPerformanceSummary = async function(forceRefresh = false) {
     // 3. Citas asistenciales atendidas
     appointments.forEach(app => {
         if (app.status === 'Completada' || app.status === 'Atendida') {
+            if (dateRange) {
+                const appDate = typeof getNormalizedAppointmentDate === 'function' ? getNormalizedAppointmentDate(app) : (window.normalizeDateToISO ? window.normalizeDateToISO(app.date) : (app.date || ''));
+                if (appDate && (appDate < dateRange.start || appDate > dateRange.end)) return;
+            }
+
             totalAttended++;
             const doc = findDoctor(app.doctorName, app.doctorId || app.doctor_id);
             if (doc) {
@@ -14740,7 +14871,7 @@ window.getClinicPerformanceSummary = async function(forceRefresh = false) {
     const activeDocsCount = clinicalDocs.length || 1;
     const avgDoctorRevenue = totalRevenueUSD / activeDocsCount;
 
-    _clinicPerfCache = {
+    const summaryResult = {
         doctorStats,
         specialtyStats,
         findDoctor,
@@ -14750,8 +14881,13 @@ window.getClinicPerformanceSummary = async function(forceRefresh = false) {
         totalAttended,
         avgDoctorRevenue
     };
-    _clinicPerfCacheTime = now;
-    return _clinicPerfCache;
+
+    if (!dateRange) {
+        _clinicPerfCache = summaryResult;
+        _clinicPerfCacheTime = Date.now();
+    }
+
+    return summaryResult;
 };
 
 window.doctorRevenueSortDesc = true;
@@ -16893,6 +17029,16 @@ function initGlobalEvents() {
 
     // Modal Registrar Pago Handler (Global and Reciprocal)
     window.openEhrPaymentModal = function() {
+        const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+        if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Acceso Restringido a Caja',
+                text: 'El rol médico no está autorizado para registrar abonos ni pagos. Esta operación debe ser gestionada exclusivamente por Caja y Recepción.'
+            });
+            return;
+        }
+
         const activeId = getActivePatientId();
         if (!activeId) {
             Swal.fire({ icon: 'info', title: 'Seleccione un paciente', text: 'Active un paciente antes de registrar un pago o abono.' });
