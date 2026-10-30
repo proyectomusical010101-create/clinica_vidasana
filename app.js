@@ -815,6 +815,107 @@ function isDoctorUser(user) {
     return r.includes('medico') || r.includes('médico') || r.includes('doctor') || r.includes('odont') || r.includes('dentista') || r.includes('cirujano') || r.includes('especialista');
 }
 
+function getDoctorSpecialties(user) {
+    const u = user || getCurrentUser();
+    if (!u) return [];
+    const prof = u.doctorProfile || u.doctor_profile || {};
+    const specs = [];
+
+    const addSpec = (s) => {
+        if (!s) return;
+        const trimmed = String(s).trim();
+        if (trimmed && !specs.some(x => x.toLowerCase() === trimmed.toLowerCase())) {
+            specs.push(trimmed);
+        }
+    };
+
+    // 1. Desde el perfil del doctor
+    if (prof.specialty) {
+        prof.specialty.split(/[,;/&]|sys/i).forEach(s => addSpec(s));
+    }
+    if (u.specialty) {
+        u.specialty.split(/[,;/&]|sys/i).forEach(s => addSpec(s));
+    }
+
+    // 2. Desde el rol (ej: "Médico Cardiólogo", "Médico Ginecólogo y Pediatra", etc.)
+    const r = (u.role || '').toLowerCase();
+    const mapKeywords = [
+        { key: 'cardiolog', label: 'Cardiología' },
+        { key: 'ginecolog', label: 'Ginecología' },
+        { key: 'obstetr', label: 'Ginecología' },
+        { key: 'pediatr', label: 'Pediatría' },
+        { key: 'odont', label: 'Odontología' },
+        { key: 'dentist', label: 'Odontología' },
+        { key: 'traumatolog', label: 'Traumatología' },
+        { key: 'oftalmolog', label: 'Oftalmología' },
+        { key: 'dermatolog', label: 'Dermatología' },
+        { key: 'urolog', label: 'Urología' },
+        { key: 'otorrino', label: 'Otorrinolaringología' },
+        { key: 'cirug', label: 'Cirugía' },
+        { key: 'medicina general', label: 'Medicina General' },
+        { key: 'internist', label: 'Medicina Interna' },
+        { key: 'nutrici', label: 'Nutrición' },
+        { key: 'psicolog', label: 'Psicología' },
+        { key: 'psiquiatr', label: 'Psiquiatría' },
+        { key: 'fisioter', label: 'Fisioterapia' },
+        { key: 'ecograf', label: 'Rayos X e Imagen' },
+        { key: 'rayos', label: 'Rayos X e Imagen' }
+    ];
+
+    mapKeywords.forEach(mk => {
+        if (r.includes(mk.key) || (prof.specialty && prof.specialty.toLowerCase().includes(mk.key))) {
+            addSpec(mk.label);
+        }
+    });
+
+    return specs;
+}
+
+function isServiceMatchingDoctor(service, doctorUser) {
+    if (!isDoctorUser(doctorUser)) return true;
+    const prof = doctorUser.doctorProfile || doctorUser.doctor_profile || {};
+
+    // Asignación explícita de servicios
+    if (Array.isArray(prof.assignedServices) && prof.assignedServices.length > 0) {
+        if (prof.assignedServices.includes(service.code) || prof.assignedServices.includes(service.name) || prof.assignedServices.includes(service.id)) {
+            return true;
+        }
+    }
+
+    const docSpecs = getDoctorSpecialties(doctorUser);
+    if (docSpecs.length === 0) return true;
+
+    const srvArea = (service.area || '').toLowerCase();
+    const srvCat = (service.category || '').toLowerCase();
+    const srvName = (service.name || '').toLowerCase();
+
+    return docSpecs.some(spec => {
+        const specLow = spec.toLowerCase();
+        if (specLow.includes('cardiolog')) {
+            return srvArea.includes('cardio') || srvCat.includes('cardio') || srvName.includes('cardio') || srvName.includes('electrocard');
+        }
+        if (specLow.includes('ginecolog')) {
+            return srvArea.includes('gineco') || srvCat.includes('gineco') || srvName.includes('gineco') || srvName.includes('citolog') || srvName.includes('colposcop') || srvName.includes('obstetr') || srvName.includes('eco pélv') || srvName.includes('eco transv') || srvName.includes('embarazo');
+        }
+        if (specLow.includes('pediatr')) {
+            return srvArea.includes('pediatr') || srvCat.includes('pediatr') || srvName.includes('pediatr') || srvName.includes('niño') || srvName.includes('vacuna');
+        }
+        if (specLow.includes('odont')) {
+            return srvArea.includes('odont') || srvCat.includes('odont') || ['operatoria', 'endodoncia', 'cirugía', 'ortodoncia', 'estética', 'prótesis', 'prevención', 'diagnóstico'].includes(srvCat);
+        }
+        if (specLow.includes('traumatolog')) {
+            return srvArea.includes('traumat') || srvCat.includes('traumat') || srvName.includes('traumat') || srvName.includes('yeso') || srvName.includes('inmoviliz');
+        }
+        if (specLow.includes('cirug')) {
+            return srvArea.includes('cirug') || srvCat.includes('cirug') || srvName.includes('cirug') || srvName.includes('quirúrg');
+        }
+        if (specLow.includes('medicina general')) {
+            return srvArea.includes('medicina') || srvCat.includes('consulta') || srvName.includes('médica general') || srvName.includes('certificado');
+        }
+        return srvArea.includes(specLow) || srvCat.includes(specLow) || srvName.includes(specLow) || specLow.includes(srvArea) || specLow.includes(srvCat);
+    });
+}
+
 function isDentalDoctor(user) {
     const u = user || getCurrentUser();
     if (!u) return false;
@@ -1041,12 +1142,13 @@ function applyRolePermissionsUI(role) {
         help: '.nav-item[data-tab="help"]',
         specialties: '.nav-item[data-tab="specialties"]',
         rooms: '.nav-item[data-tab="rooms"]',
-        payroll: '.nav-item[data-tab="payroll"]'
+        payroll: '.nav-item[data-tab="payroll"]',
+        'doctor-finances': '.nav-item[data-tab="doctor-finances"]'
     };
 
     const permissions = {
-        admin: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll'],
-        doctor: ['dashboard', 'agenda', 'ehr', 'pricing', 'settings', 'help', 'specialties', 'rooms'],
+        admin: ['dashboard', 'doctor-finances', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll'],
+        doctor: ['dashboard', 'doctor-finances', 'agenda', 'ehr', 'pricing', 'settings', 'help', 'specialties', 'rooms'],
         assistant: ['dashboard', 'patients', 'agenda', 'billing', 'finance', 'pricing', 'settings', 'help']
     };
 
@@ -1373,8 +1475,8 @@ window.navigateToTab = async function(tabName) {
         const isDoctor = r.includes('medico') || r.includes('odont') || r.includes('doctor') || r.includes('dentista') || r.includes('médico');
         const roleType = isAdmin ? 'admin' : (isDoctor ? 'doctor' : 'assistant');
         const allowedTabs = {
-            admin: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll'],
-            doctor: ['dashboard', 'agenda', 'ehr', 'pricing', 'settings', 'help', 'specialties', 'rooms'],
+            admin: ['dashboard', 'doctor-finances', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll'],
+            doctor: ['dashboard', 'doctor-finances', 'agenda', 'ehr', 'pricing', 'settings', 'help', 'specialties', 'rooms'],
             assistant: ['dashboard', 'patients', 'agenda', 'billing', 'finance', 'pricing', 'settings', 'help']
         }[roleType] || ['dashboard', 'help'];
 
@@ -1443,6 +1545,8 @@ window.navigateToTab = async function(tabName) {
         await renderEHRView();
     } else if (tabName === 'inventory') {
         await renderInventoryTable();
+    } else if (tabName === 'doctor-finances') {
+        await renderDoctorFinancesView();
     } else if (tabName === 'pricing') {
         await renderPricingTable();
     } else if (tabName === 'users') {
@@ -8572,6 +8676,7 @@ async function renderPricingTable(filter = 'all', searchQuery = '') {
     const rate = getExchangeRate();
     const currentUser = getCurrentUser();
     const isAssistant = currentUser && currentUser.role.toLowerCase().includes('asistente');
+    const isDoctor = typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false;
 
     // Ensure each service has an area assigned
     baremo.forEach(p => {
@@ -8579,6 +8684,74 @@ async function renderPricingTable(filter = 'all', searchQuery = '') {
             p.area = detectClinicalArea(p.category, p.name);
         }
     });
+
+    // RESTRICCIÓN MÉDICA: Si el usuario es médico, aislar estrictamente a su especialidad
+    if (isDoctor) {
+        const docSpecs = getDoctorSpecialties(currentUser);
+        baremo = baremo.filter(p => isServiceMatchingDoctor(p, currentUser));
+
+        // Adaptar dinámicamente los botones de filtro por área para este doctor
+        const filterBtns = document.querySelectorAll('#view-pricing .filter-btn');
+        let hasActiveVisible = false;
+
+        filterBtns.forEach(btn => {
+            const fVal = btn.dataset.filter;
+            if (fVal === 'all') {
+                btn.style.display = '';
+                btn.innerHTML = '<i class="fa-solid fa-layer-group"></i> Todos mis servicios';
+                if (btn.classList.contains('active')) hasActiveVisible = true;
+            } else {
+                const fLow = fVal.toLowerCase();
+                const matchesAny = docSpecs.some(spec => {
+                    const sLow = spec.toLowerCase();
+                    return fLow.includes(sLow) || sLow.includes(fLow) ||
+                        (sLow.includes('cardio') && fLow.includes('cardio')) ||
+                        (sLow.includes('gineco') && fLow.includes('gineco')) ||
+                        (sLow.includes('pediatr') && fLow.includes('pediatr')) ||
+                        (sLow.includes('odont') && fLow.includes('odont'));
+                });
+
+                if (matchesAny) {
+                    btn.style.display = '';
+                    if (btn.classList.contains('active')) hasActiveVisible = true;
+                } else {
+                    btn.style.display = 'none';
+                    btn.classList.remove('active');
+                }
+            }
+        });
+
+        // Si el filtro activo quedó oculto, activar "Todos"
+        if (!hasActiveVisible) {
+            filterBtns.forEach(b => {
+                if (b.dataset.filter === 'all') b.classList.add('active');
+                else b.classList.remove('active');
+            });
+            filter = 'all';
+        }
+
+        // Ocultar botones de administración del catálogo para el rol médico
+        const btnAddSrv = document.getElementById('btn-add-service');
+        const btnImportSrv = document.getElementById('btn-import-services');
+        const btnDownloadTpl = document.getElementById('btn-download-services-template');
+        if (btnAddSrv) btnAddSrv.style.display = 'none';
+        if (btnImportSrv) btnImportSrv.style.display = 'none';
+        if (btnDownloadTpl) btnDownloadTpl.style.display = 'none';
+    } else {
+        // Restaurar botones completos para administradores / otros roles
+        document.querySelectorAll('#view-pricing .filter-btn').forEach(btn => {
+            btn.style.display = '';
+            if (btn.dataset.filter === 'all') {
+                btn.innerHTML = '<i class="fa-solid fa-layer-group"></i> Todos';
+            }
+        });
+        const btnAddSrv = document.getElementById('btn-add-service');
+        const btnImportSrv = document.getElementById('btn-import-services');
+        const btnDownloadTpl = document.getElementById('btn-download-services-template');
+        if (btnAddSrv) btnAddSrv.style.display = isAssistant ? 'none' : 'inline-flex';
+        if (btnImportSrv) btnImportSrv.style.display = isAssistant ? 'none' : 'inline-flex';
+        if (btnDownloadTpl) btnDownloadTpl.style.display = isAssistant ? 'none' : 'inline-flex';
+    }
 
     // Apply Filter by Area or Category
     if (filter !== 'all') {
@@ -10641,6 +10814,34 @@ function initGlobalEvents() {
             const activeFilterBtn = document.querySelector('#view-ehr .filter-btn.active');
             const activeFilter = activeFilterBtn ? activeFilterBtn.dataset.filter : 'all';
             await renderEHRView(activeFilter, e.target.value);
+        });
+    }
+
+    // Doctor Finances Period Filters
+    document.querySelectorAll('#doc-fin-period-filters .filter-btn').forEach(btn => {
+        btn.onclick = async function() {
+            document.querySelectorAll('#doc-fin-period-filters .filter-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            await window.renderDoctorFinancesView(this.dataset.period);
+        };
+    });
+
+    // Doctor Finances Subtabs
+    document.querySelectorAll('#doc-fin-subtabs-bar .subtab-btn').forEach(btn => {
+        btn.onclick = function() {
+            document.querySelectorAll('#doc-fin-subtabs-bar .subtab-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            window._docFinSubtab = this.dataset.subtab;
+            window.renderDoctorFinancesActiveSubtab();
+        };
+    });
+
+    // Doctor Finances Search Input
+    const docFinSearch = document.getElementById('doc-fin-search-input');
+    if (docFinSearch) {
+        docFinSearch.addEventListener('input', (e) => {
+            window._docFinSearch = (e.target.value || '').toLowerCase().trim();
+            window.renderDoctorFinancesActiveSubtab();
         });
     }
 
@@ -19837,4 +20038,475 @@ window.filterDoctorMetricTable = function(query) {
 
     const filtered = all.filter(it => it.searchStr && it.searchStr.includes(q));
     window.renderDoctorMetricTableRows(filtered, type);
+};
+
+
+// ==========================================
+// MÓDULO EXCLUSIVO PARA EL MÉDICO: MIS INGRESOS Y COBROS
+// ==========================================
+
+window._docFinPeriod = 'month';
+window._docFinSubtab = 'payments';
+window._docFinSearch = '';
+window._docFinCache = { payments: [], receivables: [], patients: [] };
+
+window.renderDoctorFinancesView = async function(period, subtab, search) {
+    if (period) window._docFinPeriod = period;
+    if (subtab) window._docFinSubtab = subtab;
+    if (search !== undefined) window._docFinSearch = (search || '').toLowerCase().trim();
+
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (!curUser) return;
+
+    // Subtitle update
+    const subtitleEl = document.getElementById('doc-fin-subtitle');
+    if (subtitleEl) {
+        const docSpecs = typeof getDoctorSpecialties === 'function' ? getDoctorSpecialties(curUser) : [];
+        const specStr = docSpecs.length > 0 ? docSpecs.join(', ') : (curUser.role || 'Médico Especialista');
+        subtitleEl.innerHTML = `<i class="fa-solid fa-user-doctor text-cyan"></i> Dr(a). <strong>${curUser.fullname}</strong> &bull; Especialidad: <span class="badge-tag blue">${specStr}</span>`;
+    }
+
+    // Active period button
+    document.querySelectorAll('#doc-fin-period-filters .filter-btn').forEach(btn => {
+        if (btn.dataset.period === window._docFinPeriod) btn.classList.add('active');
+        else btn.classList.remove('active');
+    });
+
+    // Active subtab button
+    document.querySelectorAll('#doc-fin-subtabs-bar .subtab-btn').forEach(btn => {
+        if (btn.dataset.subtab === window._docFinSubtab) {
+            btn.classList.add('active');
+            btn.style.borderBottom = '3px solid #10b981';
+            btn.style.color = '#047857';
+        } else {
+            btn.classList.remove('active');
+            btn.style.borderBottom = '3px solid transparent';
+            btn.style.color = '#64748b';
+        }
+    });
+
+    const thead = document.getElementById('doc-fin-table-thead');
+    const tbody = document.getElementById('doc-fin-table-tbody');
+    if (!tbody) return;
+
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding: 30px;"><i class="fa-solid fa-spinner fa-spin text-cyan" style="font-size: 1.5rem; display: block; margin-bottom: 8px;"></i> Cargando balance e historial financiero del doctor...</td></tr>';
+
+    try {
+        const rate = typeof getExchangeRate === 'function' ? getExchangeRate() : 36.5;
+        const now = new Date();
+        const todayStr = now.toLocaleDateString('en-CA');
+        const monthStr = todayStr.substring(0, 7);
+
+        // Calculate period bounds
+        let startDateStr = '';
+        let endDateStr = '';
+
+        if (window._docFinPeriod === 'today') {
+            startDateStr = todayStr;
+            endDateStr = todayStr;
+        } else if (window._docFinPeriod === 'week') {
+            const firstDayOfWeek = new Date(now);
+            const day = firstDayOfWeek.getDay();
+            const diff = firstDayOfWeek.getDate() - day + (day === 0 ? -6 : 1);
+            firstDayOfWeek.setDate(diff);
+            startDateStr = firstDayOfWeek.toLocaleDateString('en-CA');
+            endDateStr = todayStr;
+        } else if (window._docFinPeriod === 'month') {
+            startDateStr = `${monthStr}-01`;
+            endDateStr = todayStr;
+        } else if (window._docFinPeriod === 'last_month') {
+            const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+            startDateStr = prevMonthDate.toLocaleDateString('en-CA');
+            endDateStr = prevMonthEnd.toLocaleDateString('en-CA');
+        } else if (window._docFinPeriod === 'year') {
+            startDateStr = `${now.getFullYear()}-01-01`;
+            endDateStr = todayStr;
+        }
+
+        const matchesPeriod = (dateStr) => {
+            if (!dateStr) return false;
+            const d = dateStr.split('T')[0];
+            if (window._docFinPeriod === 'all') return true;
+            if (window._docFinPeriod === 'today') return d === todayStr;
+            if (window._docFinPeriod === 'month') return d.startsWith(monthStr);
+            if (window._docFinPeriod === 'last_month') return d >= startDateStr && d <= endDateStr;
+            return d >= startDateStr && d <= (endDateStr || todayStr);
+        };
+
+        const [allPatients, allInvoices, appointments] = await Promise.all([
+            SupabaseDataService.getPatients(),
+            SupabaseDataService.getInvoices(),
+            SupabaseDataService.getAppointments()
+        ]);
+
+        const docId = String(curUser.id || '').trim();
+        const cleanDocName = String(curUser.fullname || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+
+        // Facturas de este doctor
+        const docInvoices = (allInvoices || []).filter(inv => {
+            const iDocId = String(inv.doctorId || (inv.metadata && inv.metadata.doctorId) || '').trim();
+            if (docId && iDocId && iDocId === docId) return true;
+            const iDocName = String(inv.doctor || inv.doctorName || inv.specialist || (inv.metadata && inv.metadata.doctorName) || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+            if (cleanDocName && iDocName && (iDocName === cleanDocName || iDocName.includes(cleanDocName) || cleanDocName.includes(iDocName))) return true;
+            if (Array.isArray(inv.items) && inv.items.length > 0) {
+                return inv.items.some(item => {
+                    const itDocId = String(item.doctorId || '').trim();
+                    if (docId && itDocId && itDocId === docId) return true;
+                    const itDoc = String(item.specialist || item.doctor || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+                    return cleanDocName && itDoc && (itDoc === cleanDocName || itDoc.includes(cleanDocName));
+                });
+            }
+            return false;
+        });
+
+        // Pacientes de este doctor
+        const docPatients = (allPatients || []).filter(p => isPatientAssignedToDoctor(p, curUser, appointments, docInvoices));
+
+        // 1. Recopilar Pagos Recibidos (Cobrados)
+        const countedPayKeys = new Set();
+        let allPayments = [];
+        let todayIncomeUSD = 0;
+        let todayIncomeBs = 0;
+        let periodIncomeUSD = 0;
+        let periodIncomeBs = 0;
+
+        // Pagos en perfil de pacientes del doctor
+        docPatients.forEach(p => {
+            (p.payments || []).forEach(pay => {
+                const payDate = pay.date ? pay.date.split('T')[0] : '';
+                const payKey = pay.id || ((pay.docId || '') + '_' + (pay.reference || '') + '_' + pay.amountUSD);
+                if (countedPayKeys.has(payKey)) return;
+                countedPayKeys.add(payKey);
+
+                const usd = parseFloat(pay.amountUSD || pay.paidUSD || pay.amount || 0);
+                const bs = parseFloat(pay.amountBs || (usd * rate) || 0);
+
+                if (payDate === todayStr) {
+                    todayIncomeUSD += usd;
+                    todayIncomeBs += bs;
+                }
+
+                if (matchesPeriod(payDate)) {
+                    periodIncomeUSD += usd;
+                    periodIncomeBs += bs;
+                    allPayments.push({
+                        id: pay.id || 'N/A',
+                        date: pay.date || payDate,
+                        patientName: p.fullname,
+                        patientId: p.id,
+                        concept: pay.treatment || pay.concept || 'Abono de Consulta / Tratamiento',
+                        method: pay.method || 'Efectivo',
+                        reference: pay.reference || '-',
+                        amountUSD: usd,
+                        amountBs: bs,
+                        searchStr: `${p.fullname} ${p.id} ${pay.treatment || ''} ${pay.reference || ''} ${pay.method || ''}`.toLowerCase()
+                    });
+                }
+            });
+        });
+
+        // Facturas directas del doctor
+        docInvoices.forEach(inv => {
+            const invDate = (inv.invoiceDate || inv.date || '').split('T')[0];
+            const paid = parseFloat(inv.paidRef !== undefined ? inv.paidRef : (inv.metadata?.paidUSD !== undefined ? inv.metadata.paidUSD : (inv.status === 'Pagado' ? (inv.totalRef || 0) : 0)));
+            const invKey = inv.id;
+
+            if (paid > 0 && !countedPayKeys.has(invKey)) {
+                countedPayKeys.add(invKey);
+                const bs = parseFloat(inv.metadata?.paidBs || (paid * rate) || 0);
+
+                if (invDate === todayStr) {
+                    todayIncomeUSD += paid;
+                    todayIncomeBs += bs;
+                }
+
+                if (matchesPeriod(invDate)) {
+                    periodIncomeUSD += paid;
+                    periodIncomeBs += bs;
+                    allPayments.push({
+                        id: inv.id,
+                        date: inv.invoiceDate || inv.date || invDate,
+                        patientName: inv.patientName || 'Paciente Particular',
+                        patientId: inv.patientId || 'N/A',
+                        concept: (inv.items && inv.items.map(it => it.name || it.description).join(', ')) || inv.concept || 'Consulta / Procedimiento Especializado',
+                        method: inv.metadata?.paymentMethod || inv.paymentMethod || 'Facturación',
+                        reference: inv.metadata?.reference || inv.id,
+                        amountUSD: paid,
+                        amountBs: bs,
+                        searchStr: `${inv.patientName || ''} ${inv.patientId || ''} ${inv.id} ${inv.concept || ''}`.toLowerCase()
+                    });
+                }
+            }
+        });
+
+        allPayments.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+
+        // 2. Recopilar Cuentas por Cobrar (Saldos Pendientes de sus pacientes)
+        let allReceivables = [];
+        let totalDebtUSD = 0;
+        let totalDebtBs = 0;
+
+        docPatients.forEach(p => {
+            let pQuoted = 0;
+            let pPaid = 0;
+            let pTreatments = [];
+
+            (p.sessions || []).forEach(s => {
+                if (s.treatmentLinked) pTreatments.push(s.treatmentLinked);
+            });
+
+            (p.payments || []).forEach(pay => {
+                pQuoted += parseFloat(pay.totalUSD || 0);
+                pPaid += parseFloat(pay.paidUSD || pay.amountUSD || 0);
+            });
+
+            const pBal = pQuoted - pPaid;
+            if (pBal > 0.05) {
+                const balBs = pBal * rate;
+                totalDebtUSD += pBal;
+                totalDebtBs += balBs;
+                allReceivables.push({
+                    patientName: p.fullname,
+                    patientId: p.id,
+                    voucher: p.id,
+                    concept: pTreatments.join(', ') || 'Saldo Pendiente en Tratamiento',
+                    totalUSD: pQuoted,
+                    paidUSD: pPaid,
+                    balanceUSD: pBal,
+                    balanceBs: balBs,
+                    searchStr: `${p.fullname} ${p.id} ${pTreatments.join(' ')}`.toLowerCase()
+                });
+            }
+        });
+
+        docInvoices.forEach(inv => {
+            const tot = parseFloat(inv.totalRef || inv.totalUSD || 0);
+            const paid = parseFloat(inv.paidRef !== undefined ? inv.paidRef : (inv.metadata?.paidUSD !== undefined ? inv.metadata.paidUSD : (inv.status === 'Pagado' ? tot : 0)));
+            const bal = tot - paid;
+
+            if (bal > 0.05 && inv.status !== 'Anulado' && inv.status !== 'Cancelado') {
+                const balBs = parseFloat(inv.balanceBs || (bal * rate) || 0);
+                totalDebtUSD += bal;
+                totalDebtBs += balBs;
+                allReceivables.push({
+                    patientName: inv.patientName || 'Paciente Particular',
+                    patientId: inv.patientId || 'N/A',
+                    voucher: inv.id,
+                    concept: (inv.items && inv.items.map(it => it.name || it.description).join(', ')) || inv.concept || 'Factura Pendiente',
+                    totalUSD: tot,
+                    paidUSD: paid,
+                    balanceUSD: bal,
+                    balanceBs: balBs,
+                    searchStr: `${inv.patientName || ''} ${inv.patientId || ''} ${inv.id}`.toLowerCase()
+                });
+            }
+        });
+
+        // 3. Recopilar Pacientes Atendidos en el período
+        let allAttendedPatients = [];
+        const attendedPatMap = new Map();
+
+        // Desde sesiones clínicas del paciente
+        docPatients.forEach(p => {
+            (p.sessions || []).forEach(s => {
+                const sDate = s.datetime ? s.datetime.split('T')[0] : (s.date || '');
+                if (matchesPeriod(sDate)) {
+                    const key = `${p.id}_${sDate}_${s.sessionNum || 1}`;
+                    if (!attendedPatMap.has(key)) {
+                        attendedPatMap.set(key, true);
+                        allAttendedPatients.push({
+                            date: s.datetime || sDate,
+                            patientName: p.fullname,
+                            patientId: p.id,
+                            procedure: s.procedure || 'Sesión Clínica Realizada',
+                            status: 'Atendido',
+                            paidInfo: s.paymentUSD > 0 ? `$ ${parseFloat(s.paymentUSD).toFixed(2)} USD` : 'Facturado / Plan',
+                            searchStr: `${p.fullname} ${p.id} ${s.procedure || ''}`.toLowerCase()
+                        });
+                    }
+                }
+            });
+        });
+
+        // Desde citas atendidas
+        (appointments || []).forEach(app => {
+            const aDocId = String(app.doctorId || app.doctor_id || '').trim();
+            const aDocName = String(app.doctorName || app.doctor_name || app.doctor || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+            const isMyDoc = (docId && aDocId && aDocId === docId) || (cleanDocName && aDocName && (aDocName === cleanDocName || aDocName.includes(cleanDocName)));
+
+            if (isMyDoc && (app.status === 'Completada' || app.status === 'Atendida' || app.attended)) {
+                const aDate = app.date ? app.date.split('T')[0] : '';
+                if (matchesPeriod(aDate)) {
+                    const key = `appt_${app.patientId || app.patientName}_${aDate}`;
+                    if (!attendedPatMap.has(key)) {
+                        attendedPatMap.set(key, true);
+                        allAttendedPatients.push({
+                            date: app.date || aDate,
+                            patientName: app.patientName || 'Paciente Cita',
+                            patientId: app.patientId || 'N/A',
+                            procedure: app.treatment || app.reason || 'Consulta Especializada',
+                            status: 'Atendido',
+                            paidInfo: 'Completada en Agenda',
+                            searchStr: `${app.patientName || ''} ${app.patientId || ''} ${app.treatment || ''}`.toLowerCase()
+                        });
+                    }
+                }
+            }
+        });
+
+        allAttendedPatients.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+
+        // Guardar en cache para búsqueda instantánea
+        window._docFinCache = {
+            payments: allPayments,
+            receivables: allReceivables,
+            patients: allAttendedPatients
+        };
+
+        // Actualizar KPIs superiores
+        const elTodayUSD = document.getElementById('doc-fin-kpi-today');
+        const elTodayBs = document.getElementById('doc-fin-kpi-today-bs');
+        const elPeriodUSD = document.getElementById('doc-fin-kpi-month');
+        const elPeriodBs = document.getElementById('doc-fin-kpi-month-bs');
+        const elDebtUSD = document.getElementById('doc-fin-kpi-debt');
+        const elDebtBs = document.getElementById('doc-fin-kpi-debt-bs');
+        const elPatCount = document.getElementById('doc-fin-kpi-patients');
+
+        if (elTodayUSD) elTodayUSD.textContent = `$${todayIncomeUSD.toFixed(2)} USD`;
+        if (elTodayBs) elTodayBs.textContent = `Bs. ${todayIncomeBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        if (elPeriodUSD) elPeriodUSD.textContent = `$${periodIncomeUSD.toFixed(2)} USD`;
+        if (elPeriodBs) elPeriodBs.textContent = `Bs. ${periodIncomeBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        if (elDebtUSD) elDebtUSD.textContent = `$${totalDebtUSD.toFixed(2)} USD`;
+        if (elDebtBs) elDebtBs.textContent = `Bs. ${totalDebtBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        if (elPatCount) elPatCount.textContent = allAttendedPatients.length;
+
+        // Actualizar Badges en los Subtabs
+        const bPay = document.getElementById('doc-fin-badge-payments');
+        const bRec = document.getElementById('doc-fin-badge-receivables');
+        const bPat = document.getElementById('doc-fin-badge-patients');
+        if (bPay) bPay.textContent = allPayments.length;
+        if (bRec) bRec.textContent = allReceivables.length;
+        if (bPat) bPat.textContent = allAttendedPatients.length;
+
+        // Renderizar la tabla activa
+        window.renderDoctorFinancesActiveSubtab();
+
+    } catch (err) {
+        console.error('Error renderDoctorFinancesView:', err);
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-red" style="padding: 24px;"><i class="fa-solid fa-triangle-exclamation"></i> Error al cargar datos: ${err.message}</td></tr>`;
+    }
+};
+
+window.renderDoctorFinancesActiveSubtab = function() {
+    const thead = document.getElementById('doc-fin-table-thead');
+    const tbody = document.getElementById('doc-fin-table-tbody');
+    if (!tbody || !thead) return;
+
+    const subtab = window._docFinSubtab || 'payments';
+    const query = window._docFinSearch || '';
+    const cache = window._docFinCache || {};
+
+    let list = cache[subtab] || [];
+    if (query) {
+        list = list.filter(item => item.searchStr && item.searchStr.includes(query));
+    }
+
+    if (subtab === 'payments') {
+        thead.innerHTML = `
+            <tr style="font-size: 0.78rem; text-transform: uppercase; background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
+                <th style="padding: 10px 12px;">Fecha / Hora</th>
+                <th style="padding: 10px 12px;">Paciente</th>
+                <th style="padding: 10px 12px;">Cédula / ID</th>
+                <th style="padding: 10px 12px;">Concepto / Procedimiento</th>
+                <th style="padding: 10px 12px;">Método & Referencia</th>
+                <th style="padding: 10px 12px; text-align: right;">Monto (Bs.)</th>
+                <th style="padding: 10px 12px; text-align: right;">Monto ($ USD)</th>
+            </tr>
+        `;
+
+        if (list.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding: 28px;"><i class="fa-solid fa-receipt" style="font-size: 1.8rem; display: block; margin-bottom: 8px; opacity: 0.4;"></i> No hay cobros registrados en este período.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = list.map(it => `
+            <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 10px 12px; font-size: 0.82rem; color: #64748b; white-space: nowrap;">${it.date}</td>
+                <td style="padding: 10px 12px; font-weight: 700; color: #0f172a;">${it.patientName}</td>
+                <td style="padding: 10px 12px; font-size: 0.82rem; color: #64748b;">${it.patientId}</td>
+                <td style="padding: 10px 12px; font-size: 0.84rem; color: #334155;">${it.concept}</td>
+                <td style="padding: 10px 12px; font-size: 0.82rem; color: #64748b;">
+                    <span class="badge-tag blue" style="font-size: 0.72rem;">${it.method}</span>
+                    ${it.reference && it.reference !== '-' ? `<span style="font-family: monospace; margin-left: 4px;">#${it.reference}</span>` : ''}
+                </td>
+                <td style="padding: 10px 12px; text-align: right; font-size: 0.88rem; font-weight: 700; color: #059669;">Bs. ${it.amountBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td style="padding: 10px 12px; text-align: right; font-size: 0.92rem; font-weight: 800; color: #0f172a;">$${it.amountUSD.toFixed(2)} USD</td>
+            </tr>
+        `).join('');
+
+    } else if (subtab === 'receivables') {
+        thead.innerHTML = `
+            <tr style="font-size: 0.78rem; text-transform: uppercase; background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
+                <th style="padding: 10px 12px;">Paciente</th>
+                <th style="padding: 10px 12px;">Cédula / ID</th>
+                <th style="padding: 10px 12px;">Procedimiento / Ficha</th>
+                <th style="padding: 10px 12px; text-align: right;">Total Presupuestado</th>
+                <th style="padding: 10px 12px; text-align: right;">Total Abonado</th>
+                <th style="padding: 10px 12px; text-align: right;">Saldo Deudor ($ USD)</th>
+                <th style="padding: 10px 12px; text-align: right;">Saldo Deudor (Bs.)</th>
+            </tr>
+        `;
+
+        if (list.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding: 28px;"><i class="fa-solid fa-circle-check text-green" style="font-size: 1.8rem; display: block; margin-bottom: 8px;"></i> ¡Excelente! No hay pacientes con deudas pendientes asignados a su consulta.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = list.map(it => `
+            <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 10px 12px; font-weight: 700; color: #0f172a;">${it.patientName}</td>
+                <td style="padding: 10px 12px; font-size: 0.82rem; color: #64748b;">${it.patientId}</td>
+                <td style="padding: 10px 12px; font-size: 0.84rem; color: #334155;">${it.concept}</td>
+                <td style="padding: 10px 12px; text-align: right; font-size: 0.85rem; color: #64748b;">$${it.totalUSD.toFixed(2)}</td>
+                <td style="padding: 10px 12px; text-align: right; font-size: 0.85rem; color: #059669;">$${it.paidUSD.toFixed(2)}</td>
+                <td style="padding: 10px 12px; text-align: right; font-size: 0.92rem; font-weight: 800; color: #dc2626;">$${it.balanceUSD.toFixed(2)} USD</td>
+                <td style="padding: 10px 12px; text-align: right; font-size: 0.88rem; font-weight: 700; color: #0f172a;">Bs. ${it.balanceBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            </tr>
+        `).join('');
+
+    } else if (subtab === 'patients') {
+        thead.innerHTML = `
+            <tr style="font-size: 0.78rem; text-transform: uppercase; background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
+                <th style="padding: 10px 12px;">Fecha de Atención</th>
+                <th style="padding: 10px 12px;">Paciente</th>
+                <th style="padding: 10px 12px;">Cédula / ID</th>
+                <th style="padding: 10px 12px;">Procedimiento / Motivo</th>
+                <th style="padding: 10px 12px;">Estado</th>
+                <th style="padding: 10px 12px; text-align: right;">Cobro / Detalle</th>
+            </tr>
+        `;
+
+        if (list.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding: 28px;"><i class="fa-solid fa-user-doctor" style="font-size: 1.8rem; display: block; margin-bottom: 8px; opacity: 0.4;"></i> No hay pacientes atendidos registrados en este período.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = list.map(it => `
+            <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 10px 12px; font-size: 0.82rem; color: #64748b; white-space: nowrap;">${it.date}</td>
+                <td style="padding: 10px 12px; font-weight: 700; color: #0f172a;">${it.patientName}</td>
+                <td style="padding: 10px 12px; font-size: 0.82rem; color: #64748b;">${it.patientId}</td>
+                <td style="padding: 10px 12px; font-size: 0.84rem; color: #334155;">${it.procedure}</td>
+                <td style="padding: 10px 12px;">
+                    <span class="badge-tag green" style="font-size: 0.72rem;"><i class="fa-solid fa-check"></i> ${it.status}</span>
+                </td>
+                <td style="padding: 10px 12px; text-align: right; font-size: 0.84rem; font-weight: 600; color: #0284c7;">${it.paidInfo}</td>
+            </tr>
+        `).join('');
+    }
+};
+
+window.printDoctorFinancesReport = function() {
+    window.print();
 };
