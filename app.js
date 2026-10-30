@@ -978,6 +978,44 @@ function isPatientDentalRelated(patient, appointments = [], invoices = []) {
 }
 window.isPatientDentalRelated = isPatientDentalRelated;
 
+function isDentalAppointment(app, users = []) {
+    if (!app) return false;
+
+    // 1. Verificar categoría / departamento / especialidad de la cita
+    const spec = ((app.specialty || '') + ' ' + (app.category || '') + ' ' + (app.department || '')).toLowerCase();
+    if (spec) {
+        if (spec.includes('odont') || spec.includes('dental') || spec.includes('ortodon') || spec.includes('endodon') || spec.includes('periodon') || spec.includes('maxil') || spec.includes('estomat')) {
+            return true;
+        }
+        if (spec.includes('cardio') || spec.includes('gineco') || spec.includes('pediatr') || spec.includes('traumato') || spec.includes('general') || spec.includes('medicin') || spec.includes('dermatol') || spec.includes('urolog') || spec.includes('oftalm')) {
+            return false;
+        }
+    }
+
+    // 2. Verificar doctor asignado
+    const docId = String(app.doctorId || app.doctor_id || '').trim();
+    const docName = String(app.doctorName || app.doctor_name || app.doctor || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+    if (users && users.length > 0) {
+        const matchedDoc = users.find(u => (docId && String(u.id) === docId) || (docName && u.fullname && u.fullname.toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim().includes(docName)));
+        if (matchedDoc) {
+            if (isDentalDoctor(matchedDoc)) return true;
+            if (isDoctorUser(matchedDoc) && !isDentalDoctor(matchedDoc)) return false;
+        }
+    }
+
+    // 3. Verificar palabras clave en el tratamiento o motivo
+    const text = ((app.treatment || '') + ' ' + (app.notes || '') + ' ' + (app.reason || '')).toLowerCase();
+    const dentalKeywords = ['odont', 'dental', 'resina', 'profilaxis', 'limpieza', 'carie', 'corona', 'implante', 'ortodon', 'endodon', 'periodon', 'diente', 'muela', 'blanqueamiento', 'fluor', 'sellante', 'exodoncia', 'extraccion', 'bucal', 'maxilofacial', 'sarro', 'tártaro', 'curetaje'];
+    if (dentalKeywords.some(kw => text.includes(kw))) return true;
+
+    const nonDentalKeywords = ['electro', 'ecocardiograma', 'ginecolog', 'papanicolau', 'citolog', 'pediatr', 'control nino', 'vacuna', 'holter', 'mapa', 'prenatal', 'tensión', 'presión'];
+    if (nonDentalKeywords.some(kw => text.includes(kw))) return false;
+
+    return true;
+}
+window.isDentalAppointment = isDentalAppointment;
+
+
 function isDentalDoctor(user) {
     const u = user || getCurrentUser();
     if (!u) return false;
@@ -7677,9 +7715,15 @@ async function renderDashboard() {
     const agendaList = document.getElementById('dashboard-agenda-list');
     if (agendaList) {
         agendaList.innerHTML = '';
-        const appointments = await SupabaseDataService.getAppointments();
+        let appointments = await SupabaseDataService.getAppointments();
         const currentUser = getCurrentUser();
         const isAssistant = currentUser && currentUser.role.toLowerCase().includes('asistente');
+        const isHygienist = typeof isHygienistUser === 'function' ? isHygienistUser(currentUser) : false;
+        const allUsersForDash = await SupabaseDataService.getUsers();
+
+        if (isHygienist) {
+            appointments = appointments.filter(app => isDentalAppointment(app, allUsersForDash));
+        }
 
         const todayISO = new Date().toISOString().split('T')[0];
         let todayCount = 0;
@@ -8015,9 +8059,16 @@ async function renderAgendaView(filter = 'pending', searchQuery = '') {
     if (!agendaListMain) return;
 
     agendaListMain.innerHTML = '';
-    const allAppointments = await SupabaseDataService.getAppointments();
+    let allAppointments = await SupabaseDataService.getAppointments();
     const currentUser = getCurrentUser();
     const isAssistant = currentUser && currentUser.role.toLowerCase().includes('asistente');
+    const isHygienist = typeof isHygienistUser === 'function' ? isHygienistUser(currentUser) : false;
+    const allUsersForAgenda = await SupabaseDataService.getUsers();
+
+    if (isHygienist) {
+        // La Higienista SOLO ve la agenda de toda el área de odontología (todos los odontólogos y tratamientos dentales)
+        allAppointments = allAppointments.filter(app => isDentalAppointment(app, allUsersForAgenda));
+    }
 
     // Update Counts for Filter Badges
     const countPending = allAppointments.filter(a => a.status !== 'Completada' && a.status !== 'Atendida' && a.status !== 'Cancelada').length;
@@ -9078,35 +9129,125 @@ async function renderUsersTable(filter = 'all', searchQuery = '') {
 // ==========================================
 // GESTIÓN DE USUARIOS DEL SISTEMA (AJUSTES)
 // ==========================================
-window.renderSystemUsersTable = async function() {
+window.activeSysUsersFilter = 'all';
+
+window.renderSystemUsersTable = async function(filterCategory = null) {
+    if (filterCategory) window.activeSysUsersFilter = filterCategory;
+    const currentFilter = window.activeSysUsersFilter || 'all';
+
     const tbody = document.getElementById('system-users-table-tbody');
     if (!tbody) return;
 
-    tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding: 20px;"><i class="fa-solid fa-spinner fa-spin text-cyan"></i> Cargando usuarios del sistema...</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding: 24px;"><i class="fa-solid fa-spinner fa-spin text-cyan"></i> Cargando usuarios del sistema en tiempo real...</td></tr>`;
 
-    let users = await SupabaseDataService.getUsers();
+    // Forzar lectura fresca de Supabase (sin caché desactualizada)
+    let users = await SupabaseDataService.getUsers(true);
 
-    // Filter to only administrative & system users
-    let sysUsers = users.filter(u => isSystemAdminRole(u.role) || !u.role || u.role.toLowerCase().includes('admin'));
+    // Helpers de clasificación de roles
+    const isSuperRole = (r) => {
+        const str = (r || '').toLowerCase();
+        return str.includes('super') || str.includes('gerente') || str.includes('director');
+    };
+    const isAdminRole = (r) => {
+        const str = (r || '').toLowerCase();
+        return str.includes('admin') || str.includes('gerente') || str.includes('recep') || str.includes('caja') || str.includes('factura');
+    };
+    const isHygRole = (r) => {
+        const str = (r || '').toLowerCase();
+        return str.includes('higien');
+    };
+    const isDocRole = (r) => {
+        const str = (r || '').toLowerCase();
+        return !isHygRole(r) && (str.includes('odont') || str.includes('medico') || str.includes('médico') || str.includes('cirujan') || str.includes('especialista') || str.includes('dentist'));
+    };
+    const isAsstRole = (r) => {
+        const str = (r || '').toLowerCase();
+        return !isHygRole(r) && !isDocRole(r) && (str.includes('asistente') || str.includes('enferm') || str.includes('auxiliar'));
+    };
 
-    if (sysUsers.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding: 24px;">No hay cuentas administrativas registradas. Cree una nueva con el botón "+ Crear Usuario del Sistema".</td></tr>`;
+    // Actualizar contadores en la barra de filtros
+    const countAll = users.length;
+    const countAdmin = users.filter(u => isAdminRole(u.role)).length;
+    const countDoc = users.filter(u => isDocRole(u.role)).length;
+    const countHyg = users.filter(u => isHygRole(u.role)).length;
+    const countAsst = users.filter(u => isAsstRole(u.role)).length;
+
+    const elCountAll = document.getElementById('sys-count-all');
+    const elCountAdmin = document.getElementById('sys-count-admin');
+    const elCountDoc = document.getElementById('sys-count-doctor');
+    const elCountHyg = document.getElementById('sys-count-hygienist');
+    const elCountAsst = document.getElementById('sys-count-assistant');
+
+    if (elCountAll) elCountAll.innerText = countAll;
+    if (elCountAdmin) elCountAdmin.innerText = countAdmin;
+    if (elCountDoc) elCountDoc.innerText = countDoc;
+    if (elCountHyg) elCountHyg.innerText = countHyg;
+    if (elCountAsst) elCountAsst.innerText = countAsst;
+
+    // Actualizar estilo visual activo de los botones de filtro
+    const filterBtns = document.querySelectorAll('.sys-user-filter-btn');
+    filterBtns.forEach(btn => {
+        if (btn.dataset.filter === currentFilter) {
+            btn.className = 'btn btn-xs btn-primary sys-user-filter-btn';
+        } else {
+            btn.className = 'btn btn-xs btn-outline sys-user-filter-btn';
+        }
+    });
+
+    // Filtrar según selección activa
+    let displayUsers = users;
+    if (currentFilter === 'admin') {
+        displayUsers = users.filter(u => isAdminRole(u.role));
+    } else if (currentFilter === 'doctor') {
+        displayUsers = users.filter(u => isDocRole(u.role));
+    } else if (currentFilter === 'hygienist') {
+        displayUsers = users.filter(u => isHygRole(u.role));
+    } else if (currentFilter === 'assistant') {
+        displayUsers = users.filter(u => isAsstRole(u.role));
+    }
+
+    if (displayUsers.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding: 28px;">No hay usuarios en esta categoría. Total en sistema: ${users.length}</td></tr>`;
         return;
     }
 
     tbody.innerHTML = '';
-    sysUsers.forEach(u => {
+    displayUsers.forEach(u => {
         const tr = document.createElement('tr');
-        const isSuper = (u.role || '').toLowerCase().includes('super') || (u.role || '').toLowerCase().includes('gerente');
-        const roleBadgeClass = isSuper ? 'green' : 'blue';
+        const rStr = (u.role || '').toLowerCase();
+        const isSuper = isSuperRole(u.role);
+        const isHyg = isHygRole(u.role);
+        const isDoc = isDocRole(u.role);
+
+        let roleBadgeClass = 'blue';
+        let roleIcon = 'fa-solid fa-user-gear';
+        let categoryTag = '';
+
+        if (isSuper) {
+            roleBadgeClass = 'green';
+            roleIcon = 'fa-solid fa-crown';
+            categoryTag = '<small class="badge-tag green" style="font-size:0.68rem; margin-left:4px;">Dirección</small>';
+        } else if (isHyg) {
+            roleBadgeClass = 'teal';
+            roleIcon = 'fa-solid fa-tooth';
+            categoryTag = '<small class="badge-tag green" style="background:#d1fae5; color:#065f46; font-size:0.68rem; margin-left:4px;">Higienista</small>';
+        } else if (isDoc) {
+            roleBadgeClass = 'cyan';
+            roleIcon = 'fa-solid fa-user-doctor';
+            categoryTag = '<small class="badge-tag blue" style="font-size:0.68rem; margin-left:4px;">Médico / Odontólogo</small>';
+        } else if (isAdminRole(u.role)) {
+            roleBadgeClass = 'blue';
+            roleIcon = 'fa-solid fa-shield-halved';
+            categoryTag = '<small class="badge-tag purple" style="font-size:0.68rem; margin-left:4px;">Oficina</small>';
+        }
 
         tr.innerHTML = `
             <td>
                 <strong>${u.fullname}</strong>
-                ${isSuper ? ' <small class="badge-tag green" style="font-size:0.68rem; margin-left:4px;">Dirección</small>' : ''}
+                ${categoryTag}
             </td>
             <td><span style="font-family:monospace; color:#334155;">${u.email}</span></td>
-            <td><span class="badge-tag ${roleBadgeClass}" style="font-weight:700;"><i class="fa-solid fa-shield-halved"></i> ${u.role || 'Administrador'}</span></td>
+            <td><span class="badge-tag ${roleBadgeClass}" style="font-weight:700;"><i class="${roleIcon}"></i> ${u.role || 'Usuario'}</span></td>
             <td><span class="badge-tag ${u.status === 'Inactivo' ? 'red' : 'green'}">${u.status || 'Activo'}</span></td>
             <td>${u.createdAt || '-'}</td>
             <td style="text-align: center;">
@@ -9144,11 +9285,17 @@ window.openCreateSystemUserModal = function() {
 };
 
 window.editSystemUser = async function(userId) {
-    const users = await SupabaseDataService.getUsers();
+    const users = await SupabaseDataService.getUsers(true);
     const user = users.find(u => String(u.id) === String(userId));
     if (!user) {
         Swal.fire({ icon: 'error', title: 'No encontrado', text: 'No se encontró el usuario seleccionado.' });
         return;
+    }
+
+    const r = (user.role || '').toLowerCase();
+    const isClinical = r.includes('odont') || r.includes('higien') || r.includes('medico') || r.includes('médico') || r.includes('cirujan') || r.includes('asistente');
+    if (isClinical && typeof window.openEditUserModal === 'function') {
+        return window.openEditUserModal(userId);
     }
 
     const form = document.getElementById('form-system-user');
@@ -11362,7 +11509,9 @@ function initGlobalEvents() {
             try {
                 await SupabaseDataService.saveUser(userObj);
                 closeModal('modal-user');
+                await SupabaseDataService.getUsers(true);
                 await renderUsersTable();
+                if (typeof window.renderSystemUsersTable === 'function') await window.renderSystemUsersTable();
                 Swal.fire({
                     icon: 'success',
                     title: existingUserId ? '¡Usuario Actualizado!' : '¡Usuario Registrado!',
@@ -11444,7 +11593,9 @@ function initGlobalEvents() {
                 );
             }
             closeModal('modal-system-user');
+            await SupabaseDataService.getUsers(true);
             await window.renderSystemUsersTable();
+            if (typeof renderUsersTable === 'function') await renderUsersTable();
             Swal.fire({
                 icon: 'success',
                 title: existingId ? '¡Cuenta Actualizada!' : '¡Cuenta Creada!',
@@ -13348,15 +13499,77 @@ async function renderSettingsView() {
     const r = (user.role || '').toLowerCase();
     const isAdmin = r.includes('admin') || r.includes('super') || r.includes('director');
     const isDoctor = r.includes('medico') || r.includes('odont') || r.includes('doctor') || r.includes('dentista') || r.includes('médico');
+    const isHygienist = typeof isHygienistUser === 'function' ? isHygienistUser(user) : r.includes('higien');
 
     const navButtons = document.querySelectorAll('.settings-nav-btn');
     const panes = document.querySelectorAll('.settings-pane');
+
+    // RESTRICCION ESTRICTA PARA HIGIENISTA:
+    // No puede ver datos del negocio, usuarios del sistema, papelera ni auditoría.
+    // Solo debe aparecerle "Mi Perfil Personal" y "Apariencia y Tema".
+    if (isHygienist) {
+        const busBtn = document.getElementById('btn-pane-business');
+        const sysUsersBtn = document.getElementById('btn-pane-system-users');
+        const trashBtn = document.getElementById('btn-pane-trash');
+        const auditBtn = document.getElementById('btn-pane-audit');
+        if (busBtn) busBtn.style.setProperty('display', 'none', 'important');
+        if (sysUsersBtn) sysUsersBtn.style.setProperty('display', 'none', 'important');
+        if (trashBtn) trashBtn.style.setProperty('display', 'none', 'important');
+        if (auditBtn) auditBtn.style.setProperty('display', 'none', 'important');
+
+        const profBtn = document.querySelector('.settings-nav-btn[data-pane="profile"]');
+        const appBtn = document.getElementById('btn-pane-appearance');
+        if (profBtn) profBtn.style.removeProperty('display');
+        if (appBtn) appBtn.style.removeProperty('display');
+
+        navButtons.forEach(b => b.classList.remove('active'));
+        panes.forEach(p => p.classList.remove('active'));
+        if (profBtn) profBtn.classList.add('active');
+        const paneProf = document.getElementById('pane-profile');
+        if (paneProf) paneProf.classList.add('active');
+    } else {
+        const busBtn = document.getElementById('btn-pane-business');
+        const sysUsersBtn = document.getElementById('btn-pane-system-users');
+        const trashBtn = document.getElementById('btn-pane-trash');
+        const auditBtn = document.getElementById('btn-pane-audit');
+        if (busBtn) busBtn.style.display = isAdmin ? '' : 'none';
+        if (sysUsersBtn) sysUsersBtn.style.display = isAdmin ? '' : 'none';
+        if (trashBtn) trashBtn.style.display = isAdmin ? '' : 'none';
+        if (auditBtn) auditBtn.style.display = isAdmin ? '' : 'none';
+
+        if (!isAdmin) {
+            const paneBus = document.getElementById('pane-business');
+            const paneProf = document.getElementById('pane-profile');
+            if (paneBus && paneProf) {
+                paneBus.classList.remove('active');
+                paneProf.classList.add('active');
+            }
+            if (busBtn) busBtn.classList.remove('active');
+            const profileBtn = document.querySelector('.settings-nav-btn[data-pane="profile"]');
+            if (profileBtn) profileBtn.classList.add('active');
+        } else {
+            const paneBus = document.getElementById('pane-business');
+            const paneProf = document.getElementById('pane-profile');
+            if (paneBus && paneProf) {
+                paneBus.classList.add('active');
+                paneProf.classList.remove('active');
+            }
+            if (busBtn) busBtn.classList.add('active');
+            const profileBtn = document.querySelector('.settings-nav-btn[data-pane="profile"]');
+            if (profileBtn) profileBtn.classList.remove('active');
+        }
+    }
 
     navButtons.forEach(btn => {
         btn.onclick = (e) => {
             e.preventDefault();
             const paneName = btn.dataset.pane;
             
+            // Si es higienista y trata de acceder a un panel prohibido, abortar
+            if (isHygienist && (paneName === 'business' || paneName === 'system-users' || paneName === 'trash' || paneName === 'audit')) {
+                return;
+            }
+
             navButtons.forEach(b => b.classList.remove('active'));
             panes.forEach(p => p.classList.remove('active'));
 
@@ -13365,36 +13578,10 @@ async function renderSettingsView() {
             if (targetPane) targetPane.classList.add('active');
 
             if (paneName === 'system-users' && typeof window.renderSystemUsersTable === 'function') {
-                window.renderSystemUsersTable();
+                window.renderSystemUsersTable('all');
             }
         };
     });
-
-    // If not admin, hide business pane and activate profile pane by default
-    if (!isAdmin) {
-        const paneBus = document.getElementById('pane-business');
-        const paneProf = document.getElementById('pane-profile');
-        if (paneBus && paneProf) {
-            paneBus.classList.remove('active');
-            paneProf.classList.add('active');
-        }
-        const busBtn = document.getElementById('btn-pane-business');
-        const profileBtn = document.querySelector('.settings-nav-btn[data-pane="profile"]');
-        if (busBtn) busBtn.classList.remove('active');
-        if (profileBtn) profileBtn.classList.add('active');
-    } else {
-        // If admin, default back to business pane active
-        const paneBus = document.getElementById('pane-business');
-        const paneProf = document.getElementById('pane-profile');
-        if (paneBus && paneProf) {
-            paneBus.classList.add('active');
-            paneProf.classList.remove('active');
-        }
-        const busBtn = document.getElementById('btn-pane-business');
-        const profileBtn = document.querySelector('.settings-nav-btn[data-pane="profile"]');
-        if (busBtn) busBtn.classList.add('active');
-        if (profileBtn) profileBtn.classList.remove('active');
-    }
 
     if (isAdmin) {
         let config = null;
