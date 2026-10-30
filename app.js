@@ -9425,6 +9425,17 @@ window.printDirectSaleReceipt = async function(docId = null) {
     const busData = getClinicBusData(stationery);
     const logoBase64 = await toDataURL(busData.logoUrl || stationery.logoUrl);
 
+    const usersList = await SupabaseDataService.getUsers();
+    let receiptDocUser = null;
+    if (doc.doctorId) {
+        receiptDocUser = usersList.find(u => String(u.id) === String(doc.doctorId));
+    }
+    if (!receiptDocUser && doc.doctor) {
+        const cleanName = String(doc.doctor).replace(/^dr\.\s*|^dra\.\s*/i, '').trim().toLowerCase();
+        receiptDocUser = usersList.find(u => (u.fullname || u.name || '').replace(/^dr\.\s*|^dra\.\s*/i, '').trim().toLowerCase() === cleanName);
+    }
+    const receiptDocLicense = (receiptDocUser && receiptDocUser.license && receiptDocUser.license !== 'N/A') ? receiptDocUser.license.trim() : '';
+
     const itemsHtml = (doc.items || []).map((it, idx) => `
         <tr style="border-bottom: 1px solid #e2e8f0; font-size: 11pt;">
             <td style="padding: 8px 6px;">${it.name || it.description}</td>
@@ -9468,7 +9479,7 @@ window.printDirectSaleReceipt = async function(docId = null) {
                 <strong>Datos del Paciente:</strong><br>
                 Nombre Completo: <strong>${p ? p.fullname : (doc.patientName || doc.patientId)}</strong><br>
                 Cédula / ID: <strong>${doc.patientId}</strong>${(typeof shouldHidePatientContact === 'function' && shouldHidePatientContact()) ? '' : ` • Teléfono: <strong>${p ? p.phone : 'N/A'}</strong>`}<br>
-                Médico / Especialista: <strong>${doc.doctor || 'Dr. Médico Tratante'}</strong>
+                Médico / Especialista: <strong>${doc.doctor || 'Dr. Médico Tratante'}</strong>${receiptDocLicense ? ` &bull; <span style="color:#64748b; font-size:9.5pt;">${receiptDocLicense}</span>` : ''}
             </div>
 
             <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
@@ -9561,6 +9572,17 @@ window.downloadDirectSaleReceiptPDF = async function(docId = null) {
     const busData = getClinicBusData(stationery);
     const logoBase64 = await toDataURL(busData.logoUrl || stationery.logoUrl);
 
+    const usersList = await SupabaseDataService.getUsers();
+    let receiptDocUser = null;
+    if (doc.doctorId) {
+        receiptDocUser = usersList.find(u => String(u.id) === String(doc.doctorId));
+    }
+    if (!receiptDocUser && doc.doctor) {
+        const cleanName = String(doc.doctor).replace(/^dr\.\s*|^dra\.\s*/i, '').trim().toLowerCase();
+        receiptDocUser = usersList.find(u => (u.fullname || u.name || '').replace(/^dr\.\s*|^dra\.\s*/i, '').trim().toLowerCase() === cleanName);
+    }
+    const receiptDocLicense = (receiptDocUser && receiptDocUser.license && receiptDocUser.license !== 'N/A') ? receiptDocUser.license.trim() : '';
+
     const container = document.createElement('div');
     container.innerHTML = `
         <div style="font-family: 'Segoe UI', Arial, sans-serif; padding: 25px; color: #1e293b; line-height: 1.4; background: #fff;">
@@ -9583,7 +9605,7 @@ window.downloadDirectSaleReceiptPDF = async function(docId = null) {
                 <strong>Datos del Paciente:</strong><br>
                 Nombre Completo: <strong>${p ? p.fullname : (doc.patientName || doc.patientId)}</strong><br>
                 Cédula / ID: <strong>${doc.patientId}</strong>${(typeof shouldHidePatientContact === 'function' && shouldHidePatientContact()) ? '' : ` • Teléfono: <strong>${p ? p.phone : 'N/A'}</strong>`}<br>
-                Médico / Especialista: <strong>${doc.doctor || 'Dr. Médico Tratante'}</strong>
+                Médico / Especialista: <strong>${doc.doctor || 'Dr. Médico Tratante'}</strong>${receiptDocLicense ? ` &bull; <span style="color:#64748b; font-size:9.5pt;">${receiptDocLicense}</span>` : ''}
             </div>
 
             <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
@@ -24466,7 +24488,8 @@ function buildMedicalDocumentHTML(opts) {
         logoUrl = '',
         
         doctorName = '',
-        doctorSpecialty = 'Odontología General / Especializada',
+        doctorSpecialty = '',
+        doctorLicense = '',
         doctorPhone = '',
         doctorSig = '',
         
@@ -24498,23 +24521,17 @@ function buildMedicalDocumentHTML(opts) {
     const finalClinicPhone = (clinicPhone && !clinicPhone.includes('555-0192')) ? clinicPhone : (parsedFromClinicName.phone || baseBus.phone);
     const finalClinicEmail = clinicEmail || parsedFromClinicName.email || baseBus.email;
     const finalClinicAddress = (clinicAddress && !clinicAddress.includes('Las Mercedes')) ? clinicAddress : (parsedFromClinicName.address || baseBus.address);
-    const finalDoctorName = doctorName || (getCurrentUser() && getCurrentUser().fullname) || baseBus.doctor || 'Dirección Médica';
+    const finalDoctorName = doctorName || baseBus.doctor || 'Dirección Médica';
     const finalDoctorPhone = (doctorPhone && !doctorPhone.includes('123-4567') && !doctorPhone.includes('555-0192')) ? doctorPhone : (baseBus.phone || '');
     const finalBankingDetails = bankingDetails || baseBus.bankInfo || 'Banco Banesco / Pago Móvil: RIF J-50781755-5 | Teléfono: 0424-1894138';
 
-    // Double-check & resolve Doctor Signature fallback
+    // Doctor signature resolve
     try {
         if (!doctorSig && window.doctorSigPad && typeof window.doctorSigPad.isEmpty === 'function' && !window.doctorSigPad.isEmpty()) {
             doctorSig = window.doctorSigPad.toDataURL();
         }
-        if (!doctorSig) {
-            const u = getCurrentUser();
-            if (u) {
-                doctorSig = (u.doctorProfile && u.doctorProfile.signature) || (u.doctor_profile && u.doctor_profile.signature) || '';
-            }
-        }
     } catch(e) {
-        console.warn("Doctor sig resolve fallback warning:", e);
+        console.warn("Doctor sig resolve warning:", e);
     }
 
     // Double-check & resolve Patient Signature fallback
@@ -24602,7 +24619,8 @@ function buildMedicalDocumentHTML(opts) {
                 <div>
                     <div style="font-size: 0.60rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1px;">MÉDICO TRATANTE</div>
                     <strong style="font-size: 0.76rem; color: #0f172a; display: block; margin-bottom: 1px;">${finalDoctorName.startsWith('Dr') ? finalDoctorName : `Dr(a). ${finalDoctorName}`}</strong>
-                    <div style="color: #475569; font-size: 0.68rem;">Especialidad: ${doctorSpecialty}</div>
+                    ${doctorSpecialty ? `<div style="color: #475569; font-size: 0.68rem;">Especialidad: ${doctorSpecialty}</div>` : ''}
+                    ${doctorLicense ? `<div style="color: #475569; font-size: 0.68rem;">MPPS / Col: ${doctorLicense}</div>` : ''}
                     ${finalDoctorPhone ? `<div style="color: #475569; font-size: 0.68rem;">Tlf: ${finalDoctorPhone}</div>` : ''}
                 </div>
 
@@ -24700,7 +24718,7 @@ function buildMedicalDocumentHTML(opts) {
                         <img src="${doctorSig}" style="max-height: 24px; max-width: 100px; object-fit: contain; margin: 0 auto 1px auto; display: block;" alt="Firma Médico">
                     ` : `<div style="height: 18px;"></div>`}
                     <div style="border-top: 1px solid #94a3b8; padding-top: 1px; font-size: 0.68rem; font-weight: 700; color: #0f172a;">Firma / Sello del Médico Tratante</div>
-                    <div style="font-size: 0.64rem; color: #64748b;">${doctorName} — M.P.P.S. / C.O.V.</div>
+                    <div style="font-size: 0.64rem; color: #64748b;">${finalDoctorName}${doctorLicense ? ` &bull; ${doctorLicense}` : ''}</div>
                 </div>
 
                 <div>
@@ -24736,7 +24754,7 @@ function buildRecipeDocumentHTML(opts) {
         logoUrl = '',
 
         doctorName = '',
-        doctorSpecialty = 'Medicina / Odontología Especializada',
+        doctorSpecialty = '',
         doctorLicense = '',
         doctorPhone = '',
         doctorSig = '',
@@ -24758,7 +24776,7 @@ function buildRecipeDocumentHTML(opts) {
     const finalClinicPhone = (clinicPhone && !clinicPhone.includes('555-0192')) ? clinicPhone : (parsedFromClinicName.phone || baseBus.phone);
     const finalClinicEmail = clinicEmail || parsedFromClinicName.email || baseBus.email;
     const finalClinicAddress = (clinicAddress && !clinicAddress.includes('Las Mercedes')) ? clinicAddress : (parsedFromClinicName.address || baseBus.address);
-    const finalDoctorName = doctorName || (getCurrentUser() && getCurrentUser().fullname) || baseBus.doctor || 'Dirección Médica';
+    const finalDoctorName = doctorName || baseBus.doctor || 'Dirección Médica';
     const finalDoctorPhone = (doctorPhone && !doctorPhone.includes('123-4567') && !doctorPhone.includes('555-0192')) ? doctorPhone : (baseBus.phone || '');
     const finalLogoUrl = logoUrl || 'logo-vidasana.png';
 
@@ -24874,14 +24892,16 @@ function buildRecipeDocumentHTML(opts) {
                 <div style="width: 300px; text-align: center;">
                     ${doctorSig ? `
                         <img src="${doctorSig}" style="max-height: 50px; max-width: 180px; object-fit: contain; margin: 0 auto 3px auto; display: block;" alt="Firma Médico">
-                    ` : `<div style="height: 38px;"></div>`}
+                    ` : `<div style="height: 46px;"></div>`}
                     <div style="border-top: 1.5px solid #0d9488; padding-top: 4px; font-size: 0.80rem; font-weight: 800; color: #0f172a;">
                         ${finalDoctorName.startsWith('Dr') ? finalDoctorName : `Dr(a). ${finalDoctorName}`}
                     </div>
+                    ${(doctorSpecialty || doctorLicense) ? `
                     <div style="font-size: 0.72rem; color: #334155; line-height: 1.25; margin-top: 1px;">
                         ${doctorSpecialty ? `<div>${doctorSpecialty}</div>` : ''}
-                        ${doctorLicense ? `<div><strong>M.P.P.S. / N° Colegiado:</strong> ${doctorLicense}</div>` : `<div>M.P.P.S. / Especialista Certificado</div>`}
+                        ${doctorLicense ? `<div><strong>M.P.P.S. / N° Colegiado:</strong> ${doctorLicense}</div>` : ''}
                     </div>
+                    ` : ''}
                     <div style="font-size: 0.68rem; color: #64748b; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.04em;">Firma y Sello del Médico Tratante</div>
                 </div>
             </div>
@@ -24993,6 +25013,41 @@ async function generateBudgetHTMLContainer(budgetId = null) {
     const busData = getClinicBusData(stationery);
     const logoBase64 = await toDataURL(busData.logoUrl || stationery.logoUrl);
 
+    const allUsers = await SupabaseDataService.getUsers();
+    let budgetDocUser = null;
+    const bDocId = budget?.doctorId || (budget?.metadata && budget.metadata.doctorId);
+    if (bDocId) {
+        budgetDocUser = allUsers.find(u => String(u.id) === String(bDocId));
+    }
+    const bDocName = budget?.doctor || budget?.doctorName || (budget?.metadata && budget.metadata.doctorName);
+    if (!budgetDocUser && bDocName) {
+        const cleanName = String(bDocName).replace(/^dr\.\s*|^dra\.\s*/i, '').trim().toLowerCase();
+        budgetDocUser = allUsers.find(u => (u.fullname || u.name || '').replace(/^dr\.\s*|^dra\.\s*/i, '').trim().toLowerCase() === cleanName);
+    }
+    if (!budgetDocUser && patient && (patient.assignedDoctorId || patient.assignedDoctor)) {
+        if (patient.assignedDoctorId) {
+            budgetDocUser = allUsers.find(u => String(u.id) === String(patient.assignedDoctorId));
+        } else if (patient.assignedDoctor) {
+            const cleanName = String(patient.assignedDoctor).replace(/^dr\.\s*|^dra\.\s*/i, '').trim().toLowerCase();
+            budgetDocUser = allUsers.find(u => (u.fullname || u.name || '').replace(/^dr\.\s*|^dra\.\s*/i, '').trim().toLowerCase() === cleanName);
+        }
+    }
+    if (!budgetDocUser) {
+        const curUser = getCurrentUser();
+        if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
+            budgetDocUser = curUser;
+        }
+    }
+
+    const finalDocName = (budgetDocUser ? (budgetDocUser.fullname || budgetDocUser.name) : bDocName) || '';
+    const finalDocSpecialty = budgetDocUser ? (budgetDocUser.doctorProfile?.specialty || budgetDocUser.doctor_profile?.specialty || budgetDocUser.role || '') : '';
+    const finalDocLicense = (budgetDocUser && budgetDocUser.license && budgetDocUser.license !== 'N/A') ? budgetDocUser.license.trim() : '';
+    const finalDocPhone = budgetDocUser ? (budgetDocUser.phone || '') : '';
+
+    if (!docSig && budgetDocUser) {
+        docSig = (budgetDocUser.doctorProfile && budgetDocUser.doctorProfile.signature) || (budgetDocUser.doctor_profile && budgetDocUser.doctor_profile.signature) || '';
+    }
+
     const docHtml = buildMedicalDocumentHTML({
         docType: 'presupuesto',
         docTitle: 'Presupuesto Odontológico',
@@ -25005,9 +25060,10 @@ async function generateBudgetHTMLContainer(budgetId = null) {
         clinicAddress: busData.address,
         logoUrl: logoBase64,
         
-        doctorName: (budget && budget.doctor) || (getCurrentUser() && getCurrentUser().fullname) || busData.doctor || 'Dr. Rodrigo Navas',
-        doctorSpecialty: 'Odontología General / Especializada',
-        doctorPhone: (getCurrentUser() && getCurrentUser().phone) || busData.phone,
+        doctorName: finalDocName,
+        doctorSpecialty: finalDocSpecialty,
+        doctorLicense: finalDocLicense,
+        doctorPhone: finalDocPhone,
         doctorSig: docSig,
         
         patientName: patient.fullname,
@@ -25955,15 +26011,33 @@ async function generateInvoicePreviewHTML(invoice, patient, assistant) {
     const totalUSD = invoice.totalRef || 0;
     const totalVES = `Bs. ${(totalUSD * rate).toFixed(2)}`;
 
-    let docSig = invoice.doctorSignature || '';
-    if (!docSig && window.doctorSigPad && !window.doctorSigPad.isEmpty()) {
-        docSig = window.doctorSigPad.toDataURL();
+    // Resolve the SPECIFIC Doctor assigned to this invoice
+    const allUsers = await SupabaseDataService.getUsers();
+    let assignedDocUser = null;
+    if (invoice.doctorId) {
+        assignedDocUser = allUsers.find(u => String(u.id) === String(invoice.doctorId));
     }
-    if (!docSig) {
-        const u = getCurrentUser();
-        if (u) {
-            docSig = (u.doctorProfile && u.doctorProfile.signature) || (u.doctor_profile && u.doctor_profile.signature) || '';
+    if (!assignedDocUser && (invoice.doctorName || invoice.doctor)) {
+        const cleanName = String(invoice.doctorName || invoice.doctor).replace(/^dr\.\s*|^dra\.\s*/i, '').trim().toLowerCase();
+        assignedDocUser = allUsers.find(u => (u.fullname || u.name || '').replace(/^dr\.\s*|^dra\.\s*/i, '').trim().toLowerCase() === cleanName);
+    }
+    if (!assignedDocUser && patient && (patient.assignedDoctorId || patient.assignedDoctor)) {
+        if (patient.assignedDoctorId) {
+            assignedDocUser = allUsers.find(u => String(u.id) === String(patient.assignedDoctorId));
+        } else if (patient.assignedDoctor) {
+            const cleanName = String(patient.assignedDoctor).replace(/^dr\.\s*|^dra\.\s*/i, '').trim().toLowerCase();
+            assignedDocUser = allUsers.find(u => (u.fullname || u.name || '').replace(/^dr\.\s*|^dra\.\s*/i, '').trim().toLowerCase() === cleanName);
         }
+    }
+
+    const assignedDocName = (assignedDocUser ? (assignedDocUser.fullname || assignedDocUser.name) : (invoice.doctorName || invoice.doctor)) || '';
+    const assignedDocSpecialty = assignedDocUser ? (assignedDocUser.doctorProfile?.specialty || assignedDocUser.doctor_profile?.specialty || assignedDocUser.role || '') : '';
+    const assignedDocLicense = (assignedDocUser && assignedDocUser.license && assignedDocUser.license !== 'N/A') ? assignedDocUser.license.trim() : '';
+    const assignedDocPhone = assignedDocUser ? (assignedDocUser.phone || '') : '';
+
+    let docSig = invoice.doctorSignature || '';
+    if (!docSig && assignedDocUser) {
+        docSig = (assignedDocUser.doctorProfile && assignedDocUser.doctorProfile.signature) || (assignedDocUser.doctor_profile && assignedDocUser.doctor_profile.signature) || '';
     }
 
     let patSig = invoice.patientSignature || (patient && patient.metadata && patient.metadata.patientSignature) || '';
@@ -25983,9 +26057,10 @@ async function generateInvoicePreviewHTML(invoice, patient, assistant) {
         clinicAddress: busData.address,
         logoUrl: logoBase64,
         
-        doctorName: (getCurrentUser() && getCurrentUser().fullname) || busData.doctor || 'Dr. Rodrigo Navas',
-        doctorSpecialty: 'Odontología General / Facturación Clínica',
-        doctorPhone: (getCurrentUser() && getCurrentUser().phone) || busData.phone,
+        doctorName: assignedDocName,
+        doctorSpecialty: assignedDocSpecialty,
+        doctorLicense: assignedDocLicense,
+        doctorPhone: assignedDocPhone,
         doctorSig: docSig,
         
         patientName: (patient && patient.fullname) || 'Paciente',
@@ -29408,7 +29483,7 @@ async function handleStationeryAction(templateType, action) {
                 logoUrl: logoBase64,
                 doctorName: busData.doctor || 'Dirección Médica',
                 doctorSpecialty: busData.doctorSpecialty || 'Odontología General / Rehabilitación Oral',
-                doctorLicense: 'MPPS-98402 / C.O.V-20104',
+                doctorLicense: (busData.doctorLicense && busData.doctorLicense !== 'N/A') ? busData.doctorLicense : '',
                 doctorPhone: busData.phone,
                 doctorSig: '',
                 patientName: 'Carlos Eduardo Mendoza',
@@ -30461,16 +30536,15 @@ async function renderPublicRecipeView() {
             if (currentUser) docUser = currentUser;
         }
 
-        const docName = (recipe && recipe.doctorName) || (docUser ? docUser.fullname : 'Dr. Odontólogo Especialista');
-        const docSpecialty = (recipe && recipe.doctorRole) || (docUser ? docUser.role : 'Odontología General');
-        const docLicense = (recipe && recipe.doctorLicense) || (docUser && docUser.license && docUser.license !== 'N/A' ? docUser.license : 'MPPS-98402 / C.O.V-20104');
+        const docName = (recipe && recipe.doctorName) || (docUser ? docUser.fullname : '');
+        const docSpecialty = (docUser && (docUser.doctorProfile?.specialty || docUser.doctor_profile?.specialty || docUser.role)) || (recipe && recipe.doctorRole && recipe.doctorRole !== 'Médico Tratante' ? recipe.doctorRole : '');
+        const docLicense = (recipe && recipe.doctorLicense && recipe.doctorLicense !== 'N/A') 
+            ? recipe.doctorLicense.trim() 
+            : ((docUser && docUser.license && docUser.license !== 'N/A') ? docUser.license.trim() : '');
         
         let docSignature = (recipe && recipe.doctorSignature) || '';
         if (!docSignature && docUser) {
             docSignature = (docUser.doctorProfile && docUser.doctorProfile.signature) || (docUser.doctor_profile && docUser.doctor_profile.signature) || '';
-        }
-        if (!docSignature && stationery && (stationery.doctorSignature || stationery.doctor_signature)) {
-            docSignature = stationery.doctorSignature || stationery.doctor_signature;
         }
 
         const clinicBusData = getClinicBusData(stationery);
@@ -31537,16 +31611,15 @@ window.printSingleRecipePDF = async function(patientId, recipeId = null) {
         if (currentUser) docUser = currentUser;
     }
 
-    const docName = (recipe && recipe.doctorName) || (docUser ? docUser.fullname : 'Dr. Odontólogo Especialista');
-    const docSpecialty = (recipe && recipe.doctorRole) || (docUser ? docUser.role : 'Odontología General');
-    const docLicense = (recipe && recipe.doctorLicense) || (docUser && docUser.license && docUser.license !== 'N/A' ? docUser.license : 'MPPS-98402 / C.O.V-20104');
+    const docName = (recipe && recipe.doctorName) || (docUser ? docUser.fullname : '');
+    const docSpecialty = (docUser && (docUser.doctorProfile?.specialty || docUser.doctor_profile?.specialty || docUser.role)) || (recipe && recipe.doctorRole && recipe.doctorRole !== 'Médico Tratante' ? recipe.doctorRole : '');
+    const docLicense = (recipe && recipe.doctorLicense && recipe.doctorLicense !== 'N/A') 
+        ? recipe.doctorLicense.trim() 
+        : ((docUser && docUser.license && docUser.license !== 'N/A') ? docUser.license.trim() : '');
     
     let docSignature = (recipe && recipe.doctorSignature) || '';
     if (!docSignature && docUser) {
         docSignature = (docUser.doctorProfile && docUser.doctorProfile.signature) || (docUser.doctor_profile && docUser.doctor_profile.signature) || '';
-    }
-    if (!docSignature && config && (config.doctorSignature || config.doctor_signature)) {
-        docSignature = config.doctorSignature || config.doctor_signature;
     }
 
     const clinicBusData = getClinicBusData(config);
