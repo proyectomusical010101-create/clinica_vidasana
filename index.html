@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=389">
+    <link rel="stylesheet" href="styles.css?v=390">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -427,20 +427,15 @@
 
                     <!-- Dashboard Period Filter Bar -->
                     <div class="card mb-20" id="dashboard-period-card" style="padding: 12px 16px; background: #ffffff; border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px;">
-                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                <span style="font-size: 0.82rem; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;">
-                                    <i class="fa-solid fa-filter text-cyan" style="margin-right: 4px;"></i> Período:
-                                </span>
-                                <div class="subtabs" id="dashboard-date-filter-group" style="display: inline-flex; background: #f1f5f9; padding: 4px; border-radius: 8px; gap: 4px;">
-                                    <button type="button" class="subtab-btn btn-period-filter" data-period="day" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Día</button>
-                                    <button type="button" class="subtab-btn btn-period-filter" data-period="week" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Semana</button>
-                                    <button type="button" class="subtab-btn btn-period-filter active" data-period="month" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Mes</button>
-                                    <button type="button" class="subtab-btn btn-period-filter" data-period="quarter" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Trimestre</button>
-                                    <button type="button" class="subtab-btn btn-period-filter" data-period="semester" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Semestre</button>
-                                    <button type="button" class="subtab-btn btn-period-filter" data-period="year" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Anual</button>
-                                    <button type="button" class="subtab-btn btn-period-filter" data-period="custom" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;"><i class="fa-regular fa-calendar-days"></i> Personalizada</button>
-                                </div>
+                        <div style="display: flex; flex-wrap: wrap; justify-content: flex-start; align-items: center; gap: 12px;">
+                            <div class="subtabs" id="dashboard-date-filter-group" style="display: inline-flex; background: #f1f5f9; padding: 4px; border-radius: 8px; gap: 4px;">
+                                <button type="button" class="subtab-btn btn-period-filter" data-period="day" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Día</button>
+                                <button type="button" class="subtab-btn btn-period-filter" data-period="week" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Semana</button>
+                                <button type="button" class="subtab-btn btn-period-filter active" data-period="month" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Mes</button>
+                                <button type="button" class="subtab-btn btn-period-filter" data-period="quarter" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Trimestre</button>
+                                <button type="button" class="subtab-btn btn-period-filter" data-period="semester" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Semestre</button>
+                                <button type="button" class="subtab-btn btn-period-filter" data-period="year" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Anual</button>
+                                <button type="button" class="subtab-btn btn-period-filter" data-period="custom" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;"><i class="fa-regular fa-calendar-days"></i> Personalizada</button>
                             </div>
                             <!-- Custom Date Range Inputs for Dashboard -->
                             <div id="dashboard-custom-date-container" style="display: none; align-items: center; gap: 8px; flex-wrap: wrap;">
@@ -456,9 +451,7 @@
                                     <i class="fa-solid fa-check"></i> Aplicar
                                 </button>
                             </div>
-                            <div id="dashboard-current-range-badge" style="font-size: 0.78rem; font-weight: 700; color: #0d9488; background: rgba(13, 148, 136, 0.08); padding: 5px 10px; border-radius: 6px; border: 1px solid rgba(13, 148, 136, 0.2);">
-                                <i class="fa-regular fa-calendar-check"></i> <span id="dashboard-range-text">Mes en curso</span>
-                            </div>
+                            <div id="dashboard-current-range-badge" style="display: none;"><span id="dashboard-range-text"></span></div>
                         </div>
                     </div>
 
@@ -2347,19 +2340,14 @@
                     <!-- Finance Period Filter Bar -->
                     <div class="card mb-20" id="finance-period-card" style="padding: 12px 16px; background: #ffffff; border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
                         <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px;">
-                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                <span style="font-size: 0.82rem; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;">
-                                    <i class="fa-solid fa-calendar-week text-cyan" style="margin-right: 4px;"></i> Período Financiero:
-                                </span>
-                                <div class="subtabs" id="finance-date-filter-group" style="display: inline-flex; background: #f1f5f9; padding: 4px; border-radius: 8px; gap: 4px;">
-                                    <button type="button" class="subtab-btn btn-finance-period" data-period="day" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Día</button>
-                                    <button type="button" class="subtab-btn btn-finance-period" data-period="week" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Semana</button>
-                                    <button type="button" class="subtab-btn btn-finance-period active" data-period="month" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Mes</button>
-                                    <button type="button" class="subtab-btn btn-finance-period" data-period="quarter" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Trimestre</button>
-                                    <button type="button" class="subtab-btn btn-finance-period" data-period="semester" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Semestre</button>
-                                    <button type="button" class="subtab-btn btn-finance-period" data-period="year" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Anual</button>
-                                    <button type="button" class="subtab-btn btn-finance-period" data-period="custom" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;"><i class="fa-regular fa-calendar-days"></i> Personalizada</button>
-                                </div>
+                            <div class="subtabs" id="finance-date-filter-group" style="display: inline-flex; background: #f1f5f9; padding: 4px; border-radius: 8px; gap: 4px;">
+                                <button type="button" class="subtab-btn btn-finance-period" data-period="day" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Día</button>
+                                <button type="button" class="subtab-btn btn-finance-period" data-period="week" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Semana</button>
+                                <button type="button" class="subtab-btn btn-finance-period active" data-period="month" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Mes</button>
+                                <button type="button" class="subtab-btn btn-finance-period" data-period="quarter" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Trimestre</button>
+                                <button type="button" class="subtab-btn btn-finance-period" data-period="semester" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Semestre</button>
+                                <button type="button" class="subtab-btn btn-finance-period" data-period="year" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;">Anual</button>
+                                <button type="button" class="subtab-btn btn-finance-period" data-period="custom" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px;"><i class="fa-regular fa-calendar-days"></i> Personalizada</button>
                             </div>
                             <!-- Custom Date Range Inputs for Finance -->
                             <div id="finance-custom-date-container" style="display: none; align-items: center; gap: 8px; flex-wrap: wrap;">
@@ -2375,9 +2363,7 @@
                                     <i class="fa-solid fa-check"></i> Filtrar
                                 </button>
                             </div>
-                            <div id="finance-current-range-badge" style="font-size: 0.78rem; font-weight: 700; color: #0d9488; background: rgba(13, 148, 136, 0.08); padding: 5px 10px; border-radius: 6px; border: 1px solid rgba(13, 148, 136, 0.2);">
-                                <i class="fa-solid fa-chart-pie"></i> <span id="finance-range-text">Mes en curso</span>
-                            </div>
+                            <div id="finance-current-range-badge" style="display: none;"><span id="finance-range-text"></span></div>
                         </div>
                     </div>
 
@@ -8335,10 +8321,7 @@
             <div class="modal-body" style="padding: 20px 24px; overflow-y: auto; flex: 1;">
                 
                 <!-- Period Filter Bar -->
-                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; background: #f8fafc; padding: 10px 14px; border-radius: 10px; border: 1px solid #e2e8f0;">
-                    <div style="font-size: 0.82rem; font-weight: 700; color: #334155; display: flex; align-items: center; gap: 6px;">
-                        <i class="fa-regular fa-calendar text-cyan"></i> Período a Consultar:
-                    </div>
+                <div style="display: flex; justify-content: flex-start; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; background: #f8fafc; padding: 10px 14px; border-radius: 10px; border: 1px solid #e2e8f0;">
                     <div class="filter-group" style="display: flex; gap: 6px;">
                         <button class="filter-btn active" id="cf-area-filter-today" onclick="window.filterCashFlowAreaDate('today', this)">Hoy</button>
                         <button class="filter-btn" id="cf-area-filter-week" onclick="window.filterCashFlowAreaDate('week', this)">Esta Semana</button>
@@ -8943,14 +8926,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=389"></script>
-    <script src="supabaseClient.js?v=389"></script>
-    <script src="odontogram.js?v=389"></script>
-    <script src="signature.js?v=389"></script>
-    <script src="whatsapp.js?v=389"></script>
-    <script src="kardex.js?v=389"></script>
-    <script src="app.js?v=389"></script>
-    <script src="clinicalERP.js?v=389"></script>
-    <script src="tutorial.js?v=389"></script>
+    <script src="seededData.js?v=390"></script>
+    <script src="supabaseClient.js?v=390"></script>
+    <script src="odontogram.js?v=390"></script>
+    <script src="signature.js?v=390"></script>
+    <script src="whatsapp.js?v=390"></script>
+    <script src="kardex.js?v=390"></script>
+    <script src="app.js?v=390"></script>
+    <script src="clinicalERP.js?v=390"></script>
+    <script src="tutorial.js?v=390"></script>
 </body>
 </html>
