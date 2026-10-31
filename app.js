@@ -27639,8 +27639,15 @@ async function renderCashFlow(preset, customStart, customEnd) {
                     concept: pay.concept || 'Atención en Consulta',
                     method: pay.method ? getPaymentMethodLabel(pay.method) : 'Cash (Efectivo)',
                     rawMethod: cleanMethod,
+                    reference: pay.reference || pay.ref || pay.voucher || pay.id || '-',
+                    bank: pay.bank || pay.accountBank || '',
+                    accountId: pay.accountId || pay.account || '',
+                    accountName: pay.accountName || pay.account || (pay.bank ? `${pay.method ? getPaymentMethodLabel(pay.method) : 'Pago'} (${pay.bank})` : ''),
+                    commission: parseFloat(pay.commission || 0),
                     amountUSD: pay.paidUSD,
-                    amountBs: pay.paidUSD * rate
+                    amountBs: pay.paidUSD * rate,
+                    splitDetails: pay.splitPayments || null,
+                    is_cashea: pay.is_cashea || false
                 };
 
                 window.cashFlowClinicalTransactions.push(clinicalEntry);
@@ -27712,8 +27719,15 @@ async function renderCashFlow(preset, customStart, customEnd) {
                 concept: (inv.items || []).map(i => i.name).join(', ') || 'Venta de Servicios',
                 method: inv.paymentMethod ? getPaymentMethodLabel(inv.paymentMethod) : 'Cash (Efectivo)',
                 rawMethod: cleanMethod,
+                reference: inv.reference || inv.controlNumber || inv.id || '-',
+                bank: inv.bank || inv.metadata?.bank || '',
+                accountId: inv.accountId || inv.metadata?.accountId || '',
+                accountName: inv.accountName || inv.metadata?.accountName || (inv.bank ? `${inv.paymentMethod ? getPaymentMethodLabel(inv.paymentMethod) : 'Pago'} (${inv.bank})` : ''),
+                commission: parseFloat(inv.commission || 0),
                 amountUSD: invPaid,
-                amountBs: invPaid * rate
+                amountBs: invPaid * rate,
+                splitDetails: inv.splitDetails || null,
+                is_cashea: inv.is_cashea || false
             };
 
             window.cashFlowClinicalTransactions.push(clinicalEntry);
@@ -27898,6 +27912,12 @@ async function renderCashFlow(preset, customStart, customEnd) {
     updateMethodCard('cf-total-cash', 'cf-bs-cash', methodTotals['cash']);
     updateMethodCard('cf-total-zelle', 'cf-bs-zelle', methodTotals['zelle']);
     updateMethodCard('cf-total-pos', 'cf-bs-pos', methodTotals['pos']);
+
+    // Build interactive multi-account and multi-terminal breakdown for Cash Flow
+    if (typeof window.calculateMethodsBreakdownForTransactions === 'function') {
+        window._cashFlowMethodBreakdown = window.calculateMethodsBreakdownForTransactions(window.cashFlowClinicalTransactions, rate);
+        window._cashFlowCurrentRangeLabel = range.label || 'Período en Consulta';
+    }
     updateMethodCard('cf-total-binance', 'cf-bs-binance', methodTotals['binance']);
     updateMethodCard('cf-total-cashea', 'cf-bs-cashea', methodTotals['cashea']);
 

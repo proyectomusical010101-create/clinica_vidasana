@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=393">
+    <link rel="stylesheet" href="styles.css?v=394">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -2722,64 +2722,100 @@
                             <div class="card-body" style="padding: 16px 20px;">
                                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px;">
                                     
-                                    <!-- Pago Móvil Card -->
-                                    <div style="background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 10px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                                    <!-- Pago Móvil Card (Interactive Breakdown) -->
+                                    <div onclick="window.openCashFlowMethodDetail('pagomovil')" title="Haga clic para auditar cuentas y transacciones de Pago Móvil"
+                                         style="cursor: pointer; background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 10px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: all 0.2s ease;"
+                                         onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 8px 16px rgba(16,185,129,0.15)';"
+                                         onmouseout="this.style.transform='none'; this.style.boxShadow='0 1px 3px rgba(0,0,0,0.04)';">
                                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                                             <span style="font-size: 0.8rem; font-weight: 700; color: #166534;"><i class="fa-solid fa-mobile-screen-button"></i> Pago Móvil</span>
                                             <span style="font-size: 0.72rem; background: #bbf7d0; color: #14532d; padding: 1px 6px; border-radius: 4px; font-weight: 800;">Bs.</span>
                                         </div>
                                         <div id="cf-total-pagomovil" style="font-size: 1.3rem; font-weight: 800; color: #15803d; line-height: 1.2;">$0.00</div>
                                         <div id="cf-bs-pagomovil" style="font-size: 0.78rem; font-weight: 700; color: #166534; margin-top: 2px;">Bs. 0.00</div>
+                                        <div style="margin-top: 6px; font-size: 0.70rem; color: #15803d; font-weight: 700; display: flex; align-items: center; justify-content: space-between;">
+                                            <span><i class="fa-solid fa-building-columns"></i> Cuentas y Cuadre</span> <i class="fa-solid fa-chevron-right" style="font-size: 0.62rem;"></i>
+                                        </div>
                                     </div>
 
-                                    <!-- Efectivo (Cash) Card -->
-                                    <div style="background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 10px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                                    <!-- Efectivo (Cash) Card (Interactive Breakdown) -->
+                                    <div onclick="window.openCashFlowMethodDetail('cash')" title="Haga clic para auditar cajas y arqueo de Efectivo"
+                                         style="cursor: pointer; background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 10px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: all 0.2s ease;"
+                                         onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 8px 16px rgba(100,116,139,0.15)';"
+                                         onmouseout="this.style.transform='none'; this.style.boxShadow='0 1px 3px rgba(0,0,0,0.04)';">
                                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                                             <span style="font-size: 0.8rem; font-weight: 700; color: #334155;"><i class="fa-solid fa-money-bill-wave" style="color: #16a34a;"></i> Efectivo ($ / Bs.)</span>
                                             <span style="font-size: 0.72rem; background: #e2e8f0; color: #334155; padding: 1px 6px; border-radius: 4px; font-weight: 800;">Caja</span>
                                         </div>
                                         <div id="cf-total-cash" style="font-size: 1.3rem; font-weight: 800; color: #0f172a; line-height: 1.2;">$0.00</div>
                                         <div id="cf-bs-cash" style="font-size: 0.78rem; font-weight: 700; color: #475569; margin-top: 2px;">Bs. 0.00</div>
+                                        <div style="margin-top: 6px; font-size: 0.70rem; color: #334155; font-weight: 700; display: flex; align-items: center; justify-content: space-between;">
+                                            <span><i class="fa-solid fa-vault"></i> Cajas y Cuadre</span> <i class="fa-solid fa-chevron-right" style="font-size: 0.62rem;"></i>
+                                        </div>
                                     </div>
 
-                                    <!-- Zelle Card -->
-                                    <div style="background: #faf5ff; border: 1.5px solid #d8b4fe; border-radius: 10px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                                    <!-- Zelle Card (Interactive Breakdown) -->
+                                    <div onclick="window.openCashFlowMethodDetail('zelle')" title="Haga clic para auditar cuentas Zelle y comprobantes"
+                                         style="cursor: pointer; background: #faf5ff; border: 1.5px solid #d8b4fe; border-radius: 10px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: all 0.2s ease;"
+                                         onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 8px 16px rgba(139,92,246,0.15)';"
+                                         onmouseout="this.style.transform='none'; this.style.boxShadow='0 1px 3px rgba(0,0,0,0.04)';">
                                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                                             <span style="font-size: 0.8rem; font-weight: 700; color: #6b21a8;"><i class="fa-solid fa-vault"></i> Zelle</span>
                                             <span style="font-size: 0.72rem; background: #f3e8ff; color: #581c87; padding: 1px 6px; border-radius: 4px; font-weight: 800;">USD</span>
                                         </div>
                                         <div id="cf-total-zelle" style="font-size: 1.3rem; font-weight: 800; color: #7e22ce; line-height: 1.2;">$0.00</div>
                                         <div style="font-size: 0.78rem; font-weight: 600; color: #9333ea; margin-top: 2px;">Transferencia Directa</div>
+                                        <div style="margin-top: 6px; font-size: 0.70rem; color: #7e22ce; font-weight: 700; display: flex; align-items: center; justify-content: space-between;">
+                                            <span><i class="fa-solid fa-building-columns"></i> Cuentas Zelle</span> <i class="fa-solid fa-chevron-right" style="font-size: 0.62rem;"></i>
+                                        </div>
                                     </div>
 
-                                    <!-- Punto de Venta (POS) Card -->
-                                    <div style="background: #f0f9ff; border: 1.5px solid #7dd3fc; border-radius: 10px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                                    <!-- Punto de Venta (POS) Card (Interactive Breakdown) -->
+                                    <div onclick="window.openCashFlowMethodDetail('pos')" title="Haga clic para auditar cada punto de venta / terminal POS"
+                                         style="cursor: pointer; background: #f0f9ff; border: 1.5px solid #7dd3fc; border-radius: 10px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: all 0.2s ease;"
+                                         onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 8px 16px rgba(2,132,199,0.15)';"
+                                         onmouseout="this.style.transform='none'; this.style.boxShadow='0 1px 3px rgba(0,0,0,0.04)';">
                                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                                             <span style="font-size: 0.8rem; font-weight: 700; color: #0369a1;"><i class="fa-solid fa-credit-card"></i> Punto de Venta</span>
                                             <span style="font-size: 0.72rem; background: #e0f2fe; color: #0c4a6e; padding: 1px 6px; border-radius: 4px; font-weight: 800;">POS</span>
                                         </div>
                                         <div id="cf-total-pos" style="font-size: 1.3rem; font-weight: 800; color: #0284c7; line-height: 1.2;">$0.00</div>
                                         <div id="cf-bs-pos" style="font-size: 0.78rem; font-weight: 700; color: #0369a1; margin-top: 2px;">Bs. 0.00</div>
+                                        <div style="margin-top: 6px; font-size: 0.70rem; color: #0284c7; font-weight: 700; display: flex; align-items: center; justify-content: space-between;">
+                                            <span><i class="fa-solid fa-cash-register"></i> Terminales POS</span> <i class="fa-solid fa-chevron-right" style="font-size: 0.62rem;"></i>
+                                        </div>
                                     </div>
 
-                                    <!-- Binance Card -->
-                                    <div style="background: #fffbeb; border: 1.5px solid #fde047; border-radius: 10px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                                    <!-- Binance Card (Interactive Breakdown) -->
+                                    <div onclick="window.openCashFlowMethodDetail('binance')" title="Haga clic para auditar cuentas Binance y Cripto"
+                                         style="cursor: pointer; background: #fffbeb; border: 1.5px solid #fde047; border-radius: 10px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: all 0.2s ease;"
+                                         onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 8px 16px rgba(217,119,6,0.15)';"
+                                         onmouseout="this.style.transform='none'; this.style.boxShadow='0 1px 3px rgba(0,0,0,0.04)';">
                                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                                             <span style="font-size: 0.8rem; font-weight: 700; color: #854d0e;"><i class="fa-solid fa-coins text-amber"></i> Binance</span>
                                             <span style="font-size: 0.72rem; background: #fef08a; color: #713f12; padding: 1px 6px; border-radius: 4px; font-weight: 800;">USDT</span>
                                         </div>
                                         <div id="cf-total-binance" style="font-size: 1.3rem; font-weight: 800; color: #b45309; line-height: 1.2;">$0.00</div>
                                         <div style="font-size: 0.78rem; font-weight: 600; color: #854d0e; margin-top: 2px;">Criptoactivos</div>
+                                        <div style="margin-top: 6px; font-size: 0.70rem; color: #854d0e; font-weight: 700; display: flex; align-items: center; justify-content: space-between;">
+                                            <span><i class="fa-solid fa-building-columns"></i> Cuentas USDT</span> <i class="fa-solid fa-chevron-right" style="font-size: 0.62rem;"></i>
+                                        </div>
                                     </div>
 
-                                    <!-- Cashea (Inicial en Caja) Card -->
-                                    <div style="background: #ecfeff; border: 1.5px solid #a5f3fc; border-radius: 10px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                                    <!-- Cashea (Inicial en Caja) Card (Interactive Breakdown) -->
+                                    <div onclick="window.openCashFlowMethodDetail('other')" title="Haga clic para auditar cobros de Cashea y otros"
+                                         style="cursor: pointer; background: #ecfeff; border: 1.5px solid #a5f3fc; border-radius: 10px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: all 0.2s ease;"
+                                         onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 8px 16px rgba(8,145,178,0.15)';"
+                                         onmouseout="this.style.transform='none'; this.style.boxShadow='0 1px 3px rgba(0,0,0,0.04)';">
                                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                                             <span style="font-size: 0.8rem; font-weight: 700; color: #155e75;"><i class="fa-solid fa-layer-group text-cyan"></i> Cashea (Inicial)</span>
                                             <span style="font-size: 0.72rem; background: #cffafe; color: #164e63; padding: 1px 6px; border-radius: 4px; font-weight: 800;">Cobrado</span>
                                         </div>
                                         <div id="cf-total-cashea" style="font-size: 1.3rem; font-weight: 800; color: #0891b2; line-height: 1.2;">$0.00</div>
                                         <div id="cf-bs-cashea" style="font-size: 0.78rem; font-weight: 700; color: #155e75; margin-top: 2px;">Bs. 0.00</div>
+                                        <div style="margin-top: 6px; font-size: 0.70rem; color: #0891b2; font-weight: 700; display: flex; align-items: center; justify-content: space-between;">
+                                            <span><i class="fa-solid fa-receipt"></i> Detalle Cobros</span> <i class="fa-solid fa-chevron-right" style="font-size: 0.62rem;"></i>
+                                        </div>
                                     </div>
 
                                 </div>
@@ -8940,14 +8976,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=393"></script>
-    <script src="supabaseClient.js?v=393"></script>
-    <script src="odontogram.js?v=393"></script>
-    <script src="signature.js?v=393"></script>
-    <script src="whatsapp.js?v=393"></script>
-    <script src="kardex.js?v=393"></script>
-    <script src="app.js?v=393"></script>
-    <script src="clinicalERP.js?v=393"></script>
-    <script src="tutorial.js?v=393"></script>
+    <script src="seededData.js?v=394"></script>
+    <script src="supabaseClient.js?v=394"></script>
+    <script src="odontogram.js?v=394"></script>
+    <script src="signature.js?v=394"></script>
+    <script src="whatsapp.js?v=394"></script>
+    <script src="kardex.js?v=394"></script>
+    <script src="app.js?v=394"></script>
+    <script src="clinicalERP.js?v=394"></script>
+    <script src="tutorial.js?v=394"></script>
 </body>
 </html>
