@@ -7702,3 +7702,219 @@ body.dark-theme textarea:focus {
     border-color: #ef4444 !important;
     animation: fieldRequiredPulse 1.2s infinite ease-in-out !important;
 }
+
+
+/* ========================================================
+   RESTRICCIONES Y AISLAMIENTO ESTRICTO PARA ROL MÉDICO
+   ======================================================== */
+body.is-doctor-role #dashboard-birthdays-widget,
+body.is-doctor-role .dashboard-birthdays-card,
+body.is-doctor-role #btn-birthdays-hub,
+body.is-doctor-role #birthday-notifications-badge,
+body.is-doctor-role #dashboard-stock-alerts,
+body.is-doctor-role .dashboard-stock-alerts-card,
+body.is-doctor-role #nav-stock-alert-badge,
+body.is-doctor-role .nav-item[data-tab="inventory"],
+body.is-doctor-role .nav-item[data-tab="consumables"],
+body.is-doctor-role .nav-item[data-tab="billing"],
+body.is-doctor-role .nav-item[data-tab="finance"],
+body.is-doctor-role .nav-item[data-tab="cashea"],
+body.is-doctor-role #mob-nav-inventory,
+body.is-doctor-role #mob-nav-consumables,
+body.is-doctor-role #btn-direct-sale-top,
+body.is-doctor-role #btn-direct-sale-top-main,
+body.is-doctor-role #btn-header-direct-sale,
+body.is-doctor-role #header-action-direct-sale,
+body.is-doctor-role #btn-ehr-add-abono,
+body.is-doctor-role #btn-bill-budget-direct,
+body.is-doctor-role #fab-act-direct-sale,
+body.is-doctor-role #fab-act-billing,
+body.is-doctor-role #fab-act-income,
+body.is-doctor-role .btn-act-cobrar,
+body.is-doctor-role .btn-appt-pay,
+body.is-doctor-role button[onclick*="openEhrPaymentModal"],
+body.is-doctor-role button[onclick*="openDirectSaleModal"],
+body.is-doctor-role button[onclick*="openCasheaModal"],
+body.is-doctor-role #modal-cashea-tracker,
+body.is-doctor-role #modal-cashea-reconciliation,
+body.is-doctor-role [id*="whatsapp"],
+body.is-doctor-role .btn-act-wa,
+body.is-doctor-role .btn-appt-wa,
+body.is-doctor-role button[onclick*="WhatsApp"],
+body.is-doctor-role button[onclick*="whatsapp"],
+body.is-doctor-role #btn-send-reminders-all,
+body.is-doctor-role #btn-export-patients-excel,
+body.is-doctor-role #btn-download-patients-template,
+body.is-doctor-role #btn-import-patients,
+body.is-doctor-role .btn-import,
+body.is-doctor-role .btn-export,
+body.is-doctor-role [id*="import-preview"] {
+    display: none !important;
+}
+
+body.is-doctor-role .dashboard-extra-widgets-grid {
+    grid-template-columns: 1fr !important;
+}
+
+/* ==========================================================================
+   HYGIENIST ROLE SECURITY & ISOLATION (ÁREA EXCLUSIVA DE ODONTOLOGÍA)
+   ========================================================================== */
+body.is-hygienist-role .nav-item[data-tab="billing"],
+body.is-hygienist-role .nav-item[data-tab="finance"],
+body.is-hygienist-role .nav-item[data-tab="payroll"],
+body.is-hygienist-role .nav-item[data-tab="users"],
+body.is-hygienist-role .nav-item[data-tab="rooms"],
+body.is-hygienist-role .nav-item[data-tab="specialties"],
+body.is-hygienist-role .nav-item[data-tab="stationery"],
+body.is-hygienist-role .nav-item[data-tab="cashea"],
+body.is-hygienist-role #btn-header-direct-sale,
+body.is-hygienist-role #header-action-direct-sale,
+body.is-hygienist-role #btn-ehr-add-abono,
+body.is-hygienist-role #btn-bill-budget-direct,
+body.is-hygienist-role #btn-direct-sale-top,
+body.is-hygienist-role #btn-direct-sale-top-main,
+body.is-hygienist-role #btn-header-cashea,
+body.is-hygienist-role #btn-quick-patient,
+body.is-hygienist-role #btn-new-patient-modal,
+body.is-hygienist-role #btn-add-patient-top,
+body.is-hygienist-role #fab-act-patient,
+body.is-hygienist-role #fab-act-billing,
+body.is-hygienist-role #fab-act-direct-sale,
+body.is-hygienist-role #fab-act-expense,
+body.is-hygienist-role #fab-act-income,
+body.is-hygienist-role #fab-act-transfer,
+body.is-hygienist-role .btn-act-cobrar,
+body.is-hygienist-role .btn-appt-pay,
+body.is-hygienist-role button[onclick*="openEhrPaymentModal"],
+body.is-hygienist-role button[onclick*="openDirectSaleModal"],
+body.is-hygienist-role button[onclick*="openCasheaModal"],
+body.is-hygienist-role #medical-budget-editor-container,
+body.is-hygienist-role #btn-open-medical-budget {
+    display: none !important;
+}
+
+/* Hygienist Birthday Tracker & WhatsApp Greetings Enabled */
+body.is-hygienist-role #btn-birthday-hub,
+body.is-hygienist-role .whatsapp-pill-link,
+body.is-hygienist-role .bday-btn-whatsapp {
+    display: inline-flex !important;
+}
+body.is-hygienist-role .dashboard-birthdays-card {
+    display: block !important;
+}
+
+/* Room Occupied Card High-Visibility Red Styling */
+.erp-room-card-wrapper {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+.erp-room-card.is-occupied {
+    border: 2.5px solid #ef4444 !important;
+    background: #fffafa !important;
+    box-shadow: 0 8px 25px rgba(239, 68, 68, 0.22) !important;
+    position: relative;
+}
+
+.erp-room-card.is-occupied:hover {
+    box-shadow: 0 12px 32px rgba(239, 68, 68, 0.32) !important;
+}
+
+.erp-room-card-top-bar.ocupado {
+    background: linear-gradient(90deg, #ef4444 0%, #b91c1c 100%) !important;
+    height: 6px !important;
+}
+
+.erp-room-top-etiqueta {
+    position: absolute;
+    top: -12px;
+    left: 18px;
+    z-index: 20;
+    background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+    color: #ffffff;
+    padding: 3px 14px;
+    border-radius: 9999px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    box-shadow: 0 4px 14px rgba(220, 38, 38, 0.45);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 2px solid #ffffff;
+}
+
+.erp-room-occupied-banner {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: #ffffff;
+    font-size: 0.74rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.28);
+    border-bottom: 1px solid #b91c1c;
+}
+
+.erp-room-badge-pill.ocupado {
+    background: #fee2e2 !important;
+    color: #b91c1c !important;
+    border: 1.5px solid #f87171 !important;
+    font-weight: 800 !important;
+}
+
+/* ==========================================================================
+   DOCTOR-CENTRIC MEDICAL PAYROLL & LIQUIDATION (PRIORIDAD POR DOCTOR)
+   ========================================================================== */
+.doctor-payroll-card {
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.doctor-payroll-card:hover {
+    box-shadow: 0 8px 24px rgba(13, 148, 136, 0.09) !important;
+}
+.doctor-payroll-header {
+    user-select: none;
+    transition: background 0.18s ease;
+}
+.doctor-payroll-header:hover {
+    background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%) !important;
+}
+
+/* ==========================================================================
+   HYGIENIST PERSONAL FINANCES & COMMISSIONS MODULE
+   ========================================================================== */
+#view-hygienist-finances .card {
+    transition: all 0.2s ease;
+}
+#view-hygienist-finances .card:hover {
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.04);
+}
+#hygienist-finances-table-body tr:hover {
+    background-color: #f8fafc;
+}
+
+/* ==========================================================================
+   DOCTOR & DENTIST STRICT ROLE ISOLATION & PATIENT PRIVACY LOCKDOWN
+   ========================================================================== */
+body.is-doctor-role .nav-item[data-tab="patients"],
+body.is-doctor-role [data-tab="patients"],
+body.is-doctor-role #view-patients,
+body.is-doctor-role .mobile-bottom-nav-btn[data-tab="patients"],
+body.is-doctor-role #btn-quick-patient,
+body.is-doctor-role #btn-new-patient-modal,
+body.is-doctor-role .patient-contact-sensitive,
+body.is-doctor-role .btn-appt-reminder,
+body.is-doctor-role .btn-whatsapp-patient {
+    display: none !important;
+}
+
+body.is-doctor-role #step-content-1 .patient-contact-field {
+    display: none !important;
+}
+
