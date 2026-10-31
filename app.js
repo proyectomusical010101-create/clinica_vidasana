@@ -916,52 +916,6 @@ function isServiceMatchingDoctor(service, doctorUser) {
     });
 }
 
-function isHygienistUser(user) {
-    const u = user || getCurrentUser();
-    if (!u) return false;
-    const r = (u.role || '').toLowerCase();
-    return r.includes('higien');
-}
-window.isHygienistUser = isHygienistUser;
-
-function isDentalAppointment(app, users = []) {
-    if (!app) return false;
-
-    // 1. Verificar categoría / departamento / especialidad de la cita
-    const spec = ((app.specialty || '') + ' ' + (app.category || '') + ' ' + (app.department || '')).toLowerCase();
-    if (spec) {
-        if (spec.includes('odont') || spec.includes('dental') || spec.includes('ortodon') || spec.includes('endodon') || spec.includes('periodon') || spec.includes('maxil') || spec.includes('estomat')) {
-            return true;
-        }
-        if (spec.includes('cardio') || spec.includes('gineco') || spec.includes('pediatr') || spec.includes('traumato') || spec.includes('general') || spec.includes('medicin') || spec.includes('dermatol') || spec.includes('urolog') || spec.includes('oftalm')) {
-            return false;
-        }
-    }
-
-    // 2. Verificar doctor asignado
-    const docId = String(app.doctorId || app.doctor_id || '').trim();
-    const docName = String(app.doctorName || app.doctor_name || app.doctor || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
-    if (users && users.length > 0) {
-        const matchedDoc = users.find(u => (docId && String(u.id) === docId) || (docName && u.fullname && u.fullname.toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim().includes(docName)));
-        if (matchedDoc) {
-            if (isDentalDoctor(matchedDoc)) return true;
-            if (isDoctorUser(matchedDoc) && !isDentalDoctor(matchedDoc)) return false;
-        }
-    }
-
-    // 3. Verificar palabras clave en el tratamiento o motivo
-    const text = ((app.treatment || '') + ' ' + (app.notes || '') + ' ' + (app.reason || '')).toLowerCase();
-    const dentalKeywords = ['odont', 'dental', 'resina', 'profilaxis', 'limpieza', 'carie', 'corona', 'implante', 'ortodon', 'endodon', 'periodon', 'diente', 'muela', 'blanqueamiento', 'fluor', 'sellante', 'exodoncia', 'extraccion', 'bucal', 'maxilofacial', 'sarro', 'tártaro', 'curetaje'];
-    if (dentalKeywords.some(kw => text.includes(kw))) return true;
-
-    const nonDentalKeywords = ['electro', 'ecocardiograma', 'ginecolog', 'papanicolau', 'citolog', 'pediatr', 'control nino', 'vacuna', 'holter', 'mapa', 'prenatal', 'tensión', 'presión'];
-    if (nonDentalKeywords.some(kw => text.includes(kw))) return false;
-
-    return true;
-}
-window.isDentalAppointment = isDentalAppointment;
-
-
 function isDentalDoctor(user) {
     const u = user || getCurrentUser();
     if (!u) return false;
@@ -7651,12 +7605,6 @@ async function renderDashboard() {
         let appointments = await SupabaseDataService.getAppointments();
         const currentUser = getCurrentUser();
         const isAssistant = currentUser && currentUser.role.toLowerCase().includes('asistente');
-        const isHygienist = typeof isHygienistUser === 'function' ? isHygienistUser(currentUser) : false;
-        const allUsersForDash = await SupabaseDataService.getUsers();
-
-        if (isHygienist) {
-            appointments = appointments.filter(app => isDentalAppointment(app, allUsersForDash));
-        }
 
         const todayISO = new Date().toISOString().split('T')[0];
         let todayCount = 0;
@@ -7993,13 +7941,6 @@ async function renderAgendaView(filter = 'pending', searchQuery = '') {
     let allAppointments = await SupabaseDataService.getAppointments();
     const currentUser = getCurrentUser();
     const isAssistant = currentUser && currentUser.role.toLowerCase().includes('asistente');
-    const isHygienist = typeof isHygienistUser === 'function' ? isHygienistUser(currentUser) : false;
-    const allUsersForAgenda = await SupabaseDataService.getUsers();
-
-    if (isHygienist) {
-        // La Higienista SOLO ve la agenda de toda el área de odontología (todos los odontólogos y tratamientos dentales)
-        allAppointments = allAppointments.filter(app => isDentalAppointment(app, allUsersForAgenda));
-    }
 
     // Update Counts for Filter Badges
     const countPending = allAppointments.filter(a => a.status !== 'Completada' && a.status !== 'Atendida' && a.status !== 'Cancelada').length;
@@ -9003,7 +8944,7 @@ async function renderUsersTable(filter = 'all', searchQuery = '') {
     let users = await SupabaseDataService.getUsers();
 
     // In Personal Médico view, ONLY show clinical staff (exclude pure system/administrative roles)
-    // users = users.filter(u => !isSystemAdminRole(u.role));
+    users = users.filter(u => !isSystemAdminRole(u.role));
 
     // Apply Filter
     if (filter !== 'all') {
@@ -9305,23 +9246,8 @@ function updateRoleScopeHint(role) {
     if (!hintEl) return;
 
     const r = (role || '').toLowerCase();
-    const isHygienist = r.includes('higien');
-    const isDoctor = !isHygienist && (r.includes('medico') || r.includes('odont') || r.includes('doctor') || r.includes('dentista') || r.includes('médico') || r.includes('cirujano') || r.includes('especialista'));
-    const isAssistant = !isHygienist && (r.includes('asistente') || r.includes('enfermer') || r.includes('auxiliar'));
-
-    if (isHygienist) {
-        hintEl.innerHTML = `
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px; font-weight:700; color:#047857;">
-                <i class="fa-solid fa-tooth text-green"></i> Higienista Dental / Asistencia Clínica Avanzada
-            </div>
-            <p style="margin:0 0 6px 0; font-size:0.82rem;"><strong>Compensación:</strong> Sueldo base garantizado + bono fijo + comisiones configurables por procedimiento específico o porcentaje general.</p>
-            <ul style="margin:0; padding-left:18px; font-size:0.79rem; color:var(--text-color); line-height:1.4;">
-                <li>Atención de profilaxis, limpiezas dentales, sellantes y blanqueamiento según baremo.</li>
-                <li>Asistencia en sillón con liquidación automática de comisiones en nómina.</li>
-            </ul>
-        `;
-        return;
-    }
+    const isDoctor = r.includes('medico') || r.includes('odont') || r.includes('doctor') || r.includes('dentista') || r.includes('médico') || r.includes('cirujano') || r.includes('especialista');
+    const isAssistant = r.includes('asistente') || r.includes('enfermer') || r.includes('auxiliar');
 
     if (isDoctor) {
         hintEl.innerHTML = `
@@ -9380,18 +9306,6 @@ window.openCreateUserModal = async function() {
     if (passHint) passHint.classList.add('hidden');
 
     await populateDoctorServicesSelect();
-    await populateHygienistServicesSelect();
-
-    window._currentHygienistCommissions = [];
-    const hygSalary = document.getElementById('u-hyg-base-salary');
-    const hygBonus = document.getElementById('u-hyg-fixed-bonus');
-    const hygGenComm = document.getElementById('u-hyg-general-commission');
-    const hygVal = document.getElementById('u-hyg-service-comm-value');
-    if (hygSalary) hygSalary.value = '';
-    if (hygBonus) hygBonus.value = '';
-    if (hygGenComm) hygGenComm.value = '';
-    if (hygVal) hygVal.value = '';
-    renderHygienistCommissionsTable();
 
     const roleSelect = document.getElementById('u-role');
     if (roleSelect) {
@@ -9450,18 +9364,6 @@ window.editUser = async function(userId) {
     if (licInput) licInput.value = (user.license && user.license !== 'N/A') ? user.license : '';
 
     await populateDoctorServicesSelect();
-    await populateHygienistServicesSelect();
-
-    const hygProf = user.hygienistProfile || user.hygienist_profile || user.doctorProfile || user.doctor_profile || {};
-    const hygSalary = document.getElementById('u-hyg-base-salary');
-    const hygBonus = document.getElementById('u-hyg-fixed-bonus');
-    const hygGenComm = document.getElementById('u-hyg-general-commission');
-    if (hygSalary) hygSalary.value = hygProf.baseSalary !== undefined ? hygProf.baseSalary : '';
-    if (hygBonus) hygBonus.value = hygProf.fixedBonus !== undefined ? hygProf.fixedBonus : '';
-    if (hygGenComm) hygGenComm.value = hygProf.generalCommission !== undefined ? hygProf.generalCommission : '';
-
-    window._currentHygienistCommissions = Array.isArray(hygProf.serviceCommissions) ? [...hygProf.serviceCommissions] : [];
-    renderHygienistCommissionsTable();
 
     if (roleSelect) {
         roleSelect.dispatchEvent(new Event('change'));
@@ -9515,78 +9417,6 @@ window.deleteUser = async function(userId) {
     });
 };
 
-
-// ==========================================
-// HIGIENISTA DENTAL: GESTIÓN DE SUELDO Y COMISIONES POR SERVICIO
-// ==========================================
-
-window._currentHygienistCommissions = [];
-
-async function populateHygienistServicesSelect() {
-    const select = document.getElementById('u-hyg-service-select');
-    if (!select) return;
-    select.innerHTML = '<option value="">-- Seleccionar servicio del Baremo --</option>';
-    const baremo = await SupabaseDataService.getBaremo();
-    baremo.forEach(proc => {
-        const opt = document.createElement('option');
-        opt.value = proc.code;
-        opt.dataset.name = proc.name;
-        opt.dataset.price = proc.priceUSD;
-        opt.dataset.area = proc.area || '';
-        opt.innerText = `${proc.name} [${proc.priceUSD} USD] (${proc.code})`;
-        select.appendChild(opt);
-    });
-}
-window.populateHygienistServicesSelect = populateHygienistServicesSelect;
-
-function renderHygienistCommissionsTable() {
-    const tbody = document.getElementById('u-hyg-services-comm-tbody');
-    if (!tbody) return;
-
-    const list = window._currentHygienistCommissions || [];
-    if (list.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding: 14px;">No hay comisiones específicas asignadas. Use el selector superior para agregar.</td></tr>';
-        return;
-    }
-
-    tbody.innerHTML = list.map(item => {
-        const price = parseFloat(item.priceUSD || 0);
-        let commLabel = '';
-        if (item.type === 'fixed') {
-            commLabel = `<strong style="color: #059669;">${parseFloat(item.value || 0).toFixed(2)} USD</strong> (Fijo)`;
-        } else {
-            const calculated = (price * parseFloat(item.value || 0)) / 100;
-            commLabel = `<strong style="color: #0284c7;">${item.value}%</strong> <small style="color: #64748b;">(~${calculated.toFixed(2)} USD)</small>`;
-        }
-
-        const typeBadge = item.type === 'fixed'
-            ? '<span class="badge-tag green" style="font-size: 0.72rem;">Monto Fijo</span>'
-            : '<span class="badge-tag blue" style="font-size: 0.72rem;">Porcentaje %</span>';
-
-        const safeCode = (item.code || '').replace(/'/g, "\\'");
-
-        return `
-            <tr style="border-bottom: 1px solid #e2e8f0;">
-                <td style="padding: 6px 10px;"><strong>${item.name}</strong> <small style="color: #64748b; font-family: monospace;">(${item.code})</small></td>
-                <td style="padding: 6px 10px; text-align: right; font-weight: 600;">${price.toFixed(2)}</td>
-                <td style="padding: 6px 10px;">${typeBadge}</td>
-                <td style="padding: 6px 10px; text-align: right;">${commLabel}</td>
-                <td style="padding: 6px 10px; text-align: center;">
-                    <button type="button" class="btn btn-xs btn-outline text-red" onclick="window.removeHygienistServiceComm('${safeCode}')" title="Eliminar servicio">
-                        <i class="fa-solid fa-trash"></i>
-                    </button>
-                </td>
-            </tr>
-        `;
-    }).join('');
-}
-window.renderHygienistCommissionsTable = renderHygienistCommissionsTable;
-
-window.removeHygienistServiceComm = function(code) {
-    window._currentHygienistCommissions = (window._currentHygienistCommissions || []).filter(c => c.code !== code);
-    renderHygienistCommissionsTable();
-};
-
 async function populateDoctorServicesSelect() {
     const select = document.getElementById('u-services');
     if (!select) return;
@@ -9608,54 +9438,6 @@ function initGlobalEvents() {
     initPatientStepperWizard();
     initSettingsEvents();
 
-    // Asignación de comisión por servicio a Higienista
-    const btnAddHygComm = document.getElementById('btn-add-hyg-service-comm');
-    if (btnAddHygComm) {
-        btnAddHygComm.onclick = () => {
-            const selectEl = document.getElementById('u-hyg-service-select');
-            const typeEl = document.getElementById('u-hyg-service-comm-type');
-            const valEl = document.getElementById('u-hyg-service-comm-value');
-
-            const codeVal = selectEl ? selectEl.value : '';
-            const typeVal = typeEl ? typeEl.value : 'fixed';
-            const valueVal = parseFloat(valEl ? valEl.value : 0);
-
-            if (!codeVal) {
-                Swal.fire({ icon: 'warning', title: 'Seleccione un servicio', text: 'Por favor elija un procedimiento del baremo.' });
-                return;
-            }
-
-            if (isNaN(valueVal) || valueVal <= 0) {
-                Swal.fire({ icon: 'warning', title: 'Valor inválido', text: 'Indique un monto o porcentaje mayor a cero.' });
-                return;
-            }
-
-            const selOption = selectEl.options[selectEl.selectedIndex];
-            const nameVal = selOption ? selOption.dataset.name : codeVal;
-            const priceVal = selOption ? parseFloat(selOption.dataset.price || 0) : 0;
-
-            window._currentHygienistCommissions = window._currentHygienistCommissions || [];
-            const existingIdx = window._currentHygienistCommissions.findIndex(item => item.code === codeVal);
-
-            const commItem = {
-                code: codeVal,
-                name: nameVal,
-                priceUSD: priceVal,
-                type: typeVal,
-                value: valueVal
-            };
-
-            if (existingIdx >= 0) {
-                window._currentHygienistCommissions[existingIdx] = commItem;
-            } else {
-                window._currentHygienistCommissions.push(commItem);
-            }
-
-            renderHygienistCommissionsTable();
-            if (valEl) valEl.value = '';
-        };
-    }
-
     // Conditional display for Doctor role in User Modal
     const uRoleSelect = document.getElementById('u-role');
     const docFieldsDiv = document.getElementById('doctor-profile-fields');
@@ -9671,25 +9453,15 @@ function initGlobalEvents() {
         uRoleSelect.onchange = () => {
             const role = uRoleSelect.value;
             const r = (role || '').toLowerCase();
-            const isHygienist = r.includes('higien');
-            const isDoctor = !isHygienist && (r.includes('odont') || r.includes('especialista') || r.includes('cirujano') || r.includes('médico') || r.includes('medico') || r.includes('doctor'));
+            const isDoctor = r.includes('odont') || r.includes('especialista') || r.includes('cirujano') || r.includes('médico') || r.includes('medico') || r.includes('doctor');
             const licGroup = document.getElementById('u-license-group');
-            const hygFieldsDiv = document.getElementById('hygienist-profile-fields');
 
-            if (isHygienist) {
-                if (hygFieldsDiv) hygFieldsDiv.classList.remove('hidden');
-                docFieldsDiv.classList.add('hidden');
-                if (licGroup) licGroup.classList.remove('hidden');
-                document.getElementById('u-schedule').removeAttribute('required');
-                document.getElementById('u-commission').removeAttribute('required');
-            } else if (isDoctor) {
-                if (hygFieldsDiv) hygFieldsDiv.classList.add('hidden');
+            if (isDoctor) {
                 docFieldsDiv.classList.remove('hidden');
                 if (licGroup) licGroup.classList.remove('hidden');
                 document.getElementById('u-schedule').setAttribute('required', 'true');
                 document.getElementById('u-commission').setAttribute('required', 'true');
             } else {
-                if (hygFieldsDiv) hygFieldsDiv.classList.add('hidden');
                 docFieldsDiv.classList.add('hidden');
                 if (licGroup) licGroup.classList.add('hidden');
                 const licInput = document.getElementById('u-license');
@@ -9699,19 +9471,6 @@ function initGlobalEvents() {
             }
             updateRoleScopeHint(role);
         };
-    }
-
-    async function populateDoctorServicesSelect() {
-        const select = document.getElementById('u-services');
-        if (!select) return;
-        select.innerHTML = '';
-        const baremo = await SupabaseDataService.getBaremo();
-        baremo.forEach(proc => {
-            const opt = document.createElement('option');
-            opt.value = proc.code;
-            opt.innerText = `${proc.name} ($${proc.priceUSD})`;
-            select.appendChild(opt);
-        });
     }
 
     const loginForm = document.getElementById('form-login');
@@ -13428,76 +13187,45 @@ async function renderSettingsView() {
     const r = (user.role || '').toLowerCase();
     const isAdmin = r.includes('admin') || r.includes('super') || r.includes('director');
     const isDoctor = r.includes('medico') || r.includes('odont') || r.includes('doctor') || r.includes('dentista') || r.includes('médico');
-    const isHygienist = typeof isHygienistUser === 'function' ? isHygienistUser(user) : r.includes('higien');
+
+    const busBtn = document.getElementById('btn-pane-business');
+    const sysUsersBtn = document.getElementById('btn-pane-system-users');
+    const trashBtn = document.getElementById('btn-pane-trash');
+    const auditBtn = document.getElementById('btn-pane-audit');
+    if (busBtn) busBtn.style.display = isAdmin ? '' : 'none';
+    if (sysUsersBtn) sysUsersBtn.style.display = isAdmin ? '' : 'none';
+    if (trashBtn) trashBtn.style.display = isAdmin ? '' : 'none';
+    if (auditBtn) auditBtn.style.display = isAdmin ? '' : 'none';
+
+    if (!isAdmin) {
+        const paneBus = document.getElementById('pane-business');
+        const paneProf = document.getElementById('pane-profile');
+        if (paneBus && paneProf) {
+            paneBus.classList.remove('active');
+            paneProf.classList.add('active');
+        }
+        if (busBtn) busBtn.classList.remove('active');
+        const profileBtn = document.querySelector('.settings-nav-btn[data-pane="profile"]');
+        if (profileBtn) profileBtn.classList.add('active');
+    } else {
+        const paneBus = document.getElementById('pane-business');
+        const paneProf = document.getElementById('pane-profile');
+        if (paneBus && paneProf) {
+            paneBus.classList.add('active');
+            paneProf.classList.remove('active');
+        }
+        if (busBtn) busBtn.classList.add('active');
+        const profileBtn = document.querySelector('.settings-nav-btn[data-pane="profile"]');
+        if (profileBtn) profileBtn.classList.remove('active');
+    }
 
     const navButtons = document.querySelectorAll('.settings-nav-btn');
     const panes = document.querySelectorAll('.settings-pane');
-
-    // RESTRICCION ESTRICTA PARA HIGIENISTA:
-    // No puede ver datos del negocio, usuarios del sistema, papelera ni auditoría.
-    // Solo debe aparecerle "Mi Perfil Personal" y "Apariencia y Tema".
-    if (isHygienist) {
-        const busBtn = document.getElementById('btn-pane-business');
-        const sysUsersBtn = document.getElementById('btn-pane-system-users');
-        const trashBtn = document.getElementById('btn-pane-trash');
-        const auditBtn = document.getElementById('btn-pane-audit');
-        if (busBtn) busBtn.style.setProperty('display', 'none', 'important');
-        if (sysUsersBtn) sysUsersBtn.style.setProperty('display', 'none', 'important');
-        if (trashBtn) trashBtn.style.setProperty('display', 'none', 'important');
-        if (auditBtn) auditBtn.style.setProperty('display', 'none', 'important');
-
-        const profBtn = document.querySelector('.settings-nav-btn[data-pane="profile"]');
-        const appBtn = document.getElementById('btn-pane-appearance');
-        if (profBtn) profBtn.style.removeProperty('display');
-        if (appBtn) appBtn.style.removeProperty('display');
-
-        navButtons.forEach(b => b.classList.remove('active'));
-        panes.forEach(p => p.classList.remove('active'));
-        if (profBtn) profBtn.classList.add('active');
-        const paneProf = document.getElementById('pane-profile');
-        if (paneProf) paneProf.classList.add('active');
-    } else {
-        const busBtn = document.getElementById('btn-pane-business');
-        const sysUsersBtn = document.getElementById('btn-pane-system-users');
-        const trashBtn = document.getElementById('btn-pane-trash');
-        const auditBtn = document.getElementById('btn-pane-audit');
-        if (busBtn) busBtn.style.display = isAdmin ? '' : 'none';
-        if (sysUsersBtn) sysUsersBtn.style.display = isAdmin ? '' : 'none';
-        if (trashBtn) trashBtn.style.display = isAdmin ? '' : 'none';
-        if (auditBtn) auditBtn.style.display = isAdmin ? '' : 'none';
-
-        if (!isAdmin) {
-            const paneBus = document.getElementById('pane-business');
-            const paneProf = document.getElementById('pane-profile');
-            if (paneBus && paneProf) {
-                paneBus.classList.remove('active');
-                paneProf.classList.add('active');
-            }
-            if (busBtn) busBtn.classList.remove('active');
-            const profileBtn = document.querySelector('.settings-nav-btn[data-pane="profile"]');
-            if (profileBtn) profileBtn.classList.add('active');
-        } else {
-            const paneBus = document.getElementById('pane-business');
-            const paneProf = document.getElementById('pane-profile');
-            if (paneBus && paneProf) {
-                paneBus.classList.add('active');
-                paneProf.classList.remove('active');
-            }
-            if (busBtn) busBtn.classList.add('active');
-            const profileBtn = document.querySelector('.settings-nav-btn[data-pane="profile"]');
-            if (profileBtn) profileBtn.classList.remove('active');
-        }
-    }
 
     navButtons.forEach(btn => {
         btn.onclick = (e) => {
             e.preventDefault();
             const paneName = btn.dataset.pane;
-            
-            // Si es higienista y trata de acceder a un panel prohibido, abortar
-            if (isHygienist && (paneName === 'business' || paneName === 'system-users' || paneName === 'trash' || paneName === 'audit')) {
-                return;
-            }
 
             navButtons.forEach(b => b.classList.remove('active'));
             panes.forEach(p => p.classList.remove('active'));
