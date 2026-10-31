@@ -805,6 +805,270 @@ function applyTheme(theme) {
 // ==========================================
 // AUTHENTICATION & ROLE-BASED PERMISSIONS (RBAC)
 // ==========================================
+
+function isDoctorUser(user) {
+    const u = user || getCurrentUser();
+    if (!u) return false;
+    const r = (u.role || '').toLowerCase();
+    const isAdmin = r.includes('admin') || r.includes('super') || r.includes('director');
+    if (isAdmin) return false;
+    return r.includes('medico') || r.includes('médico') || r.includes('doctor') || r.includes('odont') || r.includes('dentista') || r.includes('cirujano') || r.includes('especialista');
+}
+
+function getDoctorSpecialties(user) {
+    const u = user || getCurrentUser();
+    if (!u) return [];
+    const prof = u.doctorProfile || u.doctor_profile || {};
+    const specs = [];
+
+    const addSpec = (s) => {
+        if (!s) return;
+        const trimmed = String(s).trim();
+        if (trimmed && !specs.some(x => x.toLowerCase() === trimmed.toLowerCase())) {
+            specs.push(trimmed);
+        }
+    };
+
+    // 1. Desde el perfil del doctor
+    if (prof.specialty) {
+        prof.specialty.split(/[,;/&]|sys/i).forEach(s => addSpec(s));
+    }
+    if (u.specialty) {
+        u.specialty.split(/[,;/&]|sys/i).forEach(s => addSpec(s));
+    }
+
+    // 2. Desde el rol (ej: "Médico Cardiólogo", "Médico Ginecólogo y Pediatra", etc.)
+    const r = (u.role || '').toLowerCase();
+    const mapKeywords = [
+        { key: 'cardiolog', label: 'Cardiología' },
+        { key: 'ginecolog', label: 'Ginecología' },
+        { key: 'obstetr', label: 'Ginecología' },
+        { key: 'pediatr', label: 'Pediatría' },
+        { key: 'odont', label: 'Odontología' },
+        { key: 'dentist', label: 'Odontología' },
+        { key: 'traumatolog', label: 'Traumatología' },
+        { key: 'oftalmolog', label: 'Oftalmología' },
+        { key: 'dermatolog', label: 'Dermatología' },
+        { key: 'urolog', label: 'Urología' },
+        { key: 'otorrino', label: 'Otorrinolaringología' },
+        { key: 'cirug', label: 'Cirugía' },
+        { key: 'medicina general', label: 'Medicina General' },
+        { key: 'internist', label: 'Medicina Interna' },
+        { key: 'nutrici', label: 'Nutrición' },
+        { key: 'psicolog', label: 'Psicología' },
+        { key: 'psiquiatr', label: 'Psiquiatría' },
+        { key: 'fisioter', label: 'Fisioterapia' },
+        { key: 'ecograf', label: 'Rayos X e Imagen' },
+        { key: 'rayos', label: 'Rayos X e Imagen' }
+    ];
+
+    mapKeywords.forEach(mk => {
+        if (r.includes(mk.key) || (prof.specialty && prof.specialty.toLowerCase().includes(mk.key))) {
+            addSpec(mk.label);
+        }
+    });
+
+    return specs;
+}
+
+function isServiceMatchingDoctor(service, doctorUser) {
+    if (!isDoctorUser(doctorUser)) return true;
+    const prof = doctorUser.doctorProfile || doctorUser.doctor_profile || {};
+
+    // Asignación explícita de servicios
+    if (Array.isArray(prof.assignedServices) && prof.assignedServices.length > 0) {
+        if (prof.assignedServices.includes(service.code) || prof.assignedServices.includes(service.name) || prof.assignedServices.includes(service.id)) {
+            return true;
+        }
+    }
+
+    const docSpecs = getDoctorSpecialties(doctorUser);
+    if (docSpecs.length === 0) return true;
+
+    const srvArea = (service.area || '').toLowerCase();
+    const srvCat = (service.category || '').toLowerCase();
+    const srvName = (service.name || '').toLowerCase();
+
+    return docSpecs.some(spec => {
+        const specLow = spec.toLowerCase();
+        if (specLow.includes('cardiolog')) {
+            return srvArea.includes('cardio') || srvCat.includes('cardio') || srvName.includes('cardio') || srvName.includes('electrocard');
+        }
+        if (specLow.includes('ginecolog')) {
+            return srvArea.includes('gineco') || srvCat.includes('gineco') || srvName.includes('gineco') || srvName.includes('citolog') || srvName.includes('colposcop') || srvName.includes('obstetr') || srvName.includes('eco pélv') || srvName.includes('eco transv') || srvName.includes('embarazo');
+        }
+        if (specLow.includes('pediatr')) {
+            return srvArea.includes('pediatr') || srvCat.includes('pediatr') || srvName.includes('pediatr') || srvName.includes('niño') || srvName.includes('vacuna');
+        }
+        if (specLow.includes('odont')) {
+            return srvArea.includes('odont') || srvCat.includes('odont') || ['operatoria', 'endodoncia', 'cirugía', 'ortodoncia', 'estética', 'prótesis', 'prevención', 'diagnóstico'].includes(srvCat);
+        }
+        if (specLow.includes('traumatolog')) {
+            return srvArea.includes('traumat') || srvCat.includes('traumat') || srvName.includes('traumat') || srvName.includes('yeso') || srvName.includes('inmoviliz');
+        }
+        if (specLow.includes('cirug')) {
+            return srvArea.includes('cirug') || srvCat.includes('cirug') || srvName.includes('cirug') || srvName.includes('quirúrg');
+        }
+        if (specLow.includes('medicina general')) {
+            return srvArea.includes('medicina') || srvCat.includes('consulta') || srvName.includes('médica general') || srvName.includes('certificado');
+        }
+        return srvArea.includes(specLow) || srvCat.includes(specLow) || srvName.includes(specLow) || specLow.includes(srvArea) || specLow.includes(srvCat);
+    });
+}
+
+function isHygienistUser(user) {
+    const u = user || getCurrentUser();
+    if (!u) return false;
+    const r = (u.role || '').toLowerCase();
+    return r.includes('higien');
+}
+window.isHygienistUser = isHygienistUser;
+
+function isDentalAppointment(app, users = []) {
+    if (!app) return false;
+
+    // 1. Verificar categoría / departamento / especialidad de la cita
+    const spec = ((app.specialty || '') + ' ' + (app.category || '') + ' ' + (app.department || '')).toLowerCase();
+    if (spec) {
+        if (spec.includes('odont') || spec.includes('dental') || spec.includes('ortodon') || spec.includes('endodon') || spec.includes('periodon') || spec.includes('maxil') || spec.includes('estomat')) {
+            return true;
+        }
+        if (spec.includes('cardio') || spec.includes('gineco') || spec.includes('pediatr') || spec.includes('traumato') || spec.includes('general') || spec.includes('medicin') || spec.includes('dermatol') || spec.includes('urolog') || spec.includes('oftalm')) {
+            return false;
+        }
+    }
+
+    // 2. Verificar doctor asignado
+    const docId = String(app.doctorId || app.doctor_id || '').trim();
+    const docName = String(app.doctorName || app.doctor_name || app.doctor || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+    if (users && users.length > 0) {
+        const matchedDoc = users.find(u => (docId && String(u.id) === docId) || (docName && u.fullname && u.fullname.toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim().includes(docName)));
+        if (matchedDoc) {
+            if (isDentalDoctor(matchedDoc)) return true;
+            if (isDoctorUser(matchedDoc) && !isDentalDoctor(matchedDoc)) return false;
+        }
+    }
+
+    // 3. Verificar palabras clave en el tratamiento o motivo
+    const text = ((app.treatment || '') + ' ' + (app.notes || '') + ' ' + (app.reason || '')).toLowerCase();
+    const dentalKeywords = ['odont', 'dental', 'resina', 'profilaxis', 'limpieza', 'carie', 'corona', 'implante', 'ortodon', 'endodon', 'periodon', 'diente', 'muela', 'blanqueamiento', 'fluor', 'sellante', 'exodoncia', 'extraccion', 'bucal', 'maxilofacial', 'sarro', 'tártaro', 'curetaje'];
+    if (dentalKeywords.some(kw => text.includes(kw))) return true;
+
+    const nonDentalKeywords = ['electro', 'ecocardiograma', 'ginecolog', 'papanicolau', 'citolog', 'pediatr', 'control nino', 'vacuna', 'holter', 'mapa', 'prenatal', 'tensión', 'presión'];
+    if (nonDentalKeywords.some(kw => text.includes(kw))) return false;
+
+    return true;
+}
+window.isDentalAppointment = isDentalAppointment;
+
+
+function isDentalDoctor(user) {
+    const u = user || getCurrentUser();
+    if (!u) return false;
+    const r = (u.role || '').toLowerCase();
+    const spec = (u.doctorProfile?.specialty || u.doctor_profile?.specialty || '').toLowerCase();
+    return r.includes('odont') || r.includes('dentist') || spec.includes('odont') || spec.includes('dental') || spec.includes('ortodon') || spec.includes('endodon') || spec.includes('periodon');
+}
+
+function canCurrentUserDelete(user) {
+    const u = user || (typeof getCurrentUser === 'function' ? getCurrentUser() : null);
+    if (!u) return false;
+    const r = (u.role || '').toLowerCase();
+    const isAdmin = r.includes('admin') || r.includes('super') || r.includes('director');
+    if (isAdmin) return true;
+    if (typeof isDoctorUser === 'function' && isDoctorUser(u)) return false;
+    if (r.includes('asistente') || r.includes('asist')) return false;
+    return true;
+}
+window.canCurrentUserDelete = canCurrentUserDelete;
+
+// Global fallback to prevent any unhandled 'canDelete is not defined' ReferenceError anywhere
+if (typeof window.canDelete === 'undefined') {
+    try {
+        Object.defineProperty(window, 'canDelete', {
+            get() {
+                try {
+                    return canCurrentUserDelete();
+                } catch (e) {
+                    return false;
+                }
+            },
+            configurable: true,
+            enumerable: true
+        });
+    } catch (e) {
+        window.canDelete = false;
+    }
+}
+
+function isPatientAssignedToDoctor(patient, doctorUser, appointments = [], invoices = []) {
+    if (!doctorUser || !patient) return false;
+    const docId = String(doctorUser.id || '').trim();
+    const cleanDocName = String(doctorUser.fullname || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+
+    // 1. Asignación directa en ficha del paciente
+    if (patient.assignedDoctorId && docId && String(patient.assignedDoctorId).trim() === docId) return true;
+    if (patient.assignedDoctor) {
+        const pDoc = String(patient.assignedDoctor).trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+        if (cleanDocName && pDoc && (pDoc === cleanDocName || pDoc.includes(cleanDocName) || cleanDocName.includes(pDoc))) return true;
+    }
+
+    // 2. Citas del paciente con este doctor
+    const hasAppt = appointments.some(app => {
+        if (String(app.patientId) !== String(patient.id)) return false;
+        const aDocId = String(app.doctorId || app.doctor_id || '').trim();
+        if (docId && aDocId && aDocId === docId) return true;
+        const aDocName = String(app.doctorName || app.doctor_name || app.doctor || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+        return cleanDocName && aDocName && (aDocName === cleanDocName || aDocName.includes(cleanDocName) || cleanDocName.includes(aDocName));
+    });
+    if (hasAppt) return true;
+
+    // 3. Sesiones clínicas o notas realizadas por este doctor
+    if (patient.sessions && patient.sessions.length > 0) {
+        const hasSession = patient.sessions.some(s => {
+            const sDocId = String(s.doctorId || '').trim();
+            if (docId && sDocId && sDocId === docId) return true;
+            const sDocName = String(s.doctor || s.specialist || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+            return cleanDocName && sDocName && (sDocName === cleanDocName || sDocName.includes(cleanDocName) || cleanDocName.includes(sDocName));
+        });
+        if (hasSession) return true;
+    }
+
+    if (patient.clinicalNotes && patient.clinicalNotes.length > 0) {
+        const hasNote = patient.clinicalNotes.some(n => {
+            const nDocId = String(n.doctorId || '').trim();
+            if (docId && nDocId && nDocId === docId) return true;
+            const nDocName = String(n.doctor || n.author || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+            return cleanDocName && nDocName && (nDocName === cleanDocName || nDocName.includes(cleanDocName) || cleanDocName.includes(nDocName));
+        });
+        if (hasNote) return true;
+    }
+
+    // 4. Facturas o presupuestos para este paciente por este doctor
+    const hasInv = invoices.some(inv => {
+        if (String(inv.patientId) !== String(patient.id)) return false;
+        const iDocId = String(inv.doctorId || (inv.metadata && inv.metadata.doctorId) || '').trim();
+        if (docId && iDocId && iDocId === docId) return true;
+        const iDocName = String(inv.doctor || inv.doctorName || inv.specialist || (inv.metadata && inv.metadata.doctorName) || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+        if (cleanDocName && iDocName && (iDocName === cleanDocName || iDocName.includes(cleanDocName) || cleanDocName.includes(iDocName))) return true;
+        if (Array.isArray(inv.items) && inv.items.length > 0) {
+            return inv.items.some(item => {
+                const itDocId = String(item.doctorId || '').trim();
+                if (docId && itDocId && itDocId === docId) return true;
+                const itDoc = String(item.specialist || item.doctor || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+                return cleanDocName && itDoc && (itDoc === cleanDocName || itDoc.includes(cleanDocName));
+            });
+        }
+        return false;
+    });
+    if (hasInv) return true;
+
+    return false;
+}
+window.isDoctorUser = isDoctorUser;
+window.isDentalDoctor = isDentalDoctor;
+window.isPatientAssignedToDoctor = isPatientAssignedToDoctor;
+
 function getCurrentUser() {
     const session = sessionStorage.getItem('dental_current_user') || localStorage.getItem('dental_current_user');
     return session ? JSON.parse(session) : null;
@@ -924,12 +1188,14 @@ function applyRolePermissionsUI(role) {
         help: '.nav-item[data-tab="help"]',
         specialties: '.nav-item[data-tab="specialties"]',
         rooms: '.nav-item[data-tab="rooms"]',
-        payroll: '.nav-item[data-tab="payroll"]'
+        payroll: '.nav-item[data-tab="payroll"]',
+        'doctor-finances': '.nav-item[data-tab="doctor-finances"]'
     };
 
     const permissions = {
-        admin: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll'],
-        doctor: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'pricing', 'settings', 'help', 'specialties', 'rooms'],
+        admin: ['dashboard', 'doctor-finances', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll'],
+        doctor: ['dashboard', 'doctor-finances', 'agenda', 'ehr', 'pricing', 'settings', 'help', 'specialties', 'rooms'],
+        hygienist: ['dashboard', 'agenda', 'odontogram', 'ehr', 'pricing', 'settings', 'help'],
         assistant: ['dashboard', 'patients', 'agenda', 'billing', 'finance', 'pricing', 'settings', 'help']
     };
 
@@ -989,6 +1255,39 @@ function applyRolePermissionsUI(role) {
             docSigSection.classList.add('hidden');
         }
     }
+
+    // Role body classes & feature lockdown
+    const curUser = getCurrentUser();
+    const isDoc = (roleType === 'doctor');
+    const isDentalDoc = isDoc && typeof isDentalDoctor === 'function' && isDentalDoctor(curUser);
+    const isNonDentalDoc = isDoc && !isDentalDoc;
+    document.body.classList.toggle('is-doctor-role', isDoc);
+    document.body.classList.toggle('is-non-dental-doctor', isNonDentalDoc);
+
+    if (isDoc) {
+        // Bloquear y ocultar Presupuestos y Botón Flotante de Acciones Rápidas (FAB)
+        const mobileFabBtn = document.getElementById('mobile-fab-btn');
+        if (mobileFabBtn) mobileFabBtn.style.display = 'none';
+        const floatingBudgetBubble = document.getElementById('floating-budget-bubble');
+        if (floatingBudgetBubble) floatingBudgetBubble.style.display = 'none';
+        const btnAddBudget = document.getElementById('btn-add-budget');
+        if (btnAddBudget) btnAddBudget.style.display = 'none';
+        const cardMetricConversion = document.getElementById('card-metric-conversion');
+        if (cardMetricConversion) cardMetricConversion.style.display = 'none';
+
+        // Bloquear y ocultar Creación y Edición de Citas para Médicos
+        const btnAddApptAgenda = document.getElementById('btn-add-appointment-agenda');
+        if (btnAddApptAgenda) btnAddApptAgenda.style.display = 'none';
+        const btnAddApptDash = document.getElementById('btn-add-appointment-dash');
+        if (btnAddApptDash) btnAddApptDash.style.display = 'none';
+    } else {
+        const mobileFabBtn = document.getElementById('mobile-fab-btn');
+        if (mobileFabBtn) mobileFabBtn.style.display = '';
+        const cardMetricConversion = document.getElementById('card-metric-conversion');
+        if (cardMetricConversion) cardMetricConversion.style.display = '';
+        const btnAddApptAgenda = document.getElementById('btn-add-appointment-agenda');
+        if (btnAddApptAgenda) btnAddApptAgenda.style.display = '';
+    }
 }
 
 function renderMobileNavigationForRole(roleType) {
@@ -997,11 +1296,10 @@ function renderMobileNavigationForRole(roleType) {
 
     let bottomButtons = [];
     if (roleType === 'doctor') {
-        // DOCTOR: Enfoque clínico prioritario
+        // DOCTOR: Enfoque clínico prioritario (Sin Presupuestos)
         bottomButtons = [
             { tab: 'dashboard', icon: 'fa-house', label: 'Home' },
             { tab: 'agenda', icon: 'fa-calendar-days', label: 'Agenda' },
-            { tab: 'odontogram', icon: 'fa-file-invoice-dollar', label: 'Presupuesto' },
             { tab: 'ehr', icon: 'fa-notes-medical', label: 'Historias' },
             { tab: 'pricing', icon: 'fa-tags', label: 'Servicios' }
         ];
@@ -1065,15 +1363,17 @@ function renderMobileNavigationForRole(roleType) {
     const fabTransfer = document.getElementById('fab-act-transfer');
     const fabBilling = document.getElementById('fab-act-billing');
 
+    const mobileFabBtn = document.getElementById('mobile-fab-btn');
     if (roleType === 'doctor') {
-        if (fabPatient) fabPatient.style.display = 'none'; // Doctors don't handle frontdesk patient creation
-        if (fabAppt) fabAppt.style.display = 'flex';
-        if (fabBudget) fabBudget.style.display = 'flex';
-        if (fabEvol) fabEvol.style.display = 'flex';
+        if (mobileFabBtn) mobileFabBtn.style.display = 'none';
+        if (fabPatient) fabPatient.style.display = 'none';
+        if (fabAppt) fabAppt.style.display = 'none'; // Médicos no crean citas
+        if (fabBudget) fabBudget.style.display = 'none'; // Médicos no crean presupuestos
+        if (fabEvol) fabEvol.style.display = 'none';
         if (fabExpense) fabExpense.style.display = 'none';
         if (fabIncome) fabIncome.style.display = 'none';
         if (fabTransfer) fabTransfer.style.display = 'none';
-        if (fabBilling) fabBilling.style.display = 'flex';
+        if (fabBilling) fabBilling.style.display = 'none';
     } else if (roleType === 'assistant') {
         if (fabPatient) fabPatient.style.display = 'flex';
         if (fabAppt) fabAppt.style.display = 'flex';
@@ -1135,6 +1435,8 @@ function logout() {
     sessionStorage.removeItem('dental_current_user');
     localStorage.removeItem('dental_current_user');
     localStorage.removeItem('dental_active_tab');
+    document.body.classList.remove('is-doctor-role');
+    document.body.classList.remove('is-non-dental-doctor');
     document.documentElement.classList.remove('has-auth-session');
     document.documentElement.classList.add('no-auth-session');
     const loginOverlay = document.getElementById('login-screen');
@@ -1220,10 +1522,20 @@ window.navigateToTab = async function(tabName) {
         const isDoctor = r.includes('medico') || r.includes('odont') || r.includes('doctor') || r.includes('dentista') || r.includes('médico');
         const roleType = isAdmin ? 'admin' : (isDoctor ? 'doctor' : 'assistant');
         const allowedTabs = {
-            admin: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll'],
-            doctor: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'pricing', 'settings', 'help', 'specialties', 'rooms'],
+            admin: ['dashboard', 'doctor-finances', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll'],
+            doctor: ['dashboard', 'doctor-finances', 'agenda', 'ehr', 'pricing', 'settings', 'help', 'specialties', 'rooms'],
+            hygienist: ['dashboard', 'agenda', 'odontogram', 'ehr', 'pricing', 'settings', 'help'],
             assistant: ['dashboard', 'patients', 'agenda', 'billing', 'finance', 'pricing', 'settings', 'help']
         }[roleType] || ['dashboard', 'help'];
+
+        if (roleType === 'doctor' && tabName === 'odontogram') {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Módulo Restringido',
+                text: 'Su rol médico no gestiona ni formula presupuestos.'
+            });
+            return;
+        }
 
         if (!allowedTabs.includes(tabName)) {
             Swal.fire({
@@ -1281,6 +1593,8 @@ window.navigateToTab = async function(tabName) {
         await renderEHRView();
     } else if (tabName === 'inventory') {
         await renderInventoryTable();
+    } else if (tabName === 'doctor-finances') {
+        await renderDoctorFinancesView();
     } else if (tabName === 'pricing') {
         await renderPricingTable();
     } else if (tabName === 'users') {
@@ -2323,6 +2637,22 @@ window.activeEditingMedicalBudgetId = null;
 window.activeMedicalSpecialtyCategory = 'Consultas Médicas';
 
 window.startBudgetCreation = async function(category) {
+    if (typeof isDoctorUser === 'function' && isDoctorUser()) {
+        Swal.fire({ icon: 'warning', title: 'Acceso Restringido', text: 'Los médicos no tienen permisos para crear ni editar presupuestos.' });
+        return;
+    }
+
+    if (typeof isHygienistUser === 'function' && isHygienistUser()) {
+        if (category !== 'Odontología') {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Especialidad No Autorizada',
+                text: 'El rol de Higienista Dental únicamente está habilitado para formular presupuestos odontológicos.'
+            });
+            return;
+        }
+    }
+
     closeModal('modal-select-budget-type');
     if (category === 'Odontología') {
         await window.selectPatientAndLoadApprovedBudget(null);
@@ -2332,6 +2662,14 @@ window.startBudgetCreation = async function(category) {
 };
 
 window.openMedicalBudgetEditor = async function({ budgetId = null, specialtyCategory = 'Consultas Médicas' } = {}) {
+    if (typeof isDoctorUser === 'function' && isDoctorUser()) {
+        Swal.fire({ icon: 'warning', title: 'Acceso Restringido', text: 'Los médicos no tienen permisos para crear ni editar presupuestos.' });
+        return;
+    }
+
+    if (typeof isHygienistUser === 'function' && isHygienistUser()) {
+        specialtyCategory = 'Odontología';
+    }
     localStorage.setItem('dental_odontogram_subview', 'medical-editor');
     document.documentElement.setAttribute('data-odontogram-subview', 'medical-editor');
 
@@ -2584,7 +2922,30 @@ window.refreshMedicalBaremoSelect = async function() {
         const currentDept = document.getElementById('med-budget-department-select')?.value || 'Consultas Médicas';
 
         let filtered = baremo;
-        if (!showAll) {
+        const isHyg = typeof isHygienistUser === 'function' && isHygienistUser();
+        if (isHyg) {
+            currentDept = 'Odontología';
+            showAll = false;
+            const deptSel = document.getElementById('med-budget-department-select');
+            if (deptSel) {
+                deptSel.value = 'Odontología';
+                deptSel.disabled = true;
+            }
+            const showAllCb = document.getElementById('med-budget-show-all-baremo');
+            if (showAllCb) {
+                showAllCb.checked = false;
+                showAllCb.disabled = true;
+            }
+        }
+
+        if (isHyg) {
+            filtered = baremo.filter(b => {
+                const cat = (b.category || '').toLowerCase();
+                const area = (b.area || '').toLowerCase();
+                const name = (b.name || '').toLowerCase();
+                return area.includes('odont') || cat.includes('odont') || ['operatoria', 'endodoncia', 'cirugía', 'ortodoncia', 'estética', 'prótesis', 'prevención', 'diagnóstico'].includes(cat) || name.includes('profilaxis') || name.includes('limpieza') || name.includes('blanquea') || name.includes('destartraje');
+            });
+        } else if (!showAll) {
             const deptLow = currentDept.toLowerCase();
             filtered = baremo.filter(b => {
                 const cat = (b.category || '').toLowerCase();
@@ -2749,7 +3110,7 @@ window.renderMedicalBudgetItems = function() {
     if (elBs) elBs.innerText = `${totalFinalBs.toFixed(2)} Bs.`;
 };
 
-window.saveMedicalBudget = async function(status = 'Presupuesto') {
+window.saveMedicalBudget = async function(status = 'Presupuesto', sendToCashier = false) {
     const patientSelect = document.getElementById('med-budget-patient-select');
     const patientId = patientSelect ? patientSelect.value : null;
 
@@ -2803,7 +3164,11 @@ window.saveMedicalBudget = async function(status = 'Presupuesto') {
         status: status, // 'Presupuesto' | 'Aprobado'
         notes: notes,
         validUntil: validityDays,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        sentToCashier: !!sendToCashier,
+        sentToCashierAt: sendToCashier ? new Date().toISOString() : null,
+        sentBy: sendToCashier ? ((typeof getCurrentUser === 'function' && (getCurrentUser()?.fullname || getCurrentUser()?.username)) || 'Consultorio') : null,
+        checkoutStatus: sendToCashier ? 'pending_payment' : 'draft'
     };
 
     try {
@@ -2832,13 +3197,24 @@ window.saveMedicalBudget = async function(status = 'Presupuesto') {
             idBadge.className = status === 'Aprobado' ? 'badge-tag green' : 'badge-tag orange';
         }
 
-        Swal.fire({
-            icon: 'success',
-            title: status === 'Aprobado' ? '¡Presupuesto Aprobado!' : '¡Borrador Guardado!',
-            text: `Presupuesto ${budgetId} guardado exitosamente en la base de datos.`,
-            timer: 2000,
-            showConfirmButton: false
-        });
+        if (sendToCashier) {
+            Swal.fire({
+                icon: 'success',
+                title: '¡Enviado a Caja para Cobro! 🛒',
+                html: `Presupuesto <strong>${budgetId}</strong> guardado y enviado inmediatamente a recepción.<br><br>Total por cobrar: <strong style="color:#059669; font-size:1.25rem;">${totalRef.toFixed(2)}</strong> (${totalBcv.toFixed(2)} Bs.).<br><br><small style="color:#64748b;">La caja ya tiene al paciente en su bandeja de cobranza.</small>`,
+                confirmButtonText: 'Entendido'
+            });
+            if (typeof window.updateCheckoutBadge === 'function') await window.updateCheckoutBadge();
+            if (typeof window.renderCheckoutQueue === 'function') await window.renderCheckoutQueue();
+        } else {
+            Swal.fire({
+                icon: 'success',
+                title: status === 'Aprobado' ? '¡Presupuesto Aprobado!' : '¡Borrador Guardado!',
+                text: `Presupuesto ${budgetId} guardado exitosamente en la base de datos.`,
+                timer: 2000,
+                showConfirmButton: false
+            });
+        }
     } catch(err) {
         console.error('Error saving medical budget:', err);
         Swal.fire({ icon: 'error', title: 'Error al Guardar', text: err.message || err });
@@ -5807,13 +6183,28 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
     listGroup.innerHTML = '';
     const allPatients = await SupabaseDataService.getPatients();
     let patients = [...allPatients];
+    const currentUser = getCurrentUser();
+    const isAssistant = currentUser && currentUser.role.toLowerCase().includes('asistente');
+    const isDoctor = typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false;
+    const isHygienist = typeof isHygienistUser === 'function' ? isHygienistUser(currentUser) : false;
+
+    // RESTRICCIÓN MÉDICA Y DE HIGIENISTA EN LA LISTA DE PACIENTES
+    if (isDoctor) {
+        let [allAppts, allBudgets] = await Promise.all([
+            SupabaseDataService.getAppointments().catch(() => []),
+            SupabaseDataService.getInvoices().catch(() => [])
+        ]);
+        patients = patients.filter(p => isPatientAssignedToDoctor(p, currentUser, allAppts, allBudgets));
+    }
+
     let activeId = getActivePatientId();
-    if (!activeId && patients.length > 0) {
+    if (activeId && !patients.some(p => p.id === activeId)) {
+        activeId = patients.length > 0 ? patients[0].id : null;
+        setActivePatientId(activeId);
+    } else if (!activeId && patients.length > 0) {
         activeId = patients[0].id;
         setActivePatientId(activeId);
     }
-    const currentUser = getCurrentUser();
-    const isAssistant = currentUser && currentUser.role.toLowerCase().includes('asistente');
 
     // Apply Filter
     if (filter !== 'all') {
@@ -6369,8 +6760,10 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
             // 5. Interconsultas, Récipes e Indicaciones Tab
             const interconsultationsContainer = document.getElementById('ehr-interconsultations-list');
             if (interconsultationsContainer) {
-                const ics = (meta.interconsultations) || [];
-                const rcs = (meta.recipes) || [];
+                let ics = (meta.interconsultations) || [];
+                let rcs = (meta.recipes) || [];
+
+                
 
                 if (ics.length === 0 && rcs.length === 0) {
                     interconsultationsContainer.innerHTML = `
@@ -6477,32 +6870,49 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
 
                     const reader = new FileReader();
                     reader.onload = async (event) => {
-                        const photoBase64 = event.target.result;
-                        const newPhoto = {
-                            id: 'photo_' + Date.now(),
-                            url: photoBase64,
-                            category,
-                            title,
-                            notes,
-                            date: new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
-                        };
+                        try {
+                            const photoBase64 = event.target.result;
+                            const newPhoto = {
+                                id: 'photo_' + Date.now(),
+                                url: photoBase64,
+                                category,
+                                title,
+                                notes,
+                                date: new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
+                            };
 
-                        activePatient.metadata = activePatient.metadata || {};
-                        activePatient.metadata.photos = activePatient.metadata.photos || [];
-                        activePatient.metadata.photos.unshift(newPhoto);
+                            activePatient.metadata = activePatient.metadata || {};
+                            activePatient.metadata.photos = activePatient.metadata.photos || [];
+                            activePatient.metadata.photos.unshift(newPhoto);
 
-                        await SupabaseDataService.updatePatient(activePatient.id, activePatient);
-                        closeModal('modal-ehr-photo-upload');
+                            activePatient.photos = activePatient.photos || [];
+                            activePatient.photos.unshift(newPhoto);
 
-                        Swal.fire({
-                            icon: 'success',
-                            title: '¡Foto / Rayos X Guardado!',
-                            text: 'El estudio se añadió al álbum clínico del paciente.',
-                            timer: 1800,
-                            showConfirmButton: false
-                        });
+                            if (typeof SupabaseDataService !== 'undefined' && SupabaseDataService.addPatientPhoto) {
+                                await SupabaseDataService.addPatientPhoto(activePatient.id, newPhoto);
+                            } else if (typeof SupabaseDataService !== 'undefined' && SupabaseDataService.updatePatient) {
+                                await SupabaseDataService.updatePatient(activePatient.id, activePatient);
+                            }
 
-                        renderEHRGallery(activePatient, window.currentEHRGalleryFilter || 'all');
+                            closeModal('modal-ehr-photo-upload');
+
+                            Swal.fire({
+                                icon: 'success',
+                                title: '¡Foto / Rayos X Guardado!',
+                                text: 'El estudio se añadió al álbum clínico del paciente.',
+                                timer: 1800,
+                                showConfirmButton: false
+                            });
+
+                            renderEHRGallery(activePatient, window.currentEHRGalleryFilter || 'all');
+                        } catch (err) {
+                            console.error('Error al guardar imagen:', err);
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Error al guardar imagen',
+                                text: err.message || err
+                            });
+                        }
                     };
                     reader.readAsDataURL(fileInput.files[0]);
                 };
@@ -6532,7 +6942,10 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
     });
 
     // Auto-restore active subtab state (e.g. 'interconsultation', 'summary', etc.) without resetting
-    const savedSubtab = localStorage.getItem('dental_ehr_subtab') || window.currentEHRSubtab || 'summary';
+    let savedSubtab = localStorage.getItem('dental_ehr_subtab') || window.currentEHRSubtab || 'summary';
+    if (document.body.classList.contains('is-non-dental-doctor') && savedSubtab === 'odontogram-comp') {
+        savedSubtab = 'summary';
+    }
     const targetSubtabBtn = document.querySelector(`#view-ehr .subtab-btn[data-subtab="${savedSubtab}"]`);
     if (targetSubtabBtn) {
         document.querySelectorAll('#view-ehr .subtab-btn').forEach(b => b.classList.remove('active'));
@@ -6556,6 +6969,10 @@ function renderEHRGallery(patient, filter = 'all') {
     const container = document.getElementById('ehr-gallery-photos-grid');
     if (!container) return;
     container.innerHTML = '';
+
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const isAssist = curUser && (typeof isAssistantUser === 'function' ? isAssistantUser(curUser) : (curUser.role && curUser.role.toLowerCase().includes('asistente')));
+    const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(curUser) : (!isAssist);
 
     const photos = (patient.metadata && patient.metadata.photos) || patient.photos || [];
     let filteredPhotos = [...photos];
@@ -6615,9 +7032,7 @@ function renderEHRGallery(patient, filter = 'all') {
                     <button class="btn btn-xs btn-outline" style="font-size: 0.75rem; padding: 2px 8px;" onclick="window.openEHRPhotoLightbox('${p.url}', '${safeTitle}', '${safeCat}', '${safeDate}', '${safeNotes}')">
                         <i class="fa-solid fa-expand"></i> Ver
                     </button>
-                    <button class="btn btn-xs btn-outline text-red" style="font-size: 0.75rem; padding: 2px 6px;" onclick="window.deleteEHRPhoto('${p.id}')" title="Eliminar Imagen">
-                        <i class="fa-solid fa-trash"></i>
-                    </button>
+                    ${canDelete ? `<button class="btn btn-xs btn-outline text-red" style="font-size: 0.75rem; padding: 2px 6px;" onclick="window.deleteEHRPhoto('${p.id}')" title="Eliminar Imagen"><i class="fa-solid fa-trash"></i></button>` : ''}
                 </div>
             </div>
         `;
@@ -6642,6 +7057,13 @@ window.openEHRPhotoLightbox = function(url, title, category, date, notes) {
 };
 
 window.deleteEHRPhoto = async function(photoId) {
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const isAssist = curUser && (typeof isAssistantUser === 'function' ? isAssistantUser(curUser) : (curUser.role && curUser.role.toLowerCase().includes('asistente')));
+    const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(curUser) : (!isAssist);
+    if (!canDelete) {
+        Swal.fire({ icon: 'warning', title: 'Acción no permitida', text: 'No tiene permisos para eliminar imágenes clínicas del expediente.' });
+        return;
+    }
     Swal.fire({
         title: '¿Eliminar imagen clínica?',
         text: 'Esta fotografía o radiografía será eliminada del expediente del paciente.',
@@ -6657,10 +7079,21 @@ window.deleteEHRPhoto = async function(photoId) {
             if (!activeId) return;
             const patients = await SupabaseDataService.getPatients();
             const patient = patients.find(p => p.id === activeId);
-            if (patient && patient.metadata && patient.metadata.photos) {
-                patient.metadata.photos = patient.metadata.photos.filter(p => p.id !== photoId);
-                await SupabaseDataService.updatePatient(patient.id, patient);
-                renderEHRGallery(patient, window.currentEHRGalleryFilter || 'all');
+            if (patient) {
+                if (typeof SupabaseDataService !== 'undefined' && SupabaseDataService.deletePatientPhoto) {
+                    await SupabaseDataService.deletePatientPhoto(patient.id, photoId);
+                } else {
+                    if (patient.metadata && patient.metadata.photos) {
+                        patient.metadata.photos = patient.metadata.photos.filter(p => p.id !== photoId);
+                    }
+                    if (patient.photos) {
+                        patient.photos = patient.photos.filter(p => p.id !== photoId);
+                    }
+                    await SupabaseDataService.updatePatient(patient.id, patient);
+                }
+                const updatedPatients = await SupabaseDataService.getPatients();
+                const freshPatient = updatedPatients.find(p => p.id === activeId) || patient;
+                renderEHRGallery(freshPatient, window.currentEHRGalleryFilter || 'all');
                 Swal.fire({ icon: 'success', title: 'Imagen eliminada', timer: 1500, showConfirmButton: false });
             }
         }
@@ -7215,9 +7648,15 @@ async function renderDashboard() {
     const agendaList = document.getElementById('dashboard-agenda-list');
     if (agendaList) {
         agendaList.innerHTML = '';
-        const appointments = await SupabaseDataService.getAppointments();
+        let appointments = await SupabaseDataService.getAppointments();
         const currentUser = getCurrentUser();
         const isAssistant = currentUser && currentUser.role.toLowerCase().includes('asistente');
+        const isHygienist = typeof isHygienistUser === 'function' ? isHygienistUser(currentUser) : false;
+        const allUsersForDash = await SupabaseDataService.getUsers();
+
+        if (isHygienist) {
+            appointments = appointments.filter(app => isDentalAppointment(app, allUsersForDash));
+        }
 
         const todayISO = new Date().toISOString().split('T')[0];
         let todayCount = 0;
@@ -7268,14 +7707,18 @@ async function renderDashboard() {
                     `;
                 }
 
-                const abonoBtn = isAttended ? '' : `
+                const cartBtn = isDoctor ? '' : `
+                    
+                `;
+                const abonoBtn = (isAttended || isDoctor) ? cartBtn : `
                     <button class="btn btn-xs btn-outline" style="border-color: #10b981; color: #059669; font-weight: 600;" onclick="window.openPaymentModalForAppointment('${app.patientId}', '${app.patientName}', '${app.treatment}')" title="Registrar Abono Anticipado">
                         <i class="fa-solid fa-hand-holding-dollar"></i> <span class="btn-text-full">Abonar</span>
                     </button>
+                    ${cartBtn}
                 `;
 
-                const editApptBtn = `<button class="btn btn-xs btn-outline btn-appt-edit" style="border-color: #0891b2; color: #0891b2;" onclick="window.editAppointment('${app.id}')" title="Editar Cita"><i class="fa-solid fa-pen-to-square"></i> <span class="btn-text-full">Editar</span></button>`;
-                const deleteApptBtn = isAssistant ? '' : `<button class="btn btn-xs btn-outline text-red" onclick="deleteAppointment('${app.id}')" title="Eliminar Cita"><i class="fa-solid fa-trash"></i></button>`;
+                const editApptBtn = isDoctor ? '' : `<button class="btn btn-xs btn-outline btn-appt-edit" style="border-color: #0891b2; color: #0891b2;" onclick="window.editAppointment('${app.id}')" title="Editar Cita"><i class="fa-solid fa-pen-to-square"></i> <span class="btn-text-full">Editar</span></button>`;
+                const deleteApptBtn = (isAssistant || isDoctor) ? '' : `<button class="btn btn-xs btn-outline text-red" onclick="deleteAppointment('${app.id}')" title="Eliminar Cita"><i class="fa-solid fa-trash"></i></button>`;
 
                 let actionAttendOrViewHtml = '';
                 let statusBadgeHtml = `<span class="badge-tag blue">${app.status || 'Programada'}</span>`;
@@ -7330,10 +7773,40 @@ async function renderDashboard() {
     }
 
     try {
-        const allPatients = await SupabaseDataService.getPatients();
-        const allInvoices = await SupabaseDataService.getInvoices();
+        let allPatients = await SupabaseDataService.getPatients();
+        let allInvoices = await SupabaseDataService.getInvoices();
         const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local format
         const monthStr = todayStr.substring(0, 7); // YYYY-MM
+
+        const currentUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+        const isDoctor = currentUser && (typeof isDoctorUser === 'function' && isDoctorUser(currentUser));
+        let docId = '';
+        let cleanDocName = '';
+
+        if (isDoctor) {
+            docId = String(currentUser.id || '').trim();
+            cleanDocName = String(currentUser.fullname || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+
+            allPatients = allPatients.filter(p => isPatientAssignedToDoctor(p, currentUser, appointments, allInvoices));
+
+            allInvoices = (allInvoices || []).filter(inv => {
+                const iDocId = String(inv.doctorId || (inv.metadata && inv.metadata.doctorId) || '').trim();
+                if (docId && iDocId && iDocId === docId) return true;
+
+                const iDocName = String(inv.doctor || inv.doctorName || inv.specialist || (inv.metadata && inv.metadata.doctorName) || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+                if (cleanDocName && iDocName && (iDocName === cleanDocName || iDocName.includes(cleanDocName) || cleanDocName.includes(iDocName))) return true;
+
+                if (Array.isArray(inv.items) && inv.items.length > 0) {
+                    return inv.items.some(item => {
+                        const itDocId = String(item.doctorId || '').trim();
+                        if (docId && itDocId && itDocId === docId) return true;
+                        const itDoc = String(item.specialist || item.doctor || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+                        return cleanDocName && itDoc && (itDoc === cleanDocName || itDoc.includes(cleanDocName));
+                    });
+                }
+                return false;
+            });
+        }
 
         let todayIncome = 0;
         let monthIncome = 0;
@@ -7371,14 +7844,33 @@ async function renderDashboard() {
                 }
             });
 
-            // 3. Pacientes atendidos hoy
+            // 3. Pacientes atendidos hoy por este doctor
             let hasSessionToday = false;
             if (p.sessions && p.sessions.length > 0) {
-                hasSessionToday = p.sessions.some(s => s.datetime && s.datetime.startsWith(todayStr));
+                hasSessionToday = p.sessions.some(s => {
+                    if (!s.datetime || !s.datetime.startsWith(todayStr)) return false;
+                    if (isDoctor) {
+                        const sDocId = String(s.doctorId || '').trim();
+                        const sDocName = String(s.doctor || s.specialist || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+                        if (sDocId && docId && sDocId !== docId) return false;
+                        if (!sDocId && sDocName && cleanDocName && !sDocName.includes(cleanDocName) && !cleanDocName.includes(sDocName)) return false;
+                    }
+                    return true;
+                });
             }
             let hasNoteToday = false;
             if (p.clinicalNotes && p.clinicalNotes.length > 0) {
-                hasNoteToday = p.clinicalNotes.some(n => n.datetime && n.datetime.replace('T', ' ').startsWith(todayStr));
+                hasNoteToday = p.clinicalNotes.some(n => {
+                    const cleanDt = (n.datetime || '').replace('T', ' ');
+                    if (!cleanDt.startsWith(todayStr)) return false;
+                    if (isDoctor) {
+                        const nDocId = String(n.doctorId || '').trim();
+                        const nDocName = String(n.doctor || n.author || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+                        if (nDocId && docId && nDocId !== docId) return false;
+                        if (!nDocId && nDocName && cleanDocName && !nDocName.includes(cleanDocName) && !cleanDocName.includes(nDocName)) return false;
+                    }
+                    return true;
+                });
             }
             if (hasSessionToday || hasNoteToday) {
                 attendedCount++;
@@ -7498,9 +7990,16 @@ async function renderAgendaView(filter = 'pending', searchQuery = '') {
     if (!agendaListMain) return;
 
     agendaListMain.innerHTML = '';
-    const allAppointments = await SupabaseDataService.getAppointments();
+    let allAppointments = await SupabaseDataService.getAppointments();
     const currentUser = getCurrentUser();
     const isAssistant = currentUser && currentUser.role.toLowerCase().includes('asistente');
+    const isHygienist = typeof isHygienistUser === 'function' ? isHygienistUser(currentUser) : false;
+    const allUsersForAgenda = await SupabaseDataService.getUsers();
+
+    if (isHygienist) {
+        // La Higienista SOLO ve la agenda de toda el área de odontología (todos los odontólogos y tratamientos dentales)
+        allAppointments = allAppointments.filter(app => isDentalAppointment(app, allUsersForAgenda));
+    }
 
     // Update Counts for Filter Badges
     const countPending = allAppointments.filter(a => a.status !== 'Completada' && a.status !== 'Atendida' && a.status !== 'Cancelada').length;
@@ -7570,21 +8069,28 @@ async function renderAgendaView(filter = 'pending', searchQuery = '') {
             `;
         }
 
-        const abonoBtn = isAttended ? '' : `
+        const curUserAgenda = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+        const isDoctorAgenda = curUserAgenda && typeof isDoctorUser === 'function' && isDoctorUser(curUserAgenda);
+
+        const cartBtn = isDoctorAgenda ? '' : `
+            
+        `;
+        const abonoBtn = (isAttended || isDoctorAgenda) ? cartBtn : `
             <button class="btn btn-xs btn-outline" style="border-color: #10b981; color: #059669; font-weight: 600;" onclick="window.openPaymentModalForAppointment('${app.patientId}', '${app.patientName}', '${app.treatment}')" title="Registrar Abono Anticipado">
                 <i class="fa-solid fa-hand-holding-dollar"></i> <span class="btn-text-full">Abonar</span>
             </button>
+            ${cartBtn}
         `;
 
-        const deleteApptBtn = isAssistant ? '' : `<button class="btn btn-xs btn-outline text-red" onclick="deleteAppointment('${app.id}')" title="Eliminar Cita"><i class="fa-solid fa-trash"></i></button>`;
+        const deleteApptBtn = (isAssistant || isDoctorAgenda) ? '' : `<button class="btn btn-xs btn-outline text-red" onclick="deleteAppointment('${app.id}')" title="Eliminar Cita"><i class="fa-solid fa-trash"></i></button>`;
 
-        const gCalBtn = isAttended ? '' : `
+        const gCalBtn = (isAttended || isDoctorAgenda) ? '' : `
             <button class="btn btn-xs btn-outline btn-appt-gcal" style="border-color: #2563eb; color: #2563eb;" onclick="addApptToGoogleCalendarDirect('${app.id}')" title="Añadir a Google Calendar">
                 <i class="fa-solid fa-calendar-plus"></i> <span class="btn-text-full">Calendar</span>
             </button>
         `;
 
-        const editApptBtn = `<button class="btn btn-xs btn-outline btn-appt-edit" style="border-color: #0891b2; color: #0891b2;" onclick="window.editAppointment('${app.id}')" title="Editar Cita"><i class="fa-solid fa-pen-to-square"></i> <span class="btn-text-full">Editar</span></button>`;
+        const editApptBtn = isDoctorAgenda ? '' : `<button class="btn btn-xs btn-outline btn-appt-edit" style="border-color: #0891b2; color: #0891b2;" onclick="window.editAppointment('${app.id}')" title="Editar Cita"><i class="fa-solid fa-pen-to-square"></i> <span class="btn-text-full">Editar</span></button>`;
 
         let itemClass = 'timeline-item';
         let actionAttendOrViewHtml = '';
@@ -7595,12 +8101,12 @@ async function renderAgendaView(filter = 'pending', searchQuery = '') {
             statusBadgeHtml = `<span class="badge-tag green" style="background: rgba(16, 185, 129, 0.15); color: #059669; font-weight: 700;"><i class="fa-solid fa-circle-check"></i> Atendida</span>`;
             actionAttendOrViewHtml = `<button class="btn btn-xs btn-outline" style="border-color: #10b981; color: #059669; font-weight: 600;" onclick="window.viewAttendedSessionForPatient('${app.patientId}')" title="Ver Evolución Clínica"><i class="fa-solid fa-file-medical"></i> <span class="btn-text-full">Ver Evolución</span></button>`;
         } else if (app.status === 'Confirmada') {
-            statusBadgeHtml = `<button class="btn btn-xs btn-outline" style="border-color: #10b981; color: #059669; font-weight: 700; background: rgba(16, 185, 129, 0.12); border-radius: 12px; padding: 2px 8px; cursor: pointer;" onclick="window.toggleApptConfirmation('${app.id}')" title="Cita Confirmada (Clic para alternar)"><i class="fa-solid fa-check-double text-green"></i> Confirmada</button>`;
+            statusBadgeHtml = isDoctorAgenda ? `<span class="badge-tag green" style="background: rgba(16, 185, 129, 0.12); color: #059669; font-weight: 700; border-radius: 12px; padding: 2px 8px;"><i class="fa-solid fa-check-double text-green"></i> Confirmada</span>` : `<button class="btn btn-xs btn-outline" style="border-color: #10b981; color: #059669; font-weight: 700; background: rgba(16, 185, 129, 0.12); border-radius: 12px; padding: 2px 8px; cursor: pointer;" onclick="window.toggleApptConfirmation('${app.id}')" title="Cita Confirmada (Clic para alternar)"><i class="fa-solid fa-check-double text-green"></i> Confirmada</button>`;
             if (!isAssistant) {
                 actionAttendOrViewHtml = `<button class="btn btn-xs btn-primary btn-appt-attend" style="background-color: var(--primary-cyan) !important; color: white !important; border: none !important;" onclick="window.atenderAppointmentFromAgenda('${app.id}')" title="Atender esta cita ahora"><i class="fa-solid fa-user-doctor"></i> Atender</button>`;
             }
         } else {
-            statusBadgeHtml = `<button class="btn btn-xs btn-outline" style="border-color: #cbd5e1; color: #475569; font-weight: 600; border-radius: 12px; padding: 2px 8px; cursor: pointer;" onclick="window.toggleApptConfirmation('${app.id}')" title="Marcar como Confirmada"><i class="fa-regular fa-circle-check text-cyan"></i> ${app.status || 'Programada'} <span style="font-size: 0.7rem; color: #0284c7;">(✓)</span></button>`;
+            statusBadgeHtml = isDoctorAgenda ? `<span class="badge-tag blue" style="border-radius: 12px; padding: 2px 8px;"><i class="fa-regular fa-circle text-cyan"></i> ${app.status || 'Programada'}</span>` : `<button class="btn btn-xs btn-outline" style="border-color: #cbd5e1; color: #475569; font-weight: 600; border-radius: 12px; padding: 2px 8px; cursor: pointer;" onclick="window.toggleApptConfirmation('${app.id}')" title="Marcar como Confirmada"><i class="fa-regular fa-circle-check text-cyan"></i> ${app.status || 'Programada'} <span style="font-size: 0.7rem; color: #0284c7;">(✓)</span></button>`;
             if (!isAssistant) {
                 actionAttendOrViewHtml = `<button class="btn btn-xs btn-primary btn-appt-attend" style="background-color: var(--primary-cyan) !important; color: white !important; border: none !important;" onclick="window.atenderAppointmentFromAgenda('${app.id}')" title="Atender esta cita ahora"><i class="fa-solid fa-user-doctor"></i> Atender</button>`;
             }
@@ -8310,6 +8816,7 @@ async function renderPricingTable(filter = 'all', searchQuery = '') {
     const rate = getExchangeRate();
     const currentUser = getCurrentUser();
     const isAssistant = currentUser && currentUser.role.toLowerCase().includes('asistente');
+    const isDoctor = typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false;
 
     // Ensure each service has an area assigned
     baremo.forEach(p => {
@@ -8317,6 +8824,74 @@ async function renderPricingTable(filter = 'all', searchQuery = '') {
             p.area = detectClinicalArea(p.category, p.name);
         }
     });
+
+    // RESTRICCIÓN MÉDICA: Si el usuario es médico, aislar estrictamente a su especialidad
+    if (isDoctor) {
+        const docSpecs = getDoctorSpecialties(currentUser);
+        baremo = baremo.filter(p => isServiceMatchingDoctor(p, currentUser));
+
+        // Adaptar dinámicamente los botones de filtro por área para este doctor
+        const filterBtns = document.querySelectorAll('#view-pricing .filter-btn');
+        let hasActiveVisible = false;
+
+        filterBtns.forEach(btn => {
+            const fVal = btn.dataset.filter;
+            if (fVal === 'all') {
+                btn.style.display = '';
+                btn.innerHTML = '<i class="fa-solid fa-layer-group"></i> Todos mis servicios';
+                if (btn.classList.contains('active')) hasActiveVisible = true;
+            } else {
+                const fLow = fVal.toLowerCase();
+                const matchesAny = docSpecs.some(spec => {
+                    const sLow = spec.toLowerCase();
+                    return fLow.includes(sLow) || sLow.includes(fLow) ||
+                        (sLow.includes('cardio') && fLow.includes('cardio')) ||
+                        (sLow.includes('gineco') && fLow.includes('gineco')) ||
+                        (sLow.includes('pediatr') && fLow.includes('pediatr')) ||
+                        (sLow.includes('odont') && fLow.includes('odont'));
+                });
+
+                if (matchesAny) {
+                    btn.style.display = '';
+                    if (btn.classList.contains('active')) hasActiveVisible = true;
+                } else {
+                    btn.style.display = 'none';
+                    btn.classList.remove('active');
+                }
+            }
+        });
+
+        // Si el filtro activo quedó oculto, activar "Todos"
+        if (!hasActiveVisible) {
+            filterBtns.forEach(b => {
+                if (b.dataset.filter === 'all') b.classList.add('active');
+                else b.classList.remove('active');
+            });
+            filter = 'all';
+        }
+
+        // Ocultar botones de administración del catálogo para el rol médico
+        const btnAddSrv = document.getElementById('btn-add-service');
+        const btnImportSrv = document.getElementById('btn-import-services');
+        const btnDownloadTpl = document.getElementById('btn-download-services-template');
+        if (btnAddSrv) btnAddSrv.style.display = 'none';
+        if (btnImportSrv) btnImportSrv.style.display = 'none';
+        if (btnDownloadTpl) btnDownloadTpl.style.display = 'none';
+    } else {
+        // Restaurar botones completos para administradores / otros roles
+        document.querySelectorAll('#view-pricing .filter-btn').forEach(btn => {
+            btn.style.display = '';
+            if (btn.dataset.filter === 'all') {
+                btn.innerHTML = '<i class="fa-solid fa-layer-group"></i> Todos';
+            }
+        });
+        const btnAddSrv = document.getElementById('btn-add-service');
+        const btnImportSrv = document.getElementById('btn-import-services');
+        const btnDownloadTpl = document.getElementById('btn-download-services-template');
+        if (btnAddSrv) btnAddSrv.style.display = isAssistant ? 'none' : 'inline-flex';
+        if (btnImportSrv) btnImportSrv.style.display = isAssistant ? 'none' : 'inline-flex';
+        if (btnDownloadTpl) btnDownloadTpl.style.display = isAssistant ? 'none' : 'inline-flex';
+    }
 
     // Apply Filter by Area or Category
     if (filter !== 'all') {
@@ -8428,7 +9003,7 @@ async function renderUsersTable(filter = 'all', searchQuery = '') {
     let users = await SupabaseDataService.getUsers();
 
     // In Personal Médico view, ONLY show clinical staff (exclude pure system/administrative roles)
-    users = users.filter(u => !isSystemAdminRole(u.role));
+    // users = users.filter(u => !isSystemAdminRole(u.role));
 
     // Apply Filter
     if (filter !== 'all') {
@@ -8483,35 +9058,125 @@ async function renderUsersTable(filter = 'all', searchQuery = '') {
 // ==========================================
 // GESTIÓN DE USUARIOS DEL SISTEMA (AJUSTES)
 // ==========================================
-window.renderSystemUsersTable = async function() {
+window.activeSysUsersFilter = 'all';
+
+window.renderSystemUsersTable = async function(filterCategory = null) {
+    if (filterCategory) window.activeSysUsersFilter = filterCategory;
+    const currentFilter = window.activeSysUsersFilter || 'all';
+
     const tbody = document.getElementById('system-users-table-tbody');
     if (!tbody) return;
 
-    tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding: 20px;"><i class="fa-solid fa-spinner fa-spin text-cyan"></i> Cargando usuarios del sistema...</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding: 24px;"><i class="fa-solid fa-spinner fa-spin text-cyan"></i> Cargando usuarios del sistema en tiempo real...</td></tr>`;
 
-    let users = await SupabaseDataService.getUsers();
+    // Forzar lectura fresca de Supabase (sin caché desactualizada)
+    let users = await SupabaseDataService.getUsers(true);
 
-    // Filter to only administrative & system users
-    let sysUsers = users.filter(u => isSystemAdminRole(u.role) || !u.role || u.role.toLowerCase().includes('admin'));
+    // Helpers de clasificación de roles
+    const isSuperRole = (r) => {
+        const str = (r || '').toLowerCase();
+        return str.includes('super') || str.includes('gerente') || str.includes('director');
+    };
+    const isAdminRole = (r) => {
+        const str = (r || '').toLowerCase();
+        return str.includes('admin') || str.includes('gerente') || str.includes('recep') || str.includes('caja') || str.includes('factura');
+    };
+    const isHygRole = (r) => {
+        const str = (r || '').toLowerCase();
+        return str.includes('higien');
+    };
+    const isDocRole = (r) => {
+        const str = (r || '').toLowerCase();
+        return !isHygRole(r) && (str.includes('odont') || str.includes('medico') || str.includes('médico') || str.includes('cirujan') || str.includes('especialista') || str.includes('dentist'));
+    };
+    const isAsstRole = (r) => {
+        const str = (r || '').toLowerCase();
+        return !isHygRole(r) && !isDocRole(r) && (str.includes('asistente') || str.includes('enferm') || str.includes('auxiliar'));
+    };
 
-    if (sysUsers.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding: 24px;">No hay cuentas administrativas registradas. Cree una nueva con el botón "+ Crear Usuario del Sistema".</td></tr>`;
+    // Actualizar contadores en la barra de filtros
+    const countAll = users.length;
+    const countAdmin = users.filter(u => isAdminRole(u.role)).length;
+    const countDoc = users.filter(u => isDocRole(u.role)).length;
+    const countHyg = users.filter(u => isHygRole(u.role)).length;
+    const countAsst = users.filter(u => isAsstRole(u.role)).length;
+
+    const elCountAll = document.getElementById('sys-count-all');
+    const elCountAdmin = document.getElementById('sys-count-admin');
+    const elCountDoc = document.getElementById('sys-count-doctor');
+    const elCountHyg = document.getElementById('sys-count-hygienist');
+    const elCountAsst = document.getElementById('sys-count-assistant');
+
+    if (elCountAll) elCountAll.innerText = countAll;
+    if (elCountAdmin) elCountAdmin.innerText = countAdmin;
+    if (elCountDoc) elCountDoc.innerText = countDoc;
+    if (elCountHyg) elCountHyg.innerText = countHyg;
+    if (elCountAsst) elCountAsst.innerText = countAsst;
+
+    // Actualizar estilo visual activo de los botones de filtro
+    const filterBtns = document.querySelectorAll('.sys-user-filter-btn');
+    filterBtns.forEach(btn => {
+        if (btn.dataset.filter === currentFilter) {
+            btn.className = 'btn btn-xs btn-primary sys-user-filter-btn';
+        } else {
+            btn.className = 'btn btn-xs btn-outline sys-user-filter-btn';
+        }
+    });
+
+    // Filtrar según selección activa
+    let displayUsers = users;
+    if (currentFilter === 'admin') {
+        displayUsers = users.filter(u => isAdminRole(u.role));
+    } else if (currentFilter === 'doctor') {
+        displayUsers = users.filter(u => isDocRole(u.role));
+    } else if (currentFilter === 'hygienist') {
+        displayUsers = users.filter(u => isHygRole(u.role));
+    } else if (currentFilter === 'assistant') {
+        displayUsers = users.filter(u => isAsstRole(u.role));
+    }
+
+    if (displayUsers.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding: 28px;">No hay usuarios en esta categoría. Total en sistema: ${users.length}</td></tr>`;
         return;
     }
 
     tbody.innerHTML = '';
-    sysUsers.forEach(u => {
+    displayUsers.forEach(u => {
         const tr = document.createElement('tr');
-        const isSuper = (u.role || '').toLowerCase().includes('super') || (u.role || '').toLowerCase().includes('gerente');
-        const roleBadgeClass = isSuper ? 'green' : 'blue';
+        const rStr = (u.role || '').toLowerCase();
+        const isSuper = isSuperRole(u.role);
+        const isHyg = isHygRole(u.role);
+        const isDoc = isDocRole(u.role);
+
+        let roleBadgeClass = 'blue';
+        let roleIcon = 'fa-solid fa-user-gear';
+        let categoryTag = '';
+
+        if (isSuper) {
+            roleBadgeClass = 'green';
+            roleIcon = 'fa-solid fa-crown';
+            categoryTag = '<small class="badge-tag green" style="font-size:0.68rem; margin-left:4px;">Dirección</small>';
+        } else if (isHyg) {
+            roleBadgeClass = 'teal';
+            roleIcon = 'fa-solid fa-tooth';
+            categoryTag = '<small class="badge-tag green" style="background:#d1fae5; color:#065f46; font-size:0.68rem; margin-left:4px;">Higienista</small>';
+        } else if (isDoc) {
+            roleBadgeClass = 'cyan';
+            roleIcon = 'fa-solid fa-user-doctor';
+            categoryTag = '<small class="badge-tag blue" style="font-size:0.68rem; margin-left:4px;">Médico / Odontólogo</small>';
+        } else if (isAdminRole(u.role)) {
+            roleBadgeClass = 'blue';
+            roleIcon = 'fa-solid fa-shield-halved';
+            categoryTag = '<small class="badge-tag purple" style="font-size:0.68rem; margin-left:4px;">Oficina</small>';
+        }
 
         tr.innerHTML = `
             <td>
                 <strong>${u.fullname}</strong>
-                ${isSuper ? ' <small class="badge-tag green" style="font-size:0.68rem; margin-left:4px;">Dirección</small>' : ''}
+                ${categoryTag}
             </td>
             <td><span style="font-family:monospace; color:#334155;">${u.email}</span></td>
-            <td><span class="badge-tag ${roleBadgeClass}" style="font-weight:700;"><i class="fa-solid fa-shield-halved"></i> ${u.role || 'Administrador'}</span></td>
+            <td><span class="badge-tag ${roleBadgeClass}" style="font-weight:700;"><i class="${roleIcon}"></i> ${u.role || 'Usuario'}</span></td>
             <td><span class="badge-tag ${u.status === 'Inactivo' ? 'red' : 'green'}">${u.status || 'Activo'}</span></td>
             <td>${u.createdAt || '-'}</td>
             <td style="text-align: center;">
@@ -8549,11 +9214,17 @@ window.openCreateSystemUserModal = function() {
 };
 
 window.editSystemUser = async function(userId) {
-    const users = await SupabaseDataService.getUsers();
+    const users = await SupabaseDataService.getUsers(true);
     const user = users.find(u => String(u.id) === String(userId));
     if (!user) {
         Swal.fire({ icon: 'error', title: 'No encontrado', text: 'No se encontró el usuario seleccionado.' });
         return;
+    }
+
+    const r = (user.role || '').toLowerCase();
+    const isClinical = r.includes('odont') || r.includes('higien') || r.includes('medico') || r.includes('médico') || r.includes('cirujan') || r.includes('asistente');
+    if (isClinical && typeof window.openEditUserModal === 'function') {
+        return window.openEditUserModal(userId);
     }
 
     const form = document.getElementById('form-system-user');
@@ -8634,8 +9305,23 @@ function updateRoleScopeHint(role) {
     if (!hintEl) return;
 
     const r = (role || '').toLowerCase();
-    const isDoctor = r.includes('medico') || r.includes('odont') || r.includes('doctor') || r.includes('dentista') || r.includes('médico') || r.includes('cirujano') || r.includes('especialista');
-    const isAssistant = r.includes('asistente') || r.includes('enfermer') || r.includes('auxiliar');
+    const isHygienist = r.includes('higien');
+    const isDoctor = !isHygienist && (r.includes('medico') || r.includes('odont') || r.includes('doctor') || r.includes('dentista') || r.includes('médico') || r.includes('cirujano') || r.includes('especialista'));
+    const isAssistant = !isHygienist && (r.includes('asistente') || r.includes('enfermer') || r.includes('auxiliar'));
+
+    if (isHygienist) {
+        hintEl.innerHTML = `
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px; font-weight:700; color:#047857;">
+                <i class="fa-solid fa-tooth text-green"></i> Higienista Dental / Asistencia Clínica Avanzada
+            </div>
+            <p style="margin:0 0 6px 0; font-size:0.82rem;"><strong>Compensación:</strong> Sueldo base garantizado + bono fijo + comisiones configurables por procedimiento específico o porcentaje general.</p>
+            <ul style="margin:0; padding-left:18px; font-size:0.79rem; color:var(--text-color); line-height:1.4;">
+                <li>Atención de profilaxis, limpiezas dentales, sellantes y blanqueamiento según baremo.</li>
+                <li>Asistencia en sillón con liquidación automática de comisiones en nómina.</li>
+            </ul>
+        `;
+        return;
+    }
 
     if (isDoctor) {
         hintEl.innerHTML = `
@@ -8694,6 +9380,18 @@ window.openCreateUserModal = async function() {
     if (passHint) passHint.classList.add('hidden');
 
     await populateDoctorServicesSelect();
+    await populateHygienistServicesSelect();
+
+    window._currentHygienistCommissions = [];
+    const hygSalary = document.getElementById('u-hyg-base-salary');
+    const hygBonus = document.getElementById('u-hyg-fixed-bonus');
+    const hygGenComm = document.getElementById('u-hyg-general-commission');
+    const hygVal = document.getElementById('u-hyg-service-comm-value');
+    if (hygSalary) hygSalary.value = '';
+    if (hygBonus) hygBonus.value = '';
+    if (hygGenComm) hygGenComm.value = '';
+    if (hygVal) hygVal.value = '';
+    renderHygienistCommissionsTable();
 
     const roleSelect = document.getElementById('u-role');
     if (roleSelect) {
@@ -8752,6 +9450,18 @@ window.editUser = async function(userId) {
     if (licInput) licInput.value = (user.license && user.license !== 'N/A') ? user.license : '';
 
     await populateDoctorServicesSelect();
+    await populateHygienistServicesSelect();
+
+    const hygProf = user.hygienistProfile || user.hygienist_profile || user.doctorProfile || user.doctor_profile || {};
+    const hygSalary = document.getElementById('u-hyg-base-salary');
+    const hygBonus = document.getElementById('u-hyg-fixed-bonus');
+    const hygGenComm = document.getElementById('u-hyg-general-commission');
+    if (hygSalary) hygSalary.value = hygProf.baseSalary !== undefined ? hygProf.baseSalary : '';
+    if (hygBonus) hygBonus.value = hygProf.fixedBonus !== undefined ? hygProf.fixedBonus : '';
+    if (hygGenComm) hygGenComm.value = hygProf.generalCommission !== undefined ? hygProf.generalCommission : '';
+
+    window._currentHygienistCommissions = Array.isArray(hygProf.serviceCommissions) ? [...hygProf.serviceCommissions] : [];
+    renderHygienistCommissionsTable();
 
     if (roleSelect) {
         roleSelect.dispatchEvent(new Event('change'));
@@ -8805,6 +9515,78 @@ window.deleteUser = async function(userId) {
     });
 };
 
+
+// ==========================================
+// HIGIENISTA DENTAL: GESTIÓN DE SUELDO Y COMISIONES POR SERVICIO
+// ==========================================
+
+window._currentHygienistCommissions = [];
+
+async function populateHygienistServicesSelect() {
+    const select = document.getElementById('u-hyg-service-select');
+    if (!select) return;
+    select.innerHTML = '<option value="">-- Seleccionar servicio del Baremo --</option>';
+    const baremo = await SupabaseDataService.getBaremo();
+    baremo.forEach(proc => {
+        const opt = document.createElement('option');
+        opt.value = proc.code;
+        opt.dataset.name = proc.name;
+        opt.dataset.price = proc.priceUSD;
+        opt.dataset.area = proc.area || '';
+        opt.innerText = `${proc.name} [${proc.priceUSD} USD] (${proc.code})`;
+        select.appendChild(opt);
+    });
+}
+window.populateHygienistServicesSelect = populateHygienistServicesSelect;
+
+function renderHygienistCommissionsTable() {
+    const tbody = document.getElementById('u-hyg-services-comm-tbody');
+    if (!tbody) return;
+
+    const list = window._currentHygienistCommissions || [];
+    if (list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding: 14px;">No hay comisiones específicas asignadas. Use el selector superior para agregar.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = list.map(item => {
+        const price = parseFloat(item.priceUSD || 0);
+        let commLabel = '';
+        if (item.type === 'fixed') {
+            commLabel = `<strong style="color: #059669;">${parseFloat(item.value || 0).toFixed(2)} USD</strong> (Fijo)`;
+        } else {
+            const calculated = (price * parseFloat(item.value || 0)) / 100;
+            commLabel = `<strong style="color: #0284c7;">${item.value}%</strong> <small style="color: #64748b;">(~${calculated.toFixed(2)} USD)</small>`;
+        }
+
+        const typeBadge = item.type === 'fixed'
+            ? '<span class="badge-tag green" style="font-size: 0.72rem;">Monto Fijo</span>'
+            : '<span class="badge-tag blue" style="font-size: 0.72rem;">Porcentaje %</span>';
+
+        const safeCode = (item.code || '').replace(/'/g, "\\'");
+
+        return `
+            <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 6px 10px;"><strong>${item.name}</strong> <small style="color: #64748b; font-family: monospace;">(${item.code})</small></td>
+                <td style="padding: 6px 10px; text-align: right; font-weight: 600;">${price.toFixed(2)}</td>
+                <td style="padding: 6px 10px;">${typeBadge}</td>
+                <td style="padding: 6px 10px; text-align: right;">${commLabel}</td>
+                <td style="padding: 6px 10px; text-align: center;">
+                    <button type="button" class="btn btn-xs btn-outline text-red" onclick="window.removeHygienistServiceComm('${safeCode}')" title="Eliminar servicio">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+window.renderHygienistCommissionsTable = renderHygienistCommissionsTable;
+
+window.removeHygienistServiceComm = function(code) {
+    window._currentHygienistCommissions = (window._currentHygienistCommissions || []).filter(c => c.code !== code);
+    renderHygienistCommissionsTable();
+};
+
 async function populateDoctorServicesSelect() {
     const select = document.getElementById('u-services');
     if (!select) return;
@@ -8826,6 +9608,54 @@ function initGlobalEvents() {
     initPatientStepperWizard();
     initSettingsEvents();
 
+    // Asignación de comisión por servicio a Higienista
+    const btnAddHygComm = document.getElementById('btn-add-hyg-service-comm');
+    if (btnAddHygComm) {
+        btnAddHygComm.onclick = () => {
+            const selectEl = document.getElementById('u-hyg-service-select');
+            const typeEl = document.getElementById('u-hyg-service-comm-type');
+            const valEl = document.getElementById('u-hyg-service-comm-value');
+
+            const codeVal = selectEl ? selectEl.value : '';
+            const typeVal = typeEl ? typeEl.value : 'fixed';
+            const valueVal = parseFloat(valEl ? valEl.value : 0);
+
+            if (!codeVal) {
+                Swal.fire({ icon: 'warning', title: 'Seleccione un servicio', text: 'Por favor elija un procedimiento del baremo.' });
+                return;
+            }
+
+            if (isNaN(valueVal) || valueVal <= 0) {
+                Swal.fire({ icon: 'warning', title: 'Valor inválido', text: 'Indique un monto o porcentaje mayor a cero.' });
+                return;
+            }
+
+            const selOption = selectEl.options[selectEl.selectedIndex];
+            const nameVal = selOption ? selOption.dataset.name : codeVal;
+            const priceVal = selOption ? parseFloat(selOption.dataset.price || 0) : 0;
+
+            window._currentHygienistCommissions = window._currentHygienistCommissions || [];
+            const existingIdx = window._currentHygienistCommissions.findIndex(item => item.code === codeVal);
+
+            const commItem = {
+                code: codeVal,
+                name: nameVal,
+                priceUSD: priceVal,
+                type: typeVal,
+                value: valueVal
+            };
+
+            if (existingIdx >= 0) {
+                window._currentHygienistCommissions[existingIdx] = commItem;
+            } else {
+                window._currentHygienistCommissions.push(commItem);
+            }
+
+            renderHygienistCommissionsTable();
+            if (valEl) valEl.value = '';
+        };
+    }
+
     // Conditional display for Doctor role in User Modal
     const uRoleSelect = document.getElementById('u-role');
     const docFieldsDiv = document.getElementById('doctor-profile-fields');
@@ -8841,14 +9671,25 @@ function initGlobalEvents() {
         uRoleSelect.onchange = () => {
             const role = uRoleSelect.value;
             const r = (role || '').toLowerCase();
-            const isDoctor = r.includes('odont') || r.includes('especialista') || r.includes('cirujano') || r.includes('médico') || r.includes('medico') || r.includes('doctor');
+            const isHygienist = r.includes('higien');
+            const isDoctor = !isHygienist && (r.includes('odont') || r.includes('especialista') || r.includes('cirujano') || r.includes('médico') || r.includes('medico') || r.includes('doctor'));
             const licGroup = document.getElementById('u-license-group');
-            if (isDoctor) {
+            const hygFieldsDiv = document.getElementById('hygienist-profile-fields');
+
+            if (isHygienist) {
+                if (hygFieldsDiv) hygFieldsDiv.classList.remove('hidden');
+                docFieldsDiv.classList.add('hidden');
+                if (licGroup) licGroup.classList.remove('hidden');
+                document.getElementById('u-schedule').removeAttribute('required');
+                document.getElementById('u-commission').removeAttribute('required');
+            } else if (isDoctor) {
+                if (hygFieldsDiv) hygFieldsDiv.classList.add('hidden');
                 docFieldsDiv.classList.remove('hidden');
                 if (licGroup) licGroup.classList.remove('hidden');
                 document.getElementById('u-schedule').setAttribute('required', 'true');
                 document.getElementById('u-commission').setAttribute('required', 'true');
             } else {
+                if (hygFieldsDiv) hygFieldsDiv.classList.add('hidden');
                 docFieldsDiv.classList.add('hidden');
                 if (licGroup) licGroup.classList.add('hidden');
                 const licInput = document.getElementById('u-license');
@@ -9285,7 +10126,30 @@ function initGlobalEvents() {
                 });
 
                 await SupabaseDataService.savePatient(p);
+
+                // Si viene del Carrito Clínico, actualizar las facturas/presupuestos correspondientes a Pagado
+                if (window.activeCartCheckoutSession && String(window.activeCartCheckoutSession.patientId) === String(activeId)) {
+                    try {
+                        const allInvoices = await SupabaseDataService.getInvoices();
+                        const relInvs = allInvoices.filter(inv => 
+                            String(inv.patientId) === String(activeId) && 
+                            (inv.sentToCashier || inv.checkoutStatus === 'pending_payment' || (window.activeCartCheckoutSession.invoiceIds && window.activeCartCheckoutSession.invoiceIds.includes(String(inv.id))))
+                        );
+                        for (const inv of relInvs) {
+                            inv.status = balanceUSD === 0 ? 'Pagado' : 'Parcial';
+                            inv.checkoutStatus = balanceUSD === 0 ? 'completed' : 'partial';
+                            inv.paidAt = new Date().toISOString();
+                            await SupabaseDataService.saveInvoice(inv);
+                        }
+                    } catch(invErr) {
+                        console.error("Error updating invoices after cart checkout:", invErr);
+                    }
+                    window.activeCartCheckoutSession = null;
+                }
+
                 closeModal('modal-payment');
+                if (typeof window.updateCheckoutBadge === 'function') await window.updateCheckoutBadge();
+                if (typeof window.renderCheckoutQueue === 'function') await window.renderCheckoutQueue();
                 await renderEHRView();
                 await renderDashboard();
                 await renderCashFlow();
@@ -10018,6 +10882,10 @@ function initGlobalEvents() {
 
     // Modal Cita Helpers: New & Edit
     window.openNewAppointmentModal = async function() {
+        if (typeof isDoctorUser === 'function' && isDoctorUser()) {
+            Swal.fire({ icon: 'warning', title: 'Acción Restringida', text: 'Los médicos no tienen permisos para agendar nuevas citas.' });
+            return;
+        }
         await populateAppointmentPatientSelect();
 
         const titleEl = document.getElementById('modal-appointment-title');
@@ -10047,6 +10915,10 @@ function initGlobalEvents() {
     };
 
     window.editAppointment = async function(apptId) {
+        if (typeof isDoctorUser === 'function' && isDoctorUser()) {
+            Swal.fire({ icon: 'warning', title: 'Acción Restringida', text: 'Los médicos no tienen permisos para editar ni reagendar citas.' });
+            return;
+        }
         try {
             const appts = await SupabaseDataService.getAppointments();
             const app = appts.find(a => a.id === apptId);
@@ -10374,6 +11246,34 @@ function initGlobalEvents() {
         });
     }
 
+    // Doctor Finances Period Filters
+    document.querySelectorAll('#doc-fin-period-filters .filter-btn').forEach(btn => {
+        btn.onclick = async function() {
+            document.querySelectorAll('#doc-fin-period-filters .filter-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            await window.renderDoctorFinancesView(this.dataset.period);
+        };
+    });
+
+    // Doctor Finances Subtabs
+    document.querySelectorAll('#doc-fin-subtabs-bar .subtab-btn').forEach(btn => {
+        btn.onclick = function() {
+            document.querySelectorAll('#doc-fin-subtabs-bar .subtab-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            window._docFinSubtab = this.dataset.subtab;
+            window.renderDoctorFinancesActiveSubtab();
+        };
+    });
+
+    // Doctor Finances Search Input
+    const docFinSearch = document.getElementById('doc-fin-search-input');
+    if (docFinSearch) {
+        docFinSearch.addEventListener('input', (e) => {
+            window._docFinSearch = (e.target.value || '').toLowerCase().trim();
+            window.renderDoctorFinancesActiveSubtab();
+        });
+    }
+
     // Servicios / Pricing View Filters and Search Handler
     document.querySelectorAll('#view-pricing .filter-btn').forEach(btn => {
         btn.onclick = async function() {
@@ -10459,9 +11359,11 @@ function initGlobalEvents() {
             }
 
             const r = (role || '').toLowerCase();
-            const isDoctor = r.includes('odont') || r.includes('especialista') || r.includes('cirujano') || r.includes('médico') || r.includes('medico') || r.includes('doctor');
-            const license = isDoctor ? (rawLicense || 'N/A') : 'N/A';
+            const isHygienist = r.includes('higien');
+            const isDoctor = !isHygienist && (r.includes('odont') || r.includes('especialista') || r.includes('cirujano') || r.includes('médico') || r.includes('medico') || r.includes('doctor'));
+            const license = (isDoctor || isHygienist) ? (rawLicense || 'N/A') : 'N/A';
             let doctorProfile = null;
+            let hygienistProfile = null;
 
             if (isDoctor) {
                 const assignedServices = Array.from(document.getElementById('u-services').selectedOptions).map(opt => opt.value);
@@ -10474,6 +11376,26 @@ function initGlobalEvents() {
                     schedule,
                     commission,
                     availability
+                };
+            }
+
+            if (isHygienist) {
+                const baseSalary = parseFloat(document.getElementById('u-hyg-base-salary')?.value) || 0;
+                const fixedBonus = parseFloat(document.getElementById('u-hyg-fixed-bonus')?.value) || 0;
+                const generalCommission = parseFloat(document.getElementById('u-hyg-general-commission')?.value) || 0;
+
+                hygienistProfile = {
+                    baseSalary,
+                    fixedBonus,
+                    generalCommission,
+                    serviceCommissions: window._currentHygienistCommissions || []
+                };
+
+                // También como doctorProfile para retrocompatibilidad completa en cálculos de nómina
+                doctorProfile = {
+                    ...hygienistProfile,
+                    commission: generalCommission,
+                    assignedServices: (window._currentHygienistCommissions || []).map(c => c.code)
                 };
             }
 
@@ -10492,7 +11414,9 @@ function initGlobalEvents() {
                     status: existing ? (existing.status || 'Activo') : 'Activo',
                     createdAt: existing ? existing.createdAt : new Date().toISOString().split('T')[0],
                     doctorProfile: doctorProfile || (existing ? existing.doctorProfile : {}),
-                    doctor_profile: doctorProfile || (existing ? existing.doctor_profile : {})
+                    doctor_profile: doctorProfile || (existing ? existing.doctor_profile : {}),
+                    hygienistProfile: hygienistProfile || (existing ? existing.hygienistProfile : null),
+                    hygienist_profile: hygienistProfile || (existing ? existing.hygienist_profile : null)
                 };
             } else {
                 userObj = {
@@ -10505,14 +11429,18 @@ function initGlobalEvents() {
                     status: 'Activo',
                     createdAt: new Date().toISOString().split('T')[0],
                     doctorProfile: doctorProfile || {},
-                    doctor_profile: doctorProfile || {}
+                    doctor_profile: doctorProfile || {},
+                    hygienistProfile: hygienistProfile || null,
+                    hygienist_profile: hygienistProfile || null
                 };
             }
 
             try {
                 await SupabaseDataService.saveUser(userObj);
                 closeModal('modal-user');
+                await SupabaseDataService.getUsers(true);
                 await renderUsersTable();
+                if (typeof window.renderSystemUsersTable === 'function') await window.renderSystemUsersTable();
                 Swal.fire({
                     icon: 'success',
                     title: existingUserId ? '¡Usuario Actualizado!' : '¡Usuario Registrado!',
@@ -10594,7 +11522,9 @@ function initGlobalEvents() {
                 );
             }
             closeModal('modal-system-user');
+            await SupabaseDataService.getUsers(true);
             await window.renderSystemUsersTable();
+            if (typeof renderUsersTable === 'function') await renderUsersTable();
             Swal.fire({
                 icon: 'success',
                 title: existingId ? '¡Cuenta Actualizada!' : '¡Cuenta Creada!',
@@ -10681,7 +11611,10 @@ function initGlobalEvents() {
         const type = getVal('p-type') || 'Adulto';
         const age = parseInt(getVal('p-age')) || 0;
 
-        if (!id || !firstname || !lastname || !birthdate || !phone || !address) {
+        const curUserSave = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+        const isDocSave = curUserSave && typeof isDoctorUser === 'function' && isDoctorUser(curUserSave);
+
+        if (!id || !firstname || !lastname || !birthdate || (!isDocSave && !phone) || !address) {
             Swal.fire({ 
                 icon: 'warning', 
                 title: 'Campos Requeridos Incompletos', 
@@ -10803,12 +11736,13 @@ function initGlobalEvents() {
 
             if (existing) {
                 // MODO EDICIÓN: Actualizar todos los datos clínicos y personales preservando historial
+                const preservedPhone = (isDocSave && !phone && existing.phone) ? existing.phone : (phone || existing.phone || '');
                 patientToSave = {
                     ...existing,
                     id: existing.id,
                     fullname,
                     birthdate,
-                    phone,
+                    phone: preservedPhone,
                     email: getVal('p-email'),
                     occupation: profession,
                     address: address,
@@ -11580,6 +12514,10 @@ function initGlobalEvents() {
     const btnNewBudget = document.getElementById('btn-new-budget');
     if (btnNewBudget) {
         btnNewBudget.onclick = () => {
+            if (typeof isDoctorUser === 'function' && isDoctorUser()) {
+                Swal.fire({ icon: 'warning', title: 'Acceso Restringido', text: 'Los médicos no gestionan presupuestos.' });
+                return;
+            }
             openModal('modal-select-budget-type');
         };
     }
@@ -12490,15 +13428,77 @@ async function renderSettingsView() {
     const r = (user.role || '').toLowerCase();
     const isAdmin = r.includes('admin') || r.includes('super') || r.includes('director');
     const isDoctor = r.includes('medico') || r.includes('odont') || r.includes('doctor') || r.includes('dentista') || r.includes('médico');
+    const isHygienist = typeof isHygienistUser === 'function' ? isHygienistUser(user) : r.includes('higien');
 
     const navButtons = document.querySelectorAll('.settings-nav-btn');
     const panes = document.querySelectorAll('.settings-pane');
+
+    // RESTRICCION ESTRICTA PARA HIGIENISTA:
+    // No puede ver datos del negocio, usuarios del sistema, papelera ni auditoría.
+    // Solo debe aparecerle "Mi Perfil Personal" y "Apariencia y Tema".
+    if (isHygienist) {
+        const busBtn = document.getElementById('btn-pane-business');
+        const sysUsersBtn = document.getElementById('btn-pane-system-users');
+        const trashBtn = document.getElementById('btn-pane-trash');
+        const auditBtn = document.getElementById('btn-pane-audit');
+        if (busBtn) busBtn.style.setProperty('display', 'none', 'important');
+        if (sysUsersBtn) sysUsersBtn.style.setProperty('display', 'none', 'important');
+        if (trashBtn) trashBtn.style.setProperty('display', 'none', 'important');
+        if (auditBtn) auditBtn.style.setProperty('display', 'none', 'important');
+
+        const profBtn = document.querySelector('.settings-nav-btn[data-pane="profile"]');
+        const appBtn = document.getElementById('btn-pane-appearance');
+        if (profBtn) profBtn.style.removeProperty('display');
+        if (appBtn) appBtn.style.removeProperty('display');
+
+        navButtons.forEach(b => b.classList.remove('active'));
+        panes.forEach(p => p.classList.remove('active'));
+        if (profBtn) profBtn.classList.add('active');
+        const paneProf = document.getElementById('pane-profile');
+        if (paneProf) paneProf.classList.add('active');
+    } else {
+        const busBtn = document.getElementById('btn-pane-business');
+        const sysUsersBtn = document.getElementById('btn-pane-system-users');
+        const trashBtn = document.getElementById('btn-pane-trash');
+        const auditBtn = document.getElementById('btn-pane-audit');
+        if (busBtn) busBtn.style.display = isAdmin ? '' : 'none';
+        if (sysUsersBtn) sysUsersBtn.style.display = isAdmin ? '' : 'none';
+        if (trashBtn) trashBtn.style.display = isAdmin ? '' : 'none';
+        if (auditBtn) auditBtn.style.display = isAdmin ? '' : 'none';
+
+        if (!isAdmin) {
+            const paneBus = document.getElementById('pane-business');
+            const paneProf = document.getElementById('pane-profile');
+            if (paneBus && paneProf) {
+                paneBus.classList.remove('active');
+                paneProf.classList.add('active');
+            }
+            if (busBtn) busBtn.classList.remove('active');
+            const profileBtn = document.querySelector('.settings-nav-btn[data-pane="profile"]');
+            if (profileBtn) profileBtn.classList.add('active');
+        } else {
+            const paneBus = document.getElementById('pane-business');
+            const paneProf = document.getElementById('pane-profile');
+            if (paneBus && paneProf) {
+                paneBus.classList.add('active');
+                paneProf.classList.remove('active');
+            }
+            if (busBtn) busBtn.classList.add('active');
+            const profileBtn = document.querySelector('.settings-nav-btn[data-pane="profile"]');
+            if (profileBtn) profileBtn.classList.remove('active');
+        }
+    }
 
     navButtons.forEach(btn => {
         btn.onclick = (e) => {
             e.preventDefault();
             const paneName = btn.dataset.pane;
             
+            // Si es higienista y trata de acceder a un panel prohibido, abortar
+            if (isHygienist && (paneName === 'business' || paneName === 'system-users' || paneName === 'trash' || paneName === 'audit')) {
+                return;
+            }
+
             navButtons.forEach(b => b.classList.remove('active'));
             panes.forEach(p => p.classList.remove('active'));
 
@@ -12507,36 +13507,10 @@ async function renderSettingsView() {
             if (targetPane) targetPane.classList.add('active');
 
             if (paneName === 'system-users' && typeof window.renderSystemUsersTable === 'function') {
-                window.renderSystemUsersTable();
+                window.renderSystemUsersTable('all');
             }
         };
     });
-
-    // If not admin, hide business pane and activate profile pane by default
-    if (!isAdmin) {
-        const paneBus = document.getElementById('pane-business');
-        const paneProf = document.getElementById('pane-profile');
-        if (paneBus && paneProf) {
-            paneBus.classList.remove('active');
-            paneProf.classList.add('active');
-        }
-        const busBtn = document.getElementById('btn-pane-business');
-        const profileBtn = document.querySelector('.settings-nav-btn[data-pane="profile"]');
-        if (busBtn) busBtn.classList.remove('active');
-        if (profileBtn) profileBtn.classList.add('active');
-    } else {
-        // If admin, default back to business pane active
-        const paneBus = document.getElementById('pane-business');
-        const paneProf = document.getElementById('pane-profile');
-        if (paneBus && paneProf) {
-            paneBus.classList.add('active');
-            paneProf.classList.remove('active');
-        }
-        const busBtn = document.getElementById('btn-pane-business');
-        const profileBtn = document.querySelector('.settings-nav-btn[data-pane="profile"]');
-        if (busBtn) busBtn.classList.add('active');
-        if (profileBtn) profileBtn.classList.remove('active');
-    }
 
     if (isAdmin) {
         let config = null;
@@ -13341,7 +14315,10 @@ function initPatientStepperWizard() {
                 const birthdate = document.getElementById('p-birthdate') ? document.getElementById('p-birthdate').value : '';
                 const phone = document.getElementById('p-mobile-phone') ? document.getElementById('p-mobile-phone').value.trim() : '';
 
-                if (!firstname || !lastname || !id || !birthdate || !phone) {
+                const curUserStep = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+                const isDocStep = curUserStep && typeof isDoctorUser === 'function' && isDoctorUser(curUserStep);
+
+                if (!firstname || !lastname || !id || !birthdate || (!isDocStep && !phone)) {
                     Swal.fire({ icon: 'warning', title: 'Campos Incompletos', text: 'Por favor complete los campos obligatorios del Paso 1 (Filiación) antes de avanzar.' });
                     return;
                 }
@@ -13386,7 +14363,10 @@ function initPatientStepperWizard() {
                 const birthdate = document.getElementById('p-birthdate').value;
                 const phone = document.getElementById('p-mobile-phone').value.trim();
 
-                if (!firstname || !lastname || !id || !birthdate || !phone) {
+                const curUserStep = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+                const isDocStep = curUserStep && typeof isDoctorUser === 'function' && isDoctorUser(curUserStep);
+
+                if (!firstname || !lastname || !id || !birthdate || (!isDocStep && !phone)) {
                     Swal.fire({ icon: 'warning', title: 'Campos Incompletos', text: 'Por favor complete todos los campos obligatorios del Paso 1.' });
                     return;
                 }
@@ -15680,6 +16660,7 @@ async function renderFinanceView() {
         };
     });
 
+    if (typeof window.renderCheckoutQueue === 'function') await window.renderCheckoutQueue();
     await renderProviderBills();
     await renderReceivables();
     await renderCashFlow();
@@ -16095,6 +17076,7 @@ async function renderReceivables() {
                     <td class="text-red"><strong>$${pay.balanceUSD.toFixed(2)}</strong></td>
                     <td>
                         <div class="actions-cell-group">
+                            
                             <button class="btn btn-xs btn-success" onclick="openEHRForPatient('${p.id}')" title="Abonar en EHR"><i class="fa-solid fa-hand-holding-dollar"></i> Cobrar / EHR</button>
                         </div>
                     </td>
@@ -17684,21 +18666,42 @@ async function renderAttendedPatientsModal(dateStr) {
     tbody.innerHTML = '<tr><td colspan="5" class="text-center" style="padding: 20px;"><i class="fa-solid fa-spinner fa-spin text-cyan"></i> Cargando información...</td></tr>';
     
     try {
-        const allPatients = await SupabaseDataService.getPatients();
+        let allPatients = await SupabaseDataService.getPatients();
+        const currentUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+        const isDoctor = currentUser && (typeof isDoctorUser === 'function' && isDoctorUser(currentUser));
+        let docId = '';
+        let cleanDocName = '';
+
+        if (isDoctor) {
+            const appointments = await SupabaseDataService.getAppointments();
+            const allInvoices = await SupabaseDataService.getInvoices();
+            docId = String(currentUser.id || '').trim();
+            cleanDocName = String(currentUser.fullname || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+
+            allPatients = allPatients.filter(p => isPatientAssignedToDoctor(p, currentUser, appointments, allInvoices));
+        }
+
         const records = [];
 
         allPatients.forEach(p => {
             // Check sessions
             if (p.sessions && p.sessions.length > 0) {
                 p.sessions.forEach(s => {
-                    if (s.datetime && s.datetime.startsWith(dateStr)) {
-                        const timePart = s.datetime.slice(11).trim() || 'N/A';
+                    const sDt = window.normalizeDateToISO ? window.normalizeDateToISO(s.datetime || s.date) : (s.datetime || '').split('T')[0];
+                    if (sDt === dateStr || (s.datetime && s.datetime.startsWith(dateStr))) {
+                        if (isDoctor) {
+                            const sDocId = String(s.doctorId || '').trim();
+                            const sDocName = String(s.doctor || s.specialist || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+                            if (sDocId && docId && sDocId !== docId) return;
+                            if (!sDocId && sDocName && cleanDocName && !sDocName.includes(cleanDocName) && !cleanDocName.includes(sDocName)) return;
+                        }
+                        const timePart = s.datetime ? s.datetime.slice(11).trim() : 'N/A';
                         records.push({
                             id: p.id,
                             name: p.fullname,
-                            time: timePart,
+                            time: timePart || 'N/A',
                             type: 'Evolución de Sesión',
-                            details: `Sesión N° ${s.sessionNum}: ${s.procedure}`
+                            details: `Sesión Nº ${s.sessionNum || 1}: ${s.procedure || 'Atención Médica'}`
                         });
                     }
                 });
@@ -17706,15 +18709,22 @@ async function renderAttendedPatientsModal(dateStr) {
             // Check clinicalNotes
             if (p.clinicalNotes && p.clinicalNotes.length > 0) {
                 p.clinicalNotes.forEach(n => {
-                    const cleanDt = n.datetime.replace('T', ' ');
-                    if (cleanDt.startsWith(dateStr)) {
+                    const cleanDt = (n.datetime || '').replace('T', ' ');
+                    const nDt = window.normalizeDateToISO ? window.normalizeDateToISO(cleanDt) : cleanDt.split(' ')[0];
+                    if (nDt === dateStr || cleanDt.startsWith(dateStr)) {
+                        if (isDoctor) {
+                            const nDocId = String(n.doctorId || '').trim();
+                            const nDocName = String(n.doctor || n.author || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+                            if (nDocId && docId && nDocId !== docId) return;
+                            if (!nDocId && nDocName && cleanDocName && !nDocName.includes(cleanDocName) && !cleanDocName.includes(nDocName)) return;
+                        }
                         const timePart = cleanDt.slice(11).trim() || 'N/A';
                         records.push({
                             id: p.id,
                             name: p.fullname,
                             time: timePart,
                             type: 'Nota Clínica / Evolución',
-                            details: n.content
+                            details: n.content || 'Evolución registrada'
                         });
                     }
                 });
@@ -19166,3 +20176,837 @@ window.renderAuditLogsPane = async function() {
     });
     tbody.innerHTML = html;
 };
+
+
+// ==========================================================================
+// DASHBOARD STAT CARDS NAVIGATION & DETALLE EXCLUSIVO DEL MÉDICO
+// ==========================================================================
+window.navigateToDailyIncome = async function() {
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
+        return window.openDoctorMetricModal('today_income');
+    }
+    await window.navigateToTab('finance');
+};
+
+window.navigateToMonthIncome = async function() {
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
+        return window.openDoctorMetricModal('month_income');
+    }
+    await window.navigateToTab('finance');
+};
+
+window.navigateToConversionBudgets = async function() {
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
+        return;
+    }
+    await window.navigateToTab('odontogram');
+};
+
+window.navigateToReceivables = async function() {
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
+        return window.openDoctorMetricModal('receivables');
+    }
+    await window.navigateToTab('finance');
+};
+
+// Modal de detalles de métricas del médico
+window.openDoctorMetricModal = async function(metricType) {
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (!curUser) return;
+
+    window._currentDoctorMetricType = metricType;
+    window._doctorMetricItems = [];
+
+    const modal = document.getElementById('modal-doctor-metric-details');
+    if (!modal) return;
+
+    const titleEl = document.getElementById('doctor-metric-modal-title');
+    const subEl = document.getElementById('doctor-metric-modal-subtitle');
+    const iconEl = document.getElementById('doctor-metric-modal-icon');
+    const kpiBar = document.getElementById('doctor-metric-kpi-bar');
+    const searchInput = document.getElementById('doctor-metric-search-input');
+    const thead = document.getElementById('doctor-metric-table-thead');
+    const tbody = document.getElementById('doctor-metric-table-tbody');
+
+    if (searchInput) searchInput.value = '';
+
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center" style="padding: 24px;"><i class="fa-solid fa-spinner fa-spin text-cyan"></i> Cargando información...</td></tr>';
+    openModal('modal-doctor-metric-details');
+
+    const todayStr = new Date().toLocaleDateString('en-CA');
+    const monthStr = todayStr.substring(0, 7);
+    const rate = typeof getExchangeRate === 'function' ? getExchangeRate() : 36.5;
+    const docId = String(curUser.id || '').trim();
+    const cleanDocName = String(curUser.fullname || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+
+    try {
+        let allPatients = await SupabaseDataService.getPatients();
+        let allInvoices = await SupabaseDataService.getInvoices();
+        let appointments = await SupabaseDataService.getAppointments();
+
+        // Filtrado estricto para este médico
+        const docInvoices = (allInvoices || []).filter(inv => {
+            const iDocId = String(inv.doctorId || (inv.metadata && inv.metadata.doctorId) || '').trim();
+            if (docId && iDocId && iDocId === docId) return true;
+            const iDocName = String(inv.doctor || inv.doctorName || inv.specialist || (inv.metadata && inv.metadata.doctorName) || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+            if (cleanDocName && iDocName && (iDocName === cleanDocName || iDocName.includes(cleanDocName) || cleanDocName.includes(iDocName))) return true;
+            if (Array.isArray(inv.items) && inv.items.length > 0) {
+                return inv.items.some(item => {
+                    const itDocId = String(item.doctorId || '').trim();
+                    if (docId && itDocId && itDocId === docId) return true;
+                    const itDoc = String(item.specialist || item.doctor || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+                    return cleanDocName && itDoc && (itDoc === cleanDocName || itDoc.includes(cleanDocName));
+                });
+            }
+            return false;
+        });
+
+        const docPatients = (allPatients || []).filter(p => isPatientAssignedToDoctor(p, curUser, appointments, docInvoices));
+
+        let items = [];
+
+        if (metricType === 'today_income' || metricType === 'month_income') {
+            const isToday = metricType === 'today_income';
+            if (titleEl) titleEl.textContent = isToday ? 'Ingresos Cobrados Hoy' : 'Ingresos Cobrados en el Mes';
+            if (subEl) subEl.textContent = `Cobros y abonos recibidos por atenciones del Dr(a). ${curUser.fullname}`;
+            if (iconEl) {
+                iconEl.style.background = isToday ? '#e0f2fe' : '#dcfce7';
+                iconEl.style.color = isToday ? '#0284c7' : '#16a34a';
+                iconEl.innerHTML = `<i class="fa-solid ${isToday ? 'fa-calendar-day' : 'fa-calendar-days'}"></i>`;
+            }
+
+            if (thead) {
+                thead.innerHTML = `
+                    <tr style="font-size: 0.78rem; text-transform: uppercase; background: #f8fafc;">
+                        <th style="padding: 10px 12px;">Fecha / Hora</th>
+                        <th style="padding: 10px 12px;">Paciente</th>
+                        <th style="padding: 10px 12px;">C.I.</th>
+                        <th style="padding: 10px 12px;">Concepto / Procedimiento</th>
+                        <th style="padding: 10px 12px;">Método / Referencia</th>
+                        <th style="padding: 10px 12px; text-align: right;">Monto (Bs.)</th>
+                        <th style="padding: 10px 12px; text-align: right;">Monto ($ USD)</th>
+                    </tr>
+                `;
+            }
+
+            const countedPayIds = new Set();
+
+            // 1. Pagos en perfiles de pacientes asignados a este doctor
+            docPatients.forEach(p => {
+                (p.payments || []).forEach(pay => {
+                    const payDate = pay.date ? pay.date.split('T')[0] : '';
+                    const matchDate = isToday ? (payDate === todayStr) : (payDate.startsWith(monthStr));
+                    if (matchDate) {
+                        const payKey = pay.id || ((pay.docId || '') + '_' + (pay.reference || '') + '_' + pay.amountUSD);
+                        countedPayIds.add(payKey);
+                        const usd = parseFloat(pay.amountUSD || pay.paidUSD || pay.amount || 0);
+                        const bs = parseFloat(pay.amountBs || (usd * rate) || 0);
+                        items.push({
+                            id: pay.id || 'N/A',
+                            date: pay.date || payDate,
+                            patientName: p.fullname,
+                            patientId: p.id,
+                            concept: pay.treatment || pay.concept || 'Abono / Pago de Tratamiento',
+                            method: pay.method || 'Efectivo',
+                            reference: pay.reference || '-',
+                            amountUSD: usd,
+                            amountBs: bs,
+                            searchStr: `${p.fullname} ${p.id} ${pay.treatment || ''} ${pay.reference || ''} ${pay.method || ''}`.toLowerCase()
+                        });
+                    }
+                });
+            });
+
+            // 2. Facturas directas de este doctor
+            docInvoices.forEach(inv => {
+                const invDate = inv.invoiceDate || inv.date || '';
+                const matchDate = isToday ? (invDate.startsWith(todayStr)) : (invDate.startsWith(monthStr));
+                const paid = parseFloat(inv.paidRef !== undefined ? inv.paidRef : (inv.metadata?.paidUSD !== undefined ? inv.metadata.paidUSD : (inv.status === 'Pagado' ? (inv.totalRef || 0) : 0)));
+                const invKey = inv.id;
+
+                if (matchDate && paid > 0 && !countedPayIds.has(invKey)) {
+                    const bs = parseFloat(inv.metadata?.paidBs || (paid * rate) || 0);
+                    items.push({
+                        id: inv.id,
+                        date: invDate,
+                        patientName: inv.patientName || 'Paciente Particular',
+                        patientId: inv.patientId || 'N/A',
+                        concept: (inv.items && inv.items.map(it => it.name || it.description).join(', ')) || inv.concept || 'Servicio Médico',
+                        method: inv.metadata?.paymentMethod || inv.paymentMethod || 'Facturación',
+                        reference: inv.metadata?.reference || inv.id,
+                        amountUSD: paid,
+                        amountBs: bs,
+                        searchStr: `${inv.patientName || ''} ${inv.patientId || ''} ${inv.id} ${inv.concept || ''}`.toLowerCase()
+                    });
+                }
+            });
+
+            items.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+
+            const totalUSD = items.reduce((s, it) => s + (it.amountUSD || 0), 0);
+            const totalBs = items.reduce((s, it) => s + (it.amountBs || 0), 0);
+
+            if (kpiBar) {
+                kpiBar.innerHTML = `
+                    <div style="flex: 1; min-width: 180px; background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 8px; padding: 12px 14px;">
+                        <span style="font-size: 0.72rem; font-weight: 700; color: #166534; text-transform: uppercase;">Total Cobrado ($ USD)</span>
+                        <div style="font-size: 1.35rem; font-weight: 800; color: #15803d; margin-top: 2px;">
+                            $${totalUSD.toFixed(2)} USD
+                        </div>
+                    </div>
+                    <div style="flex: 1; min-width: 180px; background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 12px 14px;">
+                        <span style="font-size: 0.72rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Total en Bolívares (Tasa: Bs. ${rate.toFixed(2)})</span>
+                        <div style="font-size: 1.35rem; font-weight: 800; color: #059669; margin-top: 2px;">
+                            Bs. ${totalBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                    </div>
+                    <div style="flex: 1; min-width: 180px; background: #f0f9ff; border: 1.5px solid #bae6fd; border-radius: 8px; padding: 12px 14px;">
+                        <span style="font-size: 0.72rem; font-weight: 700; color: #0369a1; text-transform: uppercase;">Operaciones Registradas</span>
+                        <div style="font-size: 1.35rem; font-weight: 800; color: #0284c7; margin-top: 2px;">
+                            ${items.length} ${items.length === 1 ? 'cobro' : 'cobros'}
+                        </div>
+                    </div>
+                `;
+            }
+
+        } else if (metricType === 'receivables') {
+            if (titleEl) titleEl.textContent = 'Cuentas por Cobrar (Saldos Pendientes)';
+            if (subEl) subEl.textContent = `Pacientes con deuda activa en tratamientos realizados por Dr(a). ${curUser.fullname}`;
+            if (iconEl) {
+                iconEl.style.background = '#fef2f2';
+                iconEl.style.color = '#ef4444';
+                iconEl.innerHTML = `<i class="fa-solid fa-clock-rotate-left"></i>`;
+            }
+
+            if (thead) {
+                thead.innerHTML = `
+                    <tr style="font-size: 0.78rem; text-transform: uppercase; background: #f8fafc;">
+                        <th style="padding: 10px 12px;">Paciente</th>
+                        <th style="padding: 10px 12px;">C.I.</th>
+                        <th style="padding: 10px 12px;">Presupuesto / Comprobante</th>
+                        <th style="padding: 10px 12px; text-align: right;">Total ($)</th>
+                        <th style="padding: 10px 12px; text-align: right;">Abonado ($)</th>
+                        <th style="padding: 10px 12px; text-align: right;">Saldo Deudor ($ USD)</th>
+                        <th style="padding: 10px 12px; text-align: right;">Saldo Deudor (Bs.)</th>
+                    </tr>
+                `;
+            }
+
+            // Facturas con saldo pendiente
+            docInvoices.forEach(inv => {
+                const debt = parseFloat(inv.balanceRef !== undefined ? inv.balanceRef : (inv.metadata?.balanceUSD !== undefined ? inv.metadata.balanceUSD : 0));
+                const total = parseFloat(inv.totalRef !== undefined ? inv.totalRef : (inv.totalUSD || 0));
+                const paid = parseFloat(inv.paidRef !== undefined ? inv.paidRef : (inv.metadata?.paidUSD !== undefined ? inv.metadata.paidUSD : (total - debt)));
+
+                if (debt > 0.01) {
+                    const debtBs = debt * rate;
+                    items.push({
+                        id: inv.id,
+                        patientName: inv.patientName || 'Paciente',
+                        patientId: inv.patientId || 'N/A',
+                        voucher: inv.id,
+                        totalUSD: total,
+                        paidUSD: paid,
+                        balanceUSD: debt,
+                        balanceBs: debtBs,
+                        searchStr: `${inv.patientName || ''} ${inv.patientId || ''} ${inv.id}`.toLowerCase()
+                    });
+                }
+            });
+
+            // Pacientes con saldo deudor en historial general
+            const debtorPatientsSet = new Set(items.map(it => it.patientId));
+            docPatients.forEach(p => {
+                (p.payments || []).forEach(pay => {
+                    const debt = parseFloat(pay.balanceUSD || 0);
+                    if (debt > 0.01 && !debtorPatientsSet.has(p.id)) {
+                        debtorPatientsSet.add(p.id);
+                        const debtBs = debt * rate;
+                        items.push({
+                            id: p.id,
+                            patientName: p.fullname,
+                            patientId: p.id,
+                            voucher: 'Saldo Tratamiento Historial',
+                            totalUSD: debt,
+                            paidUSD: parseFloat(pay.paidUSD || 0),
+                            balanceUSD: debt,
+                            balanceBs: debtBs,
+                            searchStr: `${p.fullname} ${p.id}`.toLowerCase()
+                        });
+                    }
+                });
+            });
+
+            items.sort((a, b) => (b.balanceUSD || 0) - (a.balanceUSD || 0));
+
+            const totalDebtUSD = items.reduce((s, it) => s + (it.balanceUSD || 0), 0);
+            const totalDebtBs = items.reduce((s, it) => s + (it.balanceBs || 0), 0);
+
+            if (kpiBar) {
+                kpiBar.innerHTML = `
+                    <div style="flex: 1; min-width: 180px; background: #fef2f2; border: 1.5px solid #fca5a5; border-radius: 8px; padding: 12px 14px;">
+                        <span style="font-size: 0.72rem; font-weight: 700; color: #991b1b; text-transform: uppercase;">Total por Cobrar ($ USD)</span>
+                        <div style="font-size: 1.35rem; font-weight: 800; color: #dc2626; margin-top: 2px;">
+                            $${totalDebtUSD.toFixed(2)} USD
+                        </div>
+                    </div>
+                    <div style="flex: 1; min-width: 180px; background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 12px 14px;">
+                        <span style="font-size: 0.72rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Total en Bolívares (Tasa: Bs. ${rate.toFixed(2)})</span>
+                        <div style="font-size: 1.35rem; font-weight: 800; color: #0f172a; margin-top: 2px;">
+                            Bs. ${totalDebtBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                    </div>
+                    <div style="flex: 1; min-width: 180px; background: #fffbeb; border: 1.5px solid #fde68a; border-radius: 8px; padding: 12px 14px;">
+                        <span style="font-size: 0.72rem; font-weight: 700; color: #92400e; text-transform: uppercase;">Pacientes Deudores</span>
+                        <div style="font-size: 1.35rem; font-weight: 800; color: #d97706; margin-top: 2px;">
+                            ${items.length} ${items.length === 1 ? 'paciente' : 'pacientes'}
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        window._doctorMetricItems = items;
+        window.renderDoctorMetricTableRows(items, metricType);
+
+    } catch (err) {
+        console.error('Error opening doctor metric details:', err);
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-red" style="padding: 24px;"><i class="fa-solid fa-triangle-exclamation"></i> Error al cargar especificaciones: ${err.message}</td></tr>`;
+    }
+};
+
+window.renderDoctorMetricTableRows = function(items, type) {
+    const tbody = document.getElementById('doctor-metric-table-tbody');
+    const counterBadge = document.getElementById('doctor-metric-counter-badge');
+    if (!tbody) return;
+
+    if (counterBadge) {
+        counterBadge.textContent = `${items.length} ${items.length === 1 ? 'registro' : 'registros'}`;
+    }
+
+    if (!items || items.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted" style="padding: 24px;"><i class="fa-solid fa-folder-open" style="font-size: 1.5rem; display: block; margin-bottom: 6px; opacity: 0.5;"></i> No hay registros para este período.</td></tr>`;
+        return;
+    }
+
+    if (type === 'receivables') {
+        tbody.innerHTML = items.map(it => `
+            <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 10px 12px; font-weight: 700; color: #0f172a;">${it.patientName}</td>
+                <td style="padding: 10px 12px; font-size: 0.82rem; color: #64748b;">${it.patientId}</td>
+                <td style="padding: 10px 12px; font-size: 0.82rem; font-family: monospace; color: #0284c7;">${it.voucher}</td>
+                <td style="padding: 10px 12px; text-align: right; font-size: 0.85rem; color: #64748b;">$${it.totalUSD.toFixed(2)}</td>
+                <td style="padding: 10px 12px; text-align: right; font-size: 0.85rem; color: #059669;">$${it.paidUSD.toFixed(2)}</td>
+                <td style="padding: 10px 12px; text-align: right; font-size: 0.92rem; font-weight: 800; color: #dc2626;">$${it.balanceUSD.toFixed(2)} USD</td>
+                <td style="padding: 10px 12px; text-align: right; font-size: 0.88rem; font-weight: 700; color: #0f172a;">Bs. ${it.balanceBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            </tr>
+        `).join('');
+    } else {
+        tbody.innerHTML = items.map(it => `
+            <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 10px 12px; font-size: 0.82rem; color: #64748b; white-space: nowrap;">${it.date}</td>
+                <td style="padding: 10px 12px; font-weight: 700; color: #0f172a;">${it.patientName}</td>
+                <td style="padding: 10px 12px; font-size: 0.82rem; color: #64748b;">${it.patientId}</td>
+                <td style="padding: 10px 12px; font-size: 0.84rem; color: #334155;">${it.concept}</td>
+                <td style="padding: 10px 12px; font-size: 0.82rem; color: #64748b;">
+                    <span class="badge-tag blue" style="font-size: 0.72rem;">${it.method}</span>
+                    ${it.reference && it.reference !== '-' ? `<span style="font-family: monospace; margin-left: 4px;">#${it.reference}</span>` : ''}
+                </td>
+                <td style="padding: 10px 12px; text-align: right; font-size: 0.88rem; font-weight: 700; color: #059669;">Bs. ${it.amountBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td style="padding: 10px 12px; text-align: right; font-size: 0.92rem; font-weight: 800; color: #0f172a;">$${it.amountUSD.toFixed(2)} USD</td>
+            </tr>
+        `).join('');
+    }
+};
+
+window.filterDoctorMetricTable = function(query) {
+    const q = (query || '').toLowerCase().trim();
+    const type = window._currentDoctorMetricType;
+    const all = window._doctorMetricItems || [];
+
+    if (!q) {
+        window.renderDoctorMetricTableRows(all, type);
+        return;
+    }
+
+    const filtered = all.filter(it => it.searchStr && it.searchStr.includes(q));
+    window.renderDoctorMetricTableRows(filtered, type);
+};
+
+
+// ==========================================
+// MÓDULO EXCLUSIVO PARA EL MÉDICO: MIS INGRESOS Y COBROS
+// ==========================================
+
+window._docFinPeriod = 'month';
+window._docFinSubtab = 'payments';
+window._docFinSearch = '';
+window._docFinCache = { payments: [], receivables: [], patients: [] };
+
+window.renderDoctorFinancesView = async function(period, subtab, search) {
+    if (period) window._docFinPeriod = period;
+    if (subtab) window._docFinSubtab = subtab;
+    if (search !== undefined) window._docFinSearch = (search || '').toLowerCase().trim();
+
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (!curUser) return;
+
+    // Subtitle update
+    const subtitleEl = document.getElementById('doc-fin-subtitle');
+    if (subtitleEl) {
+        const docSpecs = typeof getDoctorSpecialties === 'function' ? getDoctorSpecialties(curUser) : [];
+        const specStr = docSpecs.length > 0 ? docSpecs.join(', ') : (curUser.role || 'Médico Especialista');
+        subtitleEl.innerHTML = `<i class="fa-solid fa-user-doctor text-cyan"></i> Dr(a). <strong>${curUser.fullname}</strong> &bull; Especialidad: <span class="badge-tag blue">${specStr}</span>`;
+    }
+
+    // Active period button
+    document.querySelectorAll('#doc-fin-period-filters .filter-btn').forEach(btn => {
+        if (btn.dataset.period === window._docFinPeriod) btn.classList.add('active');
+        else btn.classList.remove('active');
+    });
+
+    // Active subtab button
+    document.querySelectorAll('#doc-fin-subtabs-bar .subtab-btn').forEach(btn => {
+        if (btn.dataset.subtab === window._docFinSubtab) {
+            btn.classList.add('active');
+            btn.style.borderBottom = '3px solid #10b981';
+            btn.style.color = '#047857';
+        } else {
+            btn.classList.remove('active');
+            btn.style.borderBottom = '3px solid transparent';
+            btn.style.color = '#64748b';
+        }
+    });
+
+    const thead = document.getElementById('doc-fin-table-thead');
+    const tbody = document.getElementById('doc-fin-table-tbody');
+    if (!tbody) return;
+
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding: 30px;"><i class="fa-solid fa-spinner fa-spin text-cyan" style="font-size: 1.5rem; display: block; margin-bottom: 8px;"></i> Cargando balance e historial financiero del doctor...</td></tr>';
+
+    try {
+        const rate = typeof getExchangeRate === 'function' ? getExchangeRate() : 36.5;
+        const now = new Date();
+        const todayStr = now.toLocaleDateString('en-CA');
+        const monthStr = todayStr.substring(0, 7);
+
+        // Calculate period bounds
+        let startDateStr = '';
+        let endDateStr = '';
+
+        if (window._docFinPeriod === 'today') {
+            startDateStr = todayStr;
+            endDateStr = todayStr;
+        } else if (window._docFinPeriod === 'week') {
+            const firstDayOfWeek = new Date(now);
+            const day = firstDayOfWeek.getDay();
+            const diff = firstDayOfWeek.getDate() - day + (day === 0 ? -6 : 1);
+            firstDayOfWeek.setDate(diff);
+            startDateStr = firstDayOfWeek.toLocaleDateString('en-CA');
+            endDateStr = todayStr;
+        } else if (window._docFinPeriod === 'month') {
+            startDateStr = `${monthStr}-01`;
+            endDateStr = todayStr;
+        } else if (window._docFinPeriod === 'last_month') {
+            const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+            startDateStr = prevMonthDate.toLocaleDateString('en-CA');
+            endDateStr = prevMonthEnd.toLocaleDateString('en-CA');
+        } else if (window._docFinPeriod === 'year') {
+            startDateStr = `${now.getFullYear()}-01-01`;
+            endDateStr = todayStr;
+        }
+
+        const matchesPeriod = (dateStr) => {
+            if (!dateStr) return false;
+            const d = dateStr.split('T')[0];
+            if (window._docFinPeriod === 'all') return true;
+            if (window._docFinPeriod === 'today') return d === todayStr;
+            if (window._docFinPeriod === 'month') return d.startsWith(monthStr);
+            if (window._docFinPeriod === 'last_month') return d >= startDateStr && d <= endDateStr;
+            return d >= startDateStr && d <= (endDateStr || todayStr);
+        };
+
+        const [allPatients, allInvoices, appointments] = await Promise.all([
+            SupabaseDataService.getPatients(),
+            SupabaseDataService.getInvoices(),
+            SupabaseDataService.getAppointments()
+        ]);
+
+        const docId = String(curUser.id || '').trim();
+        const cleanDocName = String(curUser.fullname || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+
+        // Facturas de este doctor
+        const docInvoices = (allInvoices || []).filter(inv => {
+            const iDocId = String(inv.doctorId || (inv.metadata && inv.metadata.doctorId) || '').trim();
+            if (docId && iDocId && iDocId === docId) return true;
+            const iDocName = String(inv.doctor || inv.doctorName || inv.specialist || (inv.metadata && inv.metadata.doctorName) || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+            if (cleanDocName && iDocName && (iDocName === cleanDocName || iDocName.includes(cleanDocName) || cleanDocName.includes(iDocName))) return true;
+            if (Array.isArray(inv.items) && inv.items.length > 0) {
+                return inv.items.some(item => {
+                    const itDocId = String(item.doctorId || '').trim();
+                    if (docId && itDocId && itDocId === docId) return true;
+                    const itDoc = String(item.specialist || item.doctor || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+                    return cleanDocName && itDoc && (itDoc === cleanDocName || itDoc.includes(cleanDocName));
+                });
+            }
+            return false;
+        });
+
+        // Pacientes de este doctor
+        const docPatients = (allPatients || []).filter(p => isPatientAssignedToDoctor(p, curUser, appointments, docInvoices));
+
+        // 1. Recopilar Pagos Recibidos (Cobrados)
+        const countedPayKeys = new Set();
+        let allPayments = [];
+        let todayIncomeUSD = 0;
+        let todayIncomeBs = 0;
+        let periodIncomeUSD = 0;
+        let periodIncomeBs = 0;
+
+        // Pagos en perfil de pacientes del doctor
+        docPatients.forEach(p => {
+            (p.payments || []).forEach(pay => {
+                const payDate = pay.date ? pay.date.split('T')[0] : '';
+                const payKey = pay.id || ((pay.docId || '') + '_' + (pay.reference || '') + '_' + pay.amountUSD);
+                if (countedPayKeys.has(payKey)) return;
+                countedPayKeys.add(payKey);
+
+                const usd = parseFloat(pay.amountUSD || pay.paidUSD || pay.amount || 0);
+                const bs = parseFloat(pay.amountBs || (usd * rate) || 0);
+
+                if (payDate === todayStr) {
+                    todayIncomeUSD += usd;
+                    todayIncomeBs += bs;
+                }
+
+                if (matchesPeriod(payDate)) {
+                    periodIncomeUSD += usd;
+                    periodIncomeBs += bs;
+                    allPayments.push({
+                        id: pay.id || 'N/A',
+                        date: pay.date || payDate,
+                        patientName: p.fullname,
+                        patientId: p.id,
+                        concept: pay.treatment || pay.concept || 'Abono de Consulta / Tratamiento',
+                        method: pay.method || 'Efectivo',
+                        reference: pay.reference || '-',
+                        amountUSD: usd,
+                        amountBs: bs,
+                        searchStr: `${p.fullname} ${p.id} ${pay.treatment || ''} ${pay.reference || ''} ${pay.method || ''}`.toLowerCase()
+                    });
+                }
+            });
+        });
+
+        // Facturas directas del doctor
+        docInvoices.forEach(inv => {
+            const invDate = (inv.invoiceDate || inv.date || '').split('T')[0];
+            const paid = parseFloat(inv.paidRef !== undefined ? inv.paidRef : (inv.metadata?.paidUSD !== undefined ? inv.metadata.paidUSD : (inv.status === 'Pagado' ? (inv.totalRef || 0) : 0)));
+            const invKey = inv.id;
+
+            if (paid > 0 && !countedPayKeys.has(invKey)) {
+                countedPayKeys.add(invKey);
+                const bs = parseFloat(inv.metadata?.paidBs || (paid * rate) || 0);
+
+                if (invDate === todayStr) {
+                    todayIncomeUSD += paid;
+                    todayIncomeBs += bs;
+                }
+
+                if (matchesPeriod(invDate)) {
+                    periodIncomeUSD += paid;
+                    periodIncomeBs += bs;
+                    allPayments.push({
+                        id: inv.id,
+                        date: inv.invoiceDate || inv.date || invDate,
+                        patientName: inv.patientName || 'Paciente Particular',
+                        patientId: inv.patientId || 'N/A',
+                        concept: (inv.items && inv.items.map(it => it.name || it.description).join(', ')) || inv.concept || 'Consulta / Procedimiento Especializado',
+                        method: inv.metadata?.paymentMethod || inv.paymentMethod || 'Facturación',
+                        reference: inv.metadata?.reference || inv.id,
+                        amountUSD: paid,
+                        amountBs: bs,
+                        searchStr: `${inv.patientName || ''} ${inv.patientId || ''} ${inv.id} ${inv.concept || ''}`.toLowerCase()
+                    });
+                }
+            }
+        });
+
+        allPayments.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+
+        // 2. Recopilar Cuentas por Cobrar (Saldos Pendientes de sus pacientes)
+        let allReceivables = [];
+        let totalDebtUSD = 0;
+        let totalDebtBs = 0;
+
+        docPatients.forEach(p => {
+            let pQuoted = 0;
+            let pPaid = 0;
+            let pTreatments = [];
+
+            (p.sessions || []).forEach(s => {
+                if (s.treatmentLinked) pTreatments.push(s.treatmentLinked);
+            });
+
+            (p.payments || []).forEach(pay => {
+                pQuoted += parseFloat(pay.totalUSD || 0);
+                pPaid += parseFloat(pay.paidUSD || pay.amountUSD || 0);
+            });
+
+            const pBal = pQuoted - pPaid;
+            if (pBal > 0.05) {
+                const balBs = pBal * rate;
+                totalDebtUSD += pBal;
+                totalDebtBs += balBs;
+                allReceivables.push({
+                    patientName: p.fullname,
+                    patientId: p.id,
+                    voucher: p.id,
+                    concept: pTreatments.join(', ') || 'Saldo Pendiente en Tratamiento',
+                    totalUSD: pQuoted,
+                    paidUSD: pPaid,
+                    balanceUSD: pBal,
+                    balanceBs: balBs,
+                    searchStr: `${p.fullname} ${p.id} ${pTreatments.join(' ')}`.toLowerCase()
+                });
+            }
+        });
+
+        docInvoices.forEach(inv => {
+            const tot = parseFloat(inv.totalRef || inv.totalUSD || 0);
+            const paid = parseFloat(inv.paidRef !== undefined ? inv.paidRef : (inv.metadata?.paidUSD !== undefined ? inv.metadata.paidUSD : (inv.status === 'Pagado' ? tot : 0)));
+            const bal = tot - paid;
+
+            if (bal > 0.05 && inv.status !== 'Anulado' && inv.status !== 'Cancelado') {
+                const balBs = parseFloat(inv.balanceBs || (bal * rate) || 0);
+                totalDebtUSD += bal;
+                totalDebtBs += balBs;
+                allReceivables.push({
+                    patientName: inv.patientName || 'Paciente Particular',
+                    patientId: inv.patientId || 'N/A',
+                    voucher: inv.id,
+                    concept: (inv.items && inv.items.map(it => it.name || it.description).join(', ')) || inv.concept || 'Factura Pendiente',
+                    totalUSD: tot,
+                    paidUSD: paid,
+                    balanceUSD: bal,
+                    balanceBs: balBs,
+                    searchStr: `${inv.patientName || ''} ${inv.patientId || ''} ${inv.id}`.toLowerCase()
+                });
+            }
+        });
+
+        // 3. Recopilar Pacientes Atendidos en el período
+        let allAttendedPatients = [];
+        const attendedPatMap = new Map();
+
+        // Desde sesiones clínicas del paciente
+        docPatients.forEach(p => {
+            (p.sessions || []).forEach(s => {
+                const sDate = s.datetime ? s.datetime.split('T')[0] : (s.date || '');
+                if (matchesPeriod(sDate)) {
+                    const key = `${p.id}_${sDate}_${s.sessionNum || 1}`;
+                    if (!attendedPatMap.has(key)) {
+                        attendedPatMap.set(key, true);
+                        allAttendedPatients.push({
+                            date: s.datetime || sDate,
+                            patientName: p.fullname,
+                            patientId: p.id,
+                            procedure: s.procedure || 'Sesión Clínica Realizada',
+                            status: 'Atendido',
+                            paidInfo: s.paymentUSD > 0 ? `$ ${parseFloat(s.paymentUSD).toFixed(2)} USD` : 'Facturado / Plan',
+                            searchStr: `${p.fullname} ${p.id} ${s.procedure || ''}`.toLowerCase()
+                        });
+                    }
+                }
+            });
+        });
+
+        // Desde citas atendidas
+        (appointments || []).forEach(app => {
+            const aDocId = String(app.doctorId || app.doctor_id || '').trim();
+            const aDocName = String(app.doctorName || app.doctor_name || app.doctor || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+            const isMyDoc = (docId && aDocId && aDocId === docId) || (cleanDocName && aDocName && (aDocName === cleanDocName || aDocName.includes(cleanDocName)));
+
+            if (isMyDoc && (app.status === 'Completada' || app.status === 'Atendida' || app.attended)) {
+                const aDate = app.date ? app.date.split('T')[0] : '';
+                if (matchesPeriod(aDate)) {
+                    const key = `appt_${app.patientId || app.patientName}_${aDate}`;
+                    if (!attendedPatMap.has(key)) {
+                        attendedPatMap.set(key, true);
+                        allAttendedPatients.push({
+                            date: app.date || aDate,
+                            patientName: app.patientName || 'Paciente Cita',
+                            patientId: app.patientId || 'N/A',
+                            procedure: app.treatment || app.reason || 'Consulta Especializada',
+                            status: 'Atendido',
+                            paidInfo: 'Completada en Agenda',
+                            searchStr: `${app.patientName || ''} ${app.patientId || ''} ${app.treatment || ''}`.toLowerCase()
+                        });
+                    }
+                }
+            }
+        });
+
+        allAttendedPatients.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+
+        // Guardar en cache para búsqueda instantánea
+        window._docFinCache = {
+            payments: allPayments,
+            receivables: allReceivables,
+            patients: allAttendedPatients
+        };
+
+        // Actualizar KPIs superiores
+        const elTodayUSD = document.getElementById('doc-fin-kpi-today');
+        const elTodayBs = document.getElementById('doc-fin-kpi-today-bs');
+        const elPeriodUSD = document.getElementById('doc-fin-kpi-month');
+        const elPeriodBs = document.getElementById('doc-fin-kpi-month-bs');
+        const elDebtUSD = document.getElementById('doc-fin-kpi-debt');
+        const elDebtBs = document.getElementById('doc-fin-kpi-debt-bs');
+        const elPatCount = document.getElementById('doc-fin-kpi-patients');
+
+        if (elTodayUSD) elTodayUSD.textContent = `$${todayIncomeUSD.toFixed(2)} USD`;
+        if (elTodayBs) elTodayBs.textContent = `Bs. ${todayIncomeBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        if (elPeriodUSD) elPeriodUSD.textContent = `$${periodIncomeUSD.toFixed(2)} USD`;
+        if (elPeriodBs) elPeriodBs.textContent = `Bs. ${periodIncomeBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        if (elDebtUSD) elDebtUSD.textContent = `$${totalDebtUSD.toFixed(2)} USD`;
+        if (elDebtBs) elDebtBs.textContent = `Bs. ${totalDebtBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        if (elPatCount) elPatCount.textContent = allAttendedPatients.length;
+
+        // Actualizar Badges en los Subtabs
+        const bPay = document.getElementById('doc-fin-badge-payments');
+        const bRec = document.getElementById('doc-fin-badge-receivables');
+        const bPat = document.getElementById('doc-fin-badge-patients');
+        if (bPay) bPay.textContent = allPayments.length;
+        if (bRec) bRec.textContent = allReceivables.length;
+        if (bPat) bPat.textContent = allAttendedPatients.length;
+
+        // Renderizar la tabla activa
+        window.renderDoctorFinancesActiveSubtab();
+
+    } catch (err) {
+        console.error('Error renderDoctorFinancesView:', err);
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-red" style="padding: 24px;"><i class="fa-solid fa-triangle-exclamation"></i> Error al cargar datos: ${err.message}</td></tr>`;
+    }
+};
+
+window.renderDoctorFinancesActiveSubtab = function() {
+    const thead = document.getElementById('doc-fin-table-thead');
+    const tbody = document.getElementById('doc-fin-table-tbody');
+    if (!tbody || !thead) return;
+
+    const subtab = window._docFinSubtab || 'payments';
+    const query = window._docFinSearch || '';
+    const cache = window._docFinCache || {};
+
+    let list = cache[subtab] || [];
+    if (query) {
+        list = list.filter(item => item.searchStr && item.searchStr.includes(query));
+    }
+
+    if (subtab === 'payments') {
+        thead.innerHTML = `
+            <tr style="font-size: 0.78rem; text-transform: uppercase; background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
+                <th style="padding: 10px 12px;">Fecha / Hora</th>
+                <th style="padding: 10px 12px;">Paciente</th>
+                <th style="padding: 10px 12px;">Cédula / ID</th>
+                <th style="padding: 10px 12px;">Concepto / Procedimiento</th>
+                <th style="padding: 10px 12px;">Método & Referencia</th>
+                <th style="padding: 10px 12px; text-align: right;">Monto (Bs.)</th>
+                <th style="padding: 10px 12px; text-align: right;">Monto ($ USD)</th>
+            </tr>
+        `;
+
+        if (list.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding: 28px;"><i class="fa-solid fa-receipt" style="font-size: 1.8rem; display: block; margin-bottom: 8px; opacity: 0.4;"></i> No hay cobros registrados en este período.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = list.map(it => `
+            <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 10px 12px; font-size: 0.82rem; color: #64748b; white-space: nowrap;">${it.date}</td>
+                <td style="padding: 10px 12px; font-weight: 700; color: #0f172a;">${it.patientName}</td>
+                <td style="padding: 10px 12px; font-size: 0.82rem; color: #64748b;">${it.patientId}</td>
+                <td style="padding: 10px 12px; font-size: 0.84rem; color: #334155;">${it.concept}</td>
+                <td style="padding: 10px 12px; font-size: 0.82rem; color: #64748b;">
+                    <span class="badge-tag blue" style="font-size: 0.72rem;">${it.method}</span>
+                    ${it.reference && it.reference !== '-' ? `<span style="font-family: monospace; margin-left: 4px;">#${it.reference}</span>` : ''}
+                </td>
+                <td style="padding: 10px 12px; text-align: right; font-size: 0.88rem; font-weight: 700; color: #059669;">Bs. ${it.amountBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td style="padding: 10px 12px; text-align: right; font-size: 0.92rem; font-weight: 800; color: #0f172a;">$${it.amountUSD.toFixed(2)} USD</td>
+            </tr>
+        `).join('');
+
+    } else if (subtab === 'receivables') {
+        thead.innerHTML = `
+            <tr style="font-size: 0.78rem; text-transform: uppercase; background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
+                <th style="padding: 10px 12px;">Paciente</th>
+                <th style="padding: 10px 12px;">Cédula / ID</th>
+                <th style="padding: 10px 12px;">Procedimiento / Ficha</th>
+                <th style="padding: 10px 12px; text-align: right;">Total Presupuestado</th>
+                <th style="padding: 10px 12px; text-align: right;">Total Abonado</th>
+                <th style="padding: 10px 12px; text-align: right;">Saldo Deudor ($ USD)</th>
+                <th style="padding: 10px 12px; text-align: right;">Saldo Deudor (Bs.)</th>
+            </tr>
+        `;
+
+        if (list.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding: 28px;"><i class="fa-solid fa-circle-check text-green" style="font-size: 1.8rem; display: block; margin-bottom: 8px;"></i> ¡Excelente! No hay pacientes con deudas pendientes asignados a su consulta.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = list.map(it => `
+            <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 10px 12px; font-weight: 700; color: #0f172a;">${it.patientName}</td>
+                <td style="padding: 10px 12px; font-size: 0.82rem; color: #64748b;">${it.patientId}</td>
+                <td style="padding: 10px 12px; font-size: 0.84rem; color: #334155;">${it.concept}</td>
+                <td style="padding: 10px 12px; text-align: right; font-size: 0.85rem; color: #64748b;">$${it.totalUSD.toFixed(2)}</td>
+                <td style="padding: 10px 12px; text-align: right; font-size: 0.85rem; color: #059669;">$${it.paidUSD.toFixed(2)}</td>
+                <td style="padding: 10px 12px; text-align: right; font-size: 0.92rem; font-weight: 800; color: #dc2626;">$${it.balanceUSD.toFixed(2)} USD</td>
+                <td style="padding: 10px 12px; text-align: right; font-size: 0.88rem; font-weight: 700; color: #0f172a;">Bs. ${it.balanceBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            </tr>
+        `).join('');
+
+    } else if (subtab === 'patients') {
+        thead.innerHTML = `
+            <tr style="font-size: 0.78rem; text-transform: uppercase; background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
+                <th style="padding: 10px 12px;">Fecha de Atención</th>
+                <th style="padding: 10px 12px;">Paciente</th>
+                <th style="padding: 10px 12px;">Cédula / ID</th>
+                <th style="padding: 10px 12px;">Procedimiento / Motivo</th>
+                <th style="padding: 10px 12px;">Estado</th>
+                <th style="padding: 10px 12px; text-align: right;">Cobro / Detalle</th>
+            </tr>
+        `;
+
+        if (list.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding: 28px;"><i class="fa-solid fa-user-doctor" style="font-size: 1.8rem; display: block; margin-bottom: 8px; opacity: 0.4;"></i> No hay pacientes atendidos registrados en este período.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = list.map(it => `
+            <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 10px 12px; font-size: 0.82rem; color: #64748b; white-space: nowrap;">${it.date}</td>
+                <td style="padding: 10px 12px; font-weight: 700; color: #0f172a;">${it.patientName}</td>
+                <td style="padding: 10px 12px; font-size: 0.82rem; color: #64748b;">${it.patientId}</td>
+                <td style="padding: 10px 12px; font-size: 0.84rem; color: #334155;">${it.procedure}</td>
+                <td style="padding: 10px 12px;">
+                    <span class="badge-tag green" style="font-size: 0.72rem;"><i class="fa-solid fa-check"></i> ${it.status}</span>
+                </td>
+                <td style="padding: 10px 12px; text-align: right; font-size: 0.84rem; font-weight: 600; color: #0284c7;">${it.paidInfo}</td>
+            </tr>
+        `).join('');
+    }
+};
+
+window.printDoctorFinancesReport = function() {
+    window.print();
+};
+
+
+// ==============================================================================
