@@ -1186,16 +1186,7 @@ function applyRolePermissionsUI(role) {
         addSrvBtn.style.display = (roleType === 'assistant') ? 'none' : 'inline-flex';
     }
 
-    // Separation of duties: Hide register patient buttons for doctors
-    const quickPatientBtn = document.getElementById('btn-quick-patient');
-    const newPatientModalBtn = document.getElementById('btn-new-patient-modal');
     const editClinicalWizardBtn = document.getElementById('btn-edit-clinical-wizard');
-    if (quickPatientBtn) {
-        quickPatientBtn.style.display = (roleType === 'doctor') ? 'none' : 'inline-flex';
-    }
-    if (newPatientModalBtn) {
-        newPatientModalBtn.style.display = (roleType === 'doctor') ? 'none' : 'inline-flex';
-    }
     if (editClinicalWizardBtn) {
         // Only Doctors and Admins can complete or edit clinical history
         editClinicalWizardBtn.style.display = (roleType === 'assistant') ? 'none' : 'inline-flex';
@@ -1209,39 +1200,6 @@ function applyRolePermissionsUI(role) {
         } else {
             docSigSection.classList.add('hidden');
         }
-    }
-
-    // Role body classes & feature lockdown
-    const curUser = getCurrentUser();
-    const isDoc = (roleType === 'doctor');
-    const isDentalDoc = isDoc && typeof isDentalDoctor === 'function' && isDentalDoctor(curUser);
-    const isNonDentalDoc = isDoc && !isDentalDoc;
-    document.body.classList.toggle('is-doctor-role', isDoc);
-    document.body.classList.toggle('is-non-dental-doctor', isNonDentalDoc);
-
-    if (isDoc) {
-        // Bloquear y ocultar Presupuestos y Botón Flotante de Acciones Rápidas (FAB)
-        const mobileFabBtn = document.getElementById('mobile-fab-btn');
-        if (mobileFabBtn) mobileFabBtn.style.display = 'none';
-        const floatingBudgetBubble = document.getElementById('floating-budget-bubble');
-        if (floatingBudgetBubble) floatingBudgetBubble.style.display = 'none';
-        const btnAddBudget = document.getElementById('btn-add-budget');
-        if (btnAddBudget) btnAddBudget.style.display = 'none';
-        const cardMetricConversion = document.getElementById('card-metric-conversion');
-        if (cardMetricConversion) cardMetricConversion.style.display = 'none';
-
-        // Bloquear y ocultar Creación y Edición de Citas para Médicos
-        const btnAddApptAgenda = document.getElementById('btn-add-appointment-agenda');
-        if (btnAddApptAgenda) btnAddApptAgenda.style.display = 'none';
-        const btnAddApptDash = document.getElementById('btn-add-appointment-dash');
-        if (btnAddApptDash) btnAddApptDash.style.display = 'none';
-    } else {
-        const mobileFabBtn = document.getElementById('mobile-fab-btn');
-        if (mobileFabBtn) mobileFabBtn.style.display = '';
-        const cardMetricConversion = document.getElementById('card-metric-conversion');
-        if (cardMetricConversion) cardMetricConversion.style.display = '';
-        const btnAddApptAgenda = document.getElementById('btn-add-appointment-agenda');
-        if (btnAddApptAgenda) btnAddApptAgenda.style.display = '';
     }
 }
 
