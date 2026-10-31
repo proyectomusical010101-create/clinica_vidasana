@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=392">
+    <link rel="stylesheet" href="styles.css?v=393">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -2171,9 +2171,9 @@
                         </div>
                     </div>
 
-                    <div class="grid-2-col">
-                        <!-- Invoice Creator Form -->
-                        <div class="card">
+                    <div class="billing-stacked-layout" style="display: flex; flex-direction: column; gap: 24px; width: 100%;">
+                        <!-- Invoice Creator Form (Full Width for Maximum Comfort) -->
+                        <div class="card" id="card-billing-creator" style="width: 100%; box-sizing: border-box;">
                             <div class="card-header">
                                 <h3><i class="fa-solid fa-file-invoice-dollar text-cyan"></i> Crear Factura</h3>
                             </div>
@@ -2185,7 +2185,7 @@
                                     </select>
                                 </div>
 
-                                <div class="grid-form">
+                                <div class="grid-form" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px;">
                                     <div class="form-group">
                                         <label class="form-label" for="bill-currency">Moneda de Facturación</label>
                                         <select id="bill-currency" class="form-control">
@@ -2330,7 +2330,7 @@
                                 </div>
 
                                 <!-- Actual invoice paper preview container -->
-                                <div id="invoice-paper-preview" class="invoice-paper-container" style="background: white; color: #0f172a; border: 1px solid #cbd5e1; border-radius: 8px; padding: 15px; box-shadow: var(--shadow-soft); overflow-y: auto; max-height: 650px;">
+                                <div id="invoice-paper-preview" class="invoice-paper-container" style="background: white; color: #0f172a; border: 1px solid #cbd5e1; border-radius: 8px; padding: 25px; box-shadow: var(--shadow-soft); overflow-y: auto; max-height: 800px; max-width: 850px; margin: 0 auto; width: 100%; box-sizing: border-box;">
                                     <!-- Rendered in real-time with executive stationery design -->
                                 </div>
                             </div>
@@ -8940,14 +8940,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=392"></script>
-    <script src="supabaseClient.js?v=392"></script>
-    <script src="odontogram.js?v=392"></script>
-    <script src="signature.js?v=392"></script>
-    <script src="whatsapp.js?v=392"></script>
-    <script src="kardex.js?v=392"></script>
-    <script src="app.js?v=392"></script>
-    <script src="clinicalERP.js?v=392"></script>
-    <script src="tutorial.js?v=392"></script>
+    <script src="seededData.js?v=393"></script>
+    <script src="supabaseClient.js?v=393"></script>
+    <script src="odontogram.js?v=393"></script>
+    <script src="signature.js?v=393"></script>
+    <script src="whatsapp.js?v=393"></script>
+    <script src="kardex.js?v=393"></script>
+    <script src="app.js?v=393"></script>
+    <script src="clinicalERP.js?v=393"></script>
+    <script src="tutorial.js?v=393"></script>
 </body>
 </html>
