@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=390">
+    <link rel="stylesheet" href="styles.css?v=391">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -757,9 +757,10 @@
                             <button class="filter-btn" data-filter="En Tratamiento">En Tratamiento</button>
                             <button class="filter-btn" data-filter="Presupuesto Pendiente">Presupuesto Pendiente</button>
                         </div>
-                        <div style="min-width: 210px;">
-                            <select id="patient-tag-filter" class="form-control" onchange="renderPatientsTable()" style="height: 38px; border-radius: 8px; font-size: 0.85rem; border: 1px solid var(--border-color); background: var(--bg-card); cursor: pointer;">
-                                <option value="all">🏷️ Todas las Etiquetas / Convenios</option>
+                        <div style="min-width: 220px; position: relative; display: flex; align-items: center;">
+                            <i class="fa-solid fa-tags" style="position: absolute; left: 12px; color: #7c3aed; font-size: 0.85rem; pointer-events: none; z-index: 2;"></i>
+                            <select id="patient-tag-filter" class="form-control" onchange="renderPatientsTable()" style="padding-left: 32px; height: 38px; border-radius: 8px; font-size: 0.85rem; border: 1px solid var(--border-color); background: var(--bg-card); cursor: pointer;">
+                                <option value="all">Todas las Etiquetas / Convenios</option>
                                 <option value="none">Sin Etiqueta (Particulares)</option>
                             </select>
                         </div>
@@ -774,13 +775,13 @@
                             <table class="table" id="patients-table">
                                 <thead>
                                     <tr>
-                                        <th>Cédula / ID</th>
-                                        <th>Paciente</th>
-                                        <th>Edad / F. Nac.</th>
-                                        <th>WhatsApp / Contacto</th>
-                                        <th>Alertas Clínicas</th>
-                                        <th>Estado</th>
-                                        <th>Acciones</th>
+                                        <th style="width: 120px;">Cédula / ID</th>
+                                        <th style="min-width: 220px;">Paciente</th>
+                                        <th style="width: 110px;">Edad / F. Nac.</th>
+                                        <th style="width: 150px;">WhatsApp / Contacto</th>
+                                        <th style="min-width: 160px;">Alertas Clínicas</th>
+                                        <th style="width: 110px;">Estado</th>
+                                        <th style="width: 200px; text-align: right;">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody id="patients-table-body">
@@ -8926,14 +8927,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=390"></script>
-    <script src="supabaseClient.js?v=390"></script>
-    <script src="odontogram.js?v=390"></script>
-    <script src="signature.js?v=390"></script>
-    <script src="whatsapp.js?v=390"></script>
-    <script src="kardex.js?v=390"></script>
-    <script src="app.js?v=390"></script>
-    <script src="clinicalERP.js?v=390"></script>
-    <script src="tutorial.js?v=390"></script>
+    <script src="seededData.js?v=391"></script>
+    <script src="supabaseClient.js?v=391"></script>
+    <script src="odontogram.js?v=391"></script>
+    <script src="signature.js?v=391"></script>
+    <script src="whatsapp.js?v=391"></script>
+    <script src="kardex.js?v=391"></script>
+    <script src="app.js?v=391"></script>
+    <script src="clinicalERP.js?v=391"></script>
+    <script src="tutorial.js?v=391"></script>
 </body>
 </html>

@@ -5951,8 +5951,8 @@ window.populateTagSelects = async function() {
         const filterTagSelect = document.getElementById('patient-tag-filter');
         if (filterTagSelect) {
             const curFilter = filterTagSelect.value || 'all';
-            filterTagSelect.innerHTML = '<option value="all">🏷️ Todas las Etiquetas / Convenios</option><option value="none">Sin Etiqueta (Particulares)</option>' +
-                tags.map(t => `<option value="${t.id}">🏷️ ${t.name}</option>`).join('');
+            filterTagSelect.innerHTML = '<option value="all">Todas las Etiquetas / Convenios</option><option value="none">Sin Etiqueta (Particulares)</option>' +
+                tags.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
             filterTagSelect.value = curFilter;
         }
     } catch(e) {
@@ -6111,38 +6111,47 @@ async function renderPatientsTable(filter = null, searchQuery = null, highlightP
             tagBadgeHtml = `<span class="badge-tag" style="background:${tagColor}15; color:${tagColor}; border:1px solid ${tagColor}40; font-size:0.72rem; font-weight:700; margin-top:2px; display:inline-block;"><i class="fa-solid fa-tag"></i> ${tagName}${ruleText}</span>`;
         }
 
-        const allAlerts = [];
         const safeAllergies = Array.isArray(p.allergies) ? p.allergies : (typeof p.allergies === 'string' && p.allergies.trim() ? (() => { try { const r = JSON.parse(p.allergies); return Array.isArray(r) ? r : [p.allergies]; } catch(e) { return [p.allergies]; } })() : []);
-        if (safeAllergies.length > 0) {
-            safeAllergies.forEach(a => {
-                allAlerts.push({ type: 'allergy', text: a, label: `Alergia: ${a}`, icon: 'fa-triangle-exclamation', colorClass: 'red' });
-            });
-        }
         const safeSystemic = Array.isArray(p.systemic) ? p.systemic : (typeof p.systemic === 'string' && p.systemic.trim() ? (() => { try { const r = JSON.parse(p.systemic); return Array.isArray(r) ? r : [p.systemic]; } catch(e) { return [p.systemic]; } })() : []);
-        if (safeSystemic.length > 0) {
-            safeSystemic.forEach(s => {
-                allAlerts.push({ type: 'systemic', text: s, label: s, icon: 'fa-heart-pulse', colorClass: 'amber' });
-            });
-        }
 
         let alertsHtml = '';
-        if (allAlerts.length === 0) {
+        const allergyCount = safeAllergies.length;
+        const systemicCount = safeSystemic.length;
+
+        if (allergyCount === 0 && systemicCount === 0) {
             alertsHtml = `<span class="text-muted" style="font-size:0.78rem;">Sin alertas</span>`;
-        } else if (allAlerts.length === 1) {
-            alertsHtml = `<span class="badge-tag ${allAlerts[0].colorClass}" style="white-space: nowrap; cursor: pointer;" onclick="window.showPatientAlertsModal('${p.id}')" title="Ver detalles de alerta"><i class="fa-solid ${allAlerts[0].icon}"></i> ${allAlerts[0].label}</span>`;
         } else {
-            const firstAlert = allAlerts[0];
-            const remainingCount = allAlerts.length - 1;
-            alertsHtml = `
-                <div style="display: inline-flex; align-items: center; gap: 6px; flex-wrap: nowrap;">
-                    <span class="badge-tag ${firstAlert.colorClass}" style="white-space: nowrap; max-width: 130px; overflow: hidden; text-overflow: ellipsis; cursor: pointer;" onclick="window.showPatientAlertsModal('${p.id}')" title="${firstAlert.label} (Clic para ver todas)">
-                        <i class="fa-solid ${firstAlert.icon}"></i> ${firstAlert.label}
-                    </span>
-                    <button type="button" class="btn btn-xs" onclick="window.showPatientAlertsModal('${p.id}')" style="background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; border-radius: 12px; padding: 2px 7px; font-size: 0.72rem; font-weight: 700; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px;" title="Ver todas las ${allAlerts.length} alertas clínicas">
-                        <i class="fa-solid fa-layer-group"></i> +${remainingCount} más
-                    </button>
-                </div>
-            `;
+            let allergySnippet = '';
+            if (allergyCount === 1) {
+                allergySnippet = `<span class="badge-tag red" style="white-space: nowrap; font-size: 0.76rem;" title="Alergia: ${safeAllergies[0]}"><i class="fa-solid fa-triangle-exclamation"></i> ${safeAllergies[0]}</span>`;
+            } else if (allergyCount > 1) {
+                const listItems = safeAllergies.map(a => `
+                    <div style="display: flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: 0.78rem; color: #9f1239; font-weight: 600; border-radius: 4px; background: #fff1f2; margin-bottom: 3px;">
+                        <i class="fa-solid fa-circle-exclamation" style="font-size: 0.7rem; color: #e11d48;"></i> <span>${a}</span>
+                    </div>
+                `).join('');
+
+                allergySnippet = `
+                    <div class="patient-allergies-accordion" style="position: relative; display: inline-block;">
+                        <button type="button" class="badge-tag red" onclick="window.togglePatientAllergiesAccordion('${p.id}', event)" style="cursor: pointer; border: 1px solid #fca5a5; background: #fee2e2; color: #b91c1c; font-weight: 700; font-size: 0.74rem; padding: 3px 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;" title="Clic para ver todas las ${allergyCount} alergias">
+                            <i class="fa-solid fa-triangle-exclamation"></i> <span>Alergias (${allergyCount})</span> <i class="fa-solid fa-chevron-down" id="p-allergies-chevron-${p.id}" style="font-size: 0.65rem; transition: transform 0.2s;"></i>
+                        </button>
+                        <div id="p-allergies-dropdown-${p.id}" class="patient-allergies-list-dropdown" style="display: none; position: absolute; left: 0; top: calc(100% + 4px); background: #ffffff; border: 1px solid #fecdd3; border-radius: 8px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.15), 0 8px 10px -6px rgba(0,0,0,0.1); padding: 6px; z-index: 50; min-width: 170px; max-width: 260px;">
+                            <div style="font-size: 0.70rem; font-weight: 800; text-transform: uppercase; color: #be123c; margin-bottom: 4px; padding-left: 4px; letter-spacing: 0.5px;">Alergias Registradas:</div>
+                            ${listItems}
+                        </div>
+                    </div>
+                `;
+            }
+
+            let systemicSnippet = '';
+            if (systemicCount === 1) {
+                systemicSnippet = `<span class="badge-tag amber" style="white-space: nowrap; font-size: 0.76rem;" title="Condición Sistémica: ${safeSystemic[0]}"><i class="fa-solid fa-heart-pulse"></i> ${safeSystemic[0]}</span>`;
+            } else if (systemicCount > 1) {
+                systemicSnippet = `<span class="badge-tag amber" style="white-space: nowrap; font-size: 0.74rem;" title="${safeSystemic.join(', ')}"><i class="fa-solid fa-heart-pulse"></i> ${safeSystemic[0]} +${systemicCount - 1}</span>`;
+            }
+
+            alertsHtml = `<div style="display: inline-flex; align-items: center; gap: 5px; flex-wrap: nowrap;">${allergySnippet}${systemicSnippet}</div>`;
         }
 
         let statusClass = 'blue';
@@ -6179,19 +6188,19 @@ async function renderPatientsTable(filter = null, searchQuery = null, highlightP
             <td><span class="badge-tag ${statusClass}">${p.status}</span></td>
             <td>
                 <div class="patient-actions-cluster">
-                    <button class="btn btn-xs btn-outline btn-act-contact" onclick="window.copyPatientContact('${p.id}', event)" title="Ver y Copiar Datos de Contacto (Teléfono, Correo, Instagram)" style="color: #0284c7; border-color: #bae6fd;">
-                        <i class="fa-solid fa-address-card"></i> <span>Contacto</span>
+                    <button class="btn btn-xs btn-outline btn-act-icon btn-act-contact" onclick="window.copyPatientContact('${p.id}', event)" title="Ver y Copiar Datos de Contacto (Teléfono, Correo, Instagram)" style="color: #0284c7; border-color: #bae6fd;">
+                        <i class="fa-solid fa-address-card"></i>
                     </button>
-                    ${!isDoctor ? `<button class="btn btn-xs btn-outline btn-act-cobrar" onclick="window.openDirectSaleModal('${p.id}')" title="Venta Directa / Cobro Rápido">
-                        <i class="fa-solid fa-bolt"></i> <span>Cobrar</span>
+                    ${!isDoctor ? `<button class="btn btn-xs btn-outline btn-act-icon btn-act-cobrar" onclick="window.openDirectSaleModal('${p.id}')" title="Venta Directa / Cobro Rápido">
+                        <i class="fa-solid fa-bolt"></i>
                     </button>` : ''}
                     <button class="btn btn-xs btn-primary btn-act-presupuesto" onclick="selectPatientForOdontogram('${p.id}')" title="Emitir Presupuesto">
                         <i class="fa-solid fa-tooth"></i> <span>Presupuesto</span>
                     </button>
-                    <button class="btn btn-xs btn-outline btn-act-editar" onclick="window.editPatient('${p.id}')" title="Editar Ficha / Historia">
-                        <i class="fa-solid fa-pen-to-square"></i> <span>Editar</span>
+                    <button class="btn btn-xs btn-outline btn-act-icon btn-act-editar" onclick="window.editPatient('${p.id}')" title="Editar Ficha / Historia">
+                        <i class="fa-solid fa-pen-to-square"></i>
                     </button>
-                    <button class="btn btn-xs btn-outline btn-act-more" onclick="window.openPatientRowActionsMenu('${p.id}', this, event, ${!canDelete})" title="Más opciones para este paciente">
+                    <button class="btn btn-xs btn-outline btn-act-icon btn-act-more" onclick="window.openPatientRowActionsMenu('${p.id}', this, event, ${!canDelete})" title="Más opciones para este paciente">
                         <i class="fa-solid fa-ellipsis-vertical"></i>
                     </button>
                 </div>
@@ -34103,3 +34112,41 @@ window.renderHygienistFinancesView = async function(filterMode = null, searchQue
         `;
     }).join('');
 };
+
+window.togglePatientAllergiesAccordion = function(patientId, event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    const targetDropdown = document.getElementById(`p-allergies-dropdown-${patientId}`);
+    const targetChevron = document.getElementById(`p-allergies-chevron-${patientId}`);
+    if (!targetDropdown) return;
+
+    const willOpen = targetDropdown.style.display !== 'block';
+
+    document.querySelectorAll('.patient-allergies-list-dropdown').forEach(d => {
+        d.style.display = 'none';
+    });
+    document.querySelectorAll('[id^="p-allergies-chevron-"]').forEach(c => {
+        c.style.transform = 'rotate(0deg)';
+    });
+
+    if (willOpen) {
+        targetDropdown.style.display = 'block';
+        if (targetChevron) targetChevron.style.transform = 'rotate(180deg)';
+    }
+};
+
+if (typeof document !== 'undefined' && !window._patientAllergiesClickBound) {
+    window._patientAllergiesClickBound = true;
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.patient-allergies-accordion')) {
+            document.querySelectorAll('.patient-allergies-list-dropdown').forEach(d => {
+                d.style.display = 'none';
+            });
+            document.querySelectorAll('[id^="p-allergies-chevron-"]').forEach(c => {
+                c.style.transform = 'rotate(0deg)';
+            });
+        }
+    });
+}

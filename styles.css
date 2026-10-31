@@ -6319,9 +6319,25 @@ select, .form-select, select.form-control {
 .patient-actions-cluster {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 5px;
     flex-wrap: nowrap;
     width: max-content;
+}
+
+.patient-actions-cluster .btn-act-icon {
+    width: 30px !important;
+    height: 30px !important;
+    padding: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+}
+
+.patient-allergies-accordion {
+    position: relative;
+    display: inline-block;
 }
 
 .patient-actions-cluster .btn {
