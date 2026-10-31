@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=267">
+    <link rel="stylesheet" href="styles.css?v=300">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -56,7 +56,6 @@
         html[data-active-tab="finance"] .tab-view:not(#view-finance),
         html[data-active-tab="ehr"] .tab-view:not(#view-ehr),
         html[data-active-tab="inventory"] .tab-view:not(#view-inventory),
-        html[data-active-tab="doctor-finances"] .tab-view:not(#view-doctor-finances),
         html[data-active-tab="pricing"] .tab-view:not(#view-pricing),
         html[data-active-tab="users"] .tab-view:not(#view-users),
         html[data-active-tab="specialties"] .tab-view:not(#view-specialties),
@@ -75,7 +74,6 @@
         html[data-active-tab="finance"] #view-finance,
         html[data-active-tab="ehr"] #view-ehr,
         html[data-active-tab="inventory"] #view-inventory,
-        html[data-active-tab="doctor-finances"] #view-doctor-finances,
         html[data-active-tab="pricing"] #view-pricing,
         html[data-active-tab="users"] #view-users,
         html[data-active-tab="specialties"] #view-specialties,
@@ -224,10 +222,6 @@
                     <i class="fa-solid fa-notes-medical"></i>
                     <span>Historias</span>
                 </a>
-                <a href="#doctor-finances" class="nav-item doctor-only-nav hidden" data-tab="doctor-finances" id="nav-doctor-finances">
-                    <i class="fa-solid fa-file-invoice-dollar text-green"></i>
-                    <span>Mis Ingresos y Cobros</span>
-                </a>
                 <a href="#pricing" class="nav-item mobile-sidebar-hide" data-tab="pricing">
                     <i class="fa-solid fa-tags"></i>
                     <span>Servicios</span>
@@ -315,13 +309,6 @@
                         <span class="btn-text-full">Tutorial Guiado</span>
                     </button>
 
-                    <!-- Pase a Caja / En Espera de Cobro Button -->
-                    <button id="btn-topbar-checkout" class="btn btn-sm btn-outline" style="position: relative; border-radius: 8px; padding: 6px 12px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; border-color: #f59e0b; color: #d97706; background: #fffbeb; cursor: pointer;" onclick="window.navigateToCheckoutQueue()" title="Pase a Caja: Pacientes atendidos en espera de cobro">
-                        <i class="fa-solid fa-cart-shopping" style="font-size: 1rem; color: #d97706;"></i>
-                        <span class="btn-text-full" style="font-size: 0.85rem;">Pase a Caja</span>
-                        <span id="topbar-checkout-badge-count" style="display: none; background: #ef4444; color: #ffffff; font-size: 0.72rem; font-weight: 800; padding: 1px 6px; border-radius: 10px; min-width: 18px; text-align: center; box-shadow: 0 1px 3px rgba(239, 68, 68, 0.4);">0</span>
-                    </button>
-
                     <!-- Notifications & Birthday Alerts Bell -->
                     <button id="btn-notifications-bell" class="btn btn-sm btn-outline" style="position: relative; border-radius: 8px; padding: 6px 12px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; border-color: #cbd5e1; color: var(--text-main); background: var(--bg-card); cursor: pointer;" onclick="window.openBirthdaysHubModal()" title="Alertas del Sistema y Cumpleaños">
                         <i class="fa-solid fa-bell text-amber" style="font-size: 1.05rem; color: #f59e0b;"></i>
@@ -367,7 +354,7 @@
 
                     <!-- Metrics Grid -->
                     <div class="stats-grid">
-                        <div class="stat-card border-cyan" id="card-metric-today-income" style="cursor: pointer;" onclick="window.navigateToDailyIncome()" title="Haga clic para ver detalle de ingresos de hoy">
+                        <div class="stat-card border-cyan">
                             <div class="stat-header">
                                 <span>Ingresos del Día</span>
                                 <div class="stat-icon cyan"><i class="fa-solid fa-dollar-sign"></i></div>
@@ -376,7 +363,7 @@
                             <small class="trend up" id="metric-today-trend"><i class="fa-solid fa-arrow-trend-up"></i> $0.00 hoy</small>
                         </div>
 
-                        <div class="stat-card border-green" id="card-metric-month-income" style="cursor: pointer;" onclick="window.navigateToMonthIncome()" title="Haga clic para ver detalle de ingresos del mes">
+                        <div class="stat-card border-green">
                             <div class="stat-header">
                                 <span>Ingresos del Mes</span>
                                 <div class="stat-icon green"><i class="fa-solid fa-vault"></i></div>
@@ -385,7 +372,7 @@
                             <small class="text-muted" id="metric-month-sub">Total cobrado este mes</small>
                         </div>
 
-                        <div class="stat-card border-purple" id="card-metric-conversion" style="cursor: pointer;" onclick="window.navigateToConversionBudgets()" title="Haga clic para ver presupuestos">
+                        <div class="stat-card border-purple">
                             <div class="stat-header">
                                 <span>Conversión Presupuestos</span>
                                 <div class="stat-icon purple"><i class="fa-solid fa-chart-line"></i></div>
@@ -394,7 +381,7 @@
                             <small class="text-muted" id="metric-conversion-sub">0 Aprobados de 0 Emitidos</small>
                         </div>
 
-                        <div class="stat-card border-red" id="card-metric-receivables" style="cursor: pointer;" onclick="window.navigateToReceivables()" title="Haga clic para ver cuentas por cobrar y saldos pendientes">
+                        <div class="stat-card border-red">
                             <div class="stat-header">
                                 <span>Cuentas por Cobrar</span>
                                 <div class="stat-icon red"><i class="fa-solid fa-hand-holding-dollar"></i></div>
@@ -1211,9 +1198,6 @@
                                     <button type="button" class="btn btn-outline" onclick="window.saveMedicalBudget('Presupuesto')" style="font-weight: 700; border-radius: 8px; padding: 10px 18px; cursor: pointer;">
                                         <i class="fa-solid fa-floppy-disk"></i> Guardar Borrador
                                     </button>
-                                    <button type="button" class="btn btn-warning" onclick="window.saveMedicalBudget('Aprobado', true)" style="background: #f59e0b !important; border: none !important; color: white !important; font-weight: 700; padding: 10px 20px; border-radius: 8px; cursor: pointer;" title="Guardar y enviar inmediatamente a recepción para cobro en caja">
-                                        <i class="fa-solid fa-paper-plane"></i> Guardar y Enviar a Caja (🛒)
-                                    </button>
                                     <button type="button" class="btn btn-success" onclick="window.saveMedicalBudget('Aprobado')" style="background: #0d9488 !important; border: none !important; font-weight: 700; padding: 10px 22px; border-radius: 8px; cursor: pointer;">
                                         <i class="fa-solid fa-circle-check"></i> Guardar y Aprobar
                                     </button>
@@ -1238,9 +1222,6 @@
                             <p class="subtitle">Evolución por cita, comparación visual de odontodiagramas y álbum fotográfico.</p>
                         </div>
                         <div style="display:flex; gap:10px;">
-                            <button class="btn btn-warning" id="btn-open-patient-cart" onclick="window.openPatientBillingCart(getActivePatientId())" style="background: #f59e0b !important; color: white !important; border: none !important; font-weight: 700; border-radius: 8px; padding: 8px 14px; cursor: pointer;" title="Ver Carrito de Cobro, Procedimientos de Hoy y Pagos">
-                                <i class="fa-solid fa-cart-shopping"></i> Carrito / Pase a Caja
-                            </button>
                             <button class="btn btn-success" id="btn-open-payment-modal">
                                 <i class="fa-solid fa-hand-holding-dollar"></i> + Registrar Pago / Abono
                             </button>
@@ -1513,122 +1494,6 @@
                                     <!-- Populated dynamically -->
                                 </tbody>
                             </table>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- VIEW: MIS INGRESOS Y COBROS (MÉDICO) -->
-                <section id="view-doctor-finances" class="tab-view">
-                    <div class="view-header">
-                        <div>
-                            <h1><i class="fa-solid fa-file-invoice-dollar text-green"></i> Mis Ingresos, Cobros y Honorarios</h1>
-                            <p class="subtitle" id="doc-fin-subtitle">Panel financiero personalizado para seguimiento de ingresos y cuentas pendientes.</p>
-                        </div>
-                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                            <button class="btn btn-outline" id="btn-print-doctor-finances" onclick="window.printDoctorFinancesReport()" style="border-color: #0284c7; color: #0284c7; font-weight: 600;">
-                                <i class="fa-solid fa-print"></i> Imprimir Reporte
-                            </button>
-                            <button class="btn btn-primary" id="btn-refresh-doctor-finances" onclick="window.renderDoctorFinancesView()">
-                                <i class="fa-solid fa-rotate"></i> Actualizar
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Period Filter Bar -->
-                    <div class="card filter-card mb-20" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 14px 18px; border-left: 4px solid #10b981;">
-                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                            <span style="font-weight: 700; color: #334155; font-size: 0.88rem;"><i class="fa-regular fa-calendar-days text-green"></i> Período:</span>
-                            <div class="filter-group" id="doc-fin-period-filters" style="display: flex; gap: 6px; flex-wrap: wrap;">
-                                <button class="filter-btn" data-period="today">Hoy</button>
-                                <button class="filter-btn" data-period="week">Esta Semana</button>
-                                <button class="filter-btn active" data-period="month">Este Mes</button>
-                                <button class="filter-btn" data-period="last_month">Mes Anterior</button>
-                                <button class="filter-btn" data-period="year">Este Año</button>
-                                <button class="filter-btn" data-period="all">Historial Completo</button>
-                            </div>
-                        </div>
-                        <div class="search-box" style="min-width: 250px;">
-                            <input type="text" id="doc-fin-search-input" placeholder="Buscar por paciente, cédula, recibo...">
-                        </div>
-                    </div>
-
-                    <!-- 4 KPI Summary Cards -->
-                    <div class="stats-grid mb-20" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;">
-                        <div class="stat-card" style="border-top: 4px solid #0284c7; background: #ffffff; padding: 16px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
-                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                                <div>
-                                    <span style="font-size: 0.78rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Cobrado Hoy</span>
-                                    <div style="font-size: 1.5rem; font-weight: 800; color: #0284c7; margin-top: 4px;" id="doc-fin-kpi-today">$0.00 USD</div>
-                                    <small style="color: #64748b; font-weight: 600;" id="doc-fin-kpi-today-bs">Bs. 0.00</small>
-                                </div>
-                                <div style="width: 40px; height: 40px; border-radius: 8px; background: #e0f2fe; color: #0284c7; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
-                                    <i class="fa-solid fa-calendar-day"></i>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="stat-card" style="border-top: 4px solid #10b981; background: #ffffff; padding: 16px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
-                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                                <div>
-                                    <span style="font-size: 0.78rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Cobrado en el Período</span>
-                                    <div style="font-size: 1.5rem; font-weight: 800; color: #10b981; margin-top: 4px;" id="doc-fin-kpi-month">$0.00 USD</div>
-                                    <small style="color: #64748b; font-weight: 600;" id="doc-fin-kpi-month-bs">Bs. 0.00</small>
-                                </div>
-                                <div style="width: 40px; height: 40px; border-radius: 8px; background: #dcfce7; color: #15803d; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
-                                    <i class="fa-solid fa-circle-dollar-to-slot"></i>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="stat-card" style="border-top: 4px solid #ef4444; background: #ffffff; padding: 16px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
-                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                                <div>
-                                    <span style="font-size: 0.78rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Por Cobrar (Saldos)</span>
-                                    <div style="font-size: 1.5rem; font-weight: 800; color: #ef4444; margin-top: 4px;" id="doc-fin-kpi-debt">$0.00 USD</div>
-                                    <small style="color: #64748b; font-weight: 600;" id="doc-fin-kpi-debt-bs">Bs. 0.00</small>
-                                </div>
-                                <div style="width: 40px; height: 40px; border-radius: 8px; background: #fee2e2; color: #dc2626; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
-                                    <i class="fa-solid fa-hand-holding-dollar"></i>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="stat-card" style="border-top: 4px solid #8b5cf6; background: #ffffff; padding: 16px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
-                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                                <div>
-                                    <span style="font-size: 0.78rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Pacientes Atendidos</span>
-                                    <div style="font-size: 1.5rem; font-weight: 800; color: #8b5cf6; margin-top: 4px;" id="doc-fin-kpi-patients">0</div>
-                                    <small style="color: #64748b; font-weight: 600;">En el período</small>
-                                </div>
-                                <div style="width: 40px; height: 40px; border-radius: 8px; background: #f3e8ff; color: #7c3aed; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
-                                    <i class="fa-solid fa-user-check"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Navigation Subtabs for Doctor Finances -->
-                    <div class="card p-0" style="overflow: hidden; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
-                        <div id="doc-fin-subtabs-bar" style="display: flex; border-bottom: 2px solid #e2e8f0; background: #f8fafc; padding: 6px 12px 0 12px; gap: 8px; overflow-x: auto;">
-                            <button class="subtab-btn active" data-subtab="payments" style="padding: 10px 16px; font-weight: 700; font-size: 0.9rem; border: none; background: transparent; cursor: pointer; border-bottom: 3px solid #10b981; color: #047857; display: flex; align-items: center; gap: 6px;">
-                                <i class="fa-solid fa-money-bill-wave"></i> Historial de Cobros Recibidos <span class="badge-tag green" id="doc-fin-badge-payments" style="font-size: 0.75rem; padding: 2px 7px;">0</span>
-                            </button>
-                            <button class="subtab-btn" data-subtab="receivables" style="padding: 10px 16px; font-weight: 700; font-size: 0.9rem; border: none; background: transparent; cursor: pointer; border-bottom: 3px solid transparent; color: #64748b; display: flex; align-items: center; gap: 6px;">
-                                <i class="fa-solid fa-clock-rotate-left"></i> Cuentas por Cobrar (Saldos) <span class="badge-tag red" id="doc-fin-badge-receivables" style="font-size: 0.75rem; padding: 2px 7px;">0</span>
-                            </button>
-                            <button class="subtab-btn" data-subtab="patients" style="padding: 10px 16px; font-weight: 700; font-size: 0.9rem; border: none; background: transparent; cursor: pointer; border-bottom: 3px solid transparent; color: #64748b; display: flex; align-items: center; gap: 6px;">
-                                <i class="fa-solid fa-user-doctor"></i> Pacientes Atendidos <span class="badge-tag purple" id="doc-fin-badge-patients" style="font-size: 0.75rem; padding: 2px 7px;">0</span>
-                            </button>
-                        </div>
-
-                        <div style="padding: 16px;">
-                            <div class="table-responsive">
-                                <table class="table" id="doc-fin-main-table">
-                                    <thead id="doc-fin-table-thead">
-                                        <!-- Populated dynamically -->
-                                    </thead>
-                                    <tbody id="doc-fin-table-tbody">
-                                        <!-- Populated dynamically -->
-                                    </tbody>
-                                </table>
-                            </div>
                         </div>
                     </div>
                 </section>
@@ -1946,63 +1811,14 @@
                     <!-- Finance Tabs -->
                     <div class="card mb-20">
                         <div class="subtabs">
-                            <button class="subtab-btn active" data-subtab="checkout-queue" id="btn-subtab-checkout-queue"><i class="fa-solid fa-cart-shopping text-warning"></i> Pase a Caja / Por Cobrar Hoy <span class="badge" id="badge-checkout-count" style="display:none; background:#ef4444; color:white; border-radius:10px; padding:2px 8px; font-size:0.75rem; margin-left:6px; font-weight:800;">0</span></button>
-                            <button class="subtab-btn" data-subtab="bills-payable">Cuentas por Pagar</button>
+                            <button class="subtab-btn active" data-subtab="bills-payable">Cuentas por Pagar</button>
                             <button class="subtab-btn" data-subtab="receivables">Cuentas por Cobrar</button>
                             <button class="subtab-btn" data-subtab="cash-flow">Flujo de Caja</button>
                         </div>
                     </div>
 
-                    <!-- SUBTAB: Pase a Caja / En Espera de Cobro -->
-                    <div id="subtab-checkout-queue" class="subtab-content active">
-                        <div class="card mb-20" style="padding: 16px 20px; background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border-left: 4px solid #f59e0b;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-                                <div>
-                                    <h3 style="margin: 0; font-size: 1.15rem; font-weight: 800; color: #0f172a; display: flex; align-items: center; gap: 8px;">
-                                        <i class="fa-solid fa-cash-register text-amber" style="color: #d97706;"></i> Bandeja de Pase a Caja en Tiempo Real
-                                    </h3>
-                                    <p style="margin: 4px 0 0 0; font-size: 0.82rem; color: #64748b;">
-                                        Pacientes atendidos en consultorio con procedimientos o presupuestos enviados para liquidación y cobro inmediato en recepción.
-                                    </p>
-                                </div>
-                                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                                    <div style="position: relative; min-width: 250px;">
-                                        <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94a3b8;"></i>
-                                        <input type="text" id="checkout-queue-search" placeholder="Buscar por paciente o cédula..." oninput="window.filterCheckoutQueue(this.value)" style="width: 100%; padding: 7px 12px 7px 34px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.85rem;">
-                                    </div>
-                                    <button type="button" class="btn btn-outline" onclick="window.renderCheckoutQueue()" title="Refrescar lista en tiempo real" style="border-radius: 8px; padding: 7px 14px; font-weight: 700;">
-                                        <i class="fa-solid fa-rotate"></i> Refrescar
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="card">
-                            <div class="table-responsive">
-                                <table class="table" style="width: 100%; margin: 0;">
-                                    <thead>
-                                        <tr>
-                                            <th style="width: 90px;">Hora</th>
-                                            <th>Cédula</th>
-                                            <th>Paciente</th>
-                                            <th>Atendido Por</th>
-                                            <th>Procedimientos Realizados / Enviados</th>
-                                            <th style="text-align: right;">Total ($)</th>
-                                            <th style="text-align: right;">Total (Bs.)</th>
-                                            <th style="text-align: center;">Estado</th>
-                                            <th style="text-align: center;">Acción</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="checkout-queue-tbody">
-                                        <tr><td colspan="9" class="text-center text-muted" style="padding: 24px;">No hay pacientes en espera de cobro en este momento.</td></tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-
                     <!-- SUBTAB: Cuentas por Pagar -->
-                    <div id="subtab-bills-payable" class="subtab-content">
+                    <div id="subtab-bills-payable" class="subtab-content active">
                         <div class="grid-2-col">
                             <!-- Registrar Gasto / Proveedor -->
                             <div class="card">
@@ -2893,26 +2709,6 @@
                                     </div>
                                 </div>
 
-                                <!-- Filter Bar for All System Users -->
-                                <div style="display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; align-items: center;" id="system-users-filter-bar">
-                                    <span style="font-size: 0.8rem; font-weight: 700; color: #64748b; margin-right: 4px;"><i class="fa-solid fa-filter"></i> Filtrar por:</span>
-                                    <button type="button" class="btn btn-xs btn-primary sys-user-filter-btn" data-filter="all" onclick="window.renderSystemUsersTable('all')" style="font-weight: 700; border-radius: 6px;">
-                                        Todos (<span id="sys-count-all">0</span>)
-                                    </button>
-                                    <button type="button" class="btn btn-xs btn-outline sys-user-filter-btn" data-filter="admin" onclick="window.renderSystemUsersTable('admin')" style="font-weight: 700; border-radius: 6px;">
-                                        Oficina y Gestión (<span id="sys-count-admin">0</span>)
-                                    </button>
-                                    <button type="button" class="btn btn-xs btn-outline sys-user-filter-btn" data-filter="doctor" onclick="window.renderSystemUsersTable('doctor')" style="font-weight: 700; border-radius: 6px;">
-                                        Médicos y Odontólogos (<span id="sys-count-doctor">0</span>)
-                                    </button>
-                                    <button type="button" class="btn btn-xs btn-outline sys-user-filter-btn" data-filter="hygienist" onclick="window.renderSystemUsersTable('hygienist')" style="font-weight: 700; border-radius: 6px;">
-                                        Higienistas (<span id="sys-count-hygienist">0</span>)
-                                    </button>
-                                    <button type="button" class="btn btn-xs btn-outline sys-user-filter-btn" data-filter="assistant" onclick="window.renderSystemUsersTable('assistant')" style="font-weight: 700; border-radius: 6px;">
-                                        Asistentes (<span id="sys-count-assistant">0</span>)
-                                    </button>
-                                </div>
-
                                 <div class="table-responsive" style="max-height: 520px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 10px;">
                                     <table class="data-table" style="width: 100%; font-size: 0.85rem;">
                                         <thead>
@@ -3403,157 +3199,6 @@
         </div>
     </div>
 
-    <!-- MODAL: CARRITO CLÍNICO / PASE A CAJA DEL PACIENTE -->
-    <div class="modal-overlay hidden" id="modal-patient-billing-cart" style="z-index: 10600;">
-        <div class="modal-container" style="max-width: 950px; width: 95%; max-height: 92vh; display: flex; flex-direction: column; border-radius: 14px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.25);">
-            <!-- Modal Header -->
-            <div class="modal-header" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #ffffff; padding: 18px 24px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #3b82f6;">
-                <div style="display: flex; align-items: center; gap: 14px;">
-                    <div style="width: 46px; height: 46px; border-radius: 12px; background: rgba(59, 130, 246, 0.2); display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: #60a5fa; border: 1px solid rgba(96, 165, 250, 0.3);">
-                        <i class="fa-solid fa-cart-shopping"></i>
-                    </div>
-                    <div>
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <h3 id="cart-modal-patient-name" style="margin: 0; font-size: 1.25rem; font-weight: 800; color: #ffffff;">Cargando paciente...</h3>
-                            <span id="cart-modal-patient-id" class="badge-tag blue" style="background: rgba(59, 130, 246, 0.2); color: #93c5fd; border: 1px solid rgba(147, 197, 253, 0.3); font-size: 0.75rem; padding: 2px 8px;">V-000000</span>
-                        </div>
-                        <div style="font-size: 0.82rem; color: #94a3b8; display: flex; align-items: center; gap: 12px; margin-top: 3px;">
-                            <span id="cart-modal-patient-phone"><i class="fa-brands fa-whatsapp text-green"></i> --</span>
-                            <span id="cart-modal-patient-doctor"><i class="fa-solid fa-user-doctor"></i> --</span>
-                        </div>
-                    </div>
-                </div>
-                <button type="button" class="btn-close-modal" onclick="closeModal('modal-patient-billing-cart')" style="color: #94a3b8; font-size: 1.8rem; background: none; border: none; cursor: pointer; line-height: 1;">&times;</button>
-            </div>
-
-            <!-- Modal Body with Scroll -->
-            <div class="modal-body" style="padding: 20px; overflow-y: auto; flex: 1; background: #f8fafc;">
-                <!-- Top KPI Cards -->
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px;">
-                    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 16px; border-left: 4px solid #f59e0b; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                        <div style="font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Por Cobrar Hoy (Sesión)</div>
-                        <div id="cart-kpi-today-due" style="font-size: 1.4rem; font-weight: 800; color: #d97706; margin-top: 4px;">$0.00</div>
-                        <small id="cart-kpi-today-due-bs" style="color: #94a3b8; font-size: 0.75rem;">0.00 Bs.</small>
-                    </div>
-                    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 16px; border-left: 4px solid #10b981; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                        <div style="font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Total Pagado / Abonado</div>
-                        <div id="cart-kpi-total-paid" style="font-size: 1.4rem; font-weight: 800; color: #059669; margin-top: 4px;">$0.00</div>
-                        <small style="color: #94a3b8; font-size: 0.75rem;">Historial verificado</small>
-                    </div>
-                    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 16px; border-left: 4px solid #ef4444; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                        <div style="font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Saldos Previos Pendientes</div>
-                        <div id="cart-kpi-past-debt" style="font-size: 1.4rem; font-weight: 800; color: #dc2626; margin-top: 4px;">$0.00</div>
-                        <small style="color: #94a3b8; font-size: 0.75rem;">Cuentas anteriores</small>
-                    </div>
-                </div>
-
-                <!-- SECCIÓN 1: PROCEDIMIENTOS REALIZADOS / POR COBRAR HOY -->
-                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 20px; overflow: hidden; box-shadow: 0 2px 6px rgba(0,0,0,0.04);">
-                    <div style="padding: 14px 18px; background: #fffbeb; border-bottom: 1px solid #fef3c7; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <i class="fa-solid fa-bell-concierge text-amber" style="font-size: 1.1rem; color: #d97706;"></i>
-                            <strong style="color: #92400e; font-size: 0.95rem;">1. Procedimientos Realizados en Sesión / Listos para Cobro</strong>
-                        </div>
-                        <div style="display: flex; gap: 8px; align-items: center;">
-                            <span class="badge" style="background: #fde68a; color: #92400e; font-weight: 700; font-size: 0.78rem; padding: 3px 10px; border-radius: 12px;" id="cart-pending-items-count">0 ítems</span>
-                            <button type="button" class="btn btn-xs btn-outline" onclick="window.toggleAllCartItems(true)" style="font-size: 0.75rem; font-weight: 600;">Marcar Todos</button>
-                            <button type="button" class="btn btn-xs btn-outline" onclick="window.toggleAllCartItems(false)" style="font-size: 0.75rem; font-weight: 600;">Desmarcar</button>
-                        </div>
-                    </div>
-                    <div class="table-responsive" style="max-height: 240px; overflow-y: auto;">
-                        <table class="table" style="width: 100%; margin: 0; font-size: 0.85rem;">
-                            <thead style="background: #fafafa; border-bottom: 1px solid #e2e8f0; position: sticky; top: 0; z-index: 2;">
-                                <tr>
-                                    <th style="width: 40px; text-align: center;">Sel.</th>
-                                    <th>Procedimiento / Servicio</th>
-                                    <th>Especialidad / Dr.</th>
-                                    <th style="text-align: center;">Cant.</th>
-                                    <th style="text-align: right;">Precio Unit.</th>
-                                    <th style="text-align: right;">Subtotal ($)</th>
-                                    <th style="text-align: right;">Subtotal (Bs.)</th>
-                                </tr>
-                            </thead>
-                            <tbody id="cart-pending-items-tbody">
-                                <tr><td colspan="7" class="text-center text-muted" style="padding: 24px;">No hay procedimientos pendientes de cobro para hoy.</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- SECCIÓN 2: PLAN DE TRATAMIENTOS / PRESUPUESTOS VIGENTES -->
-                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 20px; overflow: hidden; box-shadow: 0 2px 6px rgba(0,0,0,0.04);">
-                    <div style="padding: 12px 18px; background: #f0fdf4; border-bottom: 1px solid #dcfce7; display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="window.toggleCartSection('cart-budgets-section-content')">
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <i class="fa-solid fa-file-invoice-dollar" style="color: #16a34a; font-size: 1.05rem;"></i>
-                            <strong style="color: #166534; font-size: 0.92rem;">2. Presupuestos y Tratamientos Cotizados</strong>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <span id="cart-budgets-count" style="font-size: 0.78rem; color: #166534; font-weight: 600;">0 presupuestos</span>
-                            <i class="fa-solid fa-chevron-down" id="cart-budgets-toggle-icon" style="color: #166534; font-size: 0.8rem;"></i>
-                        </div>
-                    </div>
-                    <div id="cart-budgets-section-content" style="display: none; padding: 14px 18px;">
-                        <div id="cart-budgets-container"></div>
-                    </div>
-                </div>
-
-                <!-- SECCIÓN 3: HISTORIAL DE PAGOS Y ABONOS REGISTRADOS -->
-                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 6px rgba(0,0,0,0.04);">
-                    <div style="padding: 12px 18px; background: #eff6ff; border-bottom: 1px solid #dbeafe; display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="window.toggleCartSection('cart-payments-history-content')">
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <i class="fa-solid fa-clock-rotate-left" style="color: #2563eb; font-size: 1.05rem;"></i>
-                            <strong style="color: #1e40af; font-size: 0.92rem;">3. Historial de Pagos y Abonos Registrados</strong>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <span id="cart-payments-count" style="font-size: 0.78rem; color: #1e40af; font-weight: 600;">0 pagos</span>
-                            <i class="fa-solid fa-chevron-down" id="cart-payments-toggle-icon" style="color: #1e40af; font-size: 0.8rem;"></i>
-                        </div>
-                    </div>
-                    <div id="cart-payments-history-content" style="display: none; padding: 0;">
-                        <div class="table-responsive" style="max-height: 200px; overflow-y: auto;">
-                            <table class="table table-compact" style="width: 100%; margin: 0; font-size: 0.82rem;">
-                                <thead style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-                                    <tr>
-                                        <th>Fecha</th>
-                                        <th>Concepto</th>
-                                        <th>Método / Banco</th>
-                                        <th>Referencia</th>
-                                        <th style="text-align: right;">Abonado ($)</th>
-                                        <th style="text-align: right;">Saldo Rest. ($)</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="cart-payments-history-tbody">
-                                    <tr><td colspan="6" class="text-center text-muted" style="padding: 16px;">Sin pagos registrados.</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Modal Footer / Checkout Action Bar -->
-            <div class="modal-footer" style="padding: 16px 24px; background: #ffffff; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
-                <div style="display: flex; align-items: baseline; gap: 10px;">
-                    <span style="font-size: 0.85rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Total a Liquidar:</span>
-                    <span id="cart-checkout-total-usd" style="font-size: 1.6rem; font-weight: 900; color: #059669;">$0.00</span>
-                    <span id="cart-checkout-total-bs" style="font-size: 0.95rem; font-weight: 700; color: #64748b;">(0.00 Bs.)</span>
-                </div>
-
-                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <button type="button" class="btn btn-outline" onclick="window.sendCartWhatsAppDetails()" style="color: #16a34a; border-color: #86efac; font-weight: 700; border-radius: 8px; padding: 10px 16px; cursor: pointer;">
-                        <i class="fa-brands fa-whatsapp"></i> WhatsApp
-                    </button>
-                    <button type="button" class="btn btn-outline" onclick="window.printCartTicket()" style="color: #0284c7; border-color: #bae6fd; font-weight: 700; border-radius: 8px; padding: 10px 16px; cursor: pointer;">
-                        <i class="fa-solid fa-print"></i> Imprimir Pase
-                    </button>
-                    <button type="button" class="btn btn-success" id="btn-cart-proceed-payment" onclick="window.proceedPaymentFromCart()" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important; border: none !important; color: white !important; font-weight: 800; font-size: 0.95rem; border-radius: 8px; padding: 10px 24px; cursor: pointer; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);">
-                        <i class="fa-solid fa-cash-register"></i> Cobrar Seleccionados en Caja
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- MODAL: REGISTRAR ABONO / PAGO DE PACIENTE -->
     <div class="modal-overlay hidden" id="modal-payment">
         <div class="modal-dialog">
@@ -3848,7 +3493,6 @@
                         <label>Rol / Especialidad Clínica *</label>
                         <select id="u-role" required>
                             <option value="Odontólogo Principal">Odontólogo Principal (Médico / Dental)</option>
-                            <option value="Higienista Dental">Higienista Dental (Limpiezas, Profilaxis y Asistencia)</option>
                             <option value="Odontólogo General">Odontólogo General (Médico / Dental)</option>
                             <option value="Especialista en Ortodoncia">Especialista en Ortodoncia</option>
                             <option value="Especialista en Endodoncia">Especialista en Endodoncia</option>
@@ -3888,69 +3532,6 @@
                             <div class="form-group span-2">
                                 <label>Disponibilidad por Servicio / Observaciones:</label>
                                 <input type="text" id="u-availability" placeholder="ej: Consultas los Miércoles por la tarde">
-                            </div>
-                        </div>
-                    </div>
-                    <!-- PERFIL DE REMUNERACIÓN Y COMISIONES DE HIGIENISTA -->
-                    <div id="hygienist-profile-fields" class="span-2 hidden" style="border: 1.5px solid #10b981; padding: 16px; border-radius: 8px; background-color: rgba(16, 185, 129, 0.03); margin-top: 10px;">
-                        <h4 style="margin-top: 0; margin-bottom: 12px; color: #047857; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
-                            <i class="fa-solid fa-tooth text-green"></i> Esquema de Remuneración y Comisiones de la Higienista
-                        </h4>
-                        <div class="grid-form" style="grid-template-columns: 1fr 1fr; gap: 10px;">
-                            <div class="form-group">
-                                <label>Sueldo Base Mensual / Quincenal ($ USD) *</label>
-                                <input type="number" id="u-hyg-base-salary" min="0" step="0.01" placeholder="ej: 250.00">
-                                <small class="text-muted" style="font-size:0.75rem;">Sueldo fijo base garantizado.</small>
-                            </div>
-                            <div class="form-group">
-                                <label>Bono Fijo Adicional ($ USD)</label>
-                                <input type="number" id="u-hyg-fixed-bonus" min="0" step="0.01" placeholder="ej: 50.00">
-                                <small class="text-muted" style="font-size:0.75rem;">Bono fijo regular por asistencia o transporte.</small>
-                            </div>
-                            <div class="form-group span-2">
-                                <label>Comisión General de Respaldo (% por procedimiento)</label>
-                                <input type="number" id="u-hyg-general-commission" min="0" max="100" step="0.5" placeholder="ej: 10">
-                                <small class="text-muted" style="font-size:0.75rem;">Porcentaje aplicable a procedimientos generales que no estén en la lista específica inferior.</small>
-                            </div>
-
-                            <!-- Asignación Específica por Servicio del Baremo -->
-                            <div class="form-group span-2" style="border-top: 1px dashed #cbd5e1; padding-top: 12px; margin-top: 6px;">
-                                <label style="font-weight: 700; color: #1e293b; display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                                    <span><i class="fa-solid fa-tags text-cyan"></i> Comisiones Específicas por Servicio del Baremo</span>
-                                </label>
-                                <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center; background: #ffffff; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0;">
-                                    <select id="u-hyg-service-select" class="form-control" style="flex: 2; min-width: 200px;">
-                                        <option value="">-- Seleccionar servicio del Baremo --</option>
-                                    </select>
-                                    <select id="u-hyg-service-comm-type" class="form-control" style="flex: 1; min-width: 140px;">
-                                        <option value="fixed">Monto Fijo ($ USD)</option>
-                                        <option value="percent">Porcentaje (%)</option>
-                                    </select>
-                                    <input type="number" id="u-hyg-service-comm-value" class="form-control" min="0" step="0.5" placeholder="Monto o %" style="flex: 1; min-width: 100px;">
-                                    <button type="button" class="btn btn-primary btn-sm" id="btn-add-hyg-service-comm" style="display: flex; align-items: center; gap: 4px; padding: 7px 12px;">
-                                        <i class="fa-solid fa-plus"></i> Asignar
-                                    </button>
-                                </div>
-
-                                <!-- Tabla de Servicios Asignados a la Higienista -->
-                                <div class="table-responsive" style="margin-top: 10px; max-height: 190px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; background: #ffffff;">
-                                    <table class="table" style="font-size: 0.82rem; margin: 0;">
-                                        <thead style="background: #f8fafc; position: sticky; top: 0; z-index: 2;">
-                                            <tr style="border-bottom: 1.5px solid #e2e8f0;">
-                                                <th style="padding: 7px 10px;">Servicio</th>
-                                                <th style="padding: 7px 10px; text-align: right;">Precio Baremo</th>
-                                                <th style="padding: 7px 10px;">Tipo Comisión</th>
-                                                <th style="padding: 7px 10px; text-align: right;">Comisión Higienista</th>
-                                                <th style="padding: 7px 10px; text-align: center;">Acción</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="u-hyg-services-comm-tbody">
-                                            <tr>
-                                                <td colspan="5" class="text-center text-muted" style="padding: 14px;">No hay comisiones específicas asignadas. Use el selector superior para agregar.</td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
                             </div>
                         </div>
                     </div>
@@ -4267,15 +3848,15 @@
                                 <label>Profesión / Ocupación</label>
                                 <input type="text" id="p-profession" placeholder="ej: Ingeniero / Estudiante">
                             </div>
-                            <div class="form-group patient-contact-field">
+                            <div class="form-group">
                                 <label>WhatsApp *</label>
                                 <input type="tel" id="p-mobile-phone" required placeholder="+584141234567">
                             </div>
-                            <div class="form-group patient-contact-field">
+                            <div class="form-group">
                                 <label>Teléfono</label>
                                 <input type="tel" id="p-local-phone" placeholder="0212-1234567">
                             </div>
-                            <div class="form-group patient-contact-field">
+                            <div class="form-group">
                                 <label>Correo Electrónico</label>
                                 <input type="email" id="p-email" placeholder="paciente@gmail.com">
                             </div>
@@ -6894,134 +6475,15 @@
         </div>
     </div>
 
-    <!-- Modal: Auditoría Detallada de Método / Arqueo Multi-Cuenta -->
-    <div id="modal-daily-closing-method-detail" class="modal-overlay hidden" style="z-index: 10550;">
-        <div class="modal-container" style="max-width: 900px; width: 95%; max-height: 90vh; display: flex; flex-direction: column;">
-            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding: 16px 20px;">
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    <div id="dc-method-modal-icon" style="width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; background: #e0f2fe; color: #0284c7;">
-                        <i class="fa-solid fa-receipt"></i>
-                    </div>
-                    <div>
-                        <h3 id="dc-method-modal-title" style="margin: 0; font-size: 1.15rem; font-weight: 800; color: #0f172a;">Auditoría de Pagos</h3>
-                        <div id="dc-method-modal-date" style="font-size: 0.8rem; color: #64748b; font-weight: 600;">Fecha Operativa</div>
-                    </div>
-                </div>
-                <button type="button" class="btn-close-modal" onclick="closeModal('modal-daily-closing-method-detail')">&times;</button>
-            </div>
-
-            <div class="modal-body" style="padding: 20px; overflow-y: auto; flex: 1;">
-                <!-- Mini KPI Bar -->
-                <div id="dc-method-modal-kpi-bar" style="display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;"></div>
-
-                <!-- Cuentas y Terminales Grid -->
-                <div id="dc-method-modal-accounts-summary"></div>
-
-                <!-- Tabla de Transacciones -->
-                <div style="border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden; background: #ffffff;">
-                    <div style="padding: 10px 14px; background: #f8fafc; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
-                        <span style="font-size: 0.82rem; font-weight: 800; color: #334155; text-transform: uppercase;">
-                            <i class="fa-solid fa-list-check text-cyan"></i> Transacciones Registradas
-                        </span>
-                        <button type="button" class="btn btn-xs btn-outline" onclick="window.printMethodDetailReport()" style="gap: 5px;">
-                            <i class="fa-solid fa-print"></i> Imprimir Lote
-                        </button>
-                    </div>
-                    <div class="table-responsive" style="max-height: 320px; overflow-y: auto;">
-                        <table class="table table-compact" style="width: 100%; margin: 0;">
-                            <thead style="position: sticky; top: 0; background: #ffffff; z-index: 2;">
-                                <tr style="font-size: 0.76rem; text-transform: uppercase;">
-                                    <th>Hora</th>
-                                    <th>Paciente</th>
-                                    <th>Concepto / Tratamiento</th>
-                                    <th>Cuenta / Banco</th>
-                                    <th>Referencia</th>
-                                    <th style="text-align: right;">Monto (Bs.)</th>
-                                    <th style="text-align: right;">Monto ($)</th>
-                                </tr>
-                            </thead>
-                            <tbody id="dc-method-modal-tbody">
-                                <tr><td colspan="7" class="text-center text-muted" style="padding: 20px;">Cargando...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <div class="modal-footer" style="padding: 12px 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: var(--bg-card);">
-                <button type="button" class="btn btn-outline" onclick="window.printMethodDetailReport()">
-                    <i class="fa-solid fa-print"></i> Imprimir Reporte
-                </button>
-                <button type="button" class="btn btn-primary" onclick="closeModal('modal-daily-closing-method-detail')">
-                    Entendido / Cerrar
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal: Especificaciones de Métricas del Médico (Ingresos Día, Mes, Cuentas por Cobrar) -->
-    <div id="modal-doctor-metric-details" class="modal-overlay hidden" style="z-index: 10550;">
-        <div class="modal-container" style="max-width: 950px; width: 95%; max-height: 90vh; display: flex; flex-direction: column;">
-            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding: 16px 20px;">
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    <div id="doctor-metric-modal-icon" style="width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; background: #dcfce7; color: #16a34a;">
-                        <i class="fa-solid fa-hand-holding-dollar"></i>
-                    </div>
-                    <div>
-                        <h3 id="doctor-metric-modal-title" style="margin: 0; font-size: 1.15rem; font-weight: 800; color: #0f172a;">Detalle de Ingresos</h3>
-                        <div id="doctor-metric-modal-subtitle" style="font-size: 0.8rem; color: #64748b; font-weight: 600;">Exclusivo de sus pacientes atendidos</div>
-                    </div>
-                </div>
-                <button type="button" class="btn-close-modal" onclick="closeModal('modal-doctor-metric-details')">&times;</button>
-            </div>
-
-            <div class="modal-body" style="padding: 20px; overflow-y: auto; flex: 1;">
-                <!-- Mini KPI Cards -->
-                <div id="doctor-metric-kpi-bar" style="display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;"></div>
-
-                <!-- Buscador rápido dentro del modal -->
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 10px; flex-wrap: wrap;">
-                    <div style="position: relative; flex: 1; min-width: 240px;">
-                        <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94a3b8;"></i>
-                        <input type="text" id="doctor-metric-search-input" placeholder="Buscar por paciente, cédula, procedimiento o comprobante..." oninput="window.filterDoctorMetricTable(this.value)" style="width: 100%; padding: 8px 12px 8px 34px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.85rem;">
-                    </div>
-                    <div id="doctor-metric-counter-badge" style="font-size: 0.8rem; font-weight: 700; color: #64748b; background: #f1f5f9; padding: 6px 12px; border-radius: 6px;">
-                        0 registros
-                    </div>
-                </div>
-
-                <!-- Tabla de datos -->
-                <div style="border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden; background: #ffffff;">
-                    <div class="table-responsive" style="max-height: 380px; overflow-y: auto;">
-                        <table class="table table-compact" style="width: 100%; margin: 0;">
-                            <thead style="position: sticky; top: 0; background: #ffffff; z-index: 2;" id="doctor-metric-table-thead">
-                                <!-- Cabeceras inyectadas dinámicamente -->
-                            </thead>
-                            <tbody id="doctor-metric-table-tbody">
-                                <tr><td colspan="6" class="text-center text-muted" style="padding: 24px;">Cargando información...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <div class="modal-footer" style="padding: 12px 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; align-items: center; background: var(--bg-card);">
-                <button type="button" class="btn btn-primary" onclick="closeModal('modal-doctor-metric-details')">
-                    Cerrar
-                </button>
-            </div>
-        </div>
-    </div>
-
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=270"></script>
-    <script src="supabaseClient.js?v=270"></script>
-    <script src="odontogram.js?v=270"></script>
-    <script src="signature.js?v=270"></script>
-    <script src="whatsapp.js?v=270"></script>
-    <script src="kardex.js?v=270"></script>
-    <script src="app.js?v=270"></script>
-    <script src="clinicalERP.js?v=270"></script>
-    <script src="tutorial.js?v=270"></script>
+    <script src="seededData.js?v=300"></script>
+    <script src="supabaseClient.js?v=300"></script>
+    <script src="odontogram.js?v=300"></script>
+    <script src="signature.js?v=300"></script>
+    <script src="whatsapp.js?v=300"></script>
+    <script src="kardex.js?v=300"></script>
+    <script src="app.js?v=300"></script>
+    <script src="clinicalERP.js?v=300"></script>
+    <script src="tutorial.js?v=300"></script>
 </body>
 </html>
