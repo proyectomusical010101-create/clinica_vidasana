@@ -745,6 +745,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (resultsBox && searchInput && !resultsBox.contains(e.target) && e.target !== searchInput) {
             resultsBox.style.display = 'none';
         }
+        const medResultsBox = document.getElementById('med-budget-patient-search-results');
+        const medSearchInput = document.getElementById('med-budget-patient-search-input');
+        if (medResultsBox && medSearchInput && !medResultsBox.contains(e.target) && e.target !== medSearchInput) {
+            medResultsBox.style.display = 'none';
+        }
     });
 });
 
@@ -2605,9 +2610,14 @@ async function updateActivePatientUI(filterText = '') {
 
 async function renderPatientSearchResults(query) {
     const resultsContainer = document.getElementById('od-patient-search-results');
+    const clearBtn = document.getElementById('od-patient-search-clear-btn');
+    const searchIcon = document.getElementById('od-patient-search-icon');
     if (!resultsContainer) return;
 
-    const trimmedQuery = query.toLowerCase().trim();
+    const trimmedQuery = (query || '').toLowerCase().trim();
+    if (clearBtn) clearBtn.style.display = trimmedQuery ? 'block' : 'none';
+    if (searchIcon) searchIcon.style.display = trimmedQuery ? 'none' : 'block';
+
     if (!trimmedQuery) {
         resultsContainer.style.display = 'none';
         return;
@@ -2617,33 +2627,64 @@ async function renderPatientSearchResults(query) {
     const filtered = patients.filter(p => {
         const name = (p.fullname || '').toLowerCase();
         const ci = (p.id || '').toLowerCase();
+        const cedula = (p.cedula || '').toLowerCase();
+        const phone = (p.phone || '').toLowerCase();
         const tag = (p.tagName || (p.metadata && p.metadata.tagName) || '').toLowerCase();
-        return name.includes(trimmedQuery) || ci.includes(trimmedQuery) || tag.includes(trimmedQuery);
+        return name.includes(trimmedQuery) || ci.includes(trimmedQuery) || cedula.includes(trimmedQuery) || phone.includes(trimmedQuery) || tag.includes(trimmedQuery);
     });
 
     if (filtered.length === 0) {
-        resultsContainer.innerHTML = '<div style="padding: 10px 15px; color: var(--text-muted); font-size: 0.88rem; text-align: left;">No se encontraron pacientes</div>';
+        resultsContainer.innerHTML = '<div style="padding: 12px 14px; color: var(--text-muted); font-size: 0.88rem; text-align: left;">No se encontraron pacientes coincidentes</div>';
         resultsContainer.style.display = 'block';
         return;
     }
 
     resultsContainer.innerHTML = '';
-    filtered.forEach(p => {
+    filtered.slice(0, 15).forEach(p => {
         const item = document.createElement('div');
         item.className = 'search-result-item';
+        item.style.padding = '10px 14px';
+        item.style.cursor = 'pointer';
+        item.style.borderBottom = '1px solid #f1f5f9';
+        item.style.transition = 'background 0.15s ease';
+        item.onmouseover = () => { item.style.background = '#f8fafc'; };
+        item.onmouseout = () => { item.style.background = 'transparent'; };
+
         const pTagName = p.tagName || (p.metadata && p.metadata.tagName);
         const pTagColor = p.tagColor || (p.metadata && p.metadata.tagColor) || '#0d9488';
-        const tagHtml = pTagName ? `<span style="font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; background: ${pTagColor}20; color: ${pTagColor}; border: 1px solid ${pTagColor}40; font-weight: 700; margin-left: 6px;">🏷️ ${pTagName}</span>` : '';
-        item.innerHTML = `<strong>${p.fullname}</strong> <span style="font-size: 0.8rem; color: var(--text-muted); margin-left: 5px;">(${p.id})</span>${tagHtml}`;
+        const tagHtml = pTagName ? `<span style="font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; background: ${pTagColor}20; color: ${pTagColor}; border: 1px solid ${pTagColor}40; font-weight: 700; margin-left: 6px;">${pTagName}</span>` : '';
+        item.innerHTML = `
+            <div style="font-weight: 600; color: #0f172a;">${p.fullname} ${tagHtml}</div>
+            <div style="font-size: 0.76rem; color: #64748b; margin-top: 2px;">Cédula: ${p.cedula || p.id || 'S/C'} • Tel: ${p.phone || 'S/N'}</div>
+        `;
         item.onclick = async () => {
-            document.getElementById('od-patient-search-input').value = p.fullname;
+            const inp = document.getElementById('od-patient-search-input');
+            if (inp) inp.value = p.fullname;
             resultsContainer.style.display = 'none';
+            if (clearBtn) clearBtn.style.display = 'block';
+            if (searchIcon) searchIcon.style.display = 'none';
             await window.selectPatientAndLoadApprovedBudget(p.id);
         };
         resultsContainer.appendChild(item);
     });
     resultsContainer.style.display = 'block';
 }
+
+window.clearOdontogramPatientSearch = async function() {
+    const searchInput = document.getElementById('od-patient-search-input');
+    const selectDropdown = document.getElementById('od-patient-select');
+    const clearBtn = document.getElementById('od-patient-search-clear-btn');
+    const searchIcon = document.getElementById('od-patient-search-icon');
+    const resultsContainer = document.getElementById('od-patient-search-results');
+
+    if (searchInput) searchInput.value = '';
+    if (selectDropdown) selectDropdown.value = '';
+    if (clearBtn) clearBtn.style.display = 'none';
+    if (searchIcon) searchIcon.style.display = 'block';
+    if (resultsContainer) resultsContainer.style.display = 'none';
+
+    await window.selectPatientAndLoadApprovedBudget(null);
+};
 
 async function saveCurrentBudgetAsDraft(patientIdToSave) {
     if (!patientIdToSave) return;
@@ -2832,7 +2873,11 @@ window.selectPatientAndLoadApprovedBudget = async function(patientId) {
         if (window.odontogram) window.odontogram.setData({});
         if (window.patientSigPad) window.patientSigPad.clear();
         const searchInput = document.getElementById('od-patient-search-input');
+        const clearBtn = document.getElementById('od-patient-search-clear-btn');
+        const searchIcon = document.getElementById('od-patient-search-icon');
         if (searchInput) searchInput.value = '';
+        if (clearBtn) clearBtn.style.display = 'none';
+        if (searchIcon) searchIcon.style.display = 'block';
         await renderOdontogramView();
         renderBudgetTable();
         return;
@@ -3693,6 +3738,8 @@ window.openMedicalBudgetEditor = async function({ budgetId = null, specialtyCate
 
     // Cargar pacientes
     const patientSelect = document.getElementById('med-budget-patient-select');
+    const medSearchInput = document.getElementById('med-budget-patient-search-input');
+    const medClearBtn = document.getElementById('med-budget-patient-search-clear-btn');
     if (patientSelect) {
         patientSelect.innerHTML = '<option value="">Cargando pacientes...</option>';
         try {
@@ -3706,9 +3753,17 @@ window.openMedicalBudgetEditor = async function({ budgetId = null, specialtyCate
                 patients.map(p => `<option value="${p.id}">${p.fullname} ${p.cedula ? `(${p.cedula})` : ''}</option>`).join('');
             if (patientId) {
                 patientSelect.value = patientId;
+                const selectedPatient = patients.find(p => String(p.id) === String(patientId));
+                if (medSearchInput && selectedPatient) {
+                    medSearchInput.value = selectedPatient.fullname;
+                    if (medClearBtn) medClearBtn.style.display = 'block';
+                }
                 if (typeof window.onMedicalBudgetPatientChange === 'function') {
                     window.onMedicalBudgetPatientChange(patientId);
                 }
+            } else {
+                if (medSearchInput) medSearchInput.value = '';
+                if (medClearBtn) medClearBtn.style.display = 'none';
             }
         } catch(e) {
             patientSelect.innerHTML = '<option value="">-- Error cargando pacientes --</option>';
@@ -3785,6 +3840,12 @@ window.openMedicalBudgetEditor = async function({ budgetId = null, specialtyCate
 
                 if (patientSelect) {
                     patientSelect.value = budget.patientId || '';
+                    const mSearch = document.getElementById('med-budget-patient-search-input');
+                    const mClear = document.getElementById('med-budget-patient-search-clear-btn');
+                    if (mSearch && budget.patientName) {
+                        mSearch.value = budget.patientName;
+                        if (mClear) mClear.style.display = 'block';
+                    }
                     window.onMedicalBudgetPatientChange(budget.patientId);
                 }
                 if (deptSelect && budget.category) {
@@ -3897,6 +3958,94 @@ window.getActivePatientTagRule = function(patientId) {
         }
     } catch(e) {}
     return null;
+};
+
+
+window.searchMedicalBudgetPatients = async function(query) {
+    const resultsContainer = document.getElementById('med-budget-patient-search-results');
+    const clearBtn = document.getElementById('med-budget-patient-search-clear-btn');
+    if (!resultsContainer) return;
+
+    const trimmed = (query || '').toLowerCase().trim();
+    if (clearBtn) clearBtn.style.display = trimmed ? 'block' : 'none';
+
+    if (!trimmed) {
+        resultsContainer.style.display = 'none';
+        return;
+    }
+
+    try {
+        const allPatients = await SupabaseDataService.getPatients();
+        let patients = allPatients;
+        const cur = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+        if (cur && typeof isDoctorUser === 'function' && isDoctorUser(cur)) {
+            patients = allPatients.filter(p => typeof isPatientAssignedToDoctor === 'function' ? isPatientAssignedToDoctor(p, cur) : true);
+        }
+
+        const filtered = patients.filter(p => {
+            const name = (p.fullname || '').toLowerCase();
+            const ci = (p.cedula || p.id || '').toLowerCase();
+            const phone = (p.phone || '').toLowerCase();
+            return name.includes(trimmed) || ci.includes(trimmed) || phone.includes(trimmed);
+        });
+
+        if (filtered.length === 0) {
+            resultsContainer.innerHTML = '<div style="padding: 12px 14px; color: var(--text-muted); font-size: 0.88rem;">No se encontraron pacientes coincidentes</div>';
+            resultsContainer.style.display = 'block';
+            return;
+        }
+
+        resultsContainer.innerHTML = '';
+        filtered.slice(0, 15).forEach(p => {
+            const item = document.createElement('div');
+            item.style.padding = '10px 14px';
+            item.style.cursor = 'pointer';
+            item.style.borderBottom = '1px solid #f1f5f9';
+            item.style.fontSize = '0.88rem';
+            item.style.transition = 'background 0.15s ease';
+            item.onmouseover = () => { item.style.background = '#f8fafc'; };
+            item.onmouseout = () => { item.style.background = 'transparent'; };
+
+            const pTagName = p.tagName || (p.metadata && p.metadata.tagName);
+            const pTagColor = p.tagColor || (p.metadata && p.metadata.tagColor) || '#0d9488';
+            const tagHtml = pTagName ? `<span style="font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; background: ${pTagColor}20; color: ${pTagColor}; border: 1px solid ${pTagColor}40; font-weight: 700; margin-left: 6px;">${pTagName}</span>` : '';
+
+            item.innerHTML = `
+                <div style="font-weight: 600; color: #0f172a;">${p.fullname} ${tagHtml}</div>
+                <div style="font-size: 0.76rem; color: #64748b; margin-top: 2px;">Cédula: ${p.cedula || p.id || 'S/C'} • Tel: ${p.phone || 'S/N'}</div>
+            `;
+
+            item.onclick = async () => {
+                const searchInp = document.getElementById('med-budget-patient-search-input');
+                const sel = document.getElementById('med-budget-patient-select');
+                if (searchInp) searchInp.value = p.fullname;
+                if (sel) sel.value = p.id;
+                resultsContainer.style.display = 'none';
+                if (clearBtn) clearBtn.style.display = 'block';
+                if (typeof window.onMedicalBudgetPatientChange === 'function') {
+                    await window.onMedicalBudgetPatientChange(p.id);
+                }
+            };
+            resultsContainer.appendChild(item);
+        });
+        resultsContainer.style.display = 'block';
+    } catch (e) {
+        console.error('Error filtering patients for medical budget:', e);
+    }
+};
+
+window.clearMedicalBudgetPatientSearch = function() {
+    const searchInp = document.getElementById('med-budget-patient-search-input');
+    const sel = document.getElementById('med-budget-patient-select');
+    const resultsContainer = document.getElementById('med-budget-patient-search-results');
+    const clearBtn = document.getElementById('med-budget-patient-search-clear-btn');
+    if (searchInp) searchInp.value = '';
+    if (sel) sel.value = '';
+    if (resultsContainer) resultsContainer.style.display = 'none';
+    if (clearBtn) clearBtn.style.display = 'none';
+    if (typeof window.onMedicalBudgetPatientChange === 'function') {
+        window.onMedicalBudgetPatientChange('');
+    }
 };
 
 window.onMedicalBudgetPatientChange = async function(patientId) {
@@ -4847,9 +4996,13 @@ async function renderOdontogramView() {
             document.getElementById('info-patient-doctor').innerText = patient.assignedDoctor || 'Dr. Rodrigo Navas';
 
             const searchInput = document.getElementById('od-patient-search-input');
+            const clearBtn = document.getElementById('od-patient-search-clear-btn');
+            const searchIcon = document.getElementById('od-patient-search-icon');
             if (searchInput) {
                 searchInput.value = patient ? (patient.fullname || '') : '';
             }
+            if (clearBtn) clearBtn.style.display = patient ? 'block' : 'none';
+            if (searchIcon) searchIcon.style.display = patient ? 'none' : 'block';
 
             let flags = [];
             const safePatAllergies = Array.isArray(patient.allergies) ? patient.allergies : (typeof patient.allergies === 'string' && patient.allergies.trim() ? (() => { try { const r = JSON.parse(patient.allergies); return Array.isArray(r) ? r : [patient.allergies]; } catch(e) { return [patient.allergies]; } })() : []);
