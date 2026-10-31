@@ -1499,8 +1499,8 @@ function applyRolePermissionsUI(role) {
     };
 
     const permissions = {
-        admin: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll', 'consumables', 'hygienist_finances'],
-        doctor: ['dashboard', 'agenda', 'odontogram', 'ehr', 'pricing', 'settings', 'help'],
+        admin: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll', 'consumables'],
+        doctor: ['dashboard', 'agenda', 'odontogram', 'ehr', 'pricing', 'settings', 'help', 'hygienist_finances'],
         hygienist: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'consumables', 'settings', 'help', 'hygienist_finances'],
         assistant: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'consumables', 'settings', 'help']
     };
@@ -1735,10 +1735,11 @@ function renderMobileNavigationForRole(roleType) {
 
     let bottomButtons = [];
     if (roleType === 'doctor') {
-        // DOCTOR: Enfoque clínico prioritario (Agenda, Presupuesto, Historias, Servicios) - Módulo Pacientes eliminado
+        // DOCTOR: Enfoque clínico prioritario (Agenda, Presupuesto, Historias, Mis Finanzas, Servicios)
         bottomButtons = [
             { tab: 'dashboard', icon: 'fa-house', label: 'Home' },
             { tab: 'agenda', icon: 'fa-calendar-days', label: 'Agenda' },
+            { tab: 'hygienist-finances', icon: 'fa-wallet', label: 'Mis Finanzas' },
             { tab: 'odontogram', icon: 'fa-file-invoice-dollar', label: 'Presupuesto' },
             { tab: 'ehr', icon: 'fa-notes-medical', label: 'Historias' },
             { tab: 'pricing', icon: 'fa-tags', label: 'Servicios' }
@@ -2153,8 +2154,8 @@ window.navigateToTab = async function(tabName) {
         const isHygienist = !isAdmin && (typeof isHygienistRole === 'function' && isHygienistRole(user.role));
         const roleType = isAdmin ? 'admin' : (isDoctor ? 'doctor' : (isHygienist ? 'hygienist' : 'assistant'));
         const allowedTabs = {
-            admin: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll', 'consumables', 'hygienist-finances'],
-            doctor: ['dashboard', 'agenda', 'odontogram', 'ehr', 'pricing', 'settings', 'help'],
+            admin: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll', 'consumables'],
+            doctor: ['dashboard', 'agenda', 'odontogram', 'ehr', 'pricing', 'settings', 'help', 'hygienist-finances'],
             hygienist: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'consumables', 'settings', 'help', 'hygienist-finances'],
             assistant: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'billing', 'settings', 'help', 'consumables']
         }[roleType] || ['dashboard', 'help'];
@@ -33919,7 +33920,7 @@ window.renderHygienistFinancesView = async function(filterMode = null, searchQue
     const currentUser = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
     const userBadgeEl = document.getElementById('hyg-finance-username');
     if (userBadgeEl && currentUser) {
-        userBadgeEl.innerText = currentUser.fullname || 'Higienista Dental';
+        userBadgeEl.innerText = currentUser.fullname || 'Personal Médico / Higienista';
     }
 
     let allLiqs = [];
@@ -33943,12 +33944,12 @@ window.renderHygienistFinancesView = async function(filterMode = null, searchQue
                 return true;
             }
         }
-        // Direct doctor check if current user is hygienist
+        // Doctor fee check
         const doc = item.doctor;
         if (doc) {
             const docNameNorm = norm(doc.name);
             const docId = String(doc.id || '');
-            if ((docId === uId || docNameNorm === uNorm) && currentUser && (currentUser.role || '').toLowerCase().includes('higien')) {
+            if (docId === uId || docNameNorm === uNorm || (uNorm && docNameNorm.includes(uNorm)) || (uNorm && uNorm.includes(docNameNorm))) {
                 return true;
             }
         }
