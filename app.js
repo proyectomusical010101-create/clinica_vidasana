@@ -1143,14 +1143,15 @@ function applyRolePermissionsUI(role) {
         specialties: '.nav-item[data-tab="specialties"]',
         rooms: '.nav-item[data-tab="rooms"]',
         payroll: '.nav-item[data-tab="payroll"]',
+        consumables: '.nav-item[data-tab="consumables"]',
         'doctor-finances': '.nav-item[data-tab="doctor-finances"]'
     };
 
     const permissions = {
-        admin: ['dashboard', 'doctor-finances', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll'],
+        admin: ['dashboard', 'doctor-finances', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll', 'consumables'],
         doctor: ['dashboard', 'doctor-finances', 'agenda', 'ehr', 'pricing', 'settings', 'help', 'specialties', 'rooms'],
         hygienist: ['dashboard', 'agenda', 'odontogram', 'ehr', 'pricing', 'settings', 'help'],
-        assistant: ['dashboard', 'patients', 'agenda', 'billing', 'finance', 'pricing', 'settings', 'help']
+        assistant: ['dashboard', 'patients', 'agenda', 'billing', 'finance', 'pricing', 'settings', 'help', 'consumables']
     };
 
     const allowedTabs = permissions[roleType] || permissions.assistant;
@@ -1476,7 +1477,7 @@ window.navigateToTab = async function(tabName) {
         const isDoctor = r.includes('medico') || r.includes('odont') || r.includes('doctor') || r.includes('dentista') || r.includes('médico');
         const roleType = isAdmin ? 'admin' : (isDoctor ? 'doctor' : 'assistant');
         const allowedTabs = {
-            admin: ['dashboard', 'doctor-finances', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll'],
+            admin: ['dashboard', 'doctor-finances', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll', 'consumables'],
             doctor: ['dashboard', 'doctor-finances', 'agenda', 'ehr', 'pricing', 'settings', 'help', 'specialties', 'rooms'],
             hygienist: ['dashboard', 'agenda', 'odontogram', 'ehr', 'pricing', 'settings', 'help'],
             assistant: ['dashboard', 'patients', 'agenda', 'billing', 'finance', 'pricing', 'settings', 'help']
@@ -1569,6 +1570,8 @@ window.navigateToTab = async function(tabName) {
         if (window.ClinicalERP) window.ClinicalERP.renderRooms();
     } else if (tabName === 'payroll') {
         if (window.ClinicalERP) window.ClinicalERP.renderPayroll();
+    } else if (tabName === 'consumables') {
+        if (typeof window.renderConsumablesView === 'function') await window.renderConsumablesView();
     }
 
     // Update floating budget bubble visibility upon navigation
@@ -5432,6 +5435,19 @@ window.addDirectSaleService = function() {
     const itemTotalUSD = Math.max(0, itemSubtotal * (1 - discount / 100));
     const itemTotalBs = itemTotalUSD * rate;
 
+    const isConsumable = (opt && opt.getAttribute('data-is-consumable') === 'true') || specialty.includes('Consumible');
+    const itemStock = parseInt(opt?.getAttribute('data-stock') || '9999');
+    const itemUnit = opt?.getAttribute('data-unit') || 'uds';
+
+    if (isConsumable && itemStock <= 0) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Producto Agotado',
+            text: `El producto "${name}" no cuenta con unidades disponibles en stock.`
+        });
+        return;
+    }
+
     window.currentDirectSaleItems.push({
         code,
         name,
@@ -5440,7 +5456,9 @@ window.addDirectSaleService = function() {
         qty,
         discount,
         totalUSD: itemTotalUSD,
-        totalBs: itemTotalBs
+        totalBs: itemTotalBs,
+        isConsumable: !!isConsumable,
+        unit: itemUnit
     });
 
     // Reset service selector and price
@@ -5474,7 +5492,10 @@ window.renderDirectSaleItems = function() {
         return `
             <tr style="font-size:0.85rem; border-bottom:1px solid var(--border-color);">
                 <td>
-                    <strong>${item.name}</strong>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <strong>${item.name}</strong>
+                        ${item.isConsumable ? '<span style="font-size:0.7rem; padding:1px 5px; border-radius:3px; background:#fef3c7; color:#b45309; font-weight:700;"><i class="fa-solid fa-mug-saucer"></i> Consumible</span>' : ''}
+                    </div>
                     <small style="display:block; color:#64748b;">${item.specialty}</small>
                 </td>
                 <td class="text-center"><strong>${item.qty}</strong></td>
@@ -5723,7 +5744,11 @@ window.processDirectSale = async function() {
     const docPrefix = isCashea ? 'FAC-' : (isFull ? 'FAC-' : 'REC-');
     const docId = docPrefix + Date.now().toString().slice(-6);
 
-    const doctor = document.getElementById('ds-doctor-select')?.value || 'Dr. Médico Tratante';
+    let doctor = document.getElementById('ds-doctor-select')?.value;
+    const isOnlyConsumables = window.currentDirectSaleItems.every(i => i.isConsumable);
+    if (!doctor || doctor === 'Dr. Médico Tratante') {
+        doctor = isOnlyConsumables ? 'Mostrador / Cafetería' : (doctor || 'Dr. Médico Tratante');
+    }
     const assistant = document.getElementById('ds-assistant-select')?.value || '';
     const notes = document.getElementById('ds-notes')?.value || '';
 
@@ -5776,6 +5801,30 @@ window.processDirectSale = async function() {
 
         const invoiceDoc = await SupabaseDataService.registerDirectSale(salePayload);
         window.lastProcessedDirectSaleDoc = invoiceDoc;
+
+        // Decrement stock for sold consumables automatically
+        const soldConsumables = (salePayload.items || []).filter(it => it.isConsumable);
+        if (soldConsumables.length > 0) {
+            try {
+                const allConsumables = await SupabaseDataService.getConsumables();
+                let stockChanged = false;
+                soldConsumables.forEach(sold => {
+                    const foundProd = allConsumables.find(c => c.code === sold.code || c.name.toLowerCase() === sold.name.toLowerCase());
+                    if (foundProd) {
+                        foundProd.stock = Math.max(0, (parseInt(foundProd.stock) || 0) - (parseInt(sold.qty) || 1));
+                        stockChanged = true;
+                    }
+                });
+                if (stockChanged) {
+                    await SupabaseDataService.syncConsumablesCloud(allConsumables);
+                    if (typeof window.renderConsumablesView === 'function') {
+                        window.renderConsumablesView();
+                    }
+                }
+            } catch(stockErr) {
+                console.warn('Notice: Error decrementing consumables stock post-sale:', stockErr);
+            }
+        }
 
         Swal.close();
 
@@ -20738,3 +20787,640 @@ window.printDoctorFinancesReport = function() {
 
 
 // ==============================================================================
+
+// ==========================================
+// MODULE: CONSUMABLES & CAFETERÍA (VENTA DIRECTA Y CONTROL DE STOCK)
+// ==========================================
+
+window._currentConsumableCategoryFilter = 'all';
+window._currentEditingConsumableCode = null;
+
+window.renderConsumablesView = async function() {
+    try {
+        const list = await SupabaseDataService.getConsumables();
+        window._cachedConsumables = list || [];
+
+        // 1. Calculate Metrics
+        const totalItems = list.length;
+        const totalUnits = list.reduce((acc, c) => acc + (parseInt(c.stock) || 0), 0);
+        const totalPvpUSD = list.reduce((acc, c) => acc + ((parseInt(c.stock) || 0) * (parseFloat(c.priceUSD) || 0)), 0);
+        const lowStockCount = list.filter(c => (parseInt(c.stock) || 0) <= (parseInt(c.minStock) || 5)).length;
+
+        const elTotItems = document.getElementById('stat-con-total-items') || document.getElementById('cons-stat-total-items');
+        if (elTotItems) elTotItems.textContent = totalItems;
+        const elTotUnits = document.getElementById('stat-con-total-stock') || document.getElementById('cons-stat-total-units');
+        if (elTotUnits) elTotUnits.textContent = totalUnits;
+        const elTotPvp = document.getElementById('stat-con-total-value') || document.getElementById('cons-stat-pvp-valuation');
+        if (elTotPvp) elTotPvp.textContent = '$' + totalPvpUSD.toFixed(2);
+        const elLowStock = document.getElementById('stat-con-low-stock') || document.getElementById('cons-stat-low-stock');
+        if (elLowStock) elLowStock.textContent = lowStockCount;
+
+        // 2. Render Table Rows
+        window.filterConsumablesList();
+    } catch(err) {
+        console.error('Error rendering consumables view:', err);
+    }
+};
+
+window.setConsumableCategoryFilter = function(category, btn) {
+    window._currentConsumableCategoryFilter = category || 'all';
+    const filterContainer = document.getElementById('consumables-category-filters');
+    const allButtons = filterContainer ? filterContainer.querySelectorAll('.filter-btn') : document.querySelectorAll('.filter-btn[data-category]');
+    allButtons.forEach(b => {
+        b.classList.remove('active');
+        b.style.background = '';
+        b.style.color = '';
+        b.style.borderColor = '';
+    });
+    if (btn) {
+        btn.classList.add('active');
+    }
+    window.filterConsumablesList();
+};
+
+window.filterConsumablesList = function() {
+    const list = window._cachedConsumables || [];
+    const tbody = document.getElementById('consumables-table-body') || document.getElementById('cons-table-tbody');
+    if (!tbody) return;
+
+    const searchInput = document.getElementById('consumables-table-search') || document.getElementById('cons-search-input');
+    const query = (searchInput?.value || '').trim().toLowerCase();
+    const activeCat = window._currentConsumableCategoryFilter || 'all';
+
+    const filtered = list.filter(item => {
+        // Category filter
+        if (activeCat !== 'all' && (item.category || '').toLowerCase() !== activeCat.toLowerCase()) {
+            return false;
+        }
+
+        // Search query filter
+        if (query) {
+            const code = (item.code || '').toLowerCase();
+            const name = (item.name || '').toLowerCase();
+            const cat = (item.category || '').toLowerCase();
+            const notes = (item.notes || '').toLowerCase();
+            if (!code.includes(query) && !name.includes(query) && !cat.includes(query) && !notes.includes(query)) {
+                return false;
+            }
+        }
+
+        return true;
+    });
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="11" class="text-center text-muted" style="padding: 36px;">
+                    <i class="fa-solid fa-mug-saucer" style="font-size: 2rem; color: #cbd5e1; margin-bottom: 8px; display: block;"></i>
+                    No se encontraron productos consumibles con los filtros seleccionados.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    const rate = getExchangeRate();
+
+    tbody.innerHTML = filtered.map(item => {
+        const stock = parseInt(item.stock) || 0;
+        const minStock = parseInt(item.minStock) || 0;
+        const costUSD = parseFloat(item.costUSD) || 0;
+        const priceUSD = parseFloat(item.priceUSD) || 0;
+        const priceBs = (priceUSD * rate).toFixed(2);
+
+        let stockBadge = '';
+        if (stock <= 0) {
+            stockBadge = `<span class="badge-tag red" style="font-weight: 700;"><i class="fa-solid fa-triangle-exclamation"></i> Agotado</span>`;
+        } else if (stock <= minStock) {
+            stockBadge = `<span class="badge-tag amber" style="font-weight: 700;"><i class="fa-solid fa-clock-rotate-left"></i> Stock Bajo</span>`;
+        } else {
+            stockBadge = `<span class="badge-tag green" style="font-weight: 700;"><i class="fa-solid fa-circle-check"></i> Óptimo</span>`;
+        }
+
+        const safeCode = (item.code || '').replace(/'/g, "\\'");
+        const notesHtml = item.notes ? `<small style="display:block; color:#94a3b8; font-size:0.75rem;">${item.notes}</small>` : '';
+
+        return `
+            <tr style="border-bottom: 1px solid var(--border-color); font-size: 0.88rem;">
+                <td><code style="background:#f1f5f9; padding:2px 6px; border-radius:4px; font-weight:700; color:#334155;">${item.code}</code></td>
+                <td><span class="badge-tag cyan">${item.category || 'General'}</span></td>
+                <td>
+                    <strong style="color: #0f172a;">${item.name}</strong>
+                    ${notesHtml}
+                </td>
+                <td><span style="font-size:0.82rem; color:#64748b;">${item.unit || 'Unidad'}</span></td>
+                <td class="text-right">
+                    <strong style="color: #0d9488;">$${priceUSD.toFixed(2)}</strong>
+                </td>
+                <td class="text-right" style="color: #0284c7; font-weight: 600;">
+                    Bs. ${priceBs}
+                </td>
+                <td class="text-right" style="color: #64748b;">$${costUSD.toFixed(2)}</td>
+                <td class="text-center" style="font-weight: 700; font-size: 0.95rem;">${stock}</td>
+                <td class="text-center text-muted" style="font-size:0.82rem;">${minStock}</td>
+                <td class="text-center">${stockBadge}</td>
+                <td class="text-right">
+                    <div style="display: inline-flex; gap: 4px; align-items: center; justify-content: flex-end;">
+                        <button type="button" class="btn btn-xs btn-outline" onclick="window.restockConsumablePrompt('${safeCode}')" style="color:#0d9488; border-color:#0d9488; padding:3px 7px; font-weight:600;" title="Surtir o reponer stock">
+                            <i class="fa-solid fa-boxes-packing"></i> Surtir
+                        </button>
+                        <button type="button" class="btn btn-xs btn-outline text-cyan" onclick="window.editConsumable('${safeCode}')" title="Editar producto">
+                            <i class="fa-solid fa-pen-to-square"></i>
+                        </button>
+                        <button type="button" class="btn btn-xs btn-outline text-red" onclick="window.deleteConsumableItem('${safeCode}')" title="Eliminar producto">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+};
+
+window.openCreateConsumableModal = function() {
+    window._currentEditingConsumableCode = null;
+    const modal = document.getElementById('modal-consumable');
+    if (!modal) return;
+
+    const list = window._cachedConsumables || [];
+    const nextCode = 'PROD-' + String(list.length + 1).padStart(2, '0');
+
+    const titleEl = document.getElementById('modal-consumable-title');
+    if (titleEl) titleEl.innerHTML = '<i class="fa-solid fa-mug-saucer text-cyan"></i> Registrar Nuevo Producto Consumible';
+
+    const inCode = document.getElementById('con-code') || document.getElementById('cons-code');
+    if (inCode) inCode.value = nextCode;
+    const inName = document.getElementById('con-name') || document.getElementById('cons-name');
+    if (inName) inName.value = '';
+    const inCat = document.getElementById('con-category') || document.getElementById('cons-category');
+    if (inCat) inCat.value = 'Bebidas Frías';
+    const inUnit = document.getElementById('con-unit') || document.getElementById('cons-unit');
+    if (inUnit) inUnit.value = 'Botella';
+    const inPrice = document.getElementById('con-price') || document.getElementById('cons-price-usd');
+    if (inPrice) inPrice.value = '';
+    const inCost = document.getElementById('con-cost') || document.getElementById('cons-cost-usd');
+    if (inCost) inCost.value = '0.50';
+    const inStock = document.getElementById('con-stock') || document.getElementById('cons-stock');
+    if (inStock) inStock.value = '24';
+    const inMin = document.getElementById('con-min-stock') || document.getElementById('cons-min-stock');
+    if (inMin) inMin.value = '6';
+
+    modal.classList.remove('hidden');
+    if (inName) inName.focus();
+};
+
+window.editConsumable = function(code) {
+    const list = window._cachedConsumables || [];
+    const item = list.find(c => c.code === code);
+    if (!item) return;
+
+    window._currentEditingConsumableCode = item.code;
+    const modal = document.getElementById('modal-consumable');
+    if (!modal) return;
+
+    const titleEl = document.getElementById('modal-consumable-title');
+    if (titleEl) titleEl.innerHTML = `<i class="fa-solid fa-pen-to-square text-cyan"></i> Editar Producto: <strong>${item.name}</strong>`;
+
+    const inCode = document.getElementById('con-code') || document.getElementById('cons-code');
+    if (inCode) inCode.value = item.code;
+    const inName = document.getElementById('con-name') || document.getElementById('cons-name');
+    if (inName) inName.value = item.name || '';
+    const inCat = document.getElementById('con-category') || document.getElementById('cons-category');
+    if (inCat) inCat.value = item.category || 'Otros Consumibles';
+    const inUnit = document.getElementById('con-unit') || document.getElementById('cons-unit');
+    if (inUnit) inUnit.value = item.unit || 'Unidad';
+    const inPrice = document.getElementById('con-price') || document.getElementById('cons-price-usd');
+    if (inPrice) inPrice.value = item.priceUSD !== undefined ? item.priceUSD : 0;
+    const inCost = document.getElementById('con-cost') || document.getElementById('cons-cost-usd');
+    if (inCost) inCost.value = item.costUSD !== undefined ? item.costUSD : 0;
+    const inStock = document.getElementById('con-stock') || document.getElementById('cons-stock');
+    if (inStock) inStock.value = item.stock !== undefined ? item.stock : 0;
+    const inMin = document.getElementById('con-min-stock') || document.getElementById('cons-min-stock');
+    if (inMin) inMin.value = item.minStock !== undefined ? item.minStock : 5;
+
+    modal.classList.remove('hidden');
+};
+
+window.closeConsumableModal = function() {
+    window._currentEditingConsumableCode = null;
+    const modal = document.getElementById('modal-consumable');
+    if (modal) modal.classList.add('hidden');
+};
+
+window.saveConsumableFromModal = async function() {
+    const inName = document.getElementById('con-name') || document.getElementById('cons-name');
+    const inCode = document.getElementById('con-code') || document.getElementById('cons-code');
+    const inPrice = document.getElementById('con-price') || document.getElementById('cons-price-usd');
+    const inCost = document.getElementById('con-cost') || document.getElementById('cons-cost-usd');
+    const inStock = document.getElementById('con-stock') || document.getElementById('cons-stock');
+    const inMin = document.getElementById('con-min-stock') || document.getElementById('cons-min-stock');
+    const inCat = document.getElementById('con-category') || document.getElementById('cons-category');
+    const inUnit = document.getElementById('con-unit') || document.getElementById('cons-unit');
+
+    const name = (inName?.value || '').trim();
+    const code = (inCode?.value || '').trim();
+    const priceUSD = parseFloat(inPrice?.value) || 0;
+
+    if (!name) {
+        Swal.fire({ icon: 'warning', title: 'Nombre requerido', text: 'Indique el nombre del producto consumible.' });
+        return;
+    }
+    if (priceUSD <= 0) {
+        Swal.fire({ icon: 'warning', title: 'Precio requerido', text: 'Indique un precio de venta mayor a 0.' });
+        return;
+    }
+
+    const isEdit = window._currentEditingConsumableCode;
+    const finalCode = code || (isEdit ? isEdit : 'PROD-' + Date.now().toString().slice(-4));
+
+    const item = {
+        code: finalCode,
+        name,
+        category: inCat?.value || 'Otros Consumibles',
+        unit: inUnit?.value || 'Unidad',
+        costUSD: parseFloat(inCost?.value) || 0,
+        priceUSD,
+        stock: parseInt(inStock?.value) || 0,
+        minStock: parseInt(inMin?.value) || 5,
+        notes: ''
+    };
+
+    try {
+        Swal.fire({
+            title: 'Guardando Producto...',
+            text: 'Sincronizando con la nube de Clínica VidaSana...',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        await SupabaseDataService.saveConsumable(item);
+        window.closeConsumableModal();
+
+        Swal.fire({
+            icon: 'success',
+            title: isEdit ? 'Producto Actualizado' : 'Producto Creado',
+            text: `El producto "${item.name}" se guardó correctamente.`,
+            timer: 1500,
+            showConfirmButton: false
+        });
+
+        await window.renderConsumablesView();
+    } catch(err) {
+        console.error('Error saving consumable:', err);
+        Swal.fire({ icon: 'error', title: 'Error al Guardar', text: err.message || 'No se pudo guardar el producto.' });
+    }
+};
+
+window.restockConsumablePrompt = async function(code) {
+    const list = window._cachedConsumables || await SupabaseDataService.getConsumables();
+    const product = list.find(c => c.code === code);
+    if (!product) return;
+
+    const currentStock = parseInt(product.stock) || 0;
+    const unit = product.unit || 'unidades';
+
+    const { value: qty } = await Swal.fire({
+        title: `📦 Surtir Stock: ${product.name}`,
+        html: `
+            <div style="text-align: left; font-size: 0.9rem; line-height: 1.5;">
+                <p style="margin-bottom: 6px;"><strong>Código:</strong> <code style="background:#f1f5f9; padding:2px 6px; border-radius:4px;">${product.code}</code></p>
+                <p style="margin-bottom: 10px;"><strong>Stock Actual:</strong> <span style="font-weight:700; color:#0d9488;">${currentStock} ${unit}</span></p>
+                <label style="display:block; font-weight:700; color:#0f172a; margin-bottom: 4px;">Cantidad de unidades que ingresan:</label>
+            </div>
+        `,
+        input: 'number',
+        inputAttributes: {
+            min: '1',
+            step: '1',
+            style: 'font-size: 1.1rem; font-weight: 700; text-align: center;'
+        },
+        inputValue: '12',
+        showCancelButton: true,
+        confirmButtonText: '<i class="fa-solid fa-plus-circle"></i> Surtir Inventario',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#0d9488'
+    });
+
+    if (qty && parseInt(qty) > 0) {
+        const added = parseInt(qty);
+        product.stock = currentStock + added;
+
+        try {
+            Swal.fire({
+                title: 'Actualizando Inventario...',
+                text: 'Registrando entrada de mercancía...',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading()
+            });
+
+            await SupabaseDataService.saveConsumable(product);
+
+            Swal.fire({
+                icon: 'success',
+                title: '¡Stock Surtido Exitosamente!',
+                text: `Se sumaron ${added} ${unit} a "${product.name}". Nuevo stock total: ${product.stock} ${unit}.`,
+                timer: 2000,
+                showConfirmButton: false
+            });
+
+            await window.renderConsumablesView();
+        } catch(err) {
+            console.error('Error restocking consumable:', err);
+            Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo actualizar el stock del producto.' });
+        }
+    }
+};
+
+window.deleteConsumableItem = async function(code) {
+    const list = window._cachedConsumables || await SupabaseDataService.getConsumables();
+    const product = list.find(c => c.code === code);
+    if (!product) return;
+
+    const res = await Swal.fire({
+        title: '¿Eliminar Producto?',
+        text: `¿Está seguro de eliminar "${product.name}" (${product.code}) del catálogo de consumibles?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#ef4444'
+    });
+
+    if (res.isConfirmed) {
+        try {
+            await SupabaseDataService.deleteConsumable(code);
+            Swal.fire({ icon: 'success', title: 'Eliminado', text: 'El producto fue eliminado del catálogo.', timer: 1400, showConfirmButton: false });
+            await window.renderConsumablesView();
+        } catch(err) {
+            console.error('Error deleting consumable:', err);
+            Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo eliminar el producto.' });
+        }
+    }
+};
+
+// ==========================================
+// EXCEL: PLANTILLA, EXPORTACIÓN E IMPORTACIÓN DE CONSUMIBLES
+// ==========================================
+
+window.downloadConsumablesTemplate = function() {
+    if (!window.XLSX) {
+        Swal.fire({ icon: 'error', title: 'Error', text: 'Librería XLSX no disponible en el sistema.' });
+        return;
+    }
+    const templateData = [
+        {
+            "Código": "BEB-01",
+            "Nombre del Producto": "Agua Mineral sin gas 500ml",
+            "Categoría": "Bebidas Frías",
+            "Costo Compra ($ USD)": 0.50,
+            "Precio Venta ($ USD)": 1.00,
+            "Stock Actual": 24,
+            "Stock Mínimo": 6,
+            "Unidad de Medida": "Botella",
+            "Notas": "Presentación individual Minalba"
+        },
+        {
+            "Código": "CAF-01",
+            "Nombre del Producto": "Café Expreso Doble",
+            "Categoría": "Cafetería e Infusiones",
+            "Costo Compra ($ USD)": 0.60,
+            "Precio Venta ($ USD)": 1.50,
+            "Stock Actual": 50,
+            "Stock Mínimo": 10,
+            "Unidad de Medida": "Taza",
+            "Notas": "Grano premium tostado"
+        },
+        {
+            "Código": "SNK-01",
+            "Nombre del Producto": "Galletas de Avena y Miel",
+            "Categoría": "Snacks y Galletas",
+            "Costo Compra ($ USD)": 0.75,
+            "Precio Venta ($ USD)": 1.50,
+            "Stock Actual": 15,
+            "Stock Mínimo": 5,
+            "Unidad de Medida": "Paquete",
+            "Notas": "Snack saludable sin azúcar añadida"
+        },
+        {
+            "Código": "GOL-01",
+            "Nombre del Producto": "Caramelos Mentolados Halls",
+            "Categoría": "Golosinas y Dulces",
+            "Costo Compra ($ USD)": 0.25,
+            "Precio Venta ($ USD)": 0.50,
+            "Stock Actual": 30,
+            "Stock Mínimo": 10,
+            "Unidad de Medida": "Unidad",
+            "Notas": "Alivio refrescante de garganta"
+        }
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(templateData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Consumibles");
+    XLSX.writeFile(wb, "plantilla_consumibles.xlsx");
+};
+
+window.exportConsumablesToExcel = async function() {
+    if (!window.XLSX) {
+        Swal.fire({ icon: 'error', title: 'Error', text: 'Librería XLSX no disponible en el sistema.' });
+        return;
+    }
+    try {
+        const list = await SupabaseDataService.getConsumables();
+        if (!list || list.length === 0) {
+            Swal.fire({ icon: 'info', title: 'Catálogo Vacío', text: 'No hay productos consumibles registrados para exportar.' });
+            return;
+        }
+
+        const rate = getExchangeRate();
+        const rows = list.map(item => {
+            const stock = parseInt(item.stock) || 0;
+            const minStock = parseInt(item.minStock) || 0;
+            const costUSD = parseFloat(item.costUSD) || 0;
+            const priceUSD = parseFloat(item.priceUSD) || 0;
+            const priceBs = priceUSD * rate;
+            const valCosto = stock * costUSD;
+            const valPVP = stock * priceUSD;
+
+            let stockStatus = 'Óptimo';
+            if (stock <= 0) stockStatus = 'Agotado';
+            else if (stock <= minStock) stockStatus = 'Stock Bajo';
+
+            return {
+                "Código": item.code || "",
+                "Nombre del Producto": item.name || "",
+                "Categoría": item.category || "Otros Consumibles",
+                "Costo Compra ($ USD)": costUSD,
+                "Precio Venta ($ USD)": priceUSD,
+                "Precio Venta (Bs.)": parseFloat(priceBs.toFixed(2)),
+                "Stock Actual": stock,
+                "Stock Mínimo": minStock,
+                "Unidad de Medida": item.unit || "Unidad",
+                "Estado de Stock": stockStatus,
+                "Valuación Costo ($)": parseFloat(valCosto.toFixed(2)),
+                "Valuación Venta ($)": parseFloat(valPVP.toFixed(2)),
+                "Notas / Observaciones": item.notes || ""
+            };
+        });
+
+        const ws = XLSX.utils.json_to_sheet(rows);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Catálogo_Consumibles");
+        const todayStr = new Date().toISOString().split('T')[0];
+        XLSX.writeFile(wb, `Consumibles_${todayStr}.xlsx`);
+
+        Swal.fire({
+            icon: 'success',
+            title: '¡Catálogo Exportado!',
+            text: `Se exportaron ${rows.length} productos consumibles exitosamente a Excel.`
+        });
+    } catch(err) {
+        console.error('Error exporting consumables:', err);
+        Swal.fire({ icon: 'error', title: 'Error de exportación', text: err.message || 'No se pudo generar el archivo.' });
+    }
+};
+
+window.importConsumablesFromExcel = function(event) {
+    const file = event.target?.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const firstSheet = workbook.SheetNames[0];
+            const rawRows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet]);
+
+            if (!rawRows || rawRows.length === 0) {
+                Swal.fire({ icon: 'warning', title: 'Archivo Vacío', text: 'El archivo Excel no contiene filas de datos.' });
+                event.target.value = '';
+                return;
+            }
+
+            const cleanStr = (s) => (s || '').toString().trim();
+            const normKey = (k) => k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+
+            const parsedItems = [];
+            rawRows.forEach((row, idx) => {
+                const keys = Object.keys(row);
+                const findVal = (patterns) => {
+                    for (const p of patterns) {
+                        const matched = keys.find(k => normKey(k).includes(p));
+                        if (matched && row[matched] !== undefined) return row[matched];
+                    }
+                    return null;
+                };
+
+                const name = cleanStr(findVal(['nombre', 'producto', 'name', 'item', 'descripcion']));
+                if (!name) return;
+
+                const code = cleanStr(findVal(['codigo', 'code', 'id'])) || ('PROD-' + String(idx + 1).padStart(3, '0'));
+                const category = cleanStr(findVal(['categoria', 'category', 'tipo', 'rubro'])) || 'Otros Consumibles';
+                const unit = cleanStr(findVal(['unidad', 'medida', 'unit'])) || 'Unidad';
+                const costUSD = parseFloat(findVal(['costo', 'cost', 'compra'])) || 0;
+                const priceUSD = parseFloat(findVal(['precio', 'price', 'pvp', 'venta'])) || 0;
+                const stock = parseInt(findVal(['stockactual', 'stock', 'cantidad', 'qty', 'existencia'])) || 0;
+                const minStock = parseInt(findVal(['stockminimo', 'minimo', 'minstock'])) || 5;
+                const notes = cleanStr(findVal(['notas', 'observaciones', 'nota', 'notes'])) || '';
+
+                parsedItems.push({
+                    code,
+                    name,
+                    category,
+                    unit,
+                    costUSD,
+                    priceUSD: priceUSD > 0 ? priceUSD : (costUSD > 0 ? parseFloat((costUSD * 1.5).toFixed(2)) : 1.00),
+                    stock,
+                    minStock,
+                    notes
+                });
+            });
+
+            if (parsedItems.length === 0) {
+                Swal.fire({ icon: 'warning', title: 'Sin Productos Válidos', text: 'No se encontraron columnas de nombre o producto reconocibles.' });
+                event.target.value = '';
+                return;
+            }
+
+            const confirmRes = await Swal.fire({
+                title: '¿Importar Consumibles?',
+                html: `
+                    <div style="text-align: left; font-size: 0.9rem;">
+                        <p>Se detectaron <strong>${parsedItems.length} productos</strong> válidos en el archivo Excel.</p>
+                        <p style="color: #64748b; font-size: 0.8rem; margin-top: 6px;">Los productos con el mismo código actualizarán sus precios y stock actual. Los nuevos se agregarán al catálogo.</p>
+                    </div>
+                `,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: `<i class="fa-solid fa-cloud-arrow-up"></i> Sí, importar ${parsedItems.length} productos`,
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#0d9488'
+            });
+
+            if (confirmRes.isConfirmed) {
+                Swal.fire({
+                    title: 'Importando Catálogo...',
+                    text: 'Sincronizando productos con la nube...',
+                    allowOutsideClick: false,
+                    didOpen: () => Swal.showLoading()
+                });
+
+                const existing = await SupabaseDataService.getConsumables();
+                const mergedMap = new Map();
+                existing.forEach(e => mergedMap.set(e.code, { ...e }));
+                parsedItems.forEach(p => mergedMap.set(p.code, { ...(mergedMap.get(p.code) || {}), ...p }));
+
+                const finalList = Array.from(mergedMap.values());
+                await SupabaseDataService.syncConsumablesCloud(finalList);
+
+                Swal.fire({
+                    icon: 'success',
+                    title: '¡Importación Completada!',
+                    text: `Se procesaron ${parsedItems.length} productos exitosamente.`
+                });
+
+                await window.renderConsumablesView();
+            }
+
+        } catch(err) {
+            console.error('Error importing consumables from Excel:', err);
+            Swal.fire({ icon: 'error', title: 'Error al Importar', text: err.message || 'No se pudo leer el archivo Excel.' });
+        } finally {
+            event.target.value = '';
+        }
+    };
+    reader.readAsArrayBuffer(file);
+};
+
+// Event listeners wiring for Consumables UI
+document.addEventListener('DOMContentLoaded', () => {
+    // 1. New Consumable Buttons
+    const btnNew = document.getElementById('btn-add-consumable') || document.getElementById('btn-new-consumable');
+    if (btnNew) {
+        btnNew.onclick = () => window.openCreateConsumableModal();
+    }
+
+    // 2. Modal close buttons
+    document.querySelectorAll('[data-close="modal-consumable"]').forEach(btn => {
+        btn.onclick = () => window.closeConsumableModal();
+    });
+
+    // 3. Modal save button
+    const btnSaveModal = document.getElementById('btn-save-consumable');
+    if (btnSaveModal) btnSaveModal.onclick = () => window.saveConsumableFromModal();
+
+    // 4. Excel buttons
+    const btnTemplate = document.getElementById('btn-download-consumables-template');
+    if (btnTemplate) btnTemplate.onclick = () => window.downloadConsumablesTemplate();
+
+    const btnExport = document.getElementById('btn-export-consumables-excel');
+    if (btnExport) btnExport.onclick = () => window.exportConsumablesToExcel();
+
+    const btnImport = document.getElementById('btn-import-consumables');
+    const fileImport = document.getElementById('import-consumables-file') || document.getElementById('file-import-consumables');
+    if (btnImport && fileImport) {
+        btnImport.onclick = () => fileImport.click();
+        fileImport.onchange = (e) => window.importConsumablesFromExcel(e);
+    }
+});
