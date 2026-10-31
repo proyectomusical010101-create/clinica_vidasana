@@ -5366,6 +5366,18 @@ window.onDirectSaleSpecialtyChange = async function(specialty) {
     const baremoSelect = document.getElementById('ds-baremo-select');
     if (!baremoSelect) return;
 
+    if (specialty === 'consumables') {
+        baremoSelect.innerHTML = '<option value="">Cargando consumibles...</option>';
+        const consumables = await SupabaseDataService.getConsumables();
+        baremoSelect.innerHTML = '<option value="">-- Seleccionar Consumible o Snack --</option>' +
+            consumables.map(c => {
+                const price = parseFloat(c.priceUSD || 0).toFixed(2);
+                const stockText = (c.stock || 0) <= 0 ? '🔴 Agotado' : `(Stock: ${c.stock} ${c.unit || 'uds'})`;
+                return `<option value="${c.code}" data-name="${c.name}" data-price="${price}" data-spec="Consumibles & Cafetería" data-is-consumable="true" data-stock="${c.stock || 0}" data-unit="${c.unit || 'uds'}">[${c.code}] ${c.name} (${price}) - ${stockText}</option>`;
+            }).join('');
+        return;
+    }
+
     baremoSelect.innerHTML = '<option value="">Cargando servicios...</option>';
     const baremo = await SupabaseDataService.getBaremo();
 
@@ -5385,7 +5397,7 @@ window.onDirectSaleSpecialtyChange = async function(specialty) {
     baremoSelect.innerHTML = '<option value="">-- Seleccionar Servicio del Baremo --</option>' +
         filtered.map(s => {
             const price = parseFloat(s.priceUSD || s.price || 0).toFixed(2);
-            return `<option value="${s.code || s.name}" data-name="${s.name}" data-price="${price}" data-spec="${s.category || specialty}">[${s.code || 'SRV'}] ${s.name} ($${price})</option>`;
+            return `<option value="${s.code || s.name}" data-name="${s.name}" data-price="${price}" data-spec="${s.category || specialty}">[${s.code || 'SRV'}] ${s.name} (${price})</option>`;
         }).join('');
 };
 
@@ -11184,26 +11196,6 @@ function initGlobalEvents() {
                     schedule,
                     commission,
                     availability
-                };
-            }
-
-            if (isHygienist) {
-                const baseSalary = parseFloat(document.getElementById('u-hyg-base-salary')?.value) || 0;
-                const fixedBonus = parseFloat(document.getElementById('u-hyg-fixed-bonus')?.value) || 0;
-                const generalCommission = parseFloat(document.getElementById('u-hyg-general-commission')?.value) || 0;
-
-                hygienistProfile = {
-                    baseSalary,
-                    fixedBonus,
-                    generalCommission,
-                    serviceCommissions: window._currentHygienistCommissions || []
-                };
-
-                // También como doctorProfile para retrocompatibilidad completa en cálculos de nómina
-                doctorProfile = {
-                    ...hygienistProfile,
-                    commission: generalCommission,
-                    assignedServices: (window._currentHygienistCommissions || []).map(c => c.code)
                 };
             }
 
