@@ -2431,6 +2431,19 @@ function initMobileFabActions() {
         };
     }
 
+    // 0.1 Venta Consumible
+    const actConsumableSale = document.getElementById('fab-act-consumable-sale');
+    if (actConsumableSale) {
+        actConsumableSale.onclick = () => {
+            closeModal('modal-mobile-quick-actions');
+            if (window.triggerHeaderNewAction) {
+                window.triggerHeaderNewAction('consumable-sale');
+            } else if (window.openDirectSaleModal) {
+                window.openDirectSaleModal(null, 'consumables');
+            }
+        };
+    }
+
     // 1. Nuevo Paciente
     const actPatient = document.getElementById('fab-act-patient');
     if (actPatient) {
@@ -7200,7 +7213,21 @@ window.closeHeaderNewMenu = function() {
 
 window.triggerHeaderNewAction = async function(action) {
     window.closeHeaderNewMenu();
-    if (action === 'direct-sale') {
+    if (action === 'consumable-sale') {
+        const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+        if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Acceso Restringido a Caja',
+                text: 'El rol médico no puede realizar ventas o facturación.'
+            });
+            return;
+        }
+        if (typeof window.openDirectSaleModal === 'function') {
+            await window.openDirectSaleModal(null, 'consumables');
+        }
+        return;
+    } else if (action === 'direct-sale') {
         const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
         if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
             Swal.fire({
@@ -7342,7 +7369,7 @@ window.setDirectSaleSaleType = function(type) {
     window.calculateDirectSaleTotals();
 };
 
-window.openDirectSaleModal = async function(preselectedPatientId = null) {
+window.openDirectSaleModal = async function(preselectedPatientId = null, initialSpecialty = 'all') {
     const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
     if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
         Swal.fire({
@@ -7392,7 +7419,7 @@ window.openDirectSaleModal = async function(preselectedPatientId = null) {
     window._cachedDirectSalePatients = patients;
 
     if (patientSelect) {
-        patientSelect.innerHTML = '<option value="">-- Seleccionar Paciente --</option>' +
+        patientSelect.innerHTML = '<option value="">-- Seleccionar Paciente --</option><option value="mostrador">🥤 Cliente Mostrador / Cafetería</option>' +
             patients.map(p => {
                 const tagInfo = p.tagName ? ` [🏷️ ${p.tagName}]` : '';
                 return `<option value="${p.id}">${p.fullname} (${p.id})${tagInfo}</option>`;
@@ -7587,9 +7614,25 @@ window.openDirectSaleModal = async function(preselectedPatientId = null) {
     }
 
     const specSelect = document.getElementById('ds-specialty-select');
-    if (specSelect) specSelect.value = 'all';
+    const titleEl = document.getElementById('ds-modal-title');
+    const subtitleEl = document.getElementById('ds-modal-subtitle');
+    const docGroup = document.getElementById('ds-doctor-group');
+
     window.clearDirectSaleServiceSearch(false);
-    await window.onDirectSaleSpecialtyChange('all');
+
+    if (initialSpecialty === 'consumables') {
+        if (titleEl) titleEl.innerHTML = '<i class="fa-solid fa-mug-saucer text-amber"></i> Venta de Consumibles & Cafetería';
+        if (subtitleEl) subtitleEl.textContent = 'Cobro y despacho de bebidas, café, snacks y golosinas.';
+        if (specSelect) specSelect.value = 'consumables';
+        if (docGroup) docGroup.style.display = 'none';
+        await window.onDirectSaleSpecialtyChange('consumables');
+    } else {
+        if (titleEl) titleEl.innerHTML = '<i class="fa-solid fa-bolt text-emerald"></i> Venta Directa & Cobro Rápido de Servicios';
+        if (subtitleEl) subtitleEl.textContent = 'Facturación o emisión de Recibo de Abono al instante sin presupuesto previo.';
+        if (specSelect) specSelect.value = initialSpecialty || 'all';
+        if (docGroup) docGroup.style.display = 'block';
+        await window.onDirectSaleSpecialtyChange(initialSpecialty || 'all');
+    }
 
     // 4. Reset Inputs & Render empty items table
     const qtyIn = document.getElementById('ds-item-qty');
@@ -9144,8 +9187,15 @@ window.processDirectSale = async function() {
     }
 
     const patients = await SupabaseDataService.getPatients();
-    const patient = patients.find(p => String(p.id) === String(patientId));
-    const patientName = patient ? patient.fullname : `Paciente (${patientId})`;
+    let patient = null;
+    let patientName = '';
+    if (patientId === 'mostrador' || patientId === 'walkin') {
+        patient = { id: 'MOSTRADOR', fullname: 'Cliente Mostrador / Cafetería', phone: '', email: '' };
+        patientName = 'Cliente Mostrador / Cafetería';
+    } else {
+        patient = patients.find(p => String(p.id) === String(patientId));
+        patientName = patient ? patient.fullname : `Paciente (${patientId})`;
+    }
 
     let subtotalGross = 0;
     let totalDiscountUSD = 0;
@@ -33390,15 +33440,15 @@ window.filterConsumablesList = function() {
                 <td class="text-center" style="font-weight: 700; font-size: 0.95rem;">${stock}</td>
                 <td class="text-center text-muted" style="font-size:0.82rem;">${minStock}</td>
                 <td class="text-center">${stockBadge}</td>
-                <td class="text-right">
-                    <div style="display: inline-flex; gap: 4px; align-items: center; justify-content: flex-end;">
-                        <button type="button" class="btn btn-xs btn-outline" onclick="window.restockConsumablePrompt('${safeCode}')" style="color:#0d9488; border-color:#0d9488; padding:3px 7px; font-weight:600;" title="Surtir o reponer stock">
-                            <i class="fa-solid fa-boxes-packing"></i> Surtir
+                <td class="text-right" style="padding: 8px 12px; white-space: nowrap;">
+                    <div style="display: inline-flex; gap: 5px; align-items: center; justify-content: flex-end;">
+                        <button type="button" class="btn btn-xs btn-outline" onclick="window.restockConsumablePrompt('${safeCode}')" style="width: 28px; height: 28px; padding: 0; display: inline-flex; align-items: center; justify-content: center; color: #0d9488; border-color: #0d9488; border-radius: 6px;" title="Surtir / Reponer Stock">
+                            <i class="fa-solid fa-boxes-packing"></i>
                         </button>
-                        <button type="button" class="btn btn-xs btn-outline text-cyan" onclick="window.editConsumable('${safeCode}')" title="Editar producto">
+                        <button type="button" class="btn btn-xs btn-outline text-cyan" onclick="window.editConsumable('${safeCode}')" style="width: 28px; height: 28px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px;" title="Editar Producto">
                             <i class="fa-solid fa-pen-to-square"></i>
                         </button>
-                        <button type="button" class="btn btn-xs btn-outline text-red" onclick="window.deleteConsumableItem('${safeCode}')" title="Eliminar producto">
+                        <button type="button" class="btn btn-xs btn-outline text-red" onclick="window.deleteConsumableItem('${safeCode}')" style="width: 28px; height: 28px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px;" title="Eliminar Producto">
                             <i class="fa-solid fa-trash"></i>
                         </button>
                     </div>

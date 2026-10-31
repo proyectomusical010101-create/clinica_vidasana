@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=391">
+    <link rel="stylesheet" href="styles.css?v=392">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -367,6 +367,15 @@
                                 <div>
                                     <div style="font-weight: 700;">Venta Directa</div>
                                     <small style="color: #64748b; font-size: 0.72rem; font-weight: normal; display: block;">Cobro rápido de servicios</small>
+                                </div>
+                            </a>
+                            <a href="javascript:void(0)" class="header-dropdown-item" id="header-action-consumable-sale" onclick="window.triggerHeaderNewAction('consumable-sale')">
+                                <span class="header-dropdown-icon" style="background: rgba(245, 158, 11, 0.14); color: #d97706;">
+                                    <i class="fa-solid fa-mug-saucer"></i>
+                                </span>
+                                <div>
+                                    <div style="font-weight: 700;">Venta Consumible</div>
+                                    <small style="color: #64748b; font-size: 0.72rem; font-weight: normal; display: block;">Cafetería, bebidas y snacks</small>
                                 </div>
                             </a>
                             <a href="javascript:void(0)" class="header-dropdown-item" onclick="window.triggerHeaderNewAction('new-patient')">
@@ -2012,17 +2021,17 @@
                             <table class="table">
                                 <thead>
                                     <tr>
-                                        <th>Código</th>
-                                        <th>Categoría</th>
-                                        <th>Nombre del Producto</th>
-                                        <th>Unidad</th>
-                                        <th class="text-right">Precio Venta (USD)</th>
-                                        <th class="text-right">Precio (Bs.)</th>
-                                        <th class="text-right">Costo (USD)</th>
-                                        <th class="text-center">Stock Actual</th>
-                                        <th class="text-center">Mínimo</th>
-                                        <th class="text-center">Estado</th>
-                                        <th class="text-right">Acciones</th>
+                                        <th style="width: 100px;">Código</th>
+                                        <th style="width: 140px;">Categoría</th>
+                                        <th style="min-width: 200px;">Nombre del Producto</th>
+                                        <th style="width: 80px;">Unidad</th>
+                                        <th style="width: 110px; text-align: right;">PVP (USD)</th>
+                                        <th style="width: 120px; text-align: right;">Precio (Bs.)</th>
+                                        <th style="width: 95px; text-align: right;">Costo</th>
+                                        <th style="width: 85px; text-align: center;">Stock</th>
+                                        <th style="width: 75px; text-align: center;">Mín.</th>
+                                        <th style="width: 110px; text-align: center;">Estado</th>
+                                        <th style="width: 110px; text-align: right;">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody id="consumables-table-body">
@@ -6281,6 +6290,10 @@
                         <div class="sheet-card-icon emerald"><i class="fa-solid fa-bolt"></i></div>
                         <span>Venta Directa</span>
                     </button>
+                    <button type="button" class="sheet-grid-card" id="fab-act-consumable-sale">
+                        <div class="sheet-card-icon amber"><i class="fa-solid fa-mug-saucer"></i></div>
+                        <span>Venta Consumible</span>
+                    </button>
                     <button type="button" class="sheet-grid-card" id="fab-act-patient">
                         <div class="sheet-card-icon cyan"><i class="fa-solid fa-user-plus"></i></div>
                         <span>Nuevo Paciente</span>
@@ -7720,10 +7733,10 @@
                         <i class="fa-solid fa-bolt"></i>
                     </div>
                     <div>
-                        <h3 style="margin: 0; font-size: 1.18rem; color: #0f172a; font-weight: 800; display: flex; align-items: center; gap: 8px;">
+                        <h3 id="ds-modal-title" style="margin: 0; font-size: 1.18rem; color: #0f172a; font-weight: 800; display: flex; align-items: center; gap: 8px;">
                             Venta Directa & Cobro Rápido de Servicios
                         </h3>
-                        <p style="margin: 2px 0 0 0; font-size: 0.82rem; color: #64748b;">
+                        <p id="ds-modal-subtitle" style="margin: 2px 0 0 0; font-size: 0.82rem; color: #64748b;">
                             Facturación o emisión de Recibo de Abono al instante sin presupuesto previo.
                         </p>
                     </div>
@@ -8927,14 +8940,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=391"></script>
-    <script src="supabaseClient.js?v=391"></script>
-    <script src="odontogram.js?v=391"></script>
-    <script src="signature.js?v=391"></script>
-    <script src="whatsapp.js?v=391"></script>
-    <script src="kardex.js?v=391"></script>
-    <script src="app.js?v=391"></script>
-    <script src="clinicalERP.js?v=391"></script>
-    <script src="tutorial.js?v=391"></script>
+    <script src="seededData.js?v=392"></script>
+    <script src="supabaseClient.js?v=392"></script>
+    <script src="odontogram.js?v=392"></script>
+    <script src="signature.js?v=392"></script>
+    <script src="whatsapp.js?v=392"></script>
+    <script src="kardex.js?v=392"></script>
+    <script src="app.js?v=392"></script>
+    <script src="clinicalERP.js?v=392"></script>
+    <script src="tutorial.js?v=392"></script>
 </body>
 </html>

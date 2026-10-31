@@ -7934,3 +7934,14 @@ body.is-doctor-role #step-content-1 .patient-contact-field {
     display: none !important;
 }
 
+
+/* Consumables Table Protection */
+#view-consumables .table-responsive {
+    border-radius: 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+#consumables-table {
+    min-width: 900px;
+}
