@@ -10286,9 +10286,12 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
             if (anamnesisContent) {
                 anamnesisContent.innerHTML = `
                     <div style="display: flex; flex-direction: column; gap: 15px; padding: 10px;">
-                        <div style="display: flex; justify-content: flex-end;">
-                            <button class="btn btn-xs btn-outline" style="border-color:#0891b2; color:#0891b2; font-weight:600;" onclick="window.editPatient('${activePatient.id}')">
+                        <div style="display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap;">
+                            <button type="button" class="btn btn-xs btn-outline" style="border-color:#0891b2; color:#0891b2; font-weight:600;" onclick="window.editPatient('${activePatient.id}')">
                                 <i class="fa-solid fa-pen-to-square"></i> Editar Anamnesis y Hábitos
+                            </button>
+                            <button type="button" class="btn btn-xs btn-primary" style="background: linear-gradient(135deg, #0d9488, #059669); color: #fff; font-weight: 700; border: none; padding: 6px 14px; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 6px rgba(13,148,136,0.25);" onclick="window.createDentalBudgetFromAnamnesis('${activePatient.id}')" title="Crear presupuesto odontológico y enlazar directamente al Odontodiagrama">
+                                <i class="fa-solid fa-tooth"></i> Crear Presupuesto Odontológico
                             </button>
                         </div>
                         <div class="details-section">
@@ -10519,18 +10522,33 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
                     trtSection.style.border = '1px solid var(--border-color)';
                     trtSection.style.borderRadius = '8px';
 
+                    const isSuperAdmin = currentUser && (currentUser.role === 'Super Administrador' || currentUser.role === 'admin' || (typeof isSuperAdminUser === 'function' && isSuperAdminUser(currentUser)));
                     let trtRowsHtml = treatmentsList.map((t, idx) => {
                         const isDone = (idx < completedSessions) || t.status === 'Completado';
                         const toothNum = extractToothNumber(t);
                         const toothLabel = toothNum === 'General' ? 'Pieza General' : `Pieza ${toothNum}`;
+                        const itemBudgetId = activeApprovedBudget ? activeApprovedBudget.id : '';
+                        const safeItemName = window.escapeApptText(t.name || 'Tratamiento');
+                        const safePrice = parseFloat(t.price || 0);
                         return `
                             <tr style="border-bottom: 1px solid var(--border-color); font-size: 0.85rem;">
                                 <td style="padding: 6px 8px;"><strong>${toothLabel}</strong></td>
                                 <td style="padding: 6px 8px;">${t.name}</td>
-                                <td style="padding: 6px 8px; color: #15803d; font-weight: 600;">$${parseFloat(t.price || 0).toFixed(2)}</td>
+                                <td style="padding: 6px 8px; color: #15803d; font-weight: 600;">${safePrice.toFixed(2)}</td>
                                 <td style="padding: 6px 8px;">${t.specialist || 'Dr. Asignado'}</td>
                                 <td style="padding: 6px 8px;">
                                     <span class="badge-tag ${isDone ? 'green' : 'amber'}">${isDone ? '✓ Atendido' : '⏳ Planificado'}</span>
+                                </td>
+                                <td style="padding: 6px 8px; text-align: right;">
+                                    <div style="display: inline-flex; gap: 4px; align-items: center; justify-content: flex-end;">
+                                        <button type="button" class="btn btn-xs btn-outline" style="color: #059669; border-color: #10b981; background: #ecfdf5; font-weight: 700; padding: 2px 8px;" onclick="window.openPaymentForTreatmentItem('${activePatient.id}', '${itemBudgetId}', '${t.id || idx}', '${safeItemName}', ${safePrice}, '${toothLabel}')" title="Abonar directamente a este tratamiento">
+                                            <i class="fa-solid fa-hand-holding-dollar"></i> Abonar
+                                        </button>
+                                        ${isSuperAdmin ? `
+                                        <button type="button" class="btn btn-xs btn-outline text-teal" style="padding: 2px 6px;" onclick="window.editTreatmentStatus('${activePatient.id}', '${itemBudgetId}', '${t.id || idx}', '${safeItemName}', '${isDone ? 'Completado' : 'Planificado'}')" title="Editar Estado del Tratamiento (Solo Super Admin)">
+                                            <i class="fa-solid fa-sliders"></i>
+                                        </button>` : ''}
+                                    </div>
                                 </td>
                             </tr>
                         `;
@@ -10550,6 +10568,7 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
                                         <th style="padding:4px 8px;">Monto</th>
                                         <th style="padding:4px 8px;">Especialista</th>
                                         <th style="padding:4px 8px;">Estado</th>
+                                        <th style="padding:4px 8px; text-align:right;">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody>${trtRowsHtml}</tbody>
@@ -10592,6 +10611,7 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
                                     ${hideContact ? '' : `<button class="btn btn-xs btn-outline" style="color: #15803d; border-color: #22c55e;" onclick="sendSessionReceiptWhatsApp('${activePatient.id}', ${s.sessionNum})" title="Enviar Recibo por WhatsApp"><i class="fa-brands fa-whatsapp"></i> Recibo</button>`}
                                     <button class="btn btn-xs btn-outline" onclick="downloadSessionReceiptPDFById('${activePatient.id}', ${s.sessionNum})" title="Descargar Recibo en PDF"><i class="fa-solid fa-file-pdf text-blue"></i> PDF</button>
                                     <span class="badge-tag green">✓ Realizada</span>
+                                    ${isSuperAdmin ? `<button class="btn btn-xs btn-outline text-teal" style="margin-left:4px;" onclick="window.editSessionAdvance('${activePatient.id}', ${s.sessionNum})" title="Editar Avance de Sesión (Solo Super Administrador)"><i class="fa-solid fa-pen-to-square"></i></button>` : ''}
                                     ${deleteSessionBtn}
                                 </div>
                             </div>
@@ -11359,6 +11379,182 @@ function setupSignaturePad(canvasId, clearBtnId) {
         getDataURL: () => canvas.toDataURL()
     };
 }
+
+window.createDentalBudgetFromAnamnesis = async function(patientId) {
+    if (!patientId) patientId = typeof getActivePatientId === 'function' ? getActivePatientId() : null;
+    if (!patientId) {
+        Swal.fire({ icon: 'warning', title: 'Atención', text: 'Por favor seleccione un paciente activo.' });
+        return;
+    }
+    if (typeof window.openBudgetForNewPatient === 'function') {
+        await window.openBudgetForNewPatient(patientId);
+    } else {
+        setActivePatientId(patientId);
+        const nav = document.querySelector('.nav-item[data-tab="odontogram"]');
+        if (nav) nav.click();
+    }
+};
+
+window.editSessionAdvance = async function(patientId, sessionNum) {
+    const user = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const isSuper = user && (user.role === 'Super Administrador' || user.role === 'admin' || (typeof isSuperAdminUser === 'function' && isSuperAdminUser(user)));
+    if (!isSuper) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Acceso Restringido',
+            text: 'La edición de avances de sesión en historias clínicas está restringida exclusivamente al Super Administrador.'
+        });
+        return;
+    }
+
+    const patients = await SupabaseDataService.getPatients();
+    const p = patients.find(pat => pat.id === patientId);
+    if (!p || !p.sessions) return;
+    const session = p.sessions.find(s => s.sessionNum === sessionNum);
+    if (!session) {
+        Swal.fire({ icon: 'error', title: 'Error', text: 'No se encontró la sesión especificada.' });
+        return;
+    }
+
+    const { value: formValues } = await Swal.fire({
+        title: `<i class="fa-solid fa-pen-to-square text-cyan"></i> Editar Avance de Sesión #${sessionNum}`,
+        html: `
+            <div style="text-align: left; font-size: 0.9rem;">
+                <label style="display:block; font-weight:700; color:#334155; margin-bottom:4px;">Fecha y Hora:</label>
+                <input id="swal-edit-sess-dt" class="swal2-input" type="text" value="${window.escapeApptText(session.datetime || '')}" style="width:100%; margin: 0 0 12px 0;">
+                <label style="display:block; font-weight:700; color:#334155; margin-bottom:4px;">Evolución / Procedimiento Realizado:</label>
+                <textarea id="swal-edit-sess-proc" class="swal2-textarea" style="width:100%; height:80px; margin: 0 0 12px 0;">${window.escapeApptText(session.procedure || '')}</textarea>
+                <label style="display:block; font-weight:700; color:#334155; margin-bottom:4px;">Indicaciones Médicas:</label>
+                <textarea id="swal-edit-sess-ind" class="swal2-textarea" style="width:100%; height:60px; margin: 0;">${window.escapeApptText(session.indications || '')}</textarea>
+            </div>
+        `,
+        focusConfirm: false,
+        showCancelButton: true,
+        confirmButtonText: '<i class="fa-solid fa-floppy-disk"></i> Guardar Cambios',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#0d9488',
+        cancelButtonColor: '#64748b',
+        preConfirm: () => {
+            const dt = document.getElementById('swal-edit-sess-dt').value.trim();
+            const proc = document.getElementById('swal-edit-sess-proc').value.trim();
+            const ind = document.getElementById('swal-edit-sess-ind').value.trim();
+            if (!proc) {
+                Swal.showValidationMessage('El procedimiento o evolución clínica no puede quedar vacío.');
+                return false;
+            }
+            return { datetime: dt, procedure: proc, indications: ind };
+        }
+    });
+
+    if (formValues) {
+        session.datetime = formValues.datetime;
+        session.procedure = formValues.procedure;
+        session.indications = formValues.indications;
+        await SupabaseDataService.savePatient(p);
+        await renderEHRView();
+        Swal.fire({
+            icon: 'success',
+            title: '¡Avance Actualizado!',
+            text: `La sesión #${sessionNum} fue editada exitosamente en la historia clínica.`,
+            timer: 2000,
+            showConfirmButton: false
+        });
+    }
+};
+
+window.editTreatmentStatus = async function(patientId, budgetId, itemId, treatmentName, currentStatus) {
+    const user = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const isSuper = user && (user.role === 'Super Administrador' || user.role === 'admin' || (typeof isSuperAdminUser === 'function' && isSuperAdminUser(user)));
+    if (!isSuper) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Acceso Restringido',
+            text: 'El cambio y edición del estado de tratamientos está restringido exclusivamente al Super Administrador.'
+        });
+        return;
+    }
+
+    const { value: newStatus } = await Swal.fire({
+        title: `<i class="fa-solid fa-sliders text-cyan"></i> Cambiar Estado de Tratamiento`,
+        html: `
+            <div style="text-align:left; font-size:0.9rem; margin-bottom:10px;">
+                <p style="margin-bottom:8px;">Tratamiento: <strong>${treatmentName}</strong></p>
+                <p style="margin-bottom:12px; color:#64748b; font-size:0.85rem;">Seleccione el nuevo estado para reflejar en la historia clínica:</p>
+                <select id="swal-edit-trt-status" class="swal2-select" style="width:100%; display:block; margin:0;">
+                    <option value="Planificado" ${currentStatus === 'Planificado' ? 'selected' : ''}>⏳ Planificado</option>
+                    <option value="En Proceso" ${currentStatus === 'En Proceso' ? 'selected' : ''}>🔄 En Proceso</option>
+                    <option value="Completado" ${currentStatus === 'Completado' ? 'selected' : ''}>✓ Atendido / Completado</option>
+                </select>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Actualizar Estado',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#0d9488',
+        cancelButtonColor: '#64748b',
+        preConfirm: () => {
+            return document.getElementById('swal-edit-trt-status').value;
+        }
+    });
+
+    if (newStatus && newStatus !== currentStatus) {
+        if (budgetId) {
+            const invoices = await SupabaseDataService.getInvoices();
+            const inv = invoices.find(i => String(i.id) === String(budgetId));
+            if (inv && Array.isArray(inv.items)) {
+                const target = inv.items.find((it, idx) => String(it.id || idx) === String(itemId) || it.name === treatmentName);
+                if (target) {
+                    target.status = newStatus;
+                    await SupabaseDataService.saveInvoice(inv);
+                }
+            }
+        }
+        await renderEHRView();
+        Swal.fire({
+            icon: 'success',
+            title: 'Estado Actualizado',
+            text: `El tratamiento se actualizó a "${newStatus}".`,
+            timer: 1800,
+            showConfirmButton: false
+        });
+    }
+};
+
+window.openPaymentForTreatmentItem = function(patientId, budgetId, itemId, treatmentName, price, toothLabel) {
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Acceso Restringido',
+            text: 'El personal médico no gestiona cobros. Las cobranzas deben realizarse desde Recepción / Caja.'
+        });
+        return;
+    }
+    setActivePatientId(patientId);
+    const conceptInput = document.getElementById('pay-concept');
+    if (conceptInput) {
+        conceptInput.value = `${treatmentName}${toothLabel ? ` (${toothLabel})` : ''}${budgetId ? ` - Presupuesto #${budgetId}` : ''}`;
+    }
+    const itemPrice = parseFloat(price) || 50;
+    const totalUsdInput = document.getElementById('pay-total-usd');
+    if (totalUsdInput) totalUsdInput.value = itemPrice.toFixed(2);
+    const paidUsdInput = document.getElementById('pay-paid-usd');
+    if (paidUsdInput) paidUsdInput.value = itemPrice.toFixed(2);
+    const dateInput = document.getElementById('pay-date');
+    if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
+
+    const rate = typeof getExchangeRate === 'function' ? getExchangeRate() : 36.5;
+    const paidBsInput = document.getElementById('pay-paid-bs');
+    if (paidBsInput) paidBsInput.value = (itemPrice * rate).toFixed(2);
+    const rateHint = document.getElementById('pay-bcv-rate-hint');
+    if (rateHint) rateHint.innerText = `Tasa BCV: Bs. ${rate.toFixed(2)}`;
+
+    const payMethodSelect = document.getElementById('pay-method');
+    if (payMethodSelect && typeof window.onModalPaymentMethodChange === 'function') {
+        window.onModalPaymentMethodChange(payMethodSelect.value);
+    }
+    openModal('modal-payment');
+};
 
 window.deleteSessionFromPatient = async function(patientId, sessionNum) {
     const user = getCurrentUser();
@@ -14152,7 +14348,7 @@ async function renderInventoryTable(filter = null, searchQuery = null, areaFilte
                     <button type="button" class="btn btn-xs btn-outline" onclick="window.restockInventoryMaterial('${item.code}')" style="color: #059669; border-color: #a7f3d0; background: #ecfdf5; font-weight: 700; padding: 2px 7px;" title="Surtir / Aumentar Stock de este insumo">
                         <i class="fa-solid fa-boxes-packing"></i> Surtir
                     </button>
-                    <button type="button" class="btn btn-xs btn-outline" onclick="window.editInventoryMaterial('${item.code}')" title="Editar Insumo" style="padding: 2px 6px;">
+                    <button type="button" class="btn btn-xs btn-outline" onclick="window.editInventoryMaterial('${encodeURIComponent(item.code)}')" title="Editar Insumo" style="padding: 2px 7px; color: #0284c7; border-color: #38bdf8; background: #f0f9ff; font-weight: 600;">
                         <i class="fa-solid fa-pen-to-square"></i>
                     </button>
                     ${deleteMatBtn}
@@ -14691,6 +14887,7 @@ window.editPricingService = async function(code) {
 
 window.editInventoryMaterial = async function(code) {
     if (!code) return;
+    try { code = decodeURIComponent(code); } catch(e) {}
     let items = [];
     if (window.SupabaseDataService && typeof window.SupabaseDataService.getInventory === 'function') {
         items = await window.SupabaseDataService.getInventory();

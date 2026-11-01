@@ -2022,8 +2022,8 @@ body.dark-theme .timeline-item.timeline-item-attended {
 }
 
 .form-control, .form-input, input[type="text"], input[type="date"], input[type="datetime-local"], input[type="tel"], input[type="email"], input[type="number"], input[type="password"], select, textarea {
-    background: #ffffff;
-    border: 1.5px solid #94a3b8;
+    background: #f1f5f9;
+    border: 1.5px solid #cbd5e1;
     border-radius: 8px;
     padding: 9px 12px;
     color: #0f172a;
@@ -2047,8 +2047,8 @@ select, .form-select, select.form-control {
     padding: 8px 12px !important;
     font-size: 0.88rem !important;
     box-sizing: border-box !important;
-    background-color: #ffffff !important;
-    border: 1.5px solid #94a3b8 !important;
+    background-color: #f1f5f9 !important;
+    border: 1.5px solid #cbd5e1 !important;
     color: #0f172a !important;
 }
 
@@ -7944,4 +7944,104 @@ body.is-doctor-role #step-content-1 .patient-contact-field {
 
 #consumables-table {
     min-width: 900px;
+}
+
+
+/* ==========================================================================
+   ENHANCED INPUT CONTRAST & REORGANIZED EHR TOP SELECTOR (MASTER SUITE)
+   ========================================================================== */
+
+/* Enhanced Input Contrast for Registration & Patient Modals */
+#modal-patient .form-control,
+#modal-patient input[type="text"],
+#modal-patient input[type="number"],
+#modal-patient input[type="date"],
+#modal-patient select,
+#modal-patient textarea {
+    background-color: #f1f5f9 !important;
+    border: 1.5px solid #cbd5e1 !important;
+    color: #0f172a !important;
+}
+#modal-patient .form-control:focus,
+#modal-patient input:focus,
+#modal-patient select:focus,
+#modal-patient textarea:focus {
+    background-color: #ffffff !important;
+    border-color: #0d9488 !important;
+    box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.22) !important;
+}
+
+/* Reorganized EHR Top Selector Header */
+.ehr-top-container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+}
+.ehr-top-selector-card {
+    background: var(--bg-card);
+    border: 1.5px solid var(--border-color);
+    border-radius: 14px;
+    padding: 14px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    box-shadow: var(--shadow-soft);
+}
+.ehr-top-search-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+.ehr-top-search-box {
+    flex: 1 1 300px;
+    min-width: 240px;
+}
+.ehr-top-filter-group {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+#ehr-patient-list {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 10px;
+    overflow-x: auto;
+    padding: 4px 2px 8px 2px;
+    scrollbar-width: thin;
+}
+#ehr-patient-list::-webkit-scrollbar {
+    height: 6px;
+}
+#ehr-patient-list::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+#ehr-patient-list .nav-item {
+    flex: 0 0 auto;
+    min-width: 190px;
+    max-width: 260px;
+    padding: 8px 14px;
+    border-radius: 10px !important;
+    border: 1.5px solid var(--border-color) !important;
+    background: #f8fafc;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    box-sizing: border-box;
+}
+#ehr-patient-list .nav-item:hover {
+    background: #f1f5f9;
+    border-color: #94a3b8 !important;
+    transform: translateY(-1px);
+}
+#ehr-patient-list .nav-item.active {
+    background: #ecfdf5 !important;
+    border-color: #10b981 !important;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
+}
+#ehr-detail-container {
+    width: 100% !important;
 }
