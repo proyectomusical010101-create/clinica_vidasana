@@ -1734,11 +1734,13 @@ class SupabaseDataService {
                         isCredit: (saleData.paymentTerms === 'Crédito' || saleData.paymentMethod === 'credito'),
                         paymentMethod: saleData.paymentMethod,
                         paymentTerms: saleData.paymentTerms,
+                        isPrivatePatient: !!saleData.isPrivatePatient,
+                        doctorRate: saleData.doctorRate !== undefined ? parseFloat(saleData.doctorRate) : undefined,
                         notes: isCashea 
                             ? `Atención concretada con Cashea (${docId}) - Inicial: $${invoiceObj.paidRef.toFixed(2)}, Financiado: $${casheaFinancedUSD.toFixed(2)}`
                             : (saleData.paymentTerms === 'Crédito' || saleData.paymentMethod === 'credito'
                                 ? `Atención concretada a Crédito Interno (${docId}) - Saldo Paciente: $${invoiceObj.balanceRef.toFixed(2)}`
-                                : `Atención concretada (${docId}) - Método: ${saleData.paymentMethod}`)
+                                : `Atención concretada (${docId}) - Método: ${saleData.paymentMethod}${saleData.isPrivatePatient ? ' [Paciente Privado]' : ''}`)
                     });
                 }
             }
@@ -3185,6 +3187,8 @@ class SupabaseDataService {
             paymentMethod = '',
             paymentTerms = '',
             date = new Date().toISOString().split('T')[0],
+            isPrivatePatient = false,
+            doctorRate = null,
             notes = ''
         } = params;
 
@@ -3193,7 +3197,7 @@ class SupabaseDataService {
         const baremo = await this.getBaremo();
         const baremoItem = baremo.find(b => b.code === serviceCode || (b.name && serviceName && b.name.toLowerCase() === serviceName.toLowerCase()));
 
-        // 1. Calculate Doctor Gain (with Individual Service Commission Override support)
+        // 1. Calculate Doctor Gain (with Private Patient and Custom Override support)
         let docCalcType = 'percentage';
         let docRate = 40.0; // Default 40% if not configured
         let docUser = null;
@@ -3203,7 +3207,13 @@ class SupabaseDataService {
             docUser = users.find(u => u.fullname && u.fullname.toLowerCase() === doctorName.toLowerCase());
         }
 
-        if (docUser) {
+        if (doctorRate !== undefined && doctorRate !== null && doctorRate !== '' && !isNaN(doctorRate)) {
+            docRate = parseFloat(doctorRate);
+            docCalcType = 'percentage';
+        } else if (isPrivatePatient) {
+            docRate = 60.0;
+            docCalcType = 'percentage';
+        } else if (docUser) {
             const prof = docUser.doctorProfile || docUser.doctor_profile || {};
             const customComms = prof.customServiceCommissions || prof.serviceCommissions || {};
             let matchedCustomRate = null;
@@ -3296,6 +3306,8 @@ class SupabaseDataService {
             is_credit: !!isCredit,
             payment_method: paymentMethod || '',
             payment_terms: paymentTerms || '',
+            is_private_patient: !!isPrivatePatient,
+            patient_type: isPrivatePatient ? 'Privado (60/40)' : 'Clínica',
             doctor: {
                 id: docUser ? docUser.id : (doctorId || ''),
                 name: docUser ? docUser.fullname : (doctorName || 'Médico Especialista'),
@@ -3720,6 +3732,26 @@ class SupabaseDataService {
     static _realtimeInitialized = false;
 
     static async notifyDataChanged(category, entityId = '') {
+        // Invalidate corresponding local memory cache immediately
+        if (category === 'patients') {
+            this._patientsCacheTime = 0;
+            this._patientsPromise = null;
+        } else if (category === 'invoices' || category === 'budgets') {
+            this._invoicesCacheTime = 0;
+            this._invoicesPromise = null;
+        } else if (category === 'appointments' || category === 'agenda') {
+            this._apptsCacheTime = 0;
+            this._apptsPromise = null;
+        } else if (category === 'service_liquidations') {
+            this._serviceLiquidationsCacheTime = 0;
+        }
+
+        // Live refresh the currently active view (e.g. Home Dashboard) on this device immediately
+        try {
+            await this.refreshActiveViews(true);
+        } catch(e) {}
+
+        // Broadcast change event to other connected devices
         if (!this._realtimeChannel) return;
         try {
             await this._realtimeChannel.send({

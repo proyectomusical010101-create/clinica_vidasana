@@ -7564,6 +7564,16 @@ window.openDirectSaleModal = async function(preselectedPatientId = null, initial
     // Default sale type to Contado
     window.setDirectSaleSaleType('contado');
 
+    // Reset Doctor Commission & Private Patient Scheme
+    const privCheck = document.getElementById('ds-is-private-patient');
+    if (privCheck) privCheck.checked = false;
+    const docRateIn = document.getElementById('ds-doctor-rate');
+    if (docRateIn) docRateIn.value = '40';
+    const clinicDisp = document.getElementById('ds-clinic-rate-display');
+    if (clinicDisp) clinicDisp.innerText = '60%';
+    const schemeBdg = document.getElementById('ds-scheme-badge');
+    if (schemeBdg) schemeBdg.style.display = 'none';
+
     openModal('modal-direct-sale');
 
     // 1. Populate Patients & Setup Live Search Autocomplete
@@ -9532,6 +9542,50 @@ window.onBillingPaymentMethodChange = function(method) {
     if (typeof refreshBillingLivePreview === 'function') refreshBillingLivePreview();
 };
 
+window.onDirectSalePrivatePatientToggle = function(checked) {
+    const rateInput = document.getElementById('ds-doctor-rate');
+    const badge = document.getElementById('ds-scheme-badge');
+    const clinicDisplay = document.getElementById('ds-clinic-rate-display');
+    if (checked) {
+        if (rateInput) rateInput.value = '60';
+        if (badge) badge.style.display = 'inline-block';
+        if (clinicDisplay) clinicDisplay.innerText = '40%';
+    } else {
+        if (rateInput) rateInput.value = '40';
+        if (badge) badge.style.display = 'none';
+        if (clinicDisplay) clinicDisplay.innerText = '60%';
+    }
+};
+
+window.onDirectSaleDoctorRateChange = function(val) {
+    const rate = Math.min(100, Math.max(0, parseFloat(val) || 0));
+    const clinicMargin = Math.max(0, 100 - rate);
+    const clinicDisplay = document.getElementById('ds-clinic-rate-display');
+    if (clinicDisplay) clinicDisplay.innerText = `${clinicMargin}%`;
+
+    const isPrivCheck = document.getElementById('ds-is-private-patient');
+    const badge = document.getElementById('ds-scheme-badge');
+    if (rate === 60) {
+        if (isPrivCheck) isPrivCheck.checked = true;
+        if (badge) badge.style.display = 'inline-block';
+    } else {
+        if (isPrivCheck && rate < 50) isPrivCheck.checked = false;
+        if (badge && rate !== 60) badge.style.display = 'none';
+    }
+};
+
+window.setDirectSaleDoctorRatePreset = function(rate, isPrivate) {
+    const rateInput = document.getElementById('ds-doctor-rate');
+    const isPrivCheck = document.getElementById('ds-is-private-patient');
+    const badge = document.getElementById('ds-scheme-badge');
+    const clinicDisplay = document.getElementById('ds-clinic-rate-display');
+
+    if (rateInput) rateInput.value = rate;
+    if (isPrivCheck) isPrivCheck.checked = !!isPrivate;
+    if (badge) badge.style.display = isPrivate ? 'inline-block' : 'none';
+    if (clinicDisplay) clinicDisplay.innerText = `${100 - rate}%`;
+};
+
 window.processDirectSale = async function() {
     const patientSelect = document.getElementById('ds-patient-select');
     const patientId = patientSelect ? patientSelect.value : null;
@@ -9685,6 +9739,10 @@ window.processDirectSale = async function() {
         dsCommission = parseFloat(selectedOpt?.getAttribute('data-commission') || 0);
     }
 
+    const isPrivatePatient = document.getElementById('ds-is-private-patient')?.checked || false;
+    const doctorRateVal = parseFloat(document.getElementById('ds-doctor-rate')?.value);
+    const doctorRate = !isNaN(doctorRateVal) ? doctorRateVal : (isPrivatePatient ? 60 : 40);
+
     const salePayload = {
         id: docId,
         patientId,
@@ -9704,6 +9762,8 @@ window.processDirectSale = async function() {
         isFullPayment: isFull,
         doctorId: docIdFinal,
         doctor: docNameFinal,
+        isPrivatePatient,
+        doctorRate,
         assistantId: assistantIdFinal,
         assistant: assistant,
         specialty: specialtyPrimary,
@@ -12460,7 +12520,11 @@ async function renderDashboard(preset, customStart, customEnd) {
         window.initDashboardPeriodFilters();
     }
 
-    const todayStr = window.formatDateToISO ? window.formatDateToISO(new Date()) : new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const todayStr = `${yyyy}-${mm}-${dd}`;
     const activePreset = preset || window.currentDashboardPeriod || 'month';
     window.currentDashboardPeriod = activePreset;
 
@@ -12666,8 +12730,8 @@ async function renderDashboard(preset, customStart, customEnd) {
     }
 
     try {
-        let allPatients = await SupabaseDataService.getPatients();
-        let allInvoices = await SupabaseDataService.getInvoices();
+        let allPatients = await SupabaseDataService.getPatients(true);
+        let allInvoices = await SupabaseDataService.getInvoices(true);
 
         if (isDoctor) {
             const docId = String(currentUser.id || '').trim();
@@ -12932,6 +12996,32 @@ async function renderDashboard(preset, customStart, customEnd) {
     }
 
     window.checkGlobalStockAlerts();
+}
+
+// ==========================================================
+// REAL-TIME AUTO REFRESH FOR DASHBOARD / HOME VIEW
+// ==========================================================
+if (typeof window !== 'undefined') {
+    if (!window._dashboardAutoRefreshInterval) {
+        window._dashboardAutoRefreshInterval = setInterval(() => {
+            const homeTab = document.getElementById('view-dashboard');
+            if (homeTab && homeTab.classList.contains('active') && !document.hidden) {
+                renderDashboard(window.currentDashboardPeriod || 'month');
+            }
+        }, 25000);
+    }
+
+    if (!window._dashboardVisibilityBound) {
+        window._dashboardVisibilityBound = true;
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                const homeTab = document.getElementById('view-dashboard');
+                if (homeTab && homeTab.classList.contains('active')) {
+                    renderDashboard(window.currentDashboardPeriod || 'month');
+                }
+            }
+        });
+    }
 }
 
 // ==========================================================

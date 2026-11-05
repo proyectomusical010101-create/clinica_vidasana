@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=398">
+    <link rel="stylesheet" href="styles.css?v=399">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -7332,8 +7332,22 @@
 
                     <!-- Bloque Médico -->
                     <div style="background: rgba(13, 148, 136, 0.05); border: 1px solid rgba(13, 148, 136, 0.25); border-radius: 10px; padding: 14px; margin-bottom: 14px;">
-                        <h4 style="margin: 0 0 10px 0; font-size: 0.92rem; color: #0d9488; display: flex; align-items: center; gap: 8px;">
-                            <i class="fa-solid fa-user-doctor"></i> Honorarios del Médico Especialista
+                        <h4 style="margin: 0 0 10px 0; font-size: 0.92rem; color: #0d9488; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                            <span><i class="fa-solid fa-user-doctor"></i> Honorarios del Médico Especialista</span>
+                            <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                                <button type="button" class="btn btn-xs btn-outline" onclick="window.ClinicalERP.setEditGainPreset(60)" style="font-size: 0.72rem; font-weight: 700; color: #7c3aed; border-color: #c4b5fd; background: #f5f3ff;">
+                                    ⭐ 60% Privado
+                                </button>
+                                <button type="button" class="btn btn-xs btn-outline" onclick="window.ClinicalERP.setEditGainPreset(50)" style="font-size: 0.72rem; font-weight: 700;">
+                                    50% / 50%
+                                </button>
+                                <button type="button" class="btn btn-xs btn-outline" onclick="window.ClinicalERP.setEditGainPreset(40)" style="font-size: 0.72rem; font-weight: 700;">
+                                    40% Clínica
+                                </button>
+                                <button type="button" class="btn btn-xs btn-outline" onclick="window.ClinicalERP.setEditGainPreset(30)" style="font-size: 0.72rem; font-weight: 700;">
+                                    30% Clínica
+                                </button>
+                            </div>
                         </h4>
                         <div class="form-row" style="display: grid; grid-template-columns: 1.5fr 1fr 1.2fr; gap: 10px;">
                             <div class="form-group">
@@ -7984,6 +7998,36 @@
                                         <select id="ds-doctor-select" class="form-control" style="display: none !important;">
                                             <!-- Doctors loaded dynamically -->
                                         </select>
+
+                                        <!-- Esquema de Honorarios y Paciente Privado -->
+                                        <div id="ds-doctor-commission-box" style="margin-top: 10px; background: #f8fafc; border: 1.5px solid var(--border-color); border-radius: 8px; padding: 10px 12px;">
+                                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
+                                                <label style="display: flex; align-items: center; gap: 6px; font-size: 0.82rem; font-weight: 700; color: #1e293b; cursor: pointer;">
+                                                    <input type="checkbox" id="ds-is-private-patient" onchange="window.onDirectSalePrivatePatientToggle(this.checked)" style="accent-color: #7c3aed; width: 16px; height: 16px;">
+                                                    <span><i class="fa-solid fa-user-tag" style="color: #7c3aed;"></i> Paciente Privado (Aportado por el Doctor)</span>
+                                                </label>
+                                                <span class="badge-tag purple" id="ds-scheme-badge" style="font-size: 0.72rem; display: none;">⭐ Esquema 60% Doctor / 40% Clínica</span>
+                                            </div>
+                                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: center;">
+                                                <div>
+                                                    <label style="font-size: 0.74rem; font-weight: 700; color: #475569; display: block; margin-bottom: 2px;">Comisión Doctor (%):</label>
+                                                    <div style="display: flex; align-items: center; gap: 4px;">
+                                                        <input type="number" id="ds-doctor-rate" class="form-control" min="0" max="100" step="1" value="40" oninput="window.onDirectSaleDoctorRateChange(this.value)" style="height: 32px; font-size: 0.85rem; font-weight: 700; width: 85px; text-align: center;">
+                                                        <span style="font-size: 0.85rem; font-weight: 700; color: #0d9488;">%</span>
+                                                    </div>
+                                                </div>
+                                                <div style="text-align: right;">
+                                                    <label style="font-size: 0.74rem; font-weight: 700; color: #475569; display: block; margin-bottom: 2px;">Margen Clínica (%):</label>
+                                                    <span id="ds-clinic-rate-display" style="font-size: 1rem; font-weight: 800; color: #0f172a;">60%</span>
+                                                </div>
+                                            </div>
+                                            <div style="display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap;">
+                                                <button type="button" class="btn btn-xs btn-outline" onclick="window.setDirectSaleDoctorRatePreset(60, true)" style="font-size: 0.72rem; font-weight: 700; color: #7c3aed; border-color: #c4b5fd; background: #f5f3ff;">⭐ 60% Privado</button>
+                                                <button type="button" class="btn btn-xs btn-outline" onclick="window.setDirectSaleDoctorRatePreset(50, false)" style="font-size: 0.72rem; font-weight: 700;">50% / 50%</button>
+                                                <button type="button" class="btn btn-xs btn-outline" onclick="window.setDirectSaleDoctorRatePreset(40, false)" style="font-size: 0.72rem; font-weight: 700;">40% Clínica</button>
+                                                <button type="button" class="btn btn-xs btn-outline" onclick="window.setDirectSaleDoctorRatePreset(30, false)" style="font-size: 0.72rem; font-weight: 700;">30% Clínica</button>
+                                            </div>
+                                        </div>
                                     </div>
                                     <div id="ds-assistant-group" style="display: none;">
                                         <label style="font-size: 0.78rem; font-weight: 700; color: #475569; display: block; margin-bottom: 4px;"><i class="fa-solid fa-user-nurse text-cyan"></i> Asistente de Turno <span id="ds-assistant-dental-badge" style="font-size: 0.7rem; color: #0284c7; font-weight: 500;">(Solo Odontología)</span></label>
@@ -9120,14 +9164,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=398"></script>
-    <script src="supabaseClient.js?v=398"></script>
-    <script src="odontogram.js?v=398"></script>
-    <script src="signature.js?v=398"></script>
-    <script src="whatsapp.js?v=398"></script>
-    <script src="kardex.js?v=398"></script>
-    <script src="app.js?v=398"></script>
-    <script src="clinicalERP.js?v=398"></script>
-    <script src="tutorial.js?v=398"></script>
+    <script src="seededData.js?v=399"></script>
+    <script src="supabaseClient.js?v=399"></script>
+    <script src="odontogram.js?v=399"></script>
+    <script src="signature.js?v=399"></script>
+    <script src="whatsapp.js?v=399"></script>
+    <script src="kardex.js?v=399"></script>
+    <script src="app.js?v=399"></script>
+    <script src="clinicalERP.js?v=399"></script>
+    <script src="tutorial.js?v=399"></script>
 </body>
 </html>

@@ -2934,6 +2934,16 @@
             if (modal) modal.classList.remove('hidden');
         },
 
+        setEditGainPreset(docRate) {
+            const rateInput = document.getElementById('edit-gain-doc-rate');
+            const typeSelect = document.getElementById('edit-gain-doc-type');
+            if (typeSelect) typeSelect.value = 'percentage';
+            if (rateInput) {
+                rateInput.value = docRate;
+                this.recalcEditGainPreview();
+            }
+        },
+
         toggleEditAssistantFields(checked) {
             const wrap = document.getElementById('edit-gain-assistant-fields');
             if (wrap) {
@@ -2987,6 +2997,8 @@
             const astAmt = hasAst ? (astType === 'percentage' ? (price * astRate) / 100 : astRate) : 0;
 
             item.service_price = price;
+            item.is_private_patient = (docRate === 60);
+            item.patient_type = (docRate === 60) ? 'Privado (60/40)' : 'Clínica';
             if (!item.doctor) item.doctor = { status: 'Pendiente' };
             item.doctor.name = docName || item.doctor.name || 'Médico Tratante';
             item.doctor.type = docType;
