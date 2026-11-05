@@ -1529,6 +1529,7 @@ function applyRolePermissionsUI(role) {
     // Settings panes restriction:
     // For assistant / hygienist: ONLY "Apariencia y Tema" and "Mi Perfil Personal"
     const paneBusBtn = document.getElementById('btn-pane-business');
+    const paneBanksBtn = document.getElementById('btn-pane-banks');
     const paneSysUsersBtn = document.getElementById('btn-pane-system-users');
     const paneTrashBtn = document.getElementById('btn-pane-trash');
     const paneAuditBtn = document.getElementById('btn-pane-audit');
@@ -1537,6 +1538,7 @@ function applyRolePermissionsUI(role) {
 
     if (roleType === 'assistant') {
         if (paneBusBtn) paneBusBtn.style.display = 'none';
+        if (paneBanksBtn) paneBanksBtn.style.display = 'none';
         if (paneSysUsersBtn) paneSysUsersBtn.style.display = 'none';
         if (paneTrashBtn) paneTrashBtn.style.display = 'none';
         if (paneAuditBtn) paneAuditBtn.style.display = 'none';
@@ -1544,6 +1546,7 @@ function applyRolePermissionsUI(role) {
         if (paneAppearanceBtn) paneAppearanceBtn.style.display = 'flex';
     } else if (roleType === 'doctor') {
         if (paneBusBtn) paneBusBtn.style.display = 'none';
+        if (paneBanksBtn) paneBanksBtn.style.display = 'none';
         if (paneSysUsersBtn) paneSysUsersBtn.style.display = 'none';
         if (paneTrashBtn) paneTrashBtn.style.display = 'none';
         if (paneAuditBtn) paneAuditBtn.style.display = 'none';
@@ -1551,6 +1554,7 @@ function applyRolePermissionsUI(role) {
         if (paneAppearanceBtn) paneAppearanceBtn.style.display = 'flex';
     } else {
         if (paneBusBtn) paneBusBtn.style.display = 'flex';
+        if (paneBanksBtn) paneBanksBtn.style.display = 'flex';
         if (paneSysUsersBtn) paneSysUsersBtn.style.display = 'flex';
         if (paneTrashBtn) paneTrashBtn.style.display = 'flex';
         if (paneAuditBtn) paneAuditBtn.style.display = 'flex';
@@ -9086,7 +9090,11 @@ window.saveFinancialAccountsToStorage = function(accounts) {
     } catch (e) {
         console.error('Error saving dental_financial_accounts', e);
     }
-    if (window.SupabaseDataService && typeof window.SupabaseDataService.saveClinicConfigItem === 'function') {
+    if (window.SupabaseDataService && typeof window.SupabaseDataService.saveFinancialAccounts === 'function') {
+        window.SupabaseDataService.saveFinancialAccounts(accounts).catch(err => {
+            console.warn('[Supabase] Warning syncing financial accounts:', err);
+        });
+    } else if (window.SupabaseDataService && typeof window.SupabaseDataService.saveClinicConfigItem === 'function') {
         window.SupabaseDataService.saveClinicConfigItem('financial_accounts', accounts).catch(() => {});
     }
 };
@@ -9274,6 +9282,195 @@ window.deleteFinancialAccount = function(id) {
             window.renderFinancialAccountsTable();
         }
     }
+};
+
+// ============================================================================
+// SUPER ADMINISTRATOR: BANCOS Y CUENTAS FINANCIERAS (CATÁLOGO Y CONFIGURACIÓN)
+// ============================================================================
+window.renderSettingsBanksTable = function() {
+    const tbody = document.getElementById('set-banks-table-body');
+    const badge = document.getElementById('set-bank-count-badge');
+    if (!tbody) return;
+
+    const accounts = window.getFinancialAccounts();
+    if (badge) {
+        const activeCount = accounts.filter(a => a.status === 'active').length;
+        badge.textContent = `${accounts.length} entidad${accounts.length === 1 ? '' : 'es'} (${activeCount} activas)`;
+    }
+
+    if (accounts.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding: 24px;"><i class="fa-solid fa-building-columns" style="font-size:1.8rem; opacity:0.4; display:block; margin-bottom:6px;"></i>No hay entidades bancarias ni cuentas registradas. Registre una nueva en el formulario superior.</td></tr>';
+        return;
+    }
+
+    const typeLabels = {
+        pos: '💳 Punto de Venta (POS)',
+        pagomovil: '📱 Pago Móvil',
+        transferencia: '🏦 Transferencia Bancaria',
+        zelle: '🇺🇸 Zelle / Int.',
+        cash: '💵 Caja Efectivo USD',
+        cash_bs: '🇻🇪 Caja Efectivo Bs.',
+        otro: '⚙️ Otro Instrumento'
+    };
+
+    tbody.innerHTML = accounts.map(acc => {
+        const isActive = acc.status === 'active';
+        const statusBadge = isActive 
+            ? `<span class="badge-tag green" style="font-size:0.75rem; cursor:pointer;" onclick="window.toggleSettingsBankStatus('${acc.id}')" title="Clic para alternar estado">🟢 Activo</span>`
+            : `<span class="badge-tag gray" style="font-size:0.75rem; cursor:pointer;" onclick="window.toggleSettingsBankStatus('${acc.id}')" title="Clic para activar">🔴 Inactivo</span>`;
+        
+        return `
+            <tr style="font-size: 0.85rem; border-bottom: 1px solid var(--border-color);">
+                <td><strong>${acc.name}</strong></td>
+                <td><span style="font-weight: 600; color: #1e40af;"><i class="fa-solid fa-building-columns"></i> ${acc.bank || '<span class="text-muted">No especificado</span>'}</span></td>
+                <td><span class="badge-tag blue" style="font-size: 0.72rem;">${typeLabels[acc.type] || acc.type}</span></td>
+                <td style="text-align: center;"><span class="badge-tag ${acc.currency === 'USD' ? 'green' : 'amber'}" style="font-size: 0.72rem; font-weight:700;">${acc.currency || 'BS'}</span></td>
+                <td style="text-align: center;"><strong>${(parseFloat(acc.commission) || 0).toFixed(2)}%</strong></td>
+                <td style="text-align: center;">${statusBadge}</td>
+                <td style="text-align: right;">
+                    <div style="display: inline-flex; gap: 4px; justify-content: flex-end;">
+                        <button type="button" class="btn btn-xs btn-outline" onclick="window.editSettingsBank('${acc.id}')" title="Editar entidad" style="padding: 3px 8px; font-size: 0.74rem; color: #0284c7; border-color: #0284c7;">
+                            <i class="fa-solid fa-pen"></i> Editar
+                        </button>
+                        <button type="button" class="btn btn-xs btn-outline text-red" onclick="window.deleteSettingsBank('${acc.id}')" title="Eliminar entidad" style="padding: 3px 8px; font-size: 0.74rem; border-color: #fca5a5;">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+};
+
+window.saveSettingsBankSubmit = function(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    const idEl = document.getElementById('set-bank-id');
+    const nameEl = document.getElementById('set-bank-name');
+    const bankEl = document.getElementById('set-bank-entity');
+    const typeEl = document.getElementById('set-bank-type');
+    const curEl = document.getElementById('set-bank-currency');
+    const comEl = document.getElementById('set-bank-commission');
+    const statusEl = document.getElementById('set-bank-status');
+
+    const name = (nameEl ? nameEl.value : '').trim();
+    const bank = (bankEl ? bankEl.value : '').trim();
+    if (!name || !bank) {
+        Swal.fire({ icon: 'warning', title: 'Campos requeridos', text: 'Indique el nombre identificador y la entidad bancaria.' });
+        return;
+    }
+
+    const type = typeEl ? typeEl.value : 'pagomovil';
+    const currency = curEl ? curEl.value : 'BS';
+    const commission = parseFloat(comEl ? comEl.value : 0) || 0;
+    const status = statusEl ? statusEl.value : 'active';
+
+    const accounts = window.getFinancialAccounts();
+    const editId = idEl ? idEl.value.trim() : '';
+
+    if (editId) {
+        const idx = accounts.findIndex(a => a.id === editId);
+        if (idx !== -1) {
+            accounts[idx] = { ...accounts[idx], name, bank, type, currency, commission, status };
+        }
+    } else {
+        const newId = 'acc_' + type + '_' + Date.now().toString().slice(-6);
+        accounts.push({ id: newId, name, bank, type, currency, commission, status });
+    }
+
+    window.saveFinancialAccountsToStorage(accounts);
+    window.resetSettingsBankForm();
+    window.renderSettingsBanksTable();
+    if (typeof window.renderFinancialAccountsTable === 'function') {
+        window.renderFinancialAccountsTable();
+    }
+
+    Swal.fire({
+        icon: 'success',
+        title: editId ? 'Banco actualizado' : 'Banco registrado',
+        text: `La entidad "${name}" ha sido guardada en la base de datos y sincronizada en la nube.`,
+        timer: 1600,
+        showConfirmButton: false
+    });
+};
+
+window.editSettingsBank = function(id) {
+    const accounts = window.getFinancialAccounts();
+    const acc = accounts.find(a => a.id === id);
+    if (!acc) return;
+
+    document.getElementById('set-bank-id').value = acc.id;
+    document.getElementById('set-bank-name').value = acc.name || '';
+    document.getElementById('set-bank-entity').value = acc.bank || '';
+    document.getElementById('set-bank-type').value = acc.type || 'pagomovil';
+    document.getElementById('set-bank-currency').value = acc.currency || 'BS';
+    document.getElementById('set-bank-commission').value = acc.commission !== undefined ? acc.commission : 0;
+    document.getElementById('set-bank-status').value = acc.status || 'active';
+
+    const title = document.getElementById('set-bank-form-title');
+    if (title) title.innerHTML = `<i class="fa-solid fa-pen-to-square text-cyan"></i> Editando Entidad: <strong>${acc.name}</strong>`;
+    const btnCancel = document.getElementById('set-bank-cancel-btn');
+    if (btnCancel) btnCancel.classList.remove('hidden');
+    const btnSubmit = document.getElementById('set-bank-submit-btn');
+    if (btnSubmit) btnSubmit.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> Actualizar Entidad Bancaria`;
+
+    const formEl = document.getElementById('form-settings-bank');
+    if (formEl) formEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+};
+
+window.resetSettingsBankForm = function() {
+    const form = document.getElementById('form-settings-bank');
+    if (form) form.reset();
+    const idEl = document.getElementById('set-bank-id');
+    if (idEl) idEl.value = '';
+    const title = document.getElementById('set-bank-form-title');
+    if (title) title.innerHTML = `<i class="fa-solid fa-circle-plus text-cyan"></i> Registrar Nueva Entidad Bancaria o Cuenta`;
+    const btnCancel = document.getElementById('set-bank-cancel-btn');
+    if (btnCancel) btnCancel.classList.add('hidden');
+    const btnSubmit = document.getElementById('set-bank-submit-btn');
+    if (btnSubmit) btnSubmit.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> Guardar Entidad Bancaria`;
+};
+
+window.toggleSettingsBankStatus = function(id) {
+    const accounts = window.getFinancialAccounts();
+    const acc = accounts.find(a => a.id === id);
+    if (!acc) return;
+    acc.status = acc.status === 'active' ? 'inactive' : 'active';
+    window.saveFinancialAccountsToStorage(accounts);
+    window.renderSettingsBanksTable();
+    if (typeof window.renderFinancialAccountsTable === 'function') {
+        window.renderFinancialAccountsTable();
+    }
+};
+
+window.deleteSettingsBank = function(id) {
+    const user = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (typeof canCurrentUserDelete === 'function' && !canCurrentUserDelete(user)) {
+        Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Su rol no cuenta con permisos para eliminar entidades bancarias.' });
+        return;
+    }
+    const accounts = window.getFinancialAccounts();
+    const acc = accounts.find(a => a.id === id);
+    if (!acc) return;
+
+    Swal.fire({
+        title: '¿Eliminar entidad bancaria?',
+        text: `¿Desea eliminar "${acc.name}" (${acc.bank})? Los comprobantes previos mantendrán su nombre histórico.`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#ef4444'
+    }).then(res => {
+        if (res.isConfirmed) {
+            const updated = accounts.filter(a => a.id !== id);
+            window.saveFinancialAccountsToStorage(updated);
+            window.renderSettingsBanksTable();
+            if (typeof window.renderFinancialAccountsTable === 'function') {
+                window.renderFinancialAccountsTable();
+            }
+            Swal.fire({ icon: 'success', title: 'Entidad eliminada', timer: 1400, showConfirmButton: false });
+        }
+    });
 };
 
 window.populateAccountSelects = function(rawMethod, selectElementId, groupElementId, labelElementId) {
@@ -10752,10 +10949,14 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
                 let balAmt = 0;
                 if (isCashea) {
                     balAmt = 0;
+                } else if (b.status === 'Pagado' || b.status === 'Pagada' || b.status === 'Aprobado' || b.status === 'Liquidado Cashea') {
+                    balAmt = 0;
+                } else if (paidAmt >= totRef) {
+                    balAmt = 0;
                 } else if (b.balanceRef !== undefined) {
-                    balAmt = parseFloat(b.balanceRef);
+                    balAmt = Math.max(0, parseFloat(b.balanceRef));
                 } else if (b.metadata?.balanceUSD !== undefined) {
-                    balAmt = parseFloat(b.metadata.balanceUSD);
+                    balAmt = Math.max(0, parseFloat(b.metadata.balanceUSD));
                 } else {
                     balAmt = Math.max(0, totRef - paidAmt);
                 }
@@ -10763,7 +10964,7 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
                 let statusLabel = 'Pendiente';
                 if (isCashea) {
                     statusLabel = 'Financiado Cashea';
-                } else if (balAmt <= 0 || b.status === 'Pagado' || b.status === 'Pagada') {
+                } else if (balAmt <= 0 || b.status === 'Pagado' || b.status === 'Pagada' || b.status === 'Aprobado') {
                     statusLabel = 'Pagado';
                 } else if (paidAmt > 0) {
                     statusLabel = 'Abono Parcial';
@@ -10813,10 +11014,18 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
                     if (payDocId) processedEhrPayKeys.add(payDocId);
                     if (payRef) processedEhrPayKeys.add(payRef);
 
+                    const isCashea = !!(p.isCashea || (p.concept && p.concept.toLowerCase().includes('cashea')) || (p.method && p.method.toLowerCase().includes('cashea')));
                     const tot = parseFloat(p.totalUSD || p.paidUSD || 0);
                     const paid = parseFloat(p.paidUSD || 0);
-                    const bal = p.balanceUSD !== undefined ? parseFloat(p.balanceUSD) : Math.max(0, tot - paid);
-                    const st = p.status || (bal <= 0 ? 'Pagado' : 'Abono Parcial');
+                    let bal = 0;
+                    if (isCashea || p.status === 'Pagado' || p.status === 'Pagada' || paid >= tot) {
+                        bal = 0;
+                    } else if (p.balanceUSD !== undefined) {
+                        bal = Math.max(0, parseFloat(p.balanceUSD));
+                    } else {
+                        bal = Math.max(0, tot - paid);
+                    }
+                    const st = isCashea ? 'Financiado Cashea' : (p.status || (bal <= 0 ? 'Pagado' : 'Abono Parcial'));
 
                     allPaymentsList.push({
                         date: p.date || new Date().toISOString().split('T')[0],
@@ -10829,8 +11038,8 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
                         paidUSD: paid,
                         balanceUSD: bal,
                         status: st,
-                        isCashea: !!p.isCashea,
-                        casheaFinancedUSD: 0
+                        isCashea: isCashea,
+                        casheaFinancedUSD: isCashea ? (parseFloat(p.casheaDetails?.financedUSD || (tot - paid)) || 0) : 0
                     });
                 });
             }
@@ -10838,15 +11047,45 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
             // Ordenar pagos del más reciente al más antiguo
             allPaymentsList.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
 
-            // Calcular métricas de balance total del paciente
+            // Calcular métricas de balance total del paciente con rigor contable sin duplicidades ni saldos fantasma
             let totalQuoted = 0;
             let totalPaid = 0;
-            let totalDebt = 0;
+            let casheaFinancedTotal = 0;
 
             allPaymentsList.forEach(pay => {
-                totalQuoted += pay.totalUSD;
-                totalPaid += pay.paidUSD;
-                totalDebt += pay.balanceUSD;
+                const isReceipt = String(pay.docId || '').startsWith('REC-') || String(pay.concept || '').toLowerCase().includes('recibo de abono');
+                totalPaid += (pay.paidUSD || 0);
+                if (pay.isCashea) {
+                    casheaFinancedTotal += (pay.casheaFinancedUSD || 0);
+                    pay.balanceUSD = 0;
+                } else if (pay.status === 'Pagado' || pay.status === 'Pagada' || pay.status === 'Aprobado' || pay.status === 'Liquidado Cashea' || pay.paidUSD >= pay.totalUSD) {
+                    pay.balanceUSD = 0;
+                }
+
+                if (!isReceipt) {
+                    totalQuoted += (pay.totalUSD || 0);
+                } else if (totalQuoted === 0) {
+                    totalQuoted += (pay.paidUSD || 0);
+                }
+            });
+
+            if (totalQuoted < totalPaid) {
+                totalQuoted = totalPaid;
+            }
+
+            let totalDebt = Math.max(0, totalQuoted - totalPaid - casheaFinancedTotal);
+            if (totalDebt < 0.01) totalDebt = 0;
+
+            // Si el balance global del paciente está en cero o liquidado, asegurar que ninguna fila muestre saldo fantasma
+            allPaymentsList.forEach(pay => {
+                if (pay.isCashea || pay.status === 'Pagado' || pay.status === 'Pagada' || pay.status === 'Liquidado Cashea') {
+                    pay.balanceUSD = 0;
+                } else if (totalDebt === 0) {
+                    pay.balanceUSD = 0;
+                    if (pay.status === 'Abono Parcial' || pay.status === 'Pendiente') {
+                        pay.status = 'Pagado';
+                    }
+                }
             });
 
             // Actualizar banner de resumen financiero
@@ -11661,16 +11900,22 @@ async function exportEHRToPDF() {
         const allInvoices = await SupabaseDataService.getInvoices();
         const patientBudgets = allInvoices.filter(i => String(i.patientId) === String(patient.id));
         patientBudgets.forEach(b => {
+            const isCashea = !!(b.is_cashea || b.casheaDetails || b.metadata?.isCashea || b.paymentTerms === 'Financiamiento Cashea');
+            const isPaid = b.status === 'Aprobado' || b.status === 'Pagado' || b.status === 'Pagada' || b.status === 'Liquidado Cashea';
+            const tot = parseFloat(b.totalRef !== undefined ? b.totalRef : (b.totalUSD || 0));
+            const paid = isPaid ? tot : (isCashea ? parseFloat(b.casheaDetails?.initialPaidUSD || b.paidRef || 0) : parseFloat(b.paidRef || 0));
+            const bal = (isCashea || isPaid || paid >= tot) ? 0 : Math.max(0, tot - paid);
+
             allPayments.push({
                 date: b.invoiceDate || '2026-01-01',
-                concept: `Presupuesto ${b.id} (${b.paymentTerms || 'Contado'})`,
+                concept: isCashea ? `Factura Cashea ${b.id}` : `Documento ${b.id} (${b.paymentTerms || 'Contado'})`,
                 method: b.paymentMethod || 'transferencia',
                 bank: b.bank || 'Caja Principal',
                 reference: b.reference || b.id,
-                totalUSD: parseFloat(b.totalRef || 0),
-                paidUSD: b.status === 'Aprobado' ? parseFloat(b.totalRef || 0) : 0,
-                balanceUSD: b.status === 'Aprobado' ? 0 : parseFloat(b.totalRef || 0),
-                status: b.status === 'Aprobado' ? 'Pagado' : 'Pendiente'
+                totalUSD: tot,
+                paidUSD: paid,
+                balanceUSD: bal,
+                status: isCashea ? 'Financiado Cashea' : (isPaid || bal <= 0 ? 'Pagado' : 'Pendiente')
             });
         });
     } catch(e) {}
@@ -11678,16 +11923,22 @@ async function exportEHRToPDF() {
     // Direct and Session Payments
     if (patient.payments && patient.payments.length > 0) {
         patient.payments.forEach(pay => {
+            const isCashea = !!(pay.isCashea || (pay.concept && pay.concept.toLowerCase().includes('cashea')) || (pay.method && pay.method.toLowerCase().includes('cashea')));
+            const tot = parseFloat(pay.totalUSD || pay.paidUSD || 0);
+            const paid = parseFloat(pay.paidUSD || 0);
+            const bal = (isCashea || pay.status === 'Pagado' || pay.status === 'Pagada' || paid >= tot) ? 0 : (pay.balanceUSD !== undefined ? Math.max(0, parseFloat(pay.balanceUSD)) : Math.max(0, tot - paid));
+            const st = isCashea ? 'Financiado Cashea' : (pay.status || (bal <= 0 ? 'Pagado' : 'Abono Parcial'));
+
             allPayments.push({
                 date: pay.date || new Date().toISOString().split('T')[0],
                 concept: pay.concept || 'Abono Registrado',
                 method: pay.method || 'cash',
                 bank: pay.bank || (pay.method === 'cash' ? 'Efectivo en Mano' : 'No especificado'),
                 reference: pay.reference || 'N/A',
-                totalUSD: parseFloat(pay.totalUSD || 0),
-                paidUSD: parseFloat(pay.paidUSD || 0),
-                balanceUSD: parseFloat(pay.balanceUSD || 0),
-                status: pay.status || 'Pagado'
+                totalUSD: tot,
+                paidUSD: paid,
+                balanceUSD: bal,
+                status: st
             });
         });
     }
@@ -22912,6 +23163,10 @@ async function renderSettingsView() {
 
             if (paneName === 'system-users' && typeof window.renderSystemUsersTable === 'function') {
                 window.renderSystemUsersTable();
+            }
+
+            if (paneName === 'banks' && typeof window.renderSettingsBanksTable === 'function') {
+                window.renderSettingsBanksTable();
             }
         };
     });

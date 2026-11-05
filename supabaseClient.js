@@ -2024,6 +2024,51 @@ class SupabaseDataService {
 
     // ==========================================
     // ==========================================
+    // FINANCIAL ACCOUNTS & BANKS CATALOG (100% CLOUD & MULTI-DEVICE PERSISTENCE)
+    // ==========================================
+    static async getFinancialAccounts() {
+        let accounts = [];
+        try {
+            const raw = localStorage.getItem('dental_financial_accounts');
+            if (raw) accounts = JSON.parse(raw);
+        } catch(e) {}
+        if (this.isCloudConnected()) {
+            try {
+                const { data } = await supabaseClient.from('patients').select('odontogram_data').eq('id', 'SYS-FINANCIAL-ACCOUNTS').maybeSingle();
+                if (data && data.odontogram_data && Array.isArray(data.odontogram_data.accounts)) {
+                    accounts = data.odontogram_data.accounts;
+                    localStorage.setItem('dental_financial_accounts', JSON.stringify(accounts));
+                }
+            } catch(e) {
+                console.warn('[Supabase] getFinancialAccounts caught:', e);
+            }
+        }
+        return accounts;
+    }
+
+    static async saveFinancialAccounts(accounts) {
+        if (!Array.isArray(accounts)) return;
+        localStorage.setItem('dental_financial_accounts', JSON.stringify(accounts));
+        if (!this.isCloudConnected()) return;
+        try {
+            await supabaseClient.from('patients').upsert({
+                id: 'SYS-FINANCIAL-ACCOUNTS',
+                fullname: 'Catálogo de Bancos y Cuentas Financieras',
+                birthdate: '2026-01-01',
+                phone: '',
+                status: 'Sistema',
+                odontogram_data: {
+                    _is_system_config: true,
+                    accounts: accounts,
+                    updatedAt: new Date().toISOString()
+                }
+            });
+        } catch(err) {
+            console.warn('[Supabase] Error saving financial accounts to Cloud:', err);
+        }
+    }
+
+    // ==========================================
     // 9. AUDIT LOGS & RECYCLE BIN PERSISTENCE (100% CLOUD GUARANTEED)
     // ==========================================
     static async saveAuditLog(logEntry) {
