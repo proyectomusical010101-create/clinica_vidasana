@@ -1630,6 +1630,24 @@ function applyRolePermissionsUI(role) {
         editClinicalWizardBtn.style.display = 'inline-flex';
     }
 
+    // Presupuestos: Revocación estricta de privilegios de elaboración/cotización de presupuestos a Recepción
+    const isRecepRole = typeof isReceptionOrCashierRole === 'function' ? isReceptionOrCashierRole(role) : ((role || '').toLowerCase().includes('recep') || (role || '').toLowerCase().includes('caja'));
+    const btnNewBudgetEl = document.getElementById('btn-new-budget');
+    const headerNewBudgetEl = document.getElementById('header-action-new-budget');
+    const btnUpdateBudgetEditsEl = document.getElementById('btn-update-budget-edits');
+    const btnApproveBudgetEl = document.getElementById('btn-approve-budget');
+    if (isRecepRole) {
+        if (btnNewBudgetEl) btnNewBudgetEl.style.display = 'none';
+        if (headerNewBudgetEl) headerNewBudgetEl.style.display = 'none';
+        if (btnUpdateBudgetEditsEl) btnUpdateBudgetEditsEl.style.display = 'none';
+        if (btnApproveBudgetEl) btnApproveBudgetEl.style.display = 'none';
+    } else {
+        if (btnNewBudgetEl) btnNewBudgetEl.style.display = 'inline-flex';
+        if (headerNewBudgetEl) headerNewBudgetEl.style.display = 'flex';
+        if (btnUpdateBudgetEditsEl) btnUpdateBudgetEditsEl.style.display = 'inline-flex';
+        if (btnApproveBudgetEl) btnApproveBudgetEl.style.display = 'inline-flex';
+    }
+
     // Hide/show doctor signature pad in profile adjustments
     const docSigSection = document.getElementById('doctor-signature-setting-section');
     if (docSigSection) {
@@ -3042,6 +3060,7 @@ async function renderBudgetListView(forceRefresh = false) {
     const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
     const isDoctor = currentUser && (typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false);
     const isHygienist = currentUser && (typeof isHygienistRole === 'function' ? isHygienistRole(currentUser.role) : (currentUser.role && currentUser.role.toLowerCase().includes('higien')));
+    const isRecep = currentUser && (typeof isReceptionOrCashierUser === 'function' ? isReceptionOrCashierUser(currentUser) : (currentUser.role && (currentUser.role.toLowerCase().includes('recep') || currentUser.role.toLowerCase().includes('caja'))));
     const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor && !isHygienist);
     const hideContact = typeof shouldHidePatientContact === 'function' && shouldHidePatientContact(currentUser);
 
@@ -3678,6 +3697,14 @@ window.activeMedicalSpecialtyCategory = 'Consultas Médicas';
 
 window.openSelectBudgetTypeModal = async function(patientId = null) {
     const cur = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (cur && typeof isReceptionOrCashierUser === 'function' && isReceptionOrCashierUser(cur)) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Acceso Restringido',
+            text: 'El rol de Recepción no está autorizado para elaborar o cotizar presupuestos médicos. Esta función corresponde exclusivamente al personal clínico o administrativo autorizado.'
+        });
+        return;
+    }
     if (cur && typeof isDoctorUser === 'function' && isDoctorUser(cur)) {
         if (typeof isDentalDoctor === 'function' && isDentalDoctor(cur)) {
             // Dental doctor -> route to Odontología
@@ -3705,6 +3732,15 @@ window.openSelectBudgetTypeModal = async function(patientId = null) {
 
 window.startBudgetCreation = async function(category) {
     closeModal('modal-select-budget-type');
+    const cur = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (cur && typeof isReceptionOrCashierUser === 'function' && isReceptionOrCashierUser(cur)) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Acceso Restringido',
+            text: 'El rol de Recepción no está autorizado para elaborar o cotizar presupuestos médicos. Esta función corresponde exclusivamente al personal clínico o administrativo autorizado.'
+        });
+        return;
+    }
     if (typeof window.navigateToTab === 'function') {
         await window.navigateToTab('odontogram');
     }
@@ -4408,6 +4444,18 @@ window.renderMedicalBudgetItems = function() {
 };
 
 window.saveMedicalBudget = async function(status = 'Presupuesto', silent = false) {
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (curUser && typeof isReceptionOrCashierUser === 'function' && isReceptionOrCashierUser(curUser)) {
+        if (!silent) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Acceso Restringido',
+                text: 'El rol de Recepción no está autorizado para elaborar o cotizar presupuestos médicos. Esta función corresponde exclusivamente al personal clínico o administrativo autorizado.'
+            });
+        }
+        return null;
+    }
+
     const patientSelect = document.getElementById('med-budget-patient-select');
     const patientId = patientSelect ? patientSelect.value : null;
 
@@ -6194,6 +6242,7 @@ async function renderPatientsTable(filter = null, searchQuery = null, highlightP
     const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
     const isDoctor = currentUser && (typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false);
     const isHygienist = currentUser && (typeof isHygienistRole === 'function' ? isHygienistRole(currentUser.role) : (currentUser.role && currentUser.role.toLowerCase().includes('higien')));
+    const isRecep = currentUser && (typeof isReceptionOrCashierUser === 'function' ? isReceptionOrCashierUser(currentUser) : (currentUser.role && (currentUser.role.toLowerCase().includes('recep') || currentUser.role.toLowerCase().includes('caja'))));
     const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor && !isHygienist);
     const hideContact = typeof shouldHidePatientContact === 'function' && shouldHidePatientContact(currentUser);
 
@@ -6364,9 +6413,9 @@ async function renderPatientsTable(filter = null, searchQuery = null, highlightP
                     ${!isDoctor ? `<button class="btn btn-xs btn-outline btn-act-icon btn-act-cobrar" onclick="window.openDirectSaleModal('${p.id}')" title="Venta Directa / Cobro Rápido">
                         <i class="fa-solid fa-bolt"></i>
                     </button>` : ''}
-                    <button class="btn btn-xs btn-primary btn-act-presupuesto" onclick="selectPatientForOdontogram('${p.id}')" title="Emitir Presupuesto">
+                    ${!isRecep ? `<button class="btn btn-xs btn-primary btn-act-presupuesto" onclick="selectPatientForOdontogram('${p.id}')" title="Emitir Presupuesto">
                         <i class="fa-solid fa-tooth"></i> <span>Presupuesto</span>
-                    </button>
+                    </button>` : ''}
                     <button class="btn btn-xs btn-outline btn-act-icon btn-act-editar" onclick="window.editPatient('${p.id}')" title="Editar Ficha / Historia">
                         <i class="fa-solid fa-pen-to-square"></i>
                     </button>
@@ -7322,6 +7371,14 @@ function calculateAge(birthdateStr) {
 
 window.selectPatientForOdontogram = async function(patientId) {
     const cur = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (cur && typeof isReceptionOrCashierUser === 'function' && isReceptionOrCashierUser(cur)) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Acceso Restringido',
+            text: 'El rol de Recepción no está autorizado para elaborar o cotizar presupuestos médicos. Esta función corresponde exclusivamente al personal clínico o administrativo autorizado.'
+        });
+        return;
+    }
     if (cur && typeof isDoctorUser === 'function' && isDoctorUser(cur) && typeof isDentalDoctor === 'function' && !isDentalDoctor(cur)) {
         const spec = cur.doctorProfile?.specialty || cur.doctor_profile?.specialty || cur.role || 'Consultas Médicas';
         if (typeof window.openMedicalBudgetEditor === 'function') {
@@ -7414,6 +7471,15 @@ window.triggerHeaderNewAction = async function(action) {
             openModal('modal-appointment');
         }
     } else if (action === 'new-budget') {
+        const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+        if (curUser && typeof isReceptionOrCashierUser === 'function' && isReceptionOrCashierUser(curUser)) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Acceso Restringido',
+                text: 'El rol de Recepción no está autorizado para elaborar o cotizar presupuestos médicos. Esta función corresponde exclusivamente al personal clínico o administrativo autorizado.'
+            });
+            return;
+        }
         if (typeof window.openSelectBudgetTypeModal === 'function') {
             window.openSelectBudgetTypeModal();
         } else if (typeof openModal === 'function') {
@@ -7784,6 +7850,7 @@ window.openDirectSaleModal = async function(preselectedPatientId = null, initial
     const titleEl = document.getElementById('ds-modal-title');
     const subtitleEl = document.getElementById('ds-modal-subtitle');
     const docGroup = document.getElementById('ds-doctor-group');
+    const staffRow = document.getElementById('ds-staff-row') || (docGroup ? docGroup.closest('.ds-staff-row') : null);
 
     window.clearDirectSaleServiceSearch(false);
 
@@ -7792,12 +7859,14 @@ window.openDirectSaleModal = async function(preselectedPatientId = null, initial
         if (subtitleEl) subtitleEl.textContent = 'Cobro y despacho de bebidas, café, snacks y golosinas.';
         if (specSelect) specSelect.value = 'consumables';
         if (docGroup) docGroup.style.display = 'none';
+        if (staffRow) staffRow.style.display = 'none';
         await window.onDirectSaleSpecialtyChange('consumables');
     } else {
         if (titleEl) titleEl.innerHTML = '<i class="fa-solid fa-bolt text-emerald"></i> Venta Directa & Cobro Rápido de Servicios';
         if (subtitleEl) subtitleEl.textContent = 'Facturación o emisión de Recibo de Abono al instante sin presupuesto previo.';
         if (specSelect) specSelect.value = initialSpecialty || 'all';
-        if (docGroup) docGroup.style.display = 'block';
+        if (docGroup) docGroup.style.display = (initialSpecialty === 'consumables') ? 'none' : 'block';
+        if (staffRow) staffRow.style.display = (initialSpecialty === 'consumables') ? 'none' : 'block';
         await window.onDirectSaleSpecialtyChange(initialSpecialty || 'all');
     }
 
@@ -8065,12 +8134,18 @@ window.onDirectSaleSpecialtyChange = async function(specialty) {
     const baremoSelect = document.getElementById('ds-baremo-select');
     const badge = document.getElementById('ds-service-count-badge');
     const searchInput = document.getElementById('ds-service-search-input');
+    const docGroup = document.getElementById('ds-doctor-group');
+    const staffRow = document.getElementById('ds-staff-row') || (docGroup ? docGroup.closest('.ds-staff-row') : null);
+    const asstGroup = document.getElementById('ds-assistant-group');
 
     if (baremoSelect) {
         baremoSelect.innerHTML = '<option value="">Cargando catálogo...</option>';
     }
 
     if (specialty === 'consumables') {
+        if (docGroup) docGroup.style.display = 'none';
+        if (staffRow) staffRow.style.display = 'none';
+        if (asstGroup) asstGroup.style.display = 'none';
         const consumables = await SupabaseDataService.getConsumables();
         window._currentFilteredDirectSaleServices = consumables.map(c => ({
             code: c.code,
@@ -8101,6 +8176,13 @@ window.onDirectSaleSpecialtyChange = async function(specialty) {
                 }).join('');
         }
         return;
+    }
+
+    const hasClinicalItems = window.currentDirectSaleItems && window.currentDirectSaleItems.some(i => !i.isConsumable && !(i.specialty && i.specialty.toLowerCase().includes('consumib')));
+    const hasOnlyConsumables = window.currentDirectSaleItems && window.currentDirectSaleItems.length > 0 && !hasClinicalItems;
+    if (!hasOnlyConsumables) {
+        if (docGroup) docGroup.style.display = 'block';
+        if (staffRow) staffRow.style.display = 'block';
     }
     const baremo = await SupabaseDataService.getBaremo();
     window._cachedDirectSaleServices = baremo;
@@ -8570,7 +8652,9 @@ window.addDirectSaleService = function() {
 
     const name = opt && opt.value ? (opt.getAttribute('data-name') || opt.text) : 'Servicio Clínico';
     const code = opt && opt.value ? opt.value : 'SRV-' + Date.now().toString().slice(-4);
-    const specialty = opt && opt.getAttribute('data-spec') ? opt.getAttribute('data-spec') : document.getElementById('ds-specialty-select')?.value || 'General';
+    const rawSpec = opt && opt.getAttribute('data-spec') ? opt.getAttribute('data-spec') : (document.getElementById('ds-specialty-select')?.value || 'General');
+    const isConsumable = (opt && opt.getAttribute('data-is-consumable') === 'true') || String(rawSpec).toLowerCase().includes('consumib') || (document.getElementById('ds-specialty-select')?.value === 'consumables');
+    const specialty = isConsumable ? 'Consumibles & Cafetería' : rawSpec;
 
     const price = parseFloat(priceIn?.value) || 0;
     const qty = parseInt(qtyIn?.value) || 1;
@@ -8586,7 +8670,6 @@ window.addDirectSaleService = function() {
     const itemTotalUSD = Math.max(0, itemSubtotal * (1 - discount / 100));
     const itemTotalBs = itemTotalUSD * rate;
 
-    const isConsumable = (opt && opt.getAttribute('data-is-consumable') === 'true') || specialty.includes('Consumible');
     const itemStock = parseInt(opt?.getAttribute('data-stock') || '9999');
     const itemUnit = opt?.getAttribute('data-unit') || 'uds';
 
@@ -8656,6 +8739,21 @@ window.renderDirectSaleItems = function() {
             const asstSelect = document.getElementById('ds-assistant-select');
             if (asstSelect) asstSelect.value = '';
         }
+    }
+
+    // Toggle Doctor & Staff row based on whether sale is purely commercial / consumables
+    const hasClinicalServices = window.currentDirectSaleItems.some(i => !i.isConsumable && !(i.specialty && i.specialty.toLowerCase().includes('consumib')));
+    const isOnlyConsumables = window.currentDirectSaleItems.length > 0 && !hasClinicalServices;
+    const docGroup = document.getElementById('ds-doctor-group');
+    const staffRow = document.getElementById('ds-staff-row') || (docGroup ? docGroup.closest('.ds-staff-row') : null);
+    const specSelect = document.getElementById('ds-specialty-select');
+
+    if (isOnlyConsumables || (specSelect && specSelect.value === 'consumables')) {
+        if (docGroup) docGroup.style.display = 'none';
+        if (staffRow) staffRow.style.display = 'none';
+    } else if (hasClinicalServices) {
+        if (docGroup) docGroup.style.display = 'block';
+        if (staffRow) staffRow.style.display = 'block';
     }
 
     if (window.currentDirectSaleItems.length === 0) {
@@ -9671,7 +9769,8 @@ window.processDirectSale = async function() {
     const docId = docPrefix + Date.now().toString().slice(-6);
 
     let doctor = document.getElementById('ds-doctor-select')?.value;
-    const isOnlyConsumables = window.currentDirectSaleItems.every(i => i.isConsumable);
+    const hasClinicalServices = window.currentDirectSaleItems.some(i => !i.isConsumable && !(i.specialty && i.specialty.toLowerCase().includes('consumib')));
+    const isOnlyConsumables = window.currentDirectSaleItems.length > 0 && !hasClinicalServices;
     if (!isOnlyConsumables && (!doctor || doctor === 'Dr. Médico Tratante' || doctor.trim() === '')) {
         Swal.fire({
             icon: 'warning',
@@ -9680,14 +9779,14 @@ window.processDirectSale = async function() {
         });
         return;
     }
-    if (!doctor || doctor === 'Dr. Médico Tratante') {
-        doctor = isOnlyConsumables ? 'Mostrador / Cafetería' : (doctor || 'Dr. Médico Tratante');
+    if (!doctor || doctor === 'Dr. Médico Tratante' || isOnlyConsumables) {
+        doctor = isOnlyConsumables ? 'Venta Comercial / Mostrador' : (doctor || 'Dr. Médico Tratante');
     }
 
     const cachedDoctors = window._cachedDirectSaleDoctors || [];
-    const foundDoc = cachedDoctors.find(d => (d.fullname || d.name) === doctor || String(d.id) === String(doctor));
-    const docIdFinal = foundDoc ? foundDoc.id : null;
-    const docNameFinal = foundDoc ? (foundDoc.fullname || foundDoc.name) : doctor;
+    const foundDoc = isOnlyConsumables ? null : cachedDoctors.find(d => (d.fullname || d.name) === doctor || String(d.id) === String(doctor));
+    const docIdFinal = isOnlyConsumables ? null : (foundDoc ? foundDoc.id : null);
+    const docNameFinal = isOnlyConsumables ? 'Venta Comercial / Mostrador' : (foundDoc ? (foundDoc.fullname || foundDoc.name) : doctor);
 
     const isDentalSale = window.currentDirectSaleItems.some(i => {
         const s = String((i.specialty || '') + ' ' + (i.name || '')).toLowerCase();
@@ -9715,7 +9814,7 @@ window.processDirectSale = async function() {
         };
     }
 
-    const specialtyPrimary = window.currentDirectSaleItems[0]?.specialty || 'General';
+    const specialtyPrimary = isOnlyConsumables ? 'Consumibles & Cafetería' : (window.currentDirectSaleItems[0]?.specialty || 'General');
     const paymentTerms = isCashea ? 'Financiamiento Cashea' : (saleType === 'credito' && !isFull ? 'Abono Parcial (Crédito)' : 'Contado');
 
     const dsAccEl = document.getElementById('ds-account-select');
@@ -10414,6 +10513,7 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
     const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
     const isDoctor = currentUser && (typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false);
     const isHygienist = currentUser && (typeof isHygienistRole === 'function' ? isHygienistRole(currentUser.role) : (currentUser.role && currentUser.role.toLowerCase().includes('higien')));
+    const isRecep = currentUser && (typeof isReceptionOrCashierUser === 'function' ? isReceptionOrCashierUser(currentUser) : (currentUser.role && (currentUser.role.toLowerCase().includes('recep') || currentUser.role.toLowerCase().includes('caja'))));
     const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor && !isHygienist);
     const hideContact = typeof shouldHidePatientContact === 'function' && shouldHidePatientContact(currentUser);
 
@@ -13659,6 +13759,7 @@ async function renderAgendaView(filter = (window.currentAgendaFilter || 'pending
     const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
     const isDoctor = currentUser && (typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false);
     const isHygienist = currentUser && (typeof isHygienistRole === 'function' ? isHygienistRole(currentUser.role) : (currentUser.role && currentUser.role.toLowerCase().includes('higien')));
+    const isRecep = currentUser && (typeof isReceptionOrCashierUser === 'function' ? isReceptionOrCashierUser(currentUser) : (currentUser.role && (currentUser.role.toLowerCase().includes('recep') || currentUser.role.toLowerCase().includes('caja'))));
     const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor && !isHygienist);
     const hideContact = typeof shouldHidePatientContact === 'function' && shouldHidePatientContact(currentUser);
 
@@ -16553,7 +16654,8 @@ window.populateAllSpecialtySelects = function(selectedNameToSet = null) {
     const dsSpec = document.getElementById('ds-specialty-select');
     if (dsSpec) {
         const currentVal = dsSpec.value;
-        dsSpec.innerHTML = '<option value="all">-- Todas las Especialidades --</option>' +
+        dsSpec.innerHTML = '<option value="all">Todas las Especialidades</option>' +
+            '<option value="consumables">🥤 Consumibles & Cafetería (Bebidas, Snacks, Golosinas)</option>' +
             allSpecs.map(s => `<option value="${s}">${s}</option>`).join('');
         if (currentVal) dsSpec.value = currentVal;
     }
@@ -21668,6 +21770,15 @@ if (patientSameDay.length === 0) {
     const approveBudgetBtn = document.getElementById('btn-approve-budget');
     if (approveBudgetBtn) {
         approveBudgetBtn.onclick = async () => {
+            const curCheck = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+            if (curCheck && typeof isReceptionOrCashierUser === 'function' && isReceptionOrCashierUser(curCheck)) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Acceso Restringido',
+                    text: 'El rol de Recepción no está autorizado para aprobar o emitir presupuestos médicos.'
+                });
+                return;
+            }
             if (window.isSavingBudget) return;
             window.isSavingBudget = true;
             approveBudgetBtn.disabled = true;
@@ -22112,7 +22223,20 @@ if (patientSameDay.length === 0) {
     // Historial y Listado de Presupuestos Buttons
     const btnNewBudget = document.getElementById('btn-new-budget');
     if (btnNewBudget) {
+        const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+        if (curUser && typeof isReceptionOrCashierUser === 'function' && isReceptionOrCashierUser(curUser)) {
+            btnNewBudget.style.display = 'none';
+        }
         btnNewBudget.onclick = () => {
+            const cur = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+            if (cur && typeof isReceptionOrCashierUser === 'function' && isReceptionOrCashierUser(cur)) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Acceso Restringido',
+                    text: 'El rol de Recepción no está autorizado para elaborar o cotizar presupuestos médicos.'
+                });
+                return;
+            }
             if (typeof window.openSelectBudgetTypeModal === 'function') {
                 window.openSelectBudgetTypeModal();
             } else {
@@ -22299,6 +22423,15 @@ if (patientSameDay.length === 0) {
     const btnUpdateBudgetEdits = document.getElementById('btn-update-budget-edits');
     if (btnUpdateBudgetEdits) {
         btnUpdateBudgetEdits.onclick = async () => {
+            const curCheck = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+            if (curCheck && typeof isReceptionOrCashierUser === 'function' && isReceptionOrCashierUser(curCheck)) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Acceso Restringido',
+                    text: 'El rol de Recepción no está autorizado para elaborar o cotizar presupuestos médicos.'
+                });
+                return;
+            }
             const activeId = getActivePatientId();
             if (!activeId) {
                 Swal.fire({ icon: 'warning', title: 'Seleccione un paciente', text: 'Por favor active un paciente antes de guardar.' });
