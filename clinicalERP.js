@@ -4108,9 +4108,18 @@
         // =========================================================
         // 6. SEGUIMIENTO A CASHEA / CRÉDITOS
         // =========================================================
-        openCasheaModal() {
+        async openCasheaModal() {
             const modal = document.getElementById('modal-cashea-tracker');
             if (!modal) return;
+            if (!this.casheaInvoices || !Array.isArray(this.casheaInvoices) || this.casheaInvoices.length === 0) {
+                if (window.SupabaseDataService && typeof window.SupabaseDataService.getCasheaInvoices === 'function') {
+                    try {
+                        this.casheaInvoices = await window.SupabaseDataService.getCasheaInvoices(true);
+                    } catch(e) {
+                        this.casheaInvoices = [];
+                    }
+                }
+            }
             this.renderCasheaList();
             modal.classList.remove('hidden');
         },
@@ -4119,7 +4128,8 @@
             const container = document.getElementById('cashea-list-container');
             if (!container) return;
 
-            if (this.casheaInvoices.length === 0) {
+            const list = Array.isArray(this.casheaInvoices) ? this.casheaInvoices : [];
+            if (list.length === 0) {
                 container.innerHTML = `
                     <div style="padding: 30px; text-align: center; color: #64748b;">
                         <i class="fa-solid fa-credit-card" style="font-size: 2rem; color: #cbd5e1; margin-bottom: 8px;"></i>
@@ -4129,10 +4139,10 @@
                 return;
             }
 
-            container.innerHTML = this.casheaInvoices.map(c => {
-                const total = parseFloat(c.totalRef || c.total_amount || 0);
-                const initial = parseFloat(c.casheaDetails?.initialPaidUSD || c.paidRef || c.paid_amount || 0);
-                const financed = parseFloat(c.casheaDetails?.financedUSD || (total - initial));
+            container.innerHTML = list.map(c => {
+                const total = parseFloat(c.totalRef || c.total_amount || c.totalUSD || c.total || 0);
+                const initial = parseFloat(c.casheaDetails?.initialPaidUSD || c.paidRef || c.paid_amount || c.paidUSD || 0);
+                const financed = parseFloat(c.casheaDetails?.financedUSD || Math.max(0, total - initial));
                 const isSettled = c.casheaDetails?.payoutStatus === 'settled' || c.status === 'Liquidado Cashea';
                 const docId = c.id || c.invoice_number || 'S/N';
                 const patientName = c.patientName || c.patient_name || 'Paciente';

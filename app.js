@@ -8724,6 +8724,10 @@ window.calculateDirectSaleTotals = function() {
             const initialIn = document.getElementById('ds-cashea-initial-input');
             casheaInitialUSD = parseFloat(initialIn ? initialIn.value : 0) || 0;
             casheaFinancedUSD = Math.max(0, totalUSD - casheaInitialUSD);
+            const casheaInitMethod = document.getElementById('ds-cashea-initial-method')?.value || 'pagomovil';
+            if (typeof window.populateAccountSelects === 'function') {
+                window.populateAccountSelects(casheaInitMethod, 'ds-cashea-account-select', 'ds-cashea-account-group', 'ds-cashea-account-label');
+            }
         } else {
             // Split mode
             casheaFinancedUSD = splitCasheaVal;
@@ -8934,6 +8938,12 @@ window.syncModalPaymentBsToUsd = function(bsVal) {
     if (usdInput && rate > 0) {
         const bs = parseFloat(bsVal) || 0;
         usdInput.value = (bs / rate).toFixed(2);
+    }
+};
+
+window.onCasheaInitialMethodChange = function(method) {
+    if (typeof window.populateAccountSelects === 'function') {
+        window.populateAccountSelects(method, 'ds-cashea-account-select', 'ds-cashea-account-group', 'ds-cashea-account-label');
     }
 };
 
@@ -9461,7 +9471,17 @@ window.processDirectSale = async function() {
     let dsAccountId = '';
     let dsAccountName = '';
     let dsCommission = 0;
-    if (dsAccEl && dsAccEl.value && document.getElementById('ds-account-group')?.style.display !== 'none') {
+
+    if (isCashea) {
+        const casheaAccEl = document.getElementById('ds-cashea-account-select');
+        if (casheaAccEl && casheaAccEl.value) {
+            dsAccountId = casheaAccEl.value;
+            const selectedOpt = casheaAccEl.options[casheaAccEl.selectedIndex];
+            dsAccountName = selectedOpt ? (selectedOpt.getAttribute('data-name') || selectedOpt.text) : '';
+            dsCommission = parseFloat(selectedOpt?.getAttribute('data-commission') || 0);
+        }
+    }
+    if (!dsAccountId && dsAccEl && dsAccEl.value && document.getElementById('ds-account-group')?.style.display !== 'none') {
         dsAccountId = dsAccEl.value;
         const selectedOpt = dsAccEl.options[dsAccEl.selectedIndex];
         dsAccountName = selectedOpt ? (selectedOpt.getAttribute('data-name') || selectedOpt.text) : '';
@@ -9497,7 +9517,9 @@ window.processDirectSale = async function() {
         casheaSurchargeUSD,
         casheaFinancedUSD,
         casheaInitialUSD,
-        casheaInitialMethod
+        casheaInitialMethod,
+        casheaAccountId: dsAccountId,
+        casheaAccountName: dsAccountName
     };
 
     try {
@@ -27587,50 +27609,66 @@ async function renderReceivables() {
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    const patients = await SupabaseDataService.getPatients();
-    let count = 0;
-    let totalPatientDebt = 0;
+    try {
+        const patients = (typeof SupabaseDataService !== 'undefined' && SupabaseDataService.getPatients)
+            ? await SupabaseDataService.getPatients()
+            : [];
+        let count = 0;
+        let totalPatientDebt = 0;
 
-    patients.forEach(p => {
-        let pendingPayments = (p.payments || []).filter(pay => (pay.status === 'Pendiente' || pay.balanceUSD > 0.01) && !pay.isCashea);
-        if (pendingPayments.length > 0) {
-            pendingPayments.forEach(pay => {
-                count++;
-                totalPatientDebt += pay.balanceUSD;
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td><strong class="badge-tag blue">${p.id}</strong></td>
-                    <td><strong>${p.fullname}</strong></td>
-                    <td>
-                        <a href="https://wa.me/${p.phone.replace(/[^0-9]/g,'')}" target="_blank" class="whatsapp-pill-link">
-                            <i class="fa-brands fa-whatsapp"></i> ${p.phone}
-                        </a>
-                    </td>
-                    <td>${pay.concept}</td>
-                    <td>$${pay.totalUSD.toFixed(2)}</td>
-                    <td class="text-green">$${pay.paidUSD.toFixed(2)}</td>
-                    <td class="text-red"><strong>$${pay.balanceUSD.toFixed(2)}</strong></td>
-                    <td>
-                        <div class="actions-cell-group">
-                            <button class="btn btn-xs btn-success" onclick="openEHRForPatient('${p.id}')" title="Abonar en EHR"><i class="fa-solid fa-hand-holding-dollar"></i> Cobrar / EHR</button>
-                        </div>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
+        patients.forEach(p => {
+            let pendingPayments = (p.payments || []).filter(pay => (pay.status === 'Pendiente' || (parseFloat(pay.balanceUSD || 0) > 0.01)) && !pay.isCashea);
+            if (pendingPayments.length > 0) {
+                pendingPayments.forEach(pay => {
+                    const bal = parseFloat(pay.balanceUSD || 0);
+                    const tot = parseFloat(pay.totalUSD || 0);
+                    const pd = parseFloat(pay.paidUSD || 0);
+                    count++;
+                    totalPatientDebt += bal;
+                    const phoneClean = p.phone ? String(p.phone).replace(/[^0-9]/g,'') : '';
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td><strong class="badge-tag blue">${p.id}</strong></td>
+                        <td><strong>${p.fullname || 'Paciente'}</strong></td>
+                        <td>
+                            ${phoneClean ? `
+                            <a href="https://wa.me/${phoneClean}" target="_blank" class="whatsapp-pill-link">
+                                <i class="fa-brands fa-whatsapp"></i> ${p.phone}
+                            </a>` : `<span class="text-muted">Sin teléfono</span>`}
+                        </td>
+                        <td>${pay.concept || 'Tratamiento'}</td>
+                        <td>${tot.toFixed(2)}</td>
+                        <td class="text-green">${pd.toFixed(2)}</td>
+                        <td class="text-red"><strong>${bal.toFixed(2)}</strong></td>
+                        <td>
+                            <div class="actions-cell-group">
+                                <button class="btn btn-xs btn-success" onclick="openEHRForPatient('${p.id}')" title="Abonar en EHR"><i class="fa-solid fa-hand-holding-dollar"></i> Cobrar / EHR</button>
+                            </div>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        });
+
+        const kpiPatients = document.getElementById('kpi-receivables-patients');
+        const kpiPatientsCount = document.getElementById('kpi-receivables-patients-count');
+        if (kpiPatients) kpiPatients.innerText = `${totalPatientDebt.toFixed(2)}`;
+        if (kpiPatientsCount) kpiPatientsCount.innerText = `${count} paciente${count === 1 ? '' : 's'} con saldo deudor directo`;
+
+        if (count === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted" style="padding: 15px;">No hay pacientes con créditos o saldos pendientes directos.</td></tr>';
         }
-    });
-
-    const kpiPatients = document.getElementById('kpi-receivables-patients');
-    const kpiPatientsCount = document.getElementById('kpi-receivables-patients-count');
-    if (kpiPatients) kpiPatients.innerText = `$${totalPatientDebt.toFixed(2)}`;
-    if (kpiPatientsCount) kpiPatientsCount.innerText = `${count} paciente${count === 1 ? '' : 's'} con saldo deudor directo`;
-
-    if (count === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted" style="padding: 15px;">No hay pacientes con créditos o saldos pendientes directos.</td></tr>';
+    } catch(err) {
+        console.error('Error rendering patient receivables:', err);
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted" style="padding: 15px; color: #ef4444;"><i class="fa-solid fa-triangle-exclamation"></i> Error al cargar cuentas por cobrar a pacientes: ${err.message || 'Error de datos'}.</td></tr>`;
     }
 
-    await window.renderCasheaReceivables();
+    try {
+        await window.renderCasheaReceivables();
+    } catch(casheaErr) {
+        console.error('Error running renderCasheaReceivables:', casheaErr);
+    }
 }
 
 window.switchReceivablesTab = function(tab, btn) {
@@ -27659,71 +27697,85 @@ window.renderCasheaReceivables = async function() {
     const kpiPendingCount = document.getElementById('kpi-receivables-cashea-count');
     const kpiSettled = document.getElementById('kpi-receivables-cashea-settled');
 
-    const casheaInvoices = await SupabaseDataService.getCasheaInvoices(true);
-    const rate = getExchangeRate();
+    try {
+        const casheaInvoices = (typeof SupabaseDataService !== 'undefined' && SupabaseDataService.getCasheaInvoices)
+            ? await SupabaseDataService.getCasheaInvoices(true)
+            : [];
+        const rate = (typeof getExchangeRate === 'function') ? getExchangeRate() : 36.5;
 
-    let totalPendingUSD = 0;
-    let totalSettledUSD = 0;
-    let pendingCount = 0;
+        let totalPendingUSD = 0;
+        let totalSettledUSD = 0;
+        let pendingCount = 0;
 
-    casheaInvoices.forEach(inv => {
-        const financed = inv.casheaDetails?.financedUSD || (inv.splitDetails?.cashea ? parseFloat(inv.splitDetails.cashea) : Math.max(0, inv.totalRef - inv.paidRef));
-        const isSettled = inv.casheaDetails?.payoutStatus === 'settled' || inv.status === 'Liquidado Cashea';
+        casheaInvoices.forEach(inv => {
+            const total = parseFloat(inv.totalRef || inv.total_amount || inv.totalUSD || inv.total || 0);
+            const paid = parseFloat(inv.paidRef || inv.paid_amount || inv.paidUSD || 0);
+            const financed = parseFloat(inv.casheaDetails?.financedUSD || (inv.splitDetails?.cashea ? parseFloat(inv.splitDetails.cashea) : Math.max(0, total - paid)));
+            const isSettled = inv.casheaDetails?.payoutStatus === 'settled' || inv.status === 'Liquidado Cashea';
 
-        if (isSettled) {
-            totalSettledUSD += financed;
-        } else {
-            totalPendingUSD += financed;
-            pendingCount++;
+            if (isSettled) {
+                totalSettledUSD += financed;
+            } else {
+                totalPendingUSD += financed;
+                pendingCount++;
+            }
+        });
+
+        if (kpiPending) kpiPending.innerText = `${totalPendingUSD.toFixed(2)}`;
+        if (kpiPendingCount) kpiPendingCount.innerText = `${pendingCount} lote${pendingCount === 1 ? '' : 's'} pendiente${pendingCount === 1 ? '' : 's'} por liquidar`;
+        if (kpiSettled) kpiSettled.innerText = `${totalSettledUSD.toFixed(2)}`;
+
+        if (!tbody) return;
+
+        if (casheaInvoices.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted" style="padding: 24px;">No se registran operaciones con financiamiento Cashea aún.</td></tr>';
+            return;
         }
-    });
 
-    if (kpiPending) kpiPending.innerText = `$${totalPendingUSD.toFixed(2)}`;
-    if (kpiPendingCount) kpiPendingCount.innerText = `${pendingCount} lote${pendingCount === 1 ? '' : 's'} pendiente${pendingCount === 1 ? '' : 's'} por liquidar`;
-    if (kpiSettled) kpiSettled.innerText = `$${totalSettledUSD.toFixed(2)}`;
+        // Sort newest first
+        const sorted = [...casheaInvoices].sort((a, b) => new Date(b.invoiceDate || b.date || 0) - new Date(a.invoiceDate || a.date || 0));
 
-    if (!tbody) return;
+        tbody.innerHTML = sorted.map(inv => {
+            const total = parseFloat(inv.totalRef || inv.total_amount || inv.totalUSD || inv.total || 0);
+            const paid = parseFloat(inv.paidRef || inv.paid_amount || inv.paidUSD || 0);
+            const financed = parseFloat(inv.casheaDetails?.financedUSD || (inv.splitDetails?.cashea ? parseFloat(inv.splitDetails.cashea) : Math.max(0, total - paid)));
+            const financedBs = financed * rate;
+            const initial = parseFloat(inv.casheaDetails?.initialPaidUSD || paid || 0);
+            const surchargePct = inv.casheaDetails?.surchargePct !== undefined ? parseFloat(inv.casheaDetails.surchargePct || 0) : 0.0;
+            const isSettled = inv.casheaDetails?.payoutStatus === 'settled' || inv.status === 'Liquidado Cashea';
+            const initialMethod = inv.casheaDetails?.initialMethod ? ` (${inv.casheaDetails.initialMethod})` : '';
 
-    if (casheaInvoices.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted" style="padding: 24px;">No se registran operaciones con financiamiento Cashea aún.</td></tr>';
-        return;
+            const statusBadge = isSettled 
+                ? `<span class="badge-tag green" style="display:inline-flex; align-items:center; gap:4px;"><i class="fa-solid fa-check-circle"></i> Liquidado en Banco</span><div style="font-size:0.7rem; color:#64748b; margin-top:2px;">${inv.casheaDetails?.payoutBank || 'Banco'} (Ref: ${inv.casheaDetails?.payoutReference || '--'})</div>`
+                : `<span class="badge-tag amber" style="display:inline-flex; align-items:center; gap:4px; font-weight:700;"><i class="fa-solid fa-clock"></i> Pendiente por Liquidar</span>`;
+
+            const actionBtn = isSettled
+                ? `<button type="button" class="btn btn-xs btn-outline" onclick="window.printDirectSaleReceipt('${inv.id}')" title="Ver Comprobante"><i class="fa-solid fa-file-invoice"></i> Ver</button>`
+                : `<button type="button" class="btn btn-xs btn-success" onclick="window.openCasheaReconciliationModal('${inv.id}')" style="font-weight:700; display:inline-flex; align-items:center; gap:4px;" title="Registrar depósito bancario recibido de Cashea"><i class="fa-solid fa-check-circle"></i> Conciliar Depósito</button>`;
+
+            return `
+                <tr style="font-size:0.85rem; border-bottom:1px solid var(--border-color);">
+                    <td>${inv.invoiceDate || inv.date || '--'}</td>
+                    <td><strong class="text-cyan">${inv.id}</strong></td>
+                    <td><strong>${inv.patientName || '--'}</strong></td>
+                    <td class="text-right" style="font-weight:600;">${total.toFixed(2)}</td>
+                    <td class="text-right text-green" style="font-weight:600;">${initial.toFixed(2)}<small style="display:block; font-size:0.7rem; color:#64748b;">${initialMethod}</small></td>
+                    <td class="text-center"><span class="badge-tag blue" style="font-size:0.75rem;">+${surchargePct}%</span></td>
+                    <td class="text-right">
+                        <strong style="color:#0284c7; font-size:0.95rem;">${financed.toFixed(2)}</strong>
+                        <small style="display:block; color:#64748b;">Bs. ${financedBs.toFixed(2)}</small>
+                    </td>
+                    <td class="text-center">${statusBadge}</td>
+                    <td class="text-center">${actionBtn}</td>
+                </tr>
+            `;
+        }).join('');
+    } catch (err) {
+        console.error('Error rendering Cashea receivables:', err);
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="9" class="text-center text-muted" style="padding: 24px; color: #ef4444;"><i class="fa-solid fa-triangle-exclamation"></i> Error al cargar operaciones de Cashea: ${err.message || 'Error de datos'}.</td></tr>`;
+        }
     }
-
-    // Sort newest first
-    const sorted = [...casheaInvoices].sort((a, b) => new Date(b.invoiceDate || 0) - new Date(a.invoiceDate || 0));
-
-    tbody.innerHTML = sorted.map(inv => {
-        const financed = inv.casheaDetails?.financedUSD || (inv.splitDetails?.cashea ? parseFloat(inv.splitDetails.cashea) : Math.max(0, inv.totalRef - inv.paidRef));
-        const financedBs = financed * rate;
-        const initial = inv.casheaDetails?.initialPaidUSD || inv.paidRef || 0;
-        const surchargePct = inv.casheaDetails?.surchargePct !== undefined ? inv.casheaDetails.surchargePct : 7.0;
-        const isSettled = inv.casheaDetails?.payoutStatus === 'settled' || inv.status === 'Liquidado Cashea';
-
-        const statusBadge = isSettled 
-            ? `<span class="badge-tag green" style="display:inline-flex; align-items:center; gap:4px;"><i class="fa-solid fa-check-circle"></i> Liquidado en Banco</span><div style="font-size:0.7rem; color:#64748b; margin-top:2px;">${inv.casheaDetails?.payoutBank || 'Banco'} (Ref: ${inv.casheaDetails?.payoutReference || '--'})</div>`
-            : `<span class="badge-tag amber" style="display:inline-flex; align-items:center; gap:4px; font-weight:700;"><i class="fa-solid fa-clock"></i> Pendiente por Liquidar</span>`;
-
-        const actionBtn = isSettled
-            ? `<button type="button" class="btn btn-xs btn-outline" onclick="window.printDirectSaleReceipt('${inv.id}')" title="Ver Comprobante"><i class="fa-solid fa-file-invoice"></i> Ver</button>`
-            : `<button type="button" class="btn btn-xs btn-success" onclick="window.openCasheaReconciliationModal('${inv.id}')" style="font-weight:700; display:inline-flex; align-items:center; gap:4px;" title="Registrar depósito bancario recibido de Cashea"><i class="fa-solid fa-check-circle"></i> Conciliar Depósito</button>`;
-
-        return `
-            <tr style="font-size:0.85rem; border-bottom:1px solid var(--border-color);">
-                <td>${inv.invoiceDate || '--'}</td>
-                <td><strong class="text-cyan">${inv.id}</strong></td>
-                <td><strong>${inv.patientName || '--'}</strong></td>
-                <td class="text-right" style="font-weight:600;">$${inv.totalRef.toFixed(2)}</td>
-                <td class="text-right text-green" style="font-weight:600;">$${initial.toFixed(2)}</td>
-                <td class="text-center"><span class="badge-tag blue" style="font-size:0.75rem;">+${surchargePct}%</span></td>
-                <td class="text-right">
-                    <strong style="color:#0284c7; font-size:0.95rem;">$${financed.toFixed(2)}</strong>
-                    <small style="display:block; color:#64748b;">Bs. ${financedBs.toFixed(2)}</small>
-                </td>
-                <td class="text-center">${statusBadge}</td>
-                <td class="text-center">${actionBtn}</td>
-            </tr>
-        `;
-    }).join('');
 };
 
 window.openCasheaReconciliationModal = async function(invoiceId) {
@@ -27786,6 +27838,8 @@ window.processCasheaReconciliation = async function(e) {
 
         closeModal('modal-cashea-reconciliation');
         await window.renderCasheaReceivables();
+        if (typeof renderCashFlow === 'function') await renderCashFlow();
+        if (typeof renderDailyClosingView === 'function') await renderDailyClosingView();
     } catch(err) {
         Swal.fire({ icon: 'error', title: 'Error', text: err.message || 'No se pudo registrar la liquidación.' });
     }
@@ -27941,8 +27995,23 @@ async function renderCashFlow(preset, customStart, customEnd) {
                     }
                     cleanMethod = 'split';
                 } else if (m.includes('cashea')) {
-                    methodTotals['cashea'] += pay.paidUSD;
-                    cleanMethod = 'cashea';
+                    const payInitM = (pay.casheaDetails?.initialMethod || pay.casheaInitialMethod || pay.method || '').toLowerCase();
+                    if (payInitM.includes('pos') || payInitM.includes('punto') || payInitM.includes('tarjeta') || payInitM.includes('debito')) {
+                        methodTotals['pos'] += pay.paidUSD;
+                        cleanMethod = 'pos';
+                    } else if (payInitM.includes('pago') || payInitM.includes('movil') || payInitM.includes('móvil') || payInitM.includes('transferencia')) {
+                        methodTotals['pagomovil'] += pay.paidUSD;
+                        cleanMethod = 'pagomovil';
+                    } else if (payInitM.includes('zelle')) {
+                        methodTotals['zelle'] += pay.paidUSD;
+                        cleanMethod = 'zelle';
+                    } else if (payInitM.includes('cash') || payInitM.includes('efectivo')) {
+                        methodTotals['cash'] += pay.paidUSD;
+                        cleanMethod = 'cash';
+                    } else {
+                        methodTotals['cashea'] += pay.paidUSD;
+                        cleanMethod = 'cashea';
+                    }
                 } else if (m.includes('punto') || m.includes('pos') || m.includes('tarjeta') || m.includes('debito') || m.includes('débito')) {
                     methodTotals['pos'] += pay.paidUSD;
                     cleanMethod = 'pos';
@@ -28027,8 +28096,23 @@ async function renderCashFlow(preset, customStart, customEnd) {
             let cleanMethod = 'cash';
 
             if (inv.is_cashea || (inv.casheaDetails && inv.casheaDetails.initialPaidUSD > 0)) {
-                methodTotals['cashea'] += invPaid;
-                cleanMethod = 'cashea';
+                const initMethod = (inv.casheaDetails?.initialMethod || 'pagomovil').toLowerCase();
+                if (initMethod.includes('pos') || initMethod.includes('punto') || initMethod.includes('tarjeta') || initMethod.includes('debito')) {
+                    methodTotals['pos'] += invPaid;
+                    cleanMethod = 'pos';
+                } else if (initMethod.includes('pago') || initMethod.includes('movil') || initMethod.includes('móvil') || initMethod.includes('transferencia')) {
+                    methodTotals['pagomovil'] += invPaid;
+                    cleanMethod = 'pagomovil';
+                } else if (initMethod.includes('zelle')) {
+                    methodTotals['zelle'] += invPaid;
+                    cleanMethod = 'zelle';
+                } else if (initMethod.includes('cash') || initMethod.includes('efectivo')) {
+                    methodTotals['cash'] += invPaid;
+                    cleanMethod = 'cash';
+                } else {
+                    methodTotals['cashea'] += invPaid;
+                    cleanMethod = 'cashea';
+                }
             } else if (inv.splitDetails) {
                 for (const sm in inv.splitDetails) {
                     const subAmt = parseFloat(inv.splitDetails[sm]) || 0;
@@ -28857,6 +28941,10 @@ window.renderDailyClosingView = async function() {
                     if (itmAsst) asst = itmAsst.assistant;
                 }
 
+                const isCashea = inv.is_cashea || false;
+                const casheaInitM = (inv.casheaDetails?.initialMethod || 'pagomovil').toLowerCase();
+                const finalMethodRaw = (isCashea && invPaid > 0) ? casheaInitM : (inv.paymentMethod || 'cash').toLowerCase();
+
                 dailyTransactions.push({
                     id: inv.id,
                     date: targetDate,
@@ -28869,17 +28957,18 @@ window.renderDailyClosingView = async function() {
                     doctor: inv.doctor || 'Dr. Médico Tratante',
                     assistant: asst || '',
                     concept: itemsConcept,
-                    method: inv.paymentMethod ? getPaymentMethodLabel(inv.paymentMethod) : 'Efectivo USD',
-                    rawMethod: (inv.paymentMethod || 'cash').toLowerCase(),
+                    method: inv.paymentMethod ? getPaymentMethodLabel(finalMethodRaw) : 'Efectivo USD',
+                    rawMethod: finalMethodRaw,
                     reference: inv.reference || inv.paymentReference || inv.ref || inv.id || '-',
-                    bank: inv.bank || inv.accountName || '',
-                    accountId: inv.accountId || '',
-                    accountName: inv.accountName || (inv.bank ? `${inv.paymentMethod ? getPaymentMethodLabel(inv.paymentMethod) : 'Pago'} (${inv.bank})` : ''),
+                    bank: inv.bank || inv.accountName || (inv.casheaDetails?.initialAccountName) || '',
+                    accountId: inv.accountId || (inv.casheaDetails?.initialAccountId) || '',
+                    accountName: inv.accountName || (inv.casheaDetails?.initialAccountName) || (inv.bank ? `${getPaymentMethodLabel(finalMethodRaw)} (${inv.bank})` : ''),
                     commission: parseFloat(inv.commission || 0),
                     amountUSD: invPaid,
                     amountBs: invPaid * rate,
                     splitDetails: inv.splitDetails || null,
-                    is_cashea: inv.is_cashea || false
+                    is_cashea: inv.is_cashea || false,
+                    casheaDetails: inv.casheaDetails || null
                 });
             }
         }
@@ -29001,7 +29090,7 @@ window.renderDailyClosingView = async function() {
 
     const categorizeMethod = (rawMethodStr, isCashea) => {
         const m = (rawMethodStr || '').toLowerCase();
-        if (isCashea || m.includes('cashea')) return 'other';
+        if (m === 'cashea' && isCashea) return 'other';
         if (m.includes('pos') || m.includes('punto') || m.includes('tarjeta') || m.includes('debito') || m.includes('débito') || m.includes('credito') || m.includes('crédito') || m.includes('terminal')) return 'pos';
         if (m.includes('pago') || m.includes('movil') || m.includes('móvil') || m.includes('pagomovil') || m.includes('transferencia')) return 'pagomovil';
         if (m.includes('zelle')) return 'zelle';
