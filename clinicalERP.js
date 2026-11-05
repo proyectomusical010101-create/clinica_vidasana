@@ -968,24 +968,24 @@
                     users = (typeof INITIAL_USERS !== 'undefined') ? INITIAL_USERS : [];
                 }
 
-                // Filter active medical doctors / dentists / specialists / assistants (strictly excluding system admins)
+                // Filter active medical doctors / dentists / specialists (strictly excluding assistants, hygienists and system admins)
                 const doctors = users.filter(u => {
-                    if (window.isDoctorOrAssistantUser) return window.isDoctorOrAssistantUser(u);
+                    if (window.isDoctorUser) return window.isDoctorUser(u);
                     const r = (u.role || '').toLowerCase();
                     const n = (u.fullname || u.name || '').toLowerCase();
-                    if (r.includes('admin') || r.includes('gerente') || r.includes('recep') || r.includes('caja')) return false;
+                    if (r.includes('admin') || r.includes('gerente') || r.includes('recep') || r.includes('caja') || r.includes('asist') || r.includes('higien')) return false;
                     return r.includes('odont') || r.includes('médic') || r.includes('medic') || 
-                           r.includes('doctor') || r.includes('especialista') || r.includes('asist') ||
+                           r.includes('doctor') || r.includes('especialista') ||
                            n.startsWith('dr') || n.startsWith('dra');
                 });
 
-                // Add clinical staff from payrollStaff if not already present
+                // Add clinical doctors from payrollStaff if not already present
                 (staff || []).forEach(st => {
                     const r = (st.role || st.puesto || '').toLowerCase();
                     const n = (st.name || st.fullname || '').toLowerCase();
-                    const isClinical = window.isDoctorOrAssistantUser 
-                        ? window.isDoctorOrAssistantUser(st) 
-                        : (r.includes('médic') || r.includes('doctor') || r.includes('odont') || r.includes('asist') || n.startsWith('dr') || n.startsWith('dra'));
+                    const isClinical = window.isDoctorUser 
+                        ? window.isDoctorUser(st) 
+                        : ((r.includes('médic') || r.includes('doctor') || r.includes('odont') || n.startsWith('dr') || n.startsWith('dra')) && !r.includes('asist') && !r.includes('higien'));
                     if (isClinical) {
                         if (!doctors.some(d => (d.fullname || d.name || '').toLowerCase() === n)) {
                             doctors.push({
@@ -3106,8 +3106,8 @@
                     const users = await window.SupabaseDataService.getUsers();
                     const doctors = users.filter(u => {
                         if (window.isDoctorUser) return window.isDoctorUser(u);
-                        if (window.isDoctorOrAssistantUser) return window.isDoctorOrAssistantUser(u);
-                        return !((u.role || '').toLowerCase().includes('admin'));
+                        const r = (u.role || '').toLowerCase();
+                        return (r.includes('odont') || r.includes('médic') || r.includes('doctor') || r.includes('especialista')) && !r.includes('asist') && !r.includes('higien') && !r.includes('admin');
                     });
                     const assistants = users.filter(u => {
                         if (window.isAssistantUser) return window.isAssistantUser(u);

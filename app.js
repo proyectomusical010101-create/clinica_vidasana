@@ -331,12 +331,22 @@ function isAssistantUser(user) {
 window.isAssistantUser = isAssistantUser;
 
 function isDoctorUser(user) {
-    if (!isDoctorOrAssistantUser(user)) return false;
+    if (!user) return false;
     const r = (user.role || '').toLowerCase().trim();
-    if (isAssistantRole(r)) {
+    if (typeof isSystemAdminRole === 'function' && isSystemAdminRole(r)) return false;
+    if (typeof isSuperOrAdminRole === 'function' && isSuperOrAdminRole(r)) return false;
+    if (typeof isAssistantRole === 'function' && isAssistantRole(r)) return false;
+    if (typeof isHygienistRole === 'function' && isHygienistRole(r)) return false;
+    if (r.includes('asist') || r.includes('higien') || r.includes('recep') || r.includes('caja') || r.includes('auxiliar') || r.includes('enferm')) {
         return false;
     }
-    return true;
+    const isDoc = r.includes('odont') || r.includes('médic') || r.includes('medico') || 
+                  r.includes('doctor') || r.includes('especialist') || r.includes('cirujan') || 
+                  r.includes('dentist');
+    const n = (user.fullname || user.name || '').toLowerCase().trim();
+    const isDrPrefix = n.startsWith('dr.') || n.startsWith('dra.') || n.startsWith('dr ') || n.startsWith('dra ');
+    const hasDocProfile = Boolean(user.doctorProfile?.specialty || user.doctor_profile?.specialty);
+    return isDoc || isDrPrefix || hasDocProfile;
 }
 window.isDoctorUser = isDoctorUser;
 
@@ -3815,7 +3825,7 @@ window.openMedicalBudgetEditor = async function({ budgetId = null, specialtyCate
     if (doctorSelect) {
         try {
             const users = await SupabaseDataService.getUsers();
-            const doctors = users.filter(u => window.isDoctorOrAssistantUser(u));
+            const doctors = users.filter(u => window.isDoctorUser(u));
             const cur = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
             const isDoc = cur && typeof isDoctorUser === 'function' && isDoctorUser(cur);
             if (isDoc) {
@@ -4201,21 +4211,7 @@ window.setupMedicalBaremoSearch = function() {
                     return true;
                 });
             } else if (!showAll) {
-                const deptLow = currentDept.toLowerCase();
-                filtered = baremo.filter(b => {
-                    const cat = (b.category || '').toLowerCase();
-                    if (deptLow.includes('consulta')) {
-                        return cat.includes('consulta') || cat.includes('medicina') || cat.includes('cardiolog') || cat.includes('pediatr') || cat.includes('especialidad');
-                    } else if (deptLow.includes('rayos') || deptLow.includes('imagen')) {
-                        return cat.includes('rayos') || cat.includes('radio') || cat.includes('eco') || cat.includes('imagen') || cat.includes('tórax') || cat.includes('rx');
-                    } else if (deptLow.includes('laboratorio')) {
-                        return cat.includes('lab') || cat.includes('sangre') || cat.includes('perfil') || cat.includes('examen') || cat.includes('química');
-                    } else if (deptLow.includes('procedimiento')) {
-                        return cat.includes('cirug') || cat.includes('proced') || cat.includes('curac') || cat.includes('sutura');
-                    }
-                    return true;
-                });
-                if (filtered.length === 0) filtered = baremo;
+                filtered = baremo.filter(b => window.isServiceInClinicalFilter ? window.isServiceInClinicalFilter(b, currentDept) : true);
             }
 
             const q = (filterText || '').toLowerCase().trim();
@@ -7743,12 +7739,12 @@ window.openDirectSaleModal = async function(preselectedPatientId = null, initial
         }
     } catch(e) {}
     
-    // Filtrar EXCLUSIVAMENTE médicos y asistentes (excluyendo administradores, gerentes, cajeros, recepcionistas)
-    const doctors = users.filter(u => window.isDoctorOrAssistantUser(u));
+    // Filtrar EXCLUSIVAMENTE médicos especialistas (excluyendo administradores, recepcionistas, higienistas y asistentes)
+    const doctors = users.filter(u => window.isDoctorUser(u));
 
-    // Agregar personal clínico/asistencial de nómina si no estuviese ya en usuarios
+    // Agregar médicos especialistas de nómina si no estuviesen ya en usuarios
     (staff || []).forEach(st => {
-        if (window.isDoctorOrAssistantUser(st)) {
+        if (window.isDoctorUser(st)) {
             const stName = (st.name || st.fullname || '').trim();
             if (stName && !doctors.some(d => (d.fullname || d.name || '').toLowerCase() === stName.toLowerCase())) {
                 doctors.push({
@@ -8130,6 +8126,35 @@ window.onDirectSalePatientChange = async function(patientId) {
     }
 };
 
+window.isServiceInClinicalFilter = function(service, filter) {
+    if (!service) return false;
+    if (!filter || filter === 'all') return true;
+
+    const f = String(filter).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    const cat = String(service.category || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    const area = String(service.area || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    const name = String(service.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    const code = String(service.code || '').toLowerCase().trim();
+
+    const isLab = cat === 'laboratorio' || code.startsWith('lab') || cat.includes('laboratorio') || area.includes('laboratorio');
+    const isDental = ['odontologia', 'odontopediatria', 'ortodoncia', 'endodoncia', 'protesis', 'exodoncias', 'aditamentos', 'operatoria', 'estetica', 'periodoncia', 'implantologia'].some(c => cat === c || cat.includes(c) || area === c || area.includes(c));
+    const isRayos = cat === 'rayos x' || cat === 'ecos' || cat.includes('rayos') || cat.includes('eco') || area.includes('rayos') || area.includes('imagen') || name.includes('ecograf') || name.includes('radiograf') || name.includes('panoramica') || name.includes('rx');
+    const isProcAmb = cat === 'procedimiento quirurgico' || cat === 'procedimiento urologico' || cat.includes('quirurgico') || cat.includes('urologico') || name.includes('sutura') || name.includes('cirugia menor');
+    const isMed = (cat === 'medicina' || cat === 'especialidades' || cat === 'consulta y diagnostico' || cat === 'general' || area === 'medicina general' || area === 'medicina' || name.includes('consulta') || name.includes('medicina') || name.includes('triaje') || name.includes('evaluacion medica')) && !isLab && !isDental;
+
+    if (f.includes('lab')) return isLab;
+    if (f.includes('odont')) return isDental;
+    if (f.includes('rayos') || f.includes('imagen')) return isRayos;
+    if (f.includes('procedimiento') || f.includes('ambulatorio')) return isProcAmb;
+    if (f.includes('medicin') || f.includes('consulta')) return isMed;
+    if (f.includes('cardio')) return cat.includes('cardio') || name.includes('cardio') || name.includes('electrocardiograma') || area.includes('cardio');
+    if (f.includes('gineco')) return cat.includes('gineco') || name.includes('gineco') || name.includes('citolog') || area.includes('gineco');
+    if (f.includes('pediatr')) return cat.includes('pediatr') || name.includes('pediatr') || area.includes('pediatr');
+
+    return (area && (area === f || area.includes(f) || f.includes(area))) ||
+           (cat && (cat === f || cat.includes(f) || f.includes(cat)));
+};
+
 window.onDirectSaleSpecialtyChange = async function(specialty) {
     const baremoSelect = document.getElementById('ds-baremo-select');
     const badge = document.getElementById('ds-service-count-badge');
@@ -8189,15 +8214,7 @@ window.onDirectSaleSpecialtyChange = async function(specialty) {
 
     let filtered = baremo;
     if (specialty && specialty !== 'all') {
-        filtered = baremo.filter(s => {
-            const cat = (s.category || '').toLowerCase();
-            const spec = specialty.toLowerCase();
-            return cat.includes(spec) || spec.includes(cat);
-        });
-    }
-
-    if (filtered.length === 0) {
-        filtered = baremo;
+        filtered = baremo.filter(s => window.isServiceInClinicalFilter ? window.isServiceInClinicalFilter(s, specialty) : true);
     }
 
     window._currentFilteredDirectSaleServices = filtered;
@@ -13826,7 +13843,7 @@ async function renderAgendaView(filter = (window.currentAgendaFilter || 'pending
     // Populate dynamic filters if needed
     let users = [];
     try { users = await SupabaseDataService.getUsers(); } catch(e) {}
-    const doctors = users.filter(u => window.isDoctorOrAssistantUser(u));
+    const doctors = users.filter(u => window.isDoctorUser(u));
     window._availableDoctorsCache = doctors;
 
     const filterSpecSel = document.getElementById('agenda-filter-specialty');
@@ -15182,12 +15199,7 @@ async function renderPricingTable(filter = 'all', searchQuery = '') {
 
     // Apply Filter by Area or Category
     if (filter !== 'all') {
-        const fLower = filter.toLowerCase();
-        baremo = baremo.filter(p => 
-            (p.area && p.area.toLowerCase() === fLower) ||
-            (p.category && p.category.toLowerCase() === fLower) ||
-            (fLower === 'odontología' && (p.area === 'Odontología' || ['operatoria', 'endodoncia', 'cirugía', 'ortodoncia', 'estética', 'prótesis', 'prevención', 'diagnóstico'].includes((p.category || '').toLowerCase())))
-        );
+        baremo = baremo.filter(p => window.isServiceInClinicalFilter ? window.isServiceInClinicalFilter(p, filter) : true);
     }
 
     // Apply Search
@@ -19652,10 +19664,10 @@ function initGlobalEvents() {
             SupabaseDataService.getClinicRooms ? SupabaseDataService.getClinicRooms().catch(() => []) : []
         ]);
 
-        const doctors = users.filter(u => window.isDoctorOrAssistantUser(u));
+        const doctors = users.filter(u => window.isDoctorUser(u));
 
         (staff || []).forEach(st => {
-            if (window.isDoctorOrAssistantUser(st)) {
+            if (window.isDoctorUser(st)) {
                 const n = (st.name || st.fullname || '').toLowerCase();
                 if (!doctors.some(d => (d.fullname || '').toLowerCase() === n)) {
                     doctors.push({
@@ -28328,6 +28340,13 @@ window.currentCFArea = 'Odontología';
 window.currentCFAreaPeriod = 'today';
 
 function detectClinicalArea(rawArea, concept = '') {
+    const rawUpper = String(rawArea || '').trim().toUpperCase();
+    if (rawUpper === 'LABORATORIO') return 'Laboratorio';
+    if (['ODONTOLOGIA', 'ODONTOPEDIATRIA', 'ORTODONCIA', 'ENDODONCIA', 'PROTESIS', 'EXODONCIAS', 'ADITAMENTOS'].includes(rawUpper)) return 'Odontología';
+    if (['RAYOS X', 'ECOS'].includes(rawUpper)) return 'Rayos X e Imagen';
+    if (['PROCEDIMIENTO QUIRURGICO', 'PROCEDIMIENTO UROLOGICO'].includes(rawUpper)) return 'Procedimientos Ambulatorios';
+    if (['MEDICINA', 'ESPECIALIDADES', 'CONSULTA Y DIAGNÓSTICO', 'CONSULTA Y DIAGNOSTICO'].includes(rawUpper)) return 'Medicina General';
+
     const str = ((rawArea || '') + ' ' + (concept || '')).toLowerCase();
     
     // Dynamic matching against all created specialties first
@@ -28364,7 +28383,7 @@ function detectClinicalArea(rawArea, concept = '') {
     if (str.includes('traumat') || str.includes('ortop') || str.includes('yeso') || str.includes('fractura')) return 'Traumatología';
     if (str.includes('oftalm') || str.includes('vista') || str.includes('ojo') || str.includes('lentes')) return 'Oftalmología';
     if (str.includes('dermat') || str.includes('piel')) return 'Dermatología';
-    if (str.includes('medicina general') || str.includes('médica general') || str.includes('consulta general') || str.includes('triaje') || str.includes('medicina interna') || str.includes('integral') || str.includes('consulta')) return 'Medicina General';
+    if (str.includes('medicina general') || str.includes('médica general') || str.includes('consulta general') || str.includes('triaje') || str.includes('medicina interna') || str.includes('integral') || str.includes('consulta') || str.includes('medicina')) return 'Medicina General';
     
     if (rawArea && rawArea.trim()) return rawArea.trim();
     return 'Medicina General';
@@ -32478,7 +32497,7 @@ window.openRecipeModal = async function(sessionNum = null, sessionTitle = '') {
         doctorSelect.innerHTML = '';
         try {
             const users = await SupabaseDataService.getUsers();
-            const doctors = users.filter(u => window.isDoctorOrAssistantUser(u) && !window.isSystemAdminRole(u.role));
+            const doctors = users.filter(u => window.isDoctorUser(u));
             const targetDoctors = (doctors.length > 0) ? doctors : [];
             const currentUser = getCurrentUser();
 
