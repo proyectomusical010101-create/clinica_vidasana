@@ -13325,6 +13325,10 @@ window.navigateAgendaWeek = async function(direction) {
 
 window.setAgendaViewMode = async function(mode) {
     window._agendaViewMode = mode;
+    window.currentAgendaFilter = 'week';
+    document.querySelectorAll('#view-agenda .filter-card .filter-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.filter === 'week');
+    });
     document.getElementById('btn-toggle-view-planner')?.classList.toggle('active', mode === 'planner');
     document.getElementById('btn-toggle-view-list')?.classList.toggle('active', mode === 'list');
     const searchVal = document.getElementById('agenda-table-search')?.value || '';
@@ -13523,7 +13527,8 @@ function renderWeeklySchedulePlanner(container, appointments, weekInfo, searchQu
     // Resolve doctor schedule filter if specific doctor selected
     let selectedDocObj = null;
     let docSchedule = null;
-    if (selectedDoctorId && selectedDoctorId !== 'all') {
+    const isAllDocs = !selectedDoctorId || selectedDoctorId === 'all' || selectedDoctorId === 'todos' || String(selectedDoctorId).trim() === '';
+    if (!isAllDocs) {
         const docsPool = (doctorsList && doctorsList.length > 0) ? doctorsList : (window._availableDoctorsCache || []);
         selectedDocObj = docsPool.find(d => String(d.id) === String(selectedDoctorId) || (d.fullname && d.fullname.trim().toLowerCase() === String(selectedDoctorId).trim().toLowerCase()));
         if (selectedDocObj) {
@@ -13982,13 +13987,15 @@ async function renderAgendaView(filter = (window.currentAgendaFilter || 'pending
 
     // Apply Secondary Filters (Specialty, Doctor, Shift)
     const selectedSpecialty = document.getElementById('agenda-filter-specialty')?.value || 'all';
-    const selectedDoctor = document.getElementById('agenda-filter-doctor')?.value || 'all';
+    const rawDoctorVal = document.getElementById('agenda-filter-doctor')?.value;
+    const isAllDoctors = !rawDoctorVal || rawDoctorVal === 'all' || rawDoctorVal === 'todos' || rawDoctorVal.trim() === '';
+    const selectedDoctor = isAllDoctors ? 'all' : rawDoctorVal;
     const selectedShift = document.getElementById('agenda-filter-shift')?.value || 'all';
 
     if (selectedSpecialty !== 'all') {
         appointments = appointments.filter(app => (app.specialty || '').toLowerCase() === selectedSpecialty.toLowerCase());
     }
-    if (selectedDoctor !== 'all') {
+    if (!isAllDoctors && selectedDoctor !== 'all') {
         const selectedDocObj = doctors.find(d => String(d.id) === String(selectedDoctor) || (d.fullname && d.fullname.trim().toLowerCase() === String(selectedDoctor).trim().toLowerCase()));
         const cleanDocName = (selectedDocObj?.fullname || selectedDocObj?.name || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '');
         appointments = appointments.filter(app => {
@@ -14146,10 +14153,12 @@ window.renderAgendaView = renderAgendaView;
 
 window.onAgendaFilterChange = async function() {
     const docSelect = document.getElementById('agenda-filter-doctor');
-    const selectedDoctor = docSelect ? docSelect.value : 'all';
+    const rawVal = docSelect ? docSelect.value : 'all';
+    const isAllDoctors = !rawVal || rawVal === 'all' || rawVal === 'todos' || rawVal.trim() === '';
+    const selectedDoctor = isAllDoctors ? 'all' : rawVal;
 
-    // Si se selecciona un médico específico, adecuamos la agenda directamente al calendario semanal (semana + planificador)
-    if (selectedDoctor && selectedDoctor !== 'all') {
+    // Si se selecciona un médico específico o ya estamos en el planificador semanal, aseguramos semana + planificador activo
+    if (window._agendaViewMode === 'planner' || !isAllDoctors) {
         window.currentAgendaFilter = 'week';
         window._agendaViewMode = 'planner';
         document.querySelectorAll('#view-agenda .filter-card .filter-btn').forEach(b => {
