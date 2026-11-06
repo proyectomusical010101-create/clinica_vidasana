@@ -1130,6 +1130,9 @@ function setActivePatientId(id) {
     } else {
         localStorage.removeItem('dental_active_patient_id');
     }
+    if (typeof resetPatientEHRState === 'function') {
+        resetPatientEHRState();
+    }
     updateActivePatientUI();
 }
 
@@ -10519,6 +10522,69 @@ window.openDirectSaleForCurrentReceiptPatient = function() {
 // ==========================================
 // HISTORIA CLÍNICA (EHR) VIEW WITH PDF EXPORT
 // ==========================================
+function resetPatientEHRState() {
+    window.ehrInitialOdontogram = null;
+    window.ehrCurrentOdontogram = null;
+
+    const fnEl = document.getElementById('ehr-patient-fullname');
+    if (fnEl) fnEl.innerText = 'Seleccione un paciente de la lista';
+    const subEl = document.getElementById('ehr-patient-subinfo');
+    if (subEl) subEl.innerText = 'Cédula, Edad, Teléfono';
+
+    const summaryFiliation = document.getElementById('ehr-summary-filiation');
+    if (summaryFiliation) summaryFiliation.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Cargando datos de filiación...</div>';
+
+    const gallery = document.getElementById('ehr-photo-gallery');
+    if (gallery) gallery.innerHTML = '<p class="text-muted text-center span-2">Sin fotografías registradas.</p>';
+
+    const anamnesisContent = document.getElementById('ehr-anamnesis-content');
+    if (anamnesisContent) anamnesisContent.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Cargando anamnesis...</div>';
+
+    const initialWrapper = document.getElementById('ehr-od-initial-view');
+    if (initialWrapper) initialWrapper.innerHTML = '';
+    const currentWrapper = document.getElementById('ehr-od-current-view');
+    if (currentWrapper) currentWrapper.innerHTML = '';
+    const initDateEl = document.getElementById('ehr-od-initial-date');
+    if (initDateEl) initDateEl.innerHTML = '';
+    const currDateEl = document.getElementById('ehr-od-current-date');
+    if (currDateEl) currDateEl.innerHTML = '';
+    const evoSelector = document.getElementById('ehr-evolution-selector');
+    if (evoSelector) { evoSelector.style.display = 'none'; evoSelector.innerHTML = ''; }
+
+    const treatmentNameEl = document.getElementById('ehr-treatment-name-display');
+    if (treatmentNameEl) treatmentNameEl.innerText = 'Sin tratamiento activo';
+    const pctDisplayEl = document.getElementById('ehr-sessions-percent-display');
+    if (pctDisplayEl) pctDisplayEl.innerHTML = '';
+    const bar = document.getElementById('ehr-sessions-progress-bar');
+    if (bar) bar.style.width = '0%';
+
+    const timeline = document.getElementById('ehr-sessions-timeline');
+    if (timeline) timeline.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Cargando tratamientos...</div>';
+
+    const payTbody = document.getElementById('ehr-payments-table-body');
+    if (payTbody) payTbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted" style="padding: 20px;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando pagos...</td></tr>';
+    const summaryBanner = document.getElementById('ehr-payments-summary-banner');
+    if (summaryBanner) summaryBanner.innerHTML = '';
+
+    const interconsultationsContainer = document.getElementById('ehr-interconsultations-list');
+    if (interconsultationsContainer) interconsultationsContainer.innerHTML = '';
+
+    const photosGrid = document.getElementById('ehr-gallery-photos-grid');
+    if (photosGrid) photosGrid.innerHTML = '';
+}
+window.resetPatientEHRState = resetPatientEHRState;
+
+window._currentEhrPaymentsAreaFilter = window._currentEhrPaymentsAreaFilter || 'dental';
+window.setEhrPaymentsAreaFilter = async function(filter, btnEl) {
+    window._currentEhrPaymentsAreaFilter = filter || 'dental';
+    document.querySelectorAll('#ehr-payments-filter-chips .check-chip').forEach(b => b.classList.remove('active'));
+    if (btnEl) btnEl.classList.add('active');
+    const actF = document.querySelector('#view-ehr .filter-btn.active');
+    const filterVal = actF ? actF.dataset.filter : 'all';
+    const searchVal = document.getElementById('ehr-patient-search') ? document.getElementById('ehr-patient-search').value : '';
+    await renderEHRView(filterVal, searchVal);
+};
+
 async function renderEHRView(filter = 'all', searchQuery = '') {
     const listGroup = document.getElementById('ehr-patient-list');
     if (!listGroup) return;
@@ -10592,6 +10658,7 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
             `;
             item.onclick = async (e) => {
                 e.preventDefault();
+                resetPatientEHRState();
                 setActivePatientId(p.id);
                 // Keep the current filters when reloading EHR view on selection
                 const actF = document.querySelector('#view-ehr .filter-btn.active');
@@ -10603,15 +10670,20 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
         });
     }
 
-    if (activeId) {
-        const activePatient = allPatients.find(p => p.id === activeId);
-        if (activePatient) {
-            document.getElementById('ehr-patient-fullname').innerText = activePatient.fullname;
-            document.getElementById('ehr-patient-subinfo').innerText = hideContact 
-                ? `Cédula: ${activePatient.id} | Edad: ${calculateAge(activePatient.birthdate)} años`
-                : `Cédula: ${activePatient.id} | Edad: ${calculateAge(activePatient.birthdate)} años | Tel: ${activePatient.phone || 'S/N'}`;
-            
-            const meta = activePatient.metadata || {};
+    const activePatient = activeId ? allPatients.find(p => p.id === activeId) : null;
+    if (!activePatient) {
+        resetPatientEHRState();
+        return;
+    }
+
+    resetPatientEHRState();
+
+    document.getElementById('ehr-patient-fullname').innerText = activePatient.fullname;
+    document.getElementById('ehr-patient-subinfo').innerText = hideContact 
+        ? `Cédula: ${activePatient.id} | Edad: ${calculateAge(activePatient.birthdate)} años`
+        : `Cédula: ${activePatient.id} | Edad: ${calculateAge(activePatient.birthdate)} años | Tel: ${activePatient.phone || 'S/N'}`;
+    
+    const meta = activePatient.metadata || {};
 
             // 1. Resumen Tab
             const summaryFiliation = document.getElementById('ehr-summary-filiation');
@@ -11081,20 +11153,40 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
                 };
             }
 
-            // 5. Pagos Tab (Balance Financiero 360° del Paciente - Facturas, Recibos de Abono, Citas y Ventas)
+            // 5. Pagos Tab (Balance Financiero del Paciente en Expediente)
             const payTbody = document.getElementById('ehr-payments-table-body');
             if (payTbody) payTbody.innerHTML = '';
             
             const allPaymentsList = [];
             const processedEhrPayKeys = new Set();
+            const payAreaFilter = window._currentEhrPaymentsAreaFilter || 'dental';
 
-            // 1. Obtener todos los documentos formales de facturación / abonos del paciente
-            const patientDocsList = allInvoices.filter(inv => 
-                String(inv.patientId) === String(activePatient.id) ||
-                String(inv.patient_id) === String(activePatient.id) ||
-                String(inv.metadata?.patientId) === String(activePatient.id) ||
-                (inv.patientName && activePatient.fullname && inv.patientName.trim().toLowerCase() === activePatient.fullname.trim().toLowerCase())
-            );
+            // Sincronizar estado visual de los chips de filtro de pagos
+            document.querySelectorAll('#ehr-payments-filter-chips .check-chip').forEach(b => {
+                b.classList.toggle('active', b.getAttribute('onclick')?.includes(`'${payAreaFilter}'`) || b.dataset.payFilter === payAreaFilter);
+            });
+
+            // 1. Obtener documentos de facturación / abonos del paciente según filtro de área
+            const patientDocsList = allInvoices.filter(inv => {
+                const isPat = String(inv.patientId) === String(activePatient.id) ||
+                    String(inv.patient_id) === String(activePatient.id) ||
+                    String(inv.metadata?.patientId) === String(activePatient.id) ||
+                    (inv.patientName && activePatient.fullname && inv.patientName.trim().toLowerCase() === activePatient.fullname.trim().toLowerCase());
+                if (!isPat) return false;
+
+                const cat = String(inv.category || inv.metadata?.category || '').trim().toLowerCase();
+                const type = String(inv.type || '').trim().toLowerCase();
+                const isNonDental = cat.includes('lab') || cat.includes('rayos') || cat.includes('imagen') || cat.includes('procedimiento') || cat.includes('consumib') || cat.includes('medicin') || cat.includes('consulta') || cat.includes('especialidad') || type === 'medical';
+
+                if (payAreaFilter === 'dental') {
+                    return !isNonDental;
+                } else if (payAreaFilter === 'medical') {
+                    return cat.includes('medicin') || cat.includes('consulta') || cat.includes('especialidad') || type === 'medical';
+                } else if (payAreaFilter === 'lab') {
+                    return cat.includes('lab');
+                }
+                return true; // 'all'
+            });
 
             patientDocsList.forEach(b => {
                 const docId = String(b.id || '');
@@ -11176,7 +11268,7 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
                 });
             });
 
-            // 2. Pagos asentados directamente al paciente (incluye abonos y pagos de sesiones no duplicados)
+            // 2. Pagos asentados directamente al paciente (filtrados para aislar el expediente odontológico)
             if (activePatient.payments && activePatient.payments.length > 0) {
                 activePatient.payments.forEach(p => {
                     const payId = String(p.id || '');
@@ -11186,6 +11278,14 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
                     if (payId && processedEhrPayKeys.has(payId)) return;
                     if (payDocId && processedEhrPayKeys.has(payDocId)) return;
                     if (payRef && payRef !== 'N/A' && processedEhrPayKeys.has(payRef)) return;
+
+                    const payConcept = String(p.concept || '').toLowerCase();
+                    const payArea = String(p.area || p.specialty || p.department || '').toLowerCase();
+                    const isNonDentalPay = payArea.includes('lab') || payArea.includes('rayos') || payArea.includes('medicin') || payArea.includes('consulta') || payArea.includes('procedimiento') || payArea.includes('consumib') || payConcept.includes('laboratorio') || payConcept.includes('perfil') || payConcept.includes('hematolog') || payConcept.includes('rayos x') || payConcept.includes('ecograf') || payConcept.includes('consulta medica');
+
+                    if (payAreaFilter === 'dental' && isNonDentalPay) return;
+                    if (payAreaFilter === 'medical' && !payArea.includes('medicin') && !payArea.includes('consulta') && !payConcept.includes('consulta') && !payConcept.includes('medicina')) return;
+                    if (payAreaFilter === 'lab' && !payArea.includes('lab') && !payConcept.includes('lab') && !payConcept.includes('perfil')) return;
 
                     if (payId) processedEhrPayKeys.add(payId);
                     if (payDocId) processedEhrPayKeys.add(payDocId);
@@ -11415,8 +11515,6 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
             if (submitPhotoBtn) {
                 submitPhotoBtn.onclick = (e) => window.saveEHRPhoto(e);
             }
-        }
-    }
 
     // Bind click events on subtabs
     document.querySelectorAll('#view-ehr .subtab-btn').forEach(btn => {
@@ -13412,6 +13510,9 @@ window.parseDoctorScheduleDaysAndShifts = function(scheduleStr, defaultShift = '
 
 function renderWeeklySchedulePlanner(container, appointments, weekInfo, searchQuery, isAssistant, selectedDoctorId = 'all', doctorsList = []) {
     container.innerHTML = '';
+
+    const currentUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const isDoctor = currentUser && typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false;
 
     const totalWeek = appointments.length;
     const confirmedCount = appointments.filter(a => a.status === 'Confirmada').length;

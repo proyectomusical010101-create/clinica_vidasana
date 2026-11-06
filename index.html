@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="styles.css?v=401">
+    <link rel="stylesheet" href="styles.css?v=402">
 
     <!-- Anti-Flash Instant Auth & Tab Guard -->
     <script>
@@ -1777,9 +1777,16 @@
                                     <!-- SUBTAB 6: Pagos (Historial financiero y abonos) -->
                                     <div id="subtab-payments-tab" class="subtab-content">
                                         <div class="payments-overview">
-                                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                                                <h3 style="margin:0;"><i class="fa-solid fa-receipt"></i> Historial de Abonos y Pagos</h3>
+                                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap: wrap; gap: 10px;">
+                                                <h3 style="margin:0;"><i class="fa-solid fa-receipt text-cyan"></i> Historial de Abonos y Pagos</h3>
                                                 <button class="btn btn-sm btn-success" id="btn-ehr-add-abono" onclick="window.openEhrPaymentModal()">+ Registrar Abono</button>
+                                            </div>
+                                            <!-- Filtro por Área Clínica: Protege el expediente odontológico de cobros ajenos -->
+                                            <div class="chips-group mb-15" id="ehr-payments-filter-chips" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                                <button type="button" class="check-chip active" id="btn-ehr-pay-dental" onclick="window.setEhrPaymentsAreaFilter('dental', this)"><i class="fa-solid fa-tooth text-cyan"></i> Odontología (Expediente Dental)</button>
+                                                <button type="button" class="check-chip" id="btn-ehr-pay-all" onclick="window.setEhrPaymentsAreaFilter('all', this)"><i class="fa-solid fa-layer-group"></i> Todas las Especialidades</button>
+                                                <button type="button" class="check-chip" id="btn-ehr-pay-med" onclick="window.setEhrPaymentsAreaFilter('medical', this)"><i class="fa-solid fa-user-doctor text-green"></i> Consultas Médicas</button>
+                                                <button type="button" class="check-chip" id="btn-ehr-pay-lab" onclick="window.setEhrPaymentsAreaFilter('lab', this)"><i class="fa-solid fa-flask-vial text-purple"></i> Laboratorio</button>
                                             </div>
                                             <div id="ehr-payments-summary-banner" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px;"></div>
                                             <div class="table-responsive">
@@ -9164,14 +9171,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=401"></script>
-    <script src="supabaseClient.js?v=401"></script>
-    <script src="odontogram.js?v=401"></script>
-    <script src="signature.js?v=401"></script>
-    <script src="whatsapp.js?v=401"></script>
-    <script src="kardex.js?v=401"></script>
-    <script src="app.js?v=401"></script>
-    <script src="clinicalERP.js?v=401"></script>
-    <script src="tutorial.js?v=401"></script>
+    <script src="seededData.js?v=402"></script>
+    <script src="supabaseClient.js?v=402"></script>
+    <script src="odontogram.js?v=402"></script>
+    <script src="signature.js?v=402"></script>
+    <script src="whatsapp.js?v=402"></script>
+    <script src="kardex.js?v=402"></script>
+    <script src="app.js?v=402"></script>
+    <script src="clinicalERP.js?v=402"></script>
+    <script src="tutorial.js?v=402"></script>
 </body>
 </html>
