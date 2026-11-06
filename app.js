@@ -417,6 +417,35 @@ function canCurrentUserDelete(user = null) {
 }
 window.canCurrentUserDelete = canCurrentUserDelete;
 
+function canCurrentUserManageUsers(user = null) {
+    const u = user || (typeof getCurrentUser === 'function' ? getCurrentUser() : null);
+    if (!u) return false;
+    // RESTRICCIÓN TOTAL: El perfil médico bajo ninguna circunstancia puede gestionar usuarios
+    if (typeof isDoctorUser === 'function' && isDoctorUser(u)) return false;
+    if (typeof isAssistantUser === 'function' && isAssistantUser(u)) return false;
+    if (typeof isHygienistRole === 'function' && isHygienistRole(u.role)) return false;
+    // Solo roles administrativos y directivos
+    return isSuperOrAdminRole(u.role);
+}
+window.canCurrentUserManageUsers = canCurrentUserManageUsers;
+
+function isMasterOrAdminUser(targetUser) {
+    if (!targetUser) return false;
+    const r = String(targetUser.role || '').toLowerCase().trim();
+    const email = String(targetUser.email || '').toLowerCase().trim();
+    const name = String(targetUser.fullname || targetUser.name || '').toLowerCase().trim();
+
+    // Perfiles administradores y máster blindados
+    if (r.includes('super') || r.includes('admin') || r.includes('director') || r.includes('gerente') || r.includes('master') || r.includes('máster')) {
+        return true;
+    }
+    if (email.includes('admin') || email.includes('master') || targetUser.isMaster === true || targetUser.is_master === true) {
+        return true;
+    }
+    return false;
+}
+window.isMasterOrAdminUser = isMasterOrAdminUser;
+
 function isPatientAssignedToDoctor(patient, doctorUser, appointments = null, budgets = null) {
     if (!patient || !doctorUser) return false;
     const docId = String(doctorUser.id || '').trim();
@@ -1718,6 +1747,23 @@ function applyRolePermissionsUI(role) {
             // Lock down Reminders
             const remindersBtn = document.getElementById('btn-agenda-reminders');
             if (remindersBtn) remindersBtn.style.display = 'none';
+
+            // RESTRICCIÓN TOTAL: Bloqueo absoluto de gestión de usuarios para perfil médico
+            const usersNavTab = document.querySelector('.nav-item[data-tab="users"]');
+            if (usersNavTab) usersNavTab.style.display = 'none';
+            const btnNewUser = document.getElementById('btn-new-user-modal');
+            if (btnNewUser) btnNewUser.style.display = 'none';
+            const btnRolesGuide = document.getElementById('btn-view-roles-guide');
+            if (btnRolesGuide) btnRolesGuide.style.display = 'none';
+            const btnSysUsers = document.getElementById('btn-pane-system-users');
+            if (btnSysUsers) btnSysUsers.style.display = 'none';
+            const curActiveTab = localStorage.getItem('dental_active_tab') || document.documentElement.getAttribute('data-active-tab');
+            if (curActiveTab === 'users' || window.location.hash === '#users') {
+                localStorage.setItem('dental_active_tab', 'agenda');
+                if (typeof window.switchTab === 'function') {
+                    window.switchTab('agenda');
+                }
+            }
         } else {
             // Restore Birthdays for non-doctor roles (Admin, Assistant, Hygienist)
             const bdayHubBtn = document.getElementById('btn-birthday-hub');
@@ -2271,6 +2317,16 @@ window.navigateToTab = async function(tabName) {
     } else if (tabName === 'pricing') {
         await renderPricingTable();
     } else if (tabName === 'users') {
+        const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+        if ((typeof isDoctorUser === 'function' && isDoctorUser(curUser)) || (typeof canCurrentUserManageUsers === 'function' && !canCurrentUserManageUsers(curUser))) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Acceso Restringido',
+                text: 'El perfil médico no tiene autorización bajo ninguna circunstancia para listar ni gestionar usuarios del sistema.'
+            });
+            await switchTab('agenda');
+            return;
+        }
         await renderUsersTable();
     } else if (tabName === 'billing') {
         await renderBillingView();
@@ -15918,6 +15974,13 @@ async function renderUsersTable(filter = 'all', searchQuery = '') {
     const tbody = document.getElementById('users-table-body');
     if (!tbody) return;
 
+    // RESTRICCIÓN TOTAL: El perfil médico no puede listar usuarios bajo ninguna circunstancia
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if ((typeof isDoctorUser === 'function' && isDoctorUser(curUser)) || (typeof canCurrentUserManageUsers === 'function' && !canCurrentUserManageUsers(curUser))) {
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted" style="padding: 30px;"><i class="fa-solid fa-lock text-red" style="font-size: 1.5rem; display: block; margin-bottom: 8px;"></i> Acceso Restringido: El perfil médico no cuenta con autorización para listar usuarios.</td></tr>`;
+        return;
+    }
+
     tbody.innerHTML = '';
     let users = await SupabaseDataService.getUsers();
 
@@ -16131,7 +16194,9 @@ async function renderUsersTable(filter = 'all', searchQuery = '') {
                 <div style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap;">
                     <button class="btn btn-xs btn-outline text-blue" onclick="window.copyUserContact('${u.id}', event)" title="Ver y Copiar Datos de Contacto (Teléfono, Correo, Instagram)" style="color: #0284c7; border-color: #bae6fd;"><i class="fa-solid fa-address-card"></i></button>
                     <button class="btn btn-xs btn-outline text-cyan" onclick="editUser('${u.id}')" title="Editar Ficha Médica"><i class="fa-solid fa-user-pen"></i></button>
-                    <button class="btn btn-xs btn-outline text-red" onclick="deleteUser('${u.id}')" title="Eliminar"><i class="fa-solid fa-user-xmark"></i></button>
+                    ${typeof isMasterOrAdminUser === 'function' && isMasterOrAdminUser(u)
+                        ? `<button class="btn btn-xs btn-outline" style="color: #94a3b8; border-color: #cbd5e1; cursor: not-allowed;" title="Perfil Administrador/Máster Blindado (Protegido contra eliminación)" onclick="Swal.fire({ icon: 'info', title: 'Usuario Blindado', text: 'Este usuario posee privilegios de Administrador/Máster y está protegido contra eliminación.' })"><i class="fa-solid fa-shield-halved text-amber"></i></button>`
+                        : `<button class="btn btn-xs btn-outline text-red" onclick="deleteUser('${u.id}')" title="Eliminar"><i class="fa-solid fa-user-xmark"></i></button>`}
                 </div>
             </td>
         `;
@@ -16145,6 +16210,13 @@ async function renderUsersTable(filter = 'all', searchQuery = '') {
 window.renderSystemUsersTable = async function() {
     const tbody = document.getElementById('system-users-table-tbody');
     if (!tbody) return;
+
+    // RESTRICCIÓN TOTAL: El perfil médico no puede listar usuarios del sistema bajo ninguna circunstancia
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if ((typeof isDoctorUser === 'function' && isDoctorUser(curUser)) || (typeof canCurrentUserManageUsers === 'function' && !canCurrentUserManageUsers(curUser))) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding: 24px;"><i class="fa-solid fa-lock text-red"></i> Acceso denegado a usuarios del sistema.</td></tr>`;
+        return;
+    }
 
     tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding: 20px;"><i class="fa-solid fa-spinner fa-spin text-cyan"></i> Cargando usuarios del sistema...</td></tr>`;
 
@@ -16176,7 +16248,9 @@ window.renderSystemUsersTable = async function() {
             <td style="text-align: center;">
                 <button class="btn btn-xs btn-outline text-blue" onclick="window.copyUserContact('${u.id}', event)" title="Ver y Copiar Datos de Contacto" style="color: #0284c7; border-color: #bae6fd; margin-right: 4px;"><i class="fa-solid fa-address-card"></i></button>
                 <button class="btn btn-xs btn-outline text-cyan" onclick="window.editSystemUser('${u.id}')" title="Editar Cuenta" style="margin-right: 4px;"><i class="fa-solid fa-user-pen"></i></button>
-                <button class="btn btn-xs btn-outline text-red" onclick="window.deleteSystemUser('${u.id}')" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
+                ${typeof isMasterOrAdminUser === 'function' && isMasterOrAdminUser(u)
+                    ? `<button class="btn btn-xs btn-outline" style="color: #94a3b8; border-color: #cbd5e1; cursor: not-allowed; margin-right: 4px;" title="Perfil Máster/Administrador Blindado (Protegido contra eliminación)" onclick="Swal.fire({ icon: 'info', title: 'Perfil Blindado', text: 'Las cuentas administrativas y perfiles máster están blindadas contra borrados accidentales o maliciosos.' })"><i class="fa-solid fa-shield-halved text-amber"></i></button>`
+                    : `<button class="btn btn-xs btn-outline text-red" onclick="window.deleteSystemUser('${u.id}')" title="Eliminar"><i class="fa-solid fa-trash"></i></button>`}
             </td>
         `;
         tbody.appendChild(tr);
@@ -16184,6 +16258,16 @@ window.renderSystemUsersTable = async function() {
 };
 
 window.openCreateSystemUserModal = function() {
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if ((typeof isDoctorUser === 'function' && isDoctorUser(curUser)) || (typeof canCurrentUserManageUsers === 'function' && !canCurrentUserManageUsers(curUser))) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Acceso Denegado',
+            text: 'El perfil médico no tiene autorización bajo ninguna circunstancia para crear usuarios del sistema.'
+        });
+        return;
+    }
+
     const form = document.getElementById('form-system-user');
     if (form) form.reset();
 
@@ -16230,6 +16314,16 @@ window.openCreateSystemUserModal = function() {
 };
 
 window.editSystemUser = async function(userId) {
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if ((typeof isDoctorUser === 'function' && isDoctorUser(curUser)) || (typeof canCurrentUserManageUsers === 'function' && !canCurrentUserManageUsers(curUser))) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Acceso Denegado',
+            text: 'El perfil médico no tiene autorización bajo ninguna circunstancia para editar usuarios del sistema.'
+        });
+        return;
+    }
+
     const users = await SupabaseDataService.getUsers();
     const user = users.find(u => String(u.id) === String(userId));
     if (!user) {
@@ -16299,9 +16393,13 @@ window.editSystemUser = async function(userId) {
 };
 
 window.deleteSystemUser = async function(userId) {
-    const currentUser = getCurrentUser();
-    if (!canCurrentUserDelete(currentUser)) {
-        Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Su rol no cuenta con permisos para eliminar usuarios del sistema.' });
+    const currentUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if ((typeof isDoctorUser === 'function' && isDoctorUser(currentUser)) || (typeof canCurrentUserManageUsers === 'function' && !canCurrentUserManageUsers(currentUser))) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Acción Denegada',
+            text: 'El perfil médico no tiene permisos bajo ninguna circunstancia para eliminar usuarios del sistema.'
+        });
         return;
     }
     if (currentUser && String(currentUser.id) === String(userId)) {
@@ -16312,6 +16410,15 @@ window.deleteSystemUser = async function(userId) {
     const users = await SupabaseDataService.getUsers();
     const target = users.find(u => String(u.id) === String(userId));
     if (!target) return;
+
+    if (typeof isMasterOrAdminUser === 'function' && isMasterOrAdminUser(target)) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Perfil Máster Blindado',
+            text: 'Seguridad Crítica: Los usuarios administradores y perfiles máster están blindados y protegidos contra borrado accidental o malicioso.'
+        });
+        return;
+    }
 
     Swal.fire({
         title: `¿Eliminar a ${target.fullname}?`,
@@ -16535,6 +16642,16 @@ window.quickAddNewSpecialtyFromService = function() {
 };
 
 window.openCreateUserModal = async function() {
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if ((typeof isDoctorUser === 'function' && isDoctorUser(curUser)) || (typeof canCurrentUserManageUsers === 'function' && !canCurrentUserManageUsers(curUser))) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Acción Denegada',
+            text: 'El perfil médico no tiene permisos bajo ninguna circunstancia para registrar nuevos usuarios.'
+        });
+        return;
+    }
+
     const form = document.getElementById('form-user');
     if (form) form.reset();
 
@@ -16586,6 +16703,16 @@ window.openCreateUserModal = async function() {
 };
 
 window.editUser = async function(userId) {
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if ((typeof isDoctorUser === 'function' && isDoctorUser(curUser)) || (typeof canCurrentUserManageUsers === 'function' && !canCurrentUserManageUsers(curUser))) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Acción Denegada',
+            text: 'El perfil médico no tiene permisos bajo ninguna circunstancia para editar usuarios del sistema.'
+        });
+        return;
+    }
+
     const users = await SupabaseDataService.getUsers();
     const user = users.find(u => String(u.id) === String(userId));
     if (!user) {
@@ -16691,19 +16818,40 @@ window.editUser = async function(userId) {
 };
 
 window.deleteUser = async function(userId) {
-    const user = getCurrentUser();
-    if (user && (typeof isAssistantUser === 'function' ? isAssistantUser(user) : (user.role && user.role.toLowerCase().includes('asistente')))) {
-        Swal.fire({ icon: 'warning', title: 'Acción denegada', text: 'Solo el Odontólogo Principal puede gestionar o eliminar cuentas de usuario.' });
+    const user = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if ((typeof isDoctorUser === 'function' && isDoctorUser(user)) || (typeof canCurrentUserManageUsers === 'function' && !canCurrentUserManageUsers(user))) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Acción Denegada',
+            text: 'El perfil médico no tiene permisos bajo ninguna circunstancia para eliminar usuarios del sistema.'
+        });
+        return;
+    }
+
+    if (user && String(user.id) === String(userId)) {
+        Swal.fire({ icon: 'warning', title: 'Acción Inválida', text: 'No puede eliminar su propia cuenta de sesión actual.' });
         return;
     }
 
     const users = await SupabaseDataService.getUsers();
+    const target = users.find(u => String(u.id) === String(userId));
+    if (!target) return;
+
+    if (typeof isMasterOrAdminUser === 'function' && isMasterOrAdminUser(target)) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Usuario Blindado',
+            text: 'Seguridad Crítica: Los usuarios administradores y perfiles máster están blindados y protegidos contra borrado accidental o malicioso.'
+        });
+        return;
+    }
+
     if (users.length <= 1) {
         Swal.fire({ icon: 'error', title: 'Acción denegada', text: 'Debe existir al menos un usuario registrado en el sistema.' });
         return;
     }
     Swal.fire({
-        title: '¿Eliminar usuario?',
+        title: `¿Eliminar a ${target.fullname || 'este usuario'}?`,
         text: 'Se revocará el acceso al consultorio a este usuario.',
         icon: 'warning',
         showCancelButton: true,
@@ -16714,6 +16862,9 @@ window.deleteUser = async function(userId) {
     }).then(async (result) => {
         if (result.isConfirmed) {
             await SupabaseDataService.deleteUser(userId);
+            if (window.logUserAction) {
+                await window.logUserAction('Eliminó Usuario', 'Personal Médico', `Usuario: ${target.fullname} (${target.role})`);
+            }
             await renderUsersTable();
             Swal.fire({ icon: 'success', title: 'Usuario eliminado', timer: 1800, showConfirmButton: false });
         }
@@ -20972,6 +21123,18 @@ if (patientSameDay.length === 0) {
     if (saveUserBtn) {
         saveUserBtn.onclick = async (e) => {
             e.preventDefault();
+
+            // RESTRICCIÓN TOTAL: El perfil médico no tiene autorización para crear o editar usuarios
+            const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+            if ((typeof isDoctorUser === 'function' && isDoctorUser(curUser)) || (typeof canCurrentUserManageUsers === 'function' && !canCurrentUserManageUsers(curUser))) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Acceso Denegado',
+                    text: 'El perfil médico no tiene autorización bajo ninguna circunstancia para crear o editar usuarios.'
+                });
+                return;
+            }
+
             const existingUserId = document.getElementById('u-user-id')?.value;
             const fullname = document.getElementById('u-fullname').value.trim();
             const email = document.getElementById('u-email').value.trim();
@@ -21157,6 +21320,18 @@ if (patientSameDay.length === 0) {
     const formSysUser = document.getElementById('form-system-user');
     const handleSaveSystemUser = async (e) => {
         if (e) e.preventDefault();
+
+        // RESTRICCIÓN TOTAL: El perfil médico no tiene autorización para crear o editar usuarios del sistema
+        const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+        if ((typeof isDoctorUser === 'function' && isDoctorUser(curUser)) || (typeof canCurrentUserManageUsers === 'function' && !canCurrentUserManageUsers(curUser))) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Acceso Denegado',
+                text: 'El perfil médico no tiene autorización bajo ninguna circunstancia para crear o editar usuarios del sistema.'
+            });
+            return;
+        }
+
         const existingId = document.getElementById('sys-user-id')?.value;
         const fullname = document.getElementById('sys-user-fullname').value.trim();
         const email = document.getElementById('sys-user-email').value.trim();

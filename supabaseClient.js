@@ -151,7 +151,16 @@ class SupabaseDataService {
 
     static async deleteUser(userId) {
         let localUsers = JSON.parse(localStorage.getItem('dental_users')) || [];
-        localUsers = localUsers.filter(u => u.id !== userId);
+        const target = localUsers.find(u => String(u.id) === String(userId));
+        if (target) {
+            const r = String(target.role || '').toLowerCase();
+            const em = String(target.email || '').toLowerCase();
+            if (r.includes('admin') || r.includes('super') || r.includes('director') || r.includes('gerente') || r.includes('master') || r.includes('máster') || em.includes('admin') || em.includes('master') || target.isMaster === true || target.is_master === true) {
+                console.error(`[SEGURIDAD] Intento de eliminación bloqueado: El usuario ${target.fullname || target.id} es un perfil Administrador/Máster blindado.`);
+                throw new Error('PROTECCIÓN DE SEGURIDAD: Los perfiles Administradores y Máster del sistema están blindados y no pueden ser eliminados.');
+            }
+        }
+        localUsers = localUsers.filter(u => String(u.id) !== String(userId));
         localStorage.setItem('dental_users', JSON.stringify(localUsers));
 
         if (this.isCloudConnected()) {
