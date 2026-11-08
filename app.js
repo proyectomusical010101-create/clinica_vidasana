@@ -1774,7 +1774,7 @@ function applyRolePermissionsUI(role) {
     const paneProfileBtn = document.querySelector('.settings-nav-btn[data-pane="profile"]');
     const paneAppearanceBtn = document.getElementById('btn-pane-appearance');
 
-    if (roleType === 'assistant') {
+    if (roleType === 'assistant' || roleType === 'hygienist') {
         if (paneBusBtn) paneBusBtn.style.display = 'none';
         if (paneBanksBtn) paneBanksBtn.style.display = 'none';
         if (paneSysUsersBtn) paneSysUsersBtn.style.display = 'none';
@@ -2186,9 +2186,35 @@ function applyRolePermissionsUI(role) {
                     }
                 });
             }
+
+            // Inhabilitación de administración de usuarios para Higienista
+            const usersNavTab = document.querySelector('.nav-item[data-tab="users"]');
+            if (usersNavTab) usersNavTab.style.display = 'none';
+            const btnNewUser = document.getElementById('btn-new-user-modal');
+            if (btnNewUser) btnNewUser.style.display = 'none';
+            const btnRolesGuide = document.getElementById('btn-view-roles-guide');
+            if (btnRolesGuide) btnRolesGuide.style.display = 'none';
+            const btnSysUsers = document.getElementById('btn-pane-system-users');
+            if (btnSysUsers) btnSysUsers.style.display = 'none';
+            const curActiveTab = localStorage.getItem('dental_active_tab') || document.documentElement.getAttribute('data-active-tab');
+            if (curActiveTab === 'users' || window.location.hash === '#users') {
+                localStorage.setItem('dental_active_tab', 'dashboard');
+                if (typeof window.navigateToTab === 'function') {
+                    window.navigateToTab('dashboard');
+                }
+            }
         } else {
             // Restore financial cards for non-hygienist roles (when not doctor or as appropriate)
             if (!isDoc) {
+                const usersNavTab = document.querySelector('.nav-item[data-tab="users"]');
+                if (usersNavTab) usersNavTab.style.display = '';
+                const btnNewUser = document.getElementById('btn-new-user-modal');
+                if (btnNewUser) btnNewUser.style.display = '';
+                const btnRolesGuide = document.getElementById('btn-view-roles-guide');
+                if (btnRolesGuide) btnRolesGuide.style.display = '';
+                const btnSysUsers = document.getElementById('btn-pane-system-users');
+                if (btnSysUsers) btnSysUsers.style.display = '';
+
                 const cardToday = document.getElementById('card-metric-today-income');
                 const cardMonth = document.getElementById('card-metric-month-income');
                 const cardReceivables = document.getElementById('card-metric-receivables');
@@ -2645,12 +2671,20 @@ window.navigateToTab = async function(tabName) {
             assistant: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'billing', 'settings', 'help', 'consumables']
         }[roleType] || ['dashboard', 'help'];
 
-        if (isHygienist && (tabName === 'billing' || tabName === 'finance' || tabName === 'payroll')) {
-            Swal.fire({
-                icon: 'error',
-                title: 'Cero Visibilidad Financiera Directa',
-                text: 'La higienista no tiene acceso a la caja, ni a módulos de recepción de pagos, ni a reportes de facturación general.'
-            });
+        if (isHygienist && (tabName === 'billing' || tabName === 'finance' || tabName === 'payroll' || tabName === 'users')) {
+            if (tabName === 'users') {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Inhabilitación de Administración de Usuarios',
+                    text: 'El perfil carece de toda atribución para dar de alta, consultar contraseñas, editar credenciales o remover perfiles del sistema, salvaguardando las cuentas administrativas del centro.'
+                });
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Cero Visibilidad Financiera Directa',
+                    text: 'La higienista no tiene acceso a la caja, ni a módulos de recepción de pagos, ni a reportes de facturación general.'
+                });
+            }
             return window.navigateToTab('dashboard');
         }
 
@@ -7435,6 +7469,16 @@ window.copyUserContact = async function(userId, event) {
     if (event) {
         event.preventDefault();
         event.stopPropagation();
+    }
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const isHyg = typeof isHygienistUser === 'function' && isHygienistUser(curUser);
+    if (isHyg) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Inhabilitación de Administración de Usuarios',
+            text: 'El perfil carece de atribución para consultar credenciales o datos de usuarios del sistema.'
+        });
+        return;
     }
     const users = await SupabaseDataService.getUsers();
     const u = users.find(usr => String(usr.id) === String(userId));
@@ -17189,10 +17233,15 @@ async function renderUsersTable(filter = 'all', searchQuery = '') {
     const tbody = document.getElementById('users-table-body');
     if (!tbody) return;
 
-    // RESTRICCIÓN TOTAL: El perfil médico no puede listar usuarios bajo ninguna circunstancia
+    // RESTRICCIÓN TOTAL: El perfil médico e higienista no puede listar usuarios bajo ninguna circunstancia
     const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const isHyg = typeof isHygienistUser === 'function' && isHygienistUser(curUser);
+    if (isHyg) {
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted" style="padding: 30px;"><i class="fa-solid fa-lock text-red" style="font-size: 1.5rem; display: block; margin-bottom: 8px;"></i> Inhabilitación de Administración de Usuarios: El perfil carece de toda atribución para consultar perfiles o credenciales de usuarios.</td></tr>`;
+        return;
+    }
     if ((typeof isDoctorUser === 'function' && isDoctorUser(curUser)) || (typeof canCurrentUserManageUsers === 'function' && !canCurrentUserManageUsers(curUser))) {
-        tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted" style="padding: 30px;"><i class="fa-solid fa-lock text-red" style="font-size: 1.5rem; display: block; margin-bottom: 8px;"></i> Acceso Restringido: El perfil médico no cuenta con autorización para listar usuarios.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted" style="padding: 30px;"><i class="fa-solid fa-lock text-red" style="font-size: 1.5rem; display: block; margin-bottom: 8px;"></i> Acceso Restringido: El perfil no cuenta con autorización para listar usuarios.</td></tr>`;
         return;
     }
 
@@ -17426,8 +17475,13 @@ window.renderSystemUsersTable = async function() {
     const tbody = document.getElementById('system-users-table-tbody');
     if (!tbody) return;
 
-    // RESTRICCIÓN TOTAL: El perfil médico no puede listar usuarios del sistema bajo ninguna circunstancia
+    // RESTRICCIÓN TOTAL: El perfil médico e higienista no puede listar usuarios del sistema bajo ninguna circunstancia
     const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const isHyg = typeof isHygienistUser === 'function' && isHygienistUser(curUser);
+    if (isHyg) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding: 24px;"><i class="fa-solid fa-lock text-red"></i> Inhabilitación de Administración de Usuarios: El perfil carece de toda atribución para consultar o gestionar usuarios del sistema, salvaguardando las cuentas administrativas del centro.</td></tr>`;
+        return;
+    }
     if ((typeof isDoctorUser === 'function' && isDoctorUser(curUser)) || (typeof canCurrentUserManageUsers === 'function' && !canCurrentUserManageUsers(curUser))) {
         tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding: 24px;"><i class="fa-solid fa-lock text-red"></i> Acceso denegado a usuarios del sistema.</td></tr>`;
         return;
@@ -17474,6 +17528,15 @@ window.renderSystemUsersTable = async function() {
 
 window.openCreateSystemUserModal = function() {
     const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const isHyg = typeof isHygienistUser === 'function' && isHygienistUser(curUser);
+    if (isHyg) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Inhabilitación de Administración de Usuarios',
+            text: 'El perfil carece de atribución para dar de alta o registrar nuevos usuarios en el sistema.'
+        });
+        return;
+    }
     if ((typeof isDoctorUser === 'function' && isDoctorUser(curUser)) || (typeof canCurrentUserManageUsers === 'function' && !canCurrentUserManageUsers(curUser))) {
         Swal.fire({
             icon: 'error',
@@ -17530,6 +17593,15 @@ window.openCreateSystemUserModal = function() {
 
 window.editSystemUser = async function(userId) {
     const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const isHygienistCurrentUser = typeof isHygienistUser === 'function' && isHygienistUser(curUser);
+    if (isHygienistCurrentUser) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Inhabilitación de Administración de Usuarios',
+            text: 'El perfil carece de atribución para consultar contraseñas o editar credenciales de usuarios del sistema.'
+        });
+        return;
+    }
     if ((typeof isDoctorUser === 'function' && isDoctorUser(curUser)) || (typeof canCurrentUserManageUsers === 'function' && !canCurrentUserManageUsers(curUser))) {
         Swal.fire({
             icon: 'error',
@@ -17609,6 +17681,15 @@ window.editSystemUser = async function(userId) {
 
 window.deleteSystemUser = async function(userId) {
     const currentUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const isHyg = typeof isHygienistUser === 'function' && isHygienistUser(currentUser);
+    if (isHyg) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Inhabilitación de Administración de Usuarios',
+            text: 'El perfil carece de atribución para remover o eliminar perfiles del sistema.'
+        });
+        return;
+    }
     if ((typeof isDoctorUser === 'function' && isDoctorUser(currentUser)) || (typeof canCurrentUserManageUsers === 'function' && !canCurrentUserManageUsers(currentUser))) {
         Swal.fire({
             icon: 'error',
@@ -17858,6 +17939,15 @@ window.quickAddNewSpecialtyFromService = function() {
 
 window.openCreateUserModal = async function() {
     const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const isHyg = typeof isHygienistUser === 'function' && isHygienistUser(curUser);
+    if (isHyg) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Inhabilitación de Administración de Usuarios',
+            text: 'El perfil carece de atribución para dar de alta o registrar nuevos usuarios en el sistema.'
+        });
+        return;
+    }
     if ((typeof isDoctorUser === 'function' && isDoctorUser(curUser)) || (typeof canCurrentUserManageUsers === 'function' && !canCurrentUserManageUsers(curUser))) {
         Swal.fire({
             icon: 'error',
@@ -17919,6 +18009,15 @@ window.openCreateUserModal = async function() {
 
 window.editUser = async function(userId) {
     const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const isHyg = typeof isHygienistUser === 'function' && isHygienistUser(curUser);
+    if (isHyg) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Inhabilitación de Administración de Usuarios',
+            text: 'El perfil carece de atribución para consultar contraseñas o editar credenciales de usuarios del sistema.'
+        });
+        return;
+    }
     if ((typeof isDoctorUser === 'function' && isDoctorUser(curUser)) || (typeof canCurrentUserManageUsers === 'function' && !canCurrentUserManageUsers(curUser))) {
         Swal.fire({
             icon: 'error',
@@ -18034,6 +18133,15 @@ window.editUser = async function(userId) {
 
 window.deleteUser = async function(userId) {
     const user = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const isHyg = typeof isHygienistUser === 'function' && isHygienistUser(user);
+    if (isHyg) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Inhabilitación de Administración de Usuarios',
+            text: 'El perfil carece de atribución para remover o eliminar perfiles del sistema.'
+        });
+        return;
+    }
     if ((typeof isDoctorUser === 'function' && isDoctorUser(user)) || (typeof canCurrentUserManageUsers === 'function' && !canCurrentUserManageUsers(user))) {
         Swal.fire({
             icon: 'error',
@@ -22550,8 +22658,17 @@ if (patientSameDay.length === 0) {
         saveUserBtn.onclick = async (e) => {
             e.preventDefault();
 
-            // RESTRICCIÓN TOTAL: El perfil médico no tiene autorización para crear o editar usuarios
+            // RESTRICCIÓN TOTAL: El perfil médico e higienista no tiene autorización para crear o editar usuarios
             const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+            const isHyg = typeof isHygienistUser === 'function' && isHygienistUser(curUser);
+            if (isHyg) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Inhabilitación de Administración de Usuarios',
+                    text: 'El perfil carece de toda atribución para dar de alta, consultar contraseñas, editar credenciales o remover perfiles del sistema, salvaguardando las cuentas administrativas del centro.'
+                });
+                return;
+            }
             if ((typeof isDoctorUser === 'function' && isDoctorUser(curUser)) || (typeof canCurrentUserManageUsers === 'function' && !canCurrentUserManageUsers(curUser))) {
                 Swal.fire({
                     icon: 'error',
@@ -22747,8 +22864,17 @@ if (patientSameDay.length === 0) {
     const handleSaveSystemUser = async (e) => {
         if (e) e.preventDefault();
 
-        // RESTRICCIÓN TOTAL: El perfil médico no tiene autorización para crear o editar usuarios del sistema
+        // RESTRICCIÓN TOTAL: El perfil médico e higienista no tiene autorización para crear o editar usuarios del sistema
         const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+        const isHygUser = typeof isHygienistUser === 'function' && isHygienistUser(curUser);
+        if (isHygUser) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Inhabilitación de Administración de Usuarios',
+                text: 'El perfil carece de toda atribución para dar de alta, consultar contraseñas, editar credenciales o remover perfiles del sistema, salvaguardando las cuentas administrativas del centro.'
+            });
+            return;
+        }
         if ((typeof isDoctorUser === 'function' && isDoctorUser(curUser)) || (typeof canCurrentUserManageUsers === 'function' && !canCurrentUserManageUsers(curUser))) {
             Swal.fire({
                 icon: 'error',
@@ -25127,6 +25253,21 @@ async function renderSettingsView() {
         btn.onclick = (e) => {
             e.preventDefault();
             const paneName = btn.dataset.pane;
+
+            if (paneName === 'system-users') {
+                const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+                const isHyg = typeof isHygienistUser === 'function' && isHygienistUser(curUser);
+                if (isHyg) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Inhabilitación de Administración de Usuarios',
+                        text: 'El perfil carece de toda atribución para dar de alta, consultar contraseñas, editar credenciales o remover perfiles del sistema, salvaguardando las cuentas administrativas del centro.'
+                    });
+                    const profileBtn = document.querySelector('.settings-nav-btn[data-pane="profile"]');
+                    if (profileBtn) profileBtn.click();
+                    return;
+                }
+            }
             
             navButtons.forEach(b => b.classList.remove('active'));
             panes.forEach(p => p.classList.remove('active'));
