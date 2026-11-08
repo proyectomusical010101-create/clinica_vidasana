@@ -1782,21 +1782,49 @@ function applyRolePermissionsUI(role) {
             const navStockBadge = document.getElementById('nav-stock-alerts-badge');
             if (navStockBadge) navStockBadge.style.display = 'none';
 
-            // Lock down Charging / Cobrar / Ventas / Abonos / Facturación
+            // Lock down Charging / Cobrar / Ventas / Abonos / Facturación & Consumibles
             const directSaleBtn = document.getElementById('btn-header-direct-sale');
             if (directSaleBtn) directSaleBtn.style.display = 'none';
             const headerActionDirectSale = document.getElementById('header-action-direct-sale');
             if (headerActionDirectSale) headerActionDirectSale.style.display = 'none';
+            const headerActionConsumableSale = document.getElementById('header-action-consumable-sale');
+            if (headerActionConsumableSale) headerActionConsumableSale.style.display = 'none';
             const ehrAbonoBtn = document.getElementById('btn-ehr-add-abono');
             if (ehrAbonoBtn) ehrAbonoBtn.style.display = 'none';
             const btnBillDirect = document.getElementById('btn-bill-budget-direct');
             if (btnBillDirect) btnBillDirect.style.display = 'none';
             const fabActDirectSale = document.getElementById('fab-act-direct-sale');
             if (fabActDirectSale) fabActDirectSale.style.display = 'none';
+            const fabActConsumableSale = document.getElementById('fab-act-consumable-sale');
+            if (fabActConsumableSale) fabActConsumableSale.style.display = 'none';
             const fabActBilling = document.getElementById('fab-act-billing');
             if (fabActBilling) fabActBilling.style.display = 'none';
             const fabActIncome = document.getElementById('fab-act-income');
             if (fabActIncome) fabActIncome.style.display = 'none';
+            const btnDirectSaleTop = document.getElementById('btn-direct-sale-top');
+            if (btnDirectSaleTop) btnDirectSaleTop.style.display = 'none';
+            const btnDirectSalePat = document.getElementById('btn-direct-sale-patients-view');
+            if (btnDirectSalePat) btnDirectSalePat.style.display = 'none';
+            const consumablesNavTab = document.querySelector('.nav-item[data-tab="consumables"]');
+            if (consumablesNavTab) consumablesNavTab.style.display = 'none';
+            const btnAddConsumable = document.getElementById('btn-add-consumable');
+            if (btnAddConsumable) btnAddConsumable.style.display = 'none';
+            const btnExportCons = document.getElementById('btn-export-consumables-excel');
+            if (btnExportCons) btnExportCons.style.display = 'none';
+            const btnTplCons = document.getElementById('btn-download-consumables-template');
+            if (btnTplCons) btnTplCons.style.display = 'none';
+            const btnImpCons = document.getElementById('btn-import-consumables');
+            if (btnImpCons) btnImpCons.style.display = 'none';
+
+            // Sidebar: Adapt label and icon for Doctor Production
+            const navHygFinLabel = document.getElementById('nav-label-hygienist-finances');
+            if (navHygFinLabel) navHygFinLabel.innerText = 'Mi Producción';
+            const navHygFinTab = document.querySelector('.nav-item[data-tab="hygienist-finances"]');
+            if (navHygFinTab) {
+                navHygFinTab.setAttribute('data-tooltip', 'Mi Producción');
+                const hygIcon = navHygFinTab.querySelector('i');
+                if (hygIcon) hygIcon.className = 'fa-solid fa-user-doctor text-cyan';
+            }
 
             // Lock down Import / Export / Templates
             const exportBtns = document.querySelectorAll('.btn-export-excel, .btn-import, .btn-download-template, #btn-export-patients-excel, #btn-import-patients, #btn-export-services-excel, #btn-import-services, #btn-export-inventory-excel, #btn-import-inventory');
@@ -1806,7 +1834,7 @@ function applyRolePermissionsUI(role) {
             const remindersBtn = document.getElementById('btn-agenda-reminders');
             if (remindersBtn) remindersBtn.style.display = 'none';
 
-            // RESTRICCIÓN TOTAL: Bloqueo absoluto de gestión de usuarios para perfil médico
+            // RESTRICCIÓN TOTAL: Bloqueo absoluto de gestión de usuarios y ventas de mostrador para perfil médico
             const usersNavTab = document.querySelector('.nav-item[data-tab="users"]');
             if (usersNavTab) usersNavTab.style.display = 'none';
             const btnNewUser = document.getElementById('btn-new-user-modal');
@@ -1816,10 +1844,10 @@ function applyRolePermissionsUI(role) {
             const btnSysUsers = document.getElementById('btn-pane-system-users');
             if (btnSysUsers) btnSysUsers.style.display = 'none';
             const curActiveTab = localStorage.getItem('dental_active_tab') || document.documentElement.getAttribute('data-active-tab');
-            if (curActiveTab === 'users' || window.location.hash === '#users') {
+            if (curActiveTab === 'users' || curActiveTab === 'consumables' || curActiveTab === 'billing' || window.location.hash === '#users' || window.location.hash === '#consumables') {
                 localStorage.setItem('dental_active_tab', 'agenda');
-                if (typeof window.switchTab === 'function') {
-                    window.switchTab('agenda');
+                if (typeof window.navigateToTab === 'function') {
+                    window.navigateToTab('agenda');
                 }
             }
         } else {
@@ -1828,6 +1856,16 @@ function applyRolePermissionsUI(role) {
             if (bdayHubBtn) bdayHubBtn.style.display = 'inline-flex';
             const bdayCard = document.querySelector('.dashboard-birthdays-card');
             if (bdayCard) bdayCard.style.display = 'block';
+
+            // Restore sidebar label for Hygienist / Admin
+            const navHygFinLabel = document.getElementById('nav-label-hygienist-finances');
+            if (navHygFinLabel) navHygFinLabel.innerText = 'Mis Finanzas';
+            const navHygFinTab = document.querySelector('.nav-item[data-tab="hygienist-finances"]');
+            if (navHygFinTab) {
+                navHygFinTab.setAttribute('data-tooltip', 'Mis Finanzas');
+                const hygIcon = navHygFinTab.querySelector('i');
+                if (hygIcon) hygIcon.className = 'fa-solid fa-wallet text-cyan';
+            }
         }
 
         if (isHyg) {
@@ -1879,11 +1917,11 @@ function renderMobileNavigationForRole(roleType) {
 
     let bottomButtons = [];
     if (roleType === 'doctor') {
-        // DOCTOR: Enfoque clínico prioritario (Agenda, Presupuesto, Historias, Mis Finanzas, Servicios)
+        // DOCTOR: Enfoque clínico prioritario (Agenda, Producción, Presupuesto, Historias, Servicios)
         bottomButtons = [
             { tab: 'dashboard', icon: 'fa-house', label: 'Home' },
             { tab: 'agenda', icon: 'fa-calendar-days', label: 'Agenda' },
-            { tab: 'hygienist-finances', icon: 'fa-wallet', label: 'Mis Finanzas' },
+            { tab: 'hygienist-finances', icon: 'fa-user-doctor', label: 'Mi Producción' },
             { tab: 'odontogram', icon: 'fa-file-invoice-dollar', label: 'Presupuesto' },
             { tab: 'ehr', icon: 'fa-notes-medical', label: 'Historias' },
             { tab: 'pricing', icon: 'fa-tags', label: 'Servicios' }
@@ -2382,7 +2420,7 @@ window.navigateToTab = async function(tabName) {
                 title: 'Acceso Restringido',
                 text: 'El perfil médico no tiene autorización bajo ninguna circunstancia para listar ni gestionar usuarios del sistema.'
             });
-            await switchTab('agenda');
+            await window.navigateToTab('agenda');
             return;
         }
         await renderUsersTable();
@@ -2403,6 +2441,16 @@ window.navigateToTab = async function(tabName) {
     } else if (tabName === 'payroll') {
         if (window.ClinicalERP) window.ClinicalERP.renderPayroll();
     } else if (tabName === 'consumables') {
+        const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+        if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Acceso Restringido',
+                text: 'El rol médico no tiene permisos para acceder a ventas de mostrador, insumos o consumibles. Esta función corresponde a Caja / Recepción.'
+            });
+            await window.navigateToTab('agenda');
+            return;
+        }
         if (typeof window.renderConsumablesView === 'function') await window.renderConsumablesView();
     } else if (tabName === 'hygienist-finances') {
         if (typeof window.renderHygienistFinancesView === 'function') await window.renderHygienistFinancesView();
@@ -7743,8 +7791,8 @@ window.openDirectSaleModal = async function(preselectedPatientId = null, initial
     if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
         Swal.fire({
             icon: 'warning',
-            title: 'Acceso Restringido a Caja',
-            text: 'El rol Médico no puede realizar ventas o facturación. La Caja o Recepción es la única encargada de generar las órdenes y ventas para el paciente.'
+            title: 'Acceso Restringido',
+            text: 'El rol médico no tiene permisos para realizar ventas de mostrador, insumos o facturación. Esta función corresponde a Caja / Recepción.'
         });
         return;
     }
@@ -9852,6 +9900,16 @@ window.setDirectSaleDoctorRatePreset = function(rate, isPrivate) {
 };
 
 window.processDirectSale = async function() {
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Acceso Restringido',
+            text: 'El rol médico no tiene permisos para realizar ventas de mostrador, insumos o facturación. Esta función corresponde a Caja / Recepción.'
+        });
+        return;
+    }
+
     const patientSelect = document.getElementById('ds-patient-select');
     const patientId = patientSelect ? patientSelect.value : null;
 
@@ -23748,6 +23806,19 @@ window.markModalClean = function(id) {
 };
 
 function openModal(id) {
+    if (id === 'modal-direct-sale' || id === 'modal-consumable') {
+        const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+        if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Acceso Restringido',
+                    text: 'El rol médico no tiene permisos para realizar ventas de mostrador, insumos o facturación. Esta función corresponde a Caja / Recepción.'
+                });
+            }
+            return;
+        }
+    }
     const el = document.getElementById(id);
     if (el) {
         el.classList.remove('hidden');
@@ -34936,6 +35007,16 @@ window.filterConsumablesList = function() {
 };
 
 window.openCreateConsumableModal = function() {
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Acceso Restringido',
+            text: 'El rol médico no tiene permisos para crear ni gestionar productos consumibles o ventas de mostrador.'
+        });
+        return;
+    }
+
     window._currentEditingConsumableCode = null;
     const modal = document.getElementById('modal-consumable');
     if (!modal) return;
@@ -34968,6 +35049,16 @@ window.openCreateConsumableModal = function() {
 };
 
 window.editConsumable = function(code) {
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Acceso Restringido',
+            text: 'El rol médico no tiene permisos para gestionar productos consumibles o ventas de mostrador.'
+        });
+        return;
+    }
+
     const list = window._cachedConsumables || [];
     const item = list.find(c => c.code === code);
     if (!item) return;
@@ -35006,6 +35097,15 @@ window.closeConsumableModal = function() {
 };
 
 window.saveConsumableFromModal = async function() {
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Acceso Restringido',
+            text: 'El rol médico no tiene permisos para crear ni guardar productos consumibles.'
+        });
+        return;
+    }
     const inName = document.getElementById('con-name') || document.getElementById('cons-name');
     const inCode = document.getElementById('con-code') || document.getElementById('cons-code');
     const inPrice = document.getElementById('con-price') || document.getElementById('cons-price-usd');
@@ -35069,6 +35169,16 @@ window.saveConsumableFromModal = async function() {
 };
 
 window.restockConsumablePrompt = async function(code) {
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Acceso Restringido',
+            text: 'El rol médico no tiene permisos para surtir inventario ni gestionar productos consumibles.'
+        });
+        return;
+    }
+
     const list = window._cachedConsumables || await SupabaseDataService.getConsumables();
     const product = list.find(c => c.code === code);
     if (!product) return;
@@ -35129,6 +35239,16 @@ window.restockConsumablePrompt = async function(code) {
 };
 
 window.deleteConsumableItem = async function(code) {
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Acceso Restringido',
+            text: 'El rol médico no tiene permisos para eliminar productos ni gestionar ventas.'
+        });
+        return;
+    }
+
     const list = window._cachedConsumables || await SupabaseDataService.getConsumables();
     const product = list.find(c => c.code === code);
     if (!product) return;
@@ -35454,9 +35574,49 @@ window.renderHygienistFinancesView = async function(filterMode = null, searchQue
     const curSearch = window._hygienistFinancesSearch || '';
 
     const currentUser = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+    const isDoctor = currentUser && typeof isDoctorUser === 'function' && isDoctorUser(currentUser);
+    const isAdmin = currentUser && (currentUser.role || '').toLowerCase().includes('admin');
+    const isHygienist = !isAdmin && !isDoctor && (currentUser?.role || '').toLowerCase().includes('higien');
+
+    // Adapt Header Title, Subtitle, Table Headers, and KPI Card titles
+    const headerTitleEl = document.querySelector('#view-hygienist-finances .view-header h1');
+    const headerSubtitleEl = document.querySelector('#view-hygienist-finances .view-header p.subtitle');
+    const thFee = document.getElementById('th-hyg-my-fee');
+    const thProcedure = document.getElementById('th-hyg-procedure');
+    const cardTotalTitle = document.getElementById('hyg-card-title-total');
+    const cardPendingTitle = document.getElementById('hyg-card-title-pending');
+    const cardSettledTitle = document.getElementById('hyg-card-title-settled');
+    const cardServicesTitle = document.getElementById('hyg-card-title-services');
+    const filterPendingLabel = document.getElementById('btn-hyg-filter-pending-label');
+    const filterSettledLabel = document.getElementById('btn-hyg-filter-settled-label');
+
+    if (isDoctor) {
+        if (headerTitleEl) headerTitleEl.innerHTML = `<i class="fa-solid fa-user-doctor text-cyan"></i> Mi Producción Médica & Honorarios`;
+        if (headerSubtitleEl) headerSubtitleEl.innerText = `Historial de procedimientos clínicos ejecutados por su persona y estatus del saldo pendiente de cobro.`;
+        if (thFee) thFee.innerText = 'Mis Honorarios ($)';
+        if (thProcedure) thProcedure.innerText = 'Procedimiento Clínico';
+        if (cardTotalTitle) cardTotalTitle.innerText = 'Total Honorarios Devengados';
+        if (cardPendingTitle) cardPendingTitle.innerText = 'Saldo Pendiente por Liquidar';
+        if (cardSettledTitle) cardSettledTitle.innerText = 'Total Honorarios Liquidados';
+        if (cardServicesTitle) cardServicesTitle.innerText = 'Procedimientos Realizados';
+        if (filterPendingLabel) filterPendingLabel.innerText = 'Pendientes por Liquidar';
+        if (filterSettledLabel) filterSettledLabel.innerText = 'Honorarios Liquidados';
+    } else {
+        if (headerTitleEl) headerTitleEl.innerHTML = `<i class="fa-solid fa-wallet text-cyan"></i> Mis Finanzas & Comisiones`;
+        if (headerSubtitleEl) headerSubtitleEl.innerText = `Consulta y balance detallado de comisiones devengadas, pagos recibidos y servicios asistidos.`;
+        if (thFee) thFee.innerText = 'Mi Comisión ($)';
+        if (thProcedure) thProcedure.innerText = 'Procedimiento Odontológico';
+        if (cardTotalTitle) cardTotalTitle.innerText = 'Total Comisiones Devengadas';
+        if (cardPendingTitle) cardPendingTitle.innerText = 'Pendiente por Cobrar';
+        if (cardSettledTitle) cardSettledTitle.innerText = 'Total Ya Cobrado';
+        if (cardServicesTitle) cardServicesTitle.innerText = 'Servicios & Procedimientos';
+        if (filterPendingLabel) filterPendingLabel.innerText = 'Pendientes por Cobrar';
+        if (filterSettledLabel) filterSettledLabel.innerText = 'Ya Cobrados';
+    }
+
     const userBadgeEl = document.getElementById('hyg-finance-username');
     if (userBadgeEl && currentUser) {
-        userBadgeEl.innerText = currentUser.fullname || 'Personal Médico / Higienista';
+        userBadgeEl.innerText = currentUser.fullname || (isDoctor ? 'Doctor Especialista' : 'Personal Médico / Higienista');
     }
 
     let allLiqs = [];
@@ -35464,34 +35624,44 @@ window.renderHygienistFinancesView = async function(filterMode = null, searchQue
         allLiqs = await window.SupabaseDataService.getServiceLiquidations(false);
     }
 
+    let invoices = [];
+    if (window.SupabaseDataService && window.SupabaseDataService.getInvoices) {
+        try {
+            invoices = await window.SupabaseDataService.getInvoices(false);
+        } catch(e) {
+            console.warn('[HygienistFinances] Could not fetch invoices for balance tracking:', e);
+        }
+    }
+    const invoiceMap = new Map();
+    (invoices || []).forEach(inv => {
+        if (inv && inv.id) invoiceMap.set(String(inv.id), inv);
+    });
+
     const norm = str => (str || '').toLowerCase().trim().replace(/^dr\.\s*|^dra\.\s*/i, '');
     const uNorm = norm(currentUser ? currentUser.fullname : '');
     const uId = currentUser ? String(currentUser.id) : '';
-    const isAdmin = currentUser && (currentUser.role || '').toLowerCase().includes('admin');
 
-    // Filter strictly services related to this hygienist / assistant
+    // Filter strictly services related to this professional
     const myServices = allLiqs.filter(item => {
-        // Assistant fee check
+        if (isDoctor) {
+            // DOCTOR: Strictly match doctor id or doctor name. NEVER match assistant.
+            const doc = item.doctor;
+            if (!doc) return false;
+            const docId = String(doc.id || '');
+            const docNameNorm = norm(doc.name);
+            return (uId && docId === uId) || (uNorm && docNameNorm === uNorm) || (uNorm && docNameNorm.includes(uNorm)) || (uNorm && uNorm.includes(docNameNorm));
+        }
+
+        if (isAdmin) {
+            return true;
+        }
+
+        // Hygienist / Assistant: strictly match assistant
         const ast = item.assistant;
         if (ast && ast.has_assistant) {
             const astNameNorm = norm(ast.name);
             const astId = String(ast.id || '');
-            if (astId === uId || astNameNorm === uNorm || (uNorm && astNameNorm.includes(uNorm)) || (uNorm && uNorm.includes(astNameNorm))) {
-                return true;
-            }
-        }
-        // Doctor fee check
-        const doc = item.doctor;
-        if (doc) {
-            const docNameNorm = norm(doc.name);
-            const docId = String(doc.id || '');
-            if (docId === uId || docNameNorm === uNorm || (uNorm && docNameNorm.includes(uNorm)) || (uNorm && uNorm.includes(docNameNorm))) {
-                return true;
-            }
-        }
-        // If admin is inspecting the view, show all hygienist / assistant services
-        if (isAdmin && ast && ast.has_assistant && ast.name && ast.name.toLowerCase() !== 'no aplica') {
-            return true;
+            return (uId && astId === uId) || (uNorm && astNameNorm === uNorm) || (uNorm && astNameNorm.includes(uNorm)) || (uNorm && uNorm.includes(astNameNorm));
         }
         return false;
     });
@@ -35504,16 +35674,26 @@ window.renderHygienistFinancesView = async function(filterMode = null, searchQue
     const rate = (typeof window.getExchangeRate === 'function') ? window.getExchangeRate() : 36.5;
 
     myServices.forEach(item => {
-        const ast = item.assistant;
-        const isAst = ast && ast.has_assistant && (norm(ast.name) === uNorm || String(ast.id || '') === uId || isAdmin);
-        const feeAmt = isAst ? parseFloat(ast.amount || 0) : parseFloat(item.doctor?.amount || 0);
-        const isPend = isAst ? (ast.status === 'Pendiente') : (item.doctor?.status === 'Pendiente');
+        let feeAmt = 0;
+        let isPend = false;
+        let settledAmt = 0;
+
+        if (isDoctor) {
+            feeAmt = parseFloat(item.doctor?.amount || 0);
+            isPend = (item.doctor?.status === 'Pendiente');
+            settledAmt = parseFloat(item.doctor?.settled_amount || feeAmt);
+        } else {
+            const ast = item.assistant;
+            const isAst = ast && ast.has_assistant && (norm(ast.name) === uNorm || String(ast.id || '') === uId || isAdmin);
+            feeAmt = isAst ? parseFloat(ast.amount || 0) : parseFloat(item.doctor?.amount || 0);
+            isPend = isAst ? (ast.status === 'Pendiente') : (item.doctor?.status === 'Pendiente');
+            settledAmt = isAst ? parseFloat(ast.settled_amount || feeAmt) : parseFloat(item.doctor?.settled_amount || feeAmt);
+        }
 
         totalEarned += feeAmt;
         if (isPend) {
             totalPending += feeAmt;
         } else {
-            const settledAmt = isAst ? parseFloat(ast.settled_amount || feeAmt) : parseFloat(item.doctor?.settled_amount || feeAmt);
             totalSettled += settledAmt;
         }
 
@@ -35543,12 +35723,14 @@ window.renderHygienistFinancesView = async function(filterMode = null, searchQue
     let displayList = [...myServices];
     if (curFilter === 'pending') {
         displayList = displayList.filter(item => {
+            if (isDoctor) return item.doctor?.status === 'Pendiente';
             const ast = item.assistant;
             const isAst = ast && ast.has_assistant && (norm(ast.name) === uNorm || String(ast.id || '') === uId || isAdmin);
             return isAst ? (ast.status === 'Pendiente') : (item.doctor?.status === 'Pendiente');
         });
     } else if (curFilter === 'settled') {
         displayList = displayList.filter(item => {
+            if (isDoctor) return item.doctor?.status === 'Liquidado';
             const ast = item.assistant;
             const isAst = ast && ast.has_assistant && (norm(ast.name) === uNorm || String(ast.id || '') === uId || isAdmin);
             return isAst ? (ast.status === 'Liquidado') : (item.doctor?.status === 'Liquidado');
@@ -35571,9 +35753,9 @@ window.renderHygienistFinancesView = async function(filterMode = null, searchQue
         tbody.innerHTML = `
             <tr>
                 <td colspan="9" style="padding: 40px 20px; text-align: center; color: #64748b;">
-                    <div style="font-size: 2.2rem; margin-bottom: 8px; color: #cbd5e1;"><i class="fa-solid fa-tooth"></i></div>
-                    <strong style="font-size: 1rem; color: #1e293b;">No hay servicios o comisiones en este filtro</strong>
-                    <p style="margin: 4px 0 0 0; font-size: 0.84rem;">A medida que atiendas o asistas procedimientos en sillón dental y se facturen, verás aquí tus honorarios al instante.</p>
+                    <div style="font-size: 2.2rem; margin-bottom: 8px; color: #cbd5e1;"><i class="fa-solid ${isDoctor ? 'fa-user-doctor' : 'fa-tooth'}"></i></div>
+                    <strong style="font-size: 1rem; color: #1e293b;">${isDoctor ? 'No posee procedimientos clínicos registrados en este filtro' : 'No hay servicios o comisiones en este filtro'}</strong>
+                    <p style="margin: 4px 0 0 0; font-size: 0.84rem;">${isDoctor ? 'A medida que atiendas citas de pacientes derivados y se registren sus liquidaciones, verás aquí tu producción y honorarios en tiempo real.' : 'A medida que atiendas o asistas procedimientos en sillón dental y se facturen, verás aquí tus honorarios al instante.'}</p>
                 </td>
             </tr>
         `;
@@ -35581,39 +35763,70 @@ window.renderHygienistFinancesView = async function(filterMode = null, searchQue
     }
 
     tbody.innerHTML = displayList.map(item => {
-        const ast = item.assistant;
-        const isAst = ast && ast.has_assistant && (norm(ast.name) === uNorm || String(ast.id || '') === uId || isAdmin);
-        const feeAmt = isAst ? parseFloat(ast.amount || 0) : parseFloat(item.doctor?.amount || 0);
-        const isPend = isAst ? (ast.status === 'Pendiente') : (item.doctor?.status === 'Pendiente');
-        const price = parseFloat(item.service_price || 0);
+        let feeAmt = 0;
+        let isPend = false;
+        let rateObj = null;
 
-        const rateObj = isAst ? ast : item.doctor;
-        const rateText = rateObj?.type === 'fixed' 
-            ? `Fijo $${parseFloat(rateObj.rate || 0).toFixed(2)}` 
-            : `${rateObj?.rate || 30}%`;
+        if (isDoctor) {
+            feeAmt = parseFloat(item.doctor?.amount || 0);
+            isPend = (item.doctor?.status === 'Pendiente');
+            rateObj = item.doctor;
+        } else {
+            const ast = item.assistant;
+            const isAst = ast && ast.has_assistant && (norm(ast.name) === uNorm || String(ast.id || '') === uId || isAdmin);
+            feeAmt = isAst ? parseFloat(ast.amount || 0) : parseFloat(item.doctor?.amount || 0);
+            isPend = isAst ? (ast.status === 'Pendiente') : (item.doctor?.status === 'Pendiente');
+            rateObj = isAst ? ast : item.doctor;
+        }
+
+        const price = parseFloat(item.service_price || 0);
+        const rateText = (rateObj?.calc_type === 'fixed' || rateObj?.type === 'fixed')
+            ? `Fijo $${parseFloat(rateObj.rate || 0).toFixed(2)}`
+            : `${rateObj?.rate || (isDoctor ? 40 : 30)}%`;
 
         const dateStr = item.date || (item.created_at ? item.created_at.substring(0, 10) : 'Hoy');
         const vesAmt = (feeAmt * rate).toFixed(2);
 
-        const paidDetail = isPend 
-            ? `<span class="badge-tag amber" style="font-size: 0.72rem;"><i class="fa-solid fa-clock"></i> Pendiente</span>`
+        // Status of patient payment / outstanding collection
+        let patientPaymentBadge = '';
+        const inv = item.invoice_id ? invoiceMap.get(String(item.invoice_id)) : null;
+        if (inv) {
+            const bal = parseFloat(inv.balanceRef !== undefined ? inv.balanceRef : (inv.metadata?.balanceUSD !== undefined ? inv.metadata.balanceUSD : 0));
+            if (!isNaN(bal) && bal > 0.05) {
+                patientPaymentBadge = `<span class="badge-tag amber" style="font-size: 0.70rem; padding: 2px 6px;" title="Saldo pendiente que debe el paciente a la clínica"><i class="fa-solid fa-clock"></i> Saldo Paciente: $${bal.toFixed(2)}</span>`;
+            } else if (inv.status === 'Liquidado Cashea' || inv.is_cashea || item.is_cashea) {
+                patientPaymentBadge = `<span class="badge-tag cyan" style="font-size: 0.70rem; padding: 2px 6px;"><i class="fa-solid fa-bag-shopping"></i> Cashea (Cobrado)</span>`;
+            } else {
+                patientPaymentBadge = `<span class="badge-tag green" style="font-size: 0.70rem; padding: 2px 6px;"><i class="fa-solid fa-check"></i> Paciente al día</span>`;
+            }
+        } else if (item.is_credit) {
+            patientPaymentBadge = `<span class="badge-tag amber" style="font-size: 0.70rem; padding: 2px 6px;"><i class="fa-solid fa-clock"></i> Crédito Pendiente</span>`;
+        } else if (item.is_cashea) {
+            patientPaymentBadge = `<span class="badge-tag cyan" style="font-size: 0.70rem; padding: 2px 6px;"><i class="fa-solid fa-bag-shopping"></i> Cashea</span>`;
+        } else {
+            patientPaymentBadge = `<span class="badge-tag green" style="font-size: 0.70rem; padding: 2px 6px;"><i class="fa-solid fa-check"></i> Cobrado</span>`;
+        }
+
+        const paidDetail = isPend
+            ? `<span class="badge-tag amber" style="font-size: 0.72rem;"><i class="fa-solid fa-clock"></i> Pendiente Liquidación</span>`
             : `<div style="font-size: 0.76rem; color: #15803d; font-weight: 600;">
-                <i class="fa-solid fa-circle-check"></i> ${rateObj?.payment_method || 'Transferencia'}
+                <i class="fa-solid fa-circle-check"></i> ${rateObj?.payment_method || 'Liquidado'}
                 ${rateObj?.payment_ref ? `<div style="font-size: 0.70rem; color: #64748b;">Ref: ${rateObj.payment_ref}</div>` : ''}
                 ${rateObj?.paid_at ? `<div style="font-size: 0.68rem; color: #94a3b8;">${rateObj.paid_at.substring(0, 10)}</div>` : ''}
                </div>`;
 
         return `
             <tr style="border-bottom: 1px solid #f1f5f9;">
-                <td style="padding: 10px 14px; color: #475569; font-size: 0.80rem;">
+                <td style="padding: 10px 14px; color: #475569; font-size: 0.80rem; white-space: nowrap;">
                     <i class="fa-regular fa-calendar text-muted"></i> ${dateStr}
                 </td>
                 <td style="padding: 10px 14px;">
                     <strong style="color: #0f172a; font-size: 0.85rem;"><i class="fa-solid fa-user-check text-cyan" style="font-size: 0.78rem;"></i> ${item.patient_name || 'Paciente Particular'}</strong>
+                    <div style="margin-top: 3px;">${patientPaymentBadge}</div>
                 </td>
                 <td style="padding: 10px 14px;">
                     <div style="font-weight: 600; color: #1e293b; font-size: 0.85rem;">${item.service_name}</div>
-                    ${item.notes ? `<div style="font-size: 0.72rem; color: #64748b;">${item.notes}</div>` : ''}
+                    ${item.notes ? `<div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">${item.notes}</div>` : ''}
                 </td>
                 <td style="padding: 10px 14px; text-align: right; font-weight: 600; color: #475569;">
                     $${price.toFixed(2)}
