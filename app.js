@@ -2140,6 +2140,26 @@ function applyRolePermissionsUI(role) {
             if (fabConsumableSale) fabConsumableSale.style.display = 'none';
             const fabDirectSale = document.getElementById('fab-act-direct-sale');
             if (fabDirectSale) fabDirectSale.style.display = 'none';
+            const fabActBilling = document.getElementById('fab-act-billing');
+            if (fabActBilling) fabActBilling.style.display = 'none';
+            const fabActIncome = document.getElementById('fab-act-income');
+            if (fabActIncome) fabActIncome.style.display = 'none';
+            const btnDirectSaleTop = document.getElementById('btn-direct-sale-top');
+            if (btnDirectSaleTop) btnDirectSaleTop.style.display = 'none';
+            const btnDirectSalePat = document.getElementById('btn-direct-sale-patients-view');
+            if (btnDirectSalePat) btnDirectSalePat.style.display = 'none';
+
+            // Cero visibilidad financiera directa: Ocultar cards de facturación general en dashboard
+            const cardToday = document.getElementById('card-metric-today-income');
+            const cardMonth = document.getElementById('card-metric-month-income');
+            const cardReceivables = document.getElementById('card-metric-receivables');
+            const cardDoctorPerf = document.getElementById('card-metric-top-doctor');
+            const cardSpecialtyPerf = document.getElementById('card-metric-top-specialty');
+            if (cardToday) cardToday.style.display = 'none';
+            if (cardMonth) cardMonth.style.display = 'none';
+            if (cardReceivables) cardReceivables.style.display = 'none';
+            if (cardDoctorPerf) cardDoctorPerf.style.display = 'none';
+            if (cardSpecialtyPerf) cardSpecialtyPerf.style.display = 'none';
 
             // Ocultamiento total de presupuestos médicos no odontológicos para higienista
             const medEditor = document.getElementById('medical-budget-editor-container');
@@ -2167,6 +2187,20 @@ function applyRolePermissionsUI(role) {
                 });
             }
         } else {
+            // Restore financial cards for non-hygienist roles (when not doctor or as appropriate)
+            if (!isDoc) {
+                const cardToday = document.getElementById('card-metric-today-income');
+                const cardMonth = document.getElementById('card-metric-month-income');
+                const cardReceivables = document.getElementById('card-metric-receivables');
+                const cardDoctorPerf = document.getElementById('card-metric-top-doctor');
+                const cardSpecialtyPerf = document.getElementById('card-metric-top-specialty');
+                if (cardToday) cardToday.style.display = '';
+                if (cardMonth) cardMonth.style.display = '';
+                if (cardReceivables) cardReceivables.style.display = '';
+                if (cardDoctorPerf) cardDoctorPerf.style.display = '';
+                if (cardSpecialtyPerf) cardSpecialtyPerf.style.display = '';
+            }
+
             // Restore inventory area filters for admin/assistant
             const invAreaGroup = document.getElementById('inventory-area-filters');
             if (invAreaGroup) {
@@ -2607,9 +2641,18 @@ window.navigateToTab = async function(tabName) {
         const allowedTabs = {
             admin: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll', 'consumables'],
             doctor: ['dashboard', 'agenda', 'odontogram', 'ehr', 'pricing', 'settings', 'help', 'hygienist-finances'],
-            hygienist: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'consumables', 'settings', 'help', 'hygienist-finances'],
+            hygienist: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'settings', 'help', 'hygienist-finances'],
             assistant: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'billing', 'settings', 'help', 'consumables']
         }[roleType] || ['dashboard', 'help'];
+
+        if (isHygienist && (tabName === 'billing' || tabName === 'finance' || tabName === 'payroll')) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Cero Visibilidad Financiera Directa',
+                text: 'La higienista no tiene acceso a la caja, ni a módulos de recepción de pagos, ni a reportes de facturación general.'
+            });
+            return window.navigateToTab('dashboard');
+        }
 
         if (tabName === 'finance' && !isAdmin) {
             Swal.fire({
@@ -2821,6 +2864,16 @@ window.returnToActiveBudgetView = function() {
 // DASHBOARD STAT CARDS DIRECT NAVIGATION HELPERS
 // ==========================================
 window.navigateToDailyIncome = async function() {
+    const cur = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const isHyg = cur && (typeof isHygienistUser === 'function' ? isHygienistUser(cur) : (typeof isHygienistRole === 'function' && isHygienistRole(cur.role)));
+    if (isHyg) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Cero Visibilidad Financiera Directa',
+            text: 'La higienista no tiene acceso a la caja, ni a módulos de recepción de pagos, ni a reportes de facturación general.'
+        });
+        return;
+    }
     await window.navigateToTab('finance');
     const btnClosing = document.querySelector('#view-finance .subtab-btn[data-subtab="daily-closing"]');
     if (btnClosing) {
@@ -2837,6 +2890,16 @@ window.navigateToDailyIncome = async function() {
 };
 
 window.navigateToMonthIncome = async function() {
+    const cur = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const isHyg = cur && (typeof isHygienistUser === 'function' ? isHygienistUser(cur) : (typeof isHygienistRole === 'function' && isHygienistRole(cur.role)));
+    if (isHyg) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Cero Visibilidad Financiera Directa',
+            text: 'La higienista no tiene acceso a la caja, ni a módulos de recepción de pagos, ni a reportes de facturación general.'
+        });
+        return;
+    }
     await window.navigateToTab('finance');
     const btnCashFlow = document.querySelector('#view-finance .subtab-btn[data-subtab="cash-flow"]');
     if (btnCashFlow) {
@@ -2864,6 +2927,16 @@ window.navigateToConversionBudgets = async function() {
 };
 
 window.navigateToReceivables = async function() {
+    const cur = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const isHyg = cur && (typeof isHygienistUser === 'function' ? isHygienistUser(cur) : (typeof isHygienistRole === 'function' && isHygienistRole(cur.role)));
+    if (isHyg) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Cero Visibilidad Financiera Directa',
+            text: 'La higienista no tiene acceso a la caja, ni a módulos de recepción de pagos, ni a reportes de facturación general.'
+        });
+        return;
+    }
     await window.navigateToTab('finance');
     const btnReceivables = document.querySelector('#view-finance .subtab-btn[data-subtab="receivables"]');
     if (btnReceivables) {
@@ -2880,10 +2953,16 @@ window.navigateToReceivables = async function() {
 };
 
 window.navigateToDoctorPerformance = async function() {
+    const cur = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const isHyg = cur && (typeof isHygienistUser === 'function' ? isHygienistUser(cur) : (typeof isHygienistRole === 'function' && isHygienistRole(cur.role)));
+    if (isHyg) return;
     await window.navigateToTab('users');
 };
 
 window.navigateToSpecialtyPerformance = async function() {
+    const cur = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const isHyg = cur && (typeof isHygienistUser === 'function' ? isHygienistUser(cur) : (typeof isHygienistRole === 'function' && isHygienistRole(cur.role)));
+    if (isHyg) return;
     await window.navigateToTab('specialties');
 };
 
@@ -11830,7 +11909,26 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
                 };
             }
 
-            // 5. Pagos Tab (Balance Financiero del Paciente en Expediente)
+            // 5. Pagos Tab (Cero visibilidad financiera directa para Higienista)
+            const paySubtabBtn = document.querySelector('#view-ehr .subtab-btn[data-subtab="payments-tab"]');
+            const paySubtabContent = document.getElementById('subtab-payments-tab');
+            const btnAddAbono = document.getElementById('btn-ehr-add-abono');
+
+            if (isHygienist) {
+                if (paySubtabBtn) paySubtabBtn.style.display = 'none';
+                if (paySubtabContent) paySubtabContent.style.display = 'none';
+                if (btnAddAbono) btnAddAbono.style.display = 'none';
+                const curSavedSubtab = localStorage.getItem('dental_ehr_subtab') || window.currentEHRSubtab;
+                if (curSavedSubtab === 'payments-tab') {
+                    window.currentEHRSubtab = 'summary';
+                    localStorage.setItem('dental_ehr_subtab', 'summary');
+                }
+            } else {
+                if (paySubtabBtn) paySubtabBtn.style.display = '';
+                if (paySubtabContent) paySubtabContent.style.display = '';
+                if (btnAddAbono) btnAddAbono.style.display = '';
+            }
+
             const payTbody = document.getElementById('ehr-payments-table-body');
             if (payTbody) payTbody.innerHTML = '';
             
@@ -12221,11 +12319,17 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
     // Bind click events on subtabs
     document.querySelectorAll('#view-ehr .subtab-btn').forEach(btn => {
         btn.onclick = function() {
+            const subtabVal = this.dataset.subtab;
+            const curSubUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+            const isHygSub = curSubUser && (typeof isHygienistUser === 'function' ? isHygienistUser(curSubUser) : (typeof isHygienistRole === 'function' && isHygienistRole(curSubUser.role)));
+            if (isHygSub && subtabVal === 'payments-tab') {
+                return;
+            }
+
             document.querySelectorAll('#view-ehr .subtab-btn').forEach(b => b.classList.remove('active'));
             document.querySelectorAll('#view-ehr .subtab-content').forEach(c => c.classList.remove('active'));
             
             this.classList.add('active');
-            const subtabVal = this.dataset.subtab;
             window.currentEHRSubtab = subtabVal;
             localStorage.setItem('dental_ehr_subtab', subtabVal);
 
@@ -12240,7 +12344,12 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
     });
 
     // Auto-restore active subtab state (e.g. 'interconsultation', 'summary', etc.) without resetting
-    const savedSubtab = localStorage.getItem('dental_ehr_subtab') || window.currentEHRSubtab || 'summary';
+    let savedSubtab = localStorage.getItem('dental_ehr_subtab') || window.currentEHRSubtab || 'summary';
+    const curU = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const isHygU = curU && (typeof isHygienistUser === 'function' ? isHygienistUser(curU) : (typeof isHygienistRole === 'function' && isHygienistRole(curU.role)));
+    if (isHygU && savedSubtab === 'payments-tab') {
+        savedSubtab = 'summary';
+    }
     const targetSubtabBtn = document.querySelector(`#view-ehr .subtab-btn[data-subtab="${savedSubtab}"]`);
     if (targetSubtabBtn) {
         document.querySelectorAll('#view-ehr .subtab-btn').forEach(b => b.classList.remove('active'));
@@ -13559,15 +13668,16 @@ async function renderDashboard(preset, customStart, customEnd) {
         rangeBadge.innerText = `${range.label} (${range.start} al ${range.end})`;
     }
 
+    const currentUser = getCurrentUser();
+    const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
+    const isDoctor = currentUser && (typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false);
+    const isHygienist = currentUser && (typeof isHygienistRole === 'function' ? isHygienistRole(currentUser.role) : (currentUser.role && currentUser.role.toLowerCase().includes('higien')));
+    const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor && !isHygienist);
+
     const agendaList = document.getElementById('dashboard-agenda-list');
     if (agendaList) {
         agendaList.innerHTML = '';
         let appointments = await SupabaseDataService.getAppointments();
-        const currentUser = getCurrentUser();
-        const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
-        const isDoctor = currentUser && (typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false);
-        const isHygienist = currentUser && (typeof isHygienistRole === 'function' ? isHygienistRole(currentUser.role) : (currentUser.role && currentUser.role.toLowerCase().includes('higien')));
-        const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor && !isHygienist);
 
         if (isDoctor) {
             const docId = String(currentUser.id || '').trim();
@@ -13656,7 +13766,7 @@ async function renderDashboard(preset, customStart, customEnd) {
                     `;
                 }
 
-                const abonoBtn = (isAttended || isDoctor) ? '' : `
+                const abonoBtn = (isAttended || isDoctor || isHygienist) ? '' : `
                     <button class="btn btn-xs btn-outline btn-appt-pay" style="border-color: #10b981; color: #059669; font-weight: 600;" onclick="window.openPaymentModalForAppointment('${app.patientId}', '${app.patientName}', '${app.treatment}')" title="Registrar Abono Anticipado">
                         <i class="fa-solid fa-hand-holding-dollar"></i> <span class="btn-text-full">Abonar</span>
                     </button>
@@ -13883,7 +13993,27 @@ async function renderDashboard(preset, customStart, customEnd) {
 
         const conversionPct = totalBudgets > 0 ? Math.round((approvedBudgets / totalBudgets) * 100) : 0;
 
-        // Render Cards
+        // Render Cards (Cero visibilidad financiera directa para Higienista)
+        const cardToday = document.getElementById('card-metric-today-income');
+        const cardMonth = document.getElementById('card-metric-month-income');
+        const cardReceivables = document.getElementById('card-metric-receivables');
+        const cardDoctorPerf = document.getElementById('card-metric-top-doctor');
+        const cardSpecialtyPerf = document.getElementById('card-metric-top-specialty');
+
+        if (isHygienist) {
+            if (cardToday) cardToday.style.display = 'none';
+            if (cardMonth) cardMonth.style.display = 'none';
+            if (cardReceivables) cardReceivables.style.display = 'none';
+            if (cardDoctorPerf) cardDoctorPerf.style.display = 'none';
+            if (cardSpecialtyPerf) cardSpecialtyPerf.style.display = 'none';
+        } else {
+            if (cardToday) cardToday.style.display = '';
+            if (cardMonth) cardMonth.style.display = '';
+            if (cardReceivables) cardReceivables.style.display = '';
+            if (cardDoctorPerf) cardDoctorPerf.style.display = '';
+            if (cardSpecialtyPerf) cardSpecialtyPerf.style.display = '';
+        }
+
         const metricToday = document.getElementById('metric-today-income');
         if (metricToday) metricToday.innerText = `${curSymbol}${todayIncome.toFixed(2)}`;
 
@@ -14926,7 +15056,7 @@ async function renderAgendaView(filter = (window.currentAgendaFilter || 'pending
             `;
         }
 
-        const abonoBtn = (isAttended || isCancelled || isDoctor) ? '' : `
+        const abonoBtn = (isAttended || isCancelled || isDoctor || isHygienist) ? '' : `
             <button class="btn btn-xs btn-outline btn-appt-pay" style="border-color: #10b981; color: #059669; font-weight: 600;" onclick="window.openPaymentModalForAppointment('${app.patientId}', '${app.patientName}', '${app.treatment}')" title="Registrar Abono Anticipado">
                 <i class="fa-solid fa-hand-holding-dollar"></i> <span class="btn-text-full">Abonar</span>
             </button>
@@ -15317,6 +15447,20 @@ window.openSessionModalForPatient = async function(patientId, sessionNum, proced
         const container = document.getElementById('session-materials-container');
         renderSessionMaterialsList(inventory, container);
 
+        // Cero visibilidad financiera directa para Higienista en sesión clínica
+        const payContainer = document.getElementById('s-payment-details-container');
+        if (payContainer) {
+            if (isHyg) {
+                payContainer.style.display = 'none';
+                const pAmt = document.getElementById('s-payment-amount');
+                if (pAmt) pAmt.value = '0.00';
+                const pAmtBs = document.getElementById('s-payment-amount-bs');
+                if (pAmtBs) pAmtBs.value = '0.00';
+            } else {
+                payContainer.style.display = 'block';
+            }
+        }
+
         window.sessionSigPad = setupSignaturePad('session-signature-canvas', 'btn-clear-session-signature');
         openModal('modal-session');
     } catch(e) {
@@ -15345,11 +15489,13 @@ window.setSessionProcedurePreset = function(presetType) {
 window.openPaymentModalForAppointment = async function(patientId, patientName, treatment) {
     try {
         const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
-        if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
+        const isDoc = curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser);
+        const isHyg = curUser && (typeof isHygienistUser === 'function' ? isHygienistUser(curUser) : (typeof isHygienistRole === 'function' && isHygienistRole(curUser.role)));
+        if (isDoc || isHyg) {
             Swal.fire({
                 icon: 'warning',
-                title: 'Acceso Restringido a Caja',
-                text: 'El rol médico no está autorizado para registrar abonos ni cobros. Las cobranzas deben realizarse exclusivamente por Recepción / Caja.'
+                title: 'Cero Visibilidad Financiera Directa',
+                text: 'Su rol no está autorizado para recibir pagos ni cobros. Las cobranzas deben realizarse exclusivamente por Recepción / Caja.'
             });
             return;
         }
@@ -18719,15 +18865,22 @@ function initGlobalEvents() {
 
         const signatureData = window.sessionSigPad ? window.sessionSigPad.getDataURL() : '';
 
-        // Extract payment info
-        const paymentUSD = parseFloat(document.getElementById('s-payment-amount').value) || 0;
-        const paymentMethod = document.getElementById('s-payment-method').value || 'cash';
-        const paymentBank = document.getElementById('s-payment-bank') ? document.getElementById('s-payment-bank').value.trim() : '';
-        const paymentReference = document.getElementById('s-payment-reference') ? document.getElementById('s-payment-reference').value.trim() : '';
+        // Extract payment info (Cero visibilidad ni cobro directo para Higienista)
+        let paymentUSD = parseFloat(document.getElementById('s-payment-amount').value) || 0;
+        let paymentMethod = document.getElementById('s-payment-method').value || 'cash';
+        let paymentBank = document.getElementById('s-payment-bank') ? document.getElementById('s-payment-bank').value.trim() : '';
+        let paymentReference = document.getElementById('s-payment-reference') ? document.getElementById('s-payment-reference').value.trim() : '';
         let splitPayments = null;
         let paymentMethodLabel = getPaymentMethodLabel(paymentMethod);
 
-        if (paymentMethod === 'split') {
+        const curSessionUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+        const isHyg = curSessionUser && (typeof isHygienistUser === 'function' ? isHygienistUser(curSessionUser) : (typeof isHygienistRole === 'function' && isHygienistRole(curSessionUser.role)));
+        if (isHyg) {
+            paymentUSD = 0;
+            splitPayments = null;
+        }
+
+        if (paymentMethod === 'split' && !isHyg) {
             splitPayments = {};
             document.querySelectorAll('.s-split-input').forEach(inp => {
                 const methodKey = inp.dataset.method;
@@ -18754,8 +18907,6 @@ function initGlobalEvents() {
             if (!patient) return;
 
             // Validación obligatoria de paciente para procedimientos auxiliares y bonificación
-            const curSessionUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
-            const isHyg = curSessionUser && (typeof isHygienistUser === 'function' ? isHygienistUser(curSessionUser) : (typeof isHygienistRole === 'function' && isHygienistRole(curSessionUser.role)));
             const isAuxiliary = isHyg || /radiograf|rayos\s*x|\brx\b|impresi[óo]n|modelo|profilaxis|limpieza/i.test(procedure);
 
             if (isAuxiliary) {
@@ -19170,11 +19321,13 @@ function initGlobalEvents() {
     // Modal Registrar Pago Handler (Global and Reciprocal)
     window.openEhrPaymentModal = function() {
         const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
-        if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
+        const isDoc = curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser);
+        const isHyg = curUser && (typeof isHygienistUser === 'function' ? isHygienistUser(curUser) : (typeof isHygienistRole === 'function' && isHygienistRole(curUser.role)));
+        if (isDoc || isHyg) {
             Swal.fire({
                 icon: 'warning',
-                title: 'Acceso Restringido a Caja',
-                text: 'El rol médico no está autorizado para registrar abonos ni pagos. Esta operación debe ser gestionada exclusivamente por Caja y Recepción.'
+                title: 'Cero Visibilidad Financiera Directa',
+                text: 'Su rol no está autorizado para registrar abonos ni pagos. Esta operación debe ser gestionada exclusivamente por Caja y Recepción.'
             });
             return;
         }
@@ -19275,6 +19428,18 @@ function initGlobalEvents() {
     if (savePayBtn) {
         savePayBtn.onclick = async (e) => {
             e.preventDefault();
+            const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+            const isDoc = curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser);
+            const isHyg = curUser && (typeof isHygienistUser === 'function' ? isHygienistUser(curUser) : (typeof isHygienistRole === 'function' && isHygienistRole(curUser.role)));
+            if (isDoc || isHyg) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Cero Visibilidad Financiera Directa',
+                    text: 'Su rol no está autorizado para registrar pagos.'
+                });
+                return;
+            }
+
             const activeId = getActivePatientId();
             if (!activeId) return;
 
