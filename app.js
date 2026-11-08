@@ -450,14 +450,14 @@ function isPatientAssignedToDoctor(patient, doctorUser, appointments = null, bud
     if (!patient || !doctorUser) return false;
     const docId = String(doctorUser.id || '').trim();
     const docName = String(doctorUser.fullname || doctorUser.name || '').trim().toLowerCase();
-    const cleanDocName = docName.replace(/^dr.s*|^dra.s*/i, '').trim();
+    const cleanDocName = docName.replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
 
     // 1. Direct field on patient
     const pDocId = String(patient.doctorId || patient.assignedDoctorId || (patient.metadata && (patient.metadata.doctorId || patient.metadata.assignedDoctorId)) || '').trim();
     if (docId && pDocId && pDocId === docId) return true;
 
     const pDocName = String(patient.assignedDoctor || (patient.metadata && patient.metadata.assignedDoctor) || '').trim().toLowerCase();
-    const cleanPDocName = pDocName.replace(/^dr.s*|^dra.s*/i, '').trim();
+    const cleanPDocName = pDocName.replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
     if (cleanDocName && cleanPDocName && (cleanPDocName === cleanDocName || cleanPDocName.includes(cleanDocName) || cleanDocName.includes(cleanPDocName))) {
         return true;
     }
@@ -470,36 +470,57 @@ function isPatientAssignedToDoctor(patient, doctorUser, appointments = null, bud
         const hasNote = patient.clinicalNotes.some(n => {
             const nDocId = String(n.doctorId || n.authorId || '').trim();
             if (docId && nDocId && nDocId === docId) return true;
-            const nDocName = String(n.doctor || n.doctorName || n.author || '').trim().toLowerCase().replace(/^dr.s*|^dra.s*/i, '').trim();
+            const nDocName = String(n.doctor || n.doctorName || n.author || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
             return cleanDocName && nDocName && (nDocName === cleanDocName || nDocName.includes(cleanDocName));
         });
         if (hasNote) return true;
     }
 
-    // 3. Check appointments if available
-    if (Array.isArray(appointments) && appointments.length > 0) {
+    // 2b. Check interconsultations / derivaciones
+    const meta = patient.metadata || {};
+    const ics = Array.isArray(patient.interconsultations) ? patient.interconsultations : (Array.isArray(meta.interconsultations) ? meta.interconsultations : []);
+    if (ics.length > 0) {
+        const hasIC = ics.some(ic => {
+            const icDocId = String(ic.doctorId || ic.targetDoctorId || ic.specialistId || '').trim();
+            if (docId && icDocId && icDocId === docId) return true;
+            const icDoc = String(ic.doctor || ic.doctorName || ic.specialist || ic.targetDoctor || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
+            return cleanDocName && icDoc && (icDoc === cleanDocName || icDoc.includes(cleanDocName) || cleanDocName.includes(icDoc));
+        });
+        if (hasIC) return true;
+    }
+
+    // 3. Check appointments if available (auto-fallback to cache / localStorage if null)
+    let apptsPool = appointments;
+    if (!apptsPool) {
+        apptsPool = (window.SupabaseDataService && window.SupabaseDataService._appointmentsCache) || (typeof storage !== 'undefined' && storage.get('appointments')) || [];
+    }
+    if (Array.isArray(apptsPool) && apptsPool.length > 0) {
         const patId = String(patient.id || '').trim();
         const patName = String(patient.fullname || '').trim().toLowerCase();
-        const hasAppt = appointments.some(a => {
+        const hasAppt = apptsPool.some(a => {
             const matchesPat = (patId && String(a.patientId || a.patient_id) === patId) || 
                                (patName && String(a.patientName || a.patient_name || '').toLowerCase() === patName);
             if (!matchesPat) return false;
             const aDocId = String(a.doctorId || a.doctor_id || '').trim();
             if (docId && aDocId && aDocId === docId) return true;
-            const aDocName = String(a.doctorName || a.doctor_name || a.doctor || '').trim().toLowerCase().replace(/^dr.s*|^dra.s*/i, '').trim();
+            const aDocName = String(a.doctorName || a.doctor_name || a.doctor || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
             return cleanDocName && aDocName && (aDocName === cleanDocName || aDocName.includes(cleanDocName));
         });
         if (hasAppt) return true;
     }
 
-    // 4. Check budgets if available
-    if (Array.isArray(budgets) && budgets.length > 0) {
+    // 4. Check budgets if available (auto-fallback to cache / localStorage if null)
+    let budgetsPool = budgets;
+    if (!budgetsPool) {
+        budgetsPool = (window.SupabaseDataService && window.SupabaseDataService._invoicesCache) || (typeof storage !== 'undefined' && storage.get('budgets')) || [];
+    }
+    if (Array.isArray(budgetsPool) && budgetsPool.length > 0) {
         const patId = String(patient.id || '').trim();
-        const hasBudget = budgets.some(b => {
+        const hasBudget = budgetsPool.some(b => {
             if (patId && String(b.patientId) !== patId) return false;
             const bDocId = String(b.doctorId || '').trim();
             if (docId && bDocId && bDocId === docId) return true;
-            const bDocName = String(b.doctor || b.doctorName || b.specialist || '').trim().toLowerCase().replace(/^dr.s*|^dra.s*/i, '').trim();
+            const bDocName = String(b.doctor || b.doctorName || b.specialist || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
             return cleanDocName && bDocName && (bDocName === cleanDocName || bDocName.includes(cleanDocName));
         });
         if (hasBudget) return true;
@@ -510,7 +531,7 @@ function isPatientAssignedToDoctor(patient, doctorUser, appointments = null, bud
         const hasSession = patient.sessions.some(s => {
             const sDocId = String(s.doctorId || '').trim();
             if (docId && sDocId && sDocId === docId) return true;
-            const sDoc = String(s.doctor || s.doctorName || s.specialist || '').trim().toLowerCase().replace(/^dr\.s*|^dra\.s*/i, '').trim();
+            const sDoc = String(s.doctor || s.doctorName || s.specialist || '').trim().toLowerCase().replace(/^dr\.\s*|^dra\.\s*/i, '').trim();
             return cleanDocName && sDoc && (sDoc === cleanDocName || sDoc.includes(cleanDocName) || cleanDocName.includes(sDoc));
         });
         if (hasSession) return true;
@@ -519,6 +540,30 @@ function isPatientAssignedToDoctor(patient, doctorUser, appointments = null, bud
     return false;
 }
 window.isPatientAssignedToDoctor = isPatientAssignedToDoctor;
+
+function canDoctorAccessPatient(patientOrId, doctorUser = null) {
+    const cur = doctorUser || (typeof getCurrentUser === 'function' ? getCurrentUser() : null);
+    if (!cur || typeof isDoctorUser !== 'function' || !isDoctorUser(cur)) {
+        return true;
+    }
+    if (!patientOrId) return true;
+    let patObj = (typeof patientOrId === 'object' && patientOrId !== null) ? patientOrId : null;
+    if (!patObj && typeof SupabaseDataService !== 'undefined' && SupabaseDataService._patientsCache) {
+        patObj = SupabaseDataService._patientsCache.find(p => String(p.id) === String(patientOrId));
+    }
+    if (!patObj) {
+        try {
+            const rawP = localStorage.getItem('dental_patients');
+            if (rawP) {
+                const arr = JSON.parse(rawP);
+                patObj = arr.find(p => String(p.id) === String(patientOrId));
+            }
+        } catch(e) {}
+    }
+    if (!patObj) return true;
+    return isPatientAssignedToDoctor(patObj, cur);
+}
+window.canDoctorAccessPatient = canDoctorAccessPatient;
 
 document.addEventListener('DOMContentLoaded', async () => {
     // 1. Instant local storage seed & initial render setup
@@ -1150,11 +1195,23 @@ function updateCurrencyBadge(rate, isLive) {
 }
 
 function getActivePatientId() {
-    return localStorage.getItem('dental_active_patient_id') || null;
+    const id = localStorage.getItem('dental_active_patient_id') || null;
+    if (id && typeof canDoctorAccessPatient === 'function' && !canDoctorAccessPatient(id)) {
+        localStorage.removeItem('dental_active_patient_id');
+        return null;
+    }
+    return id;
 }
 
 function setActivePatientId(id) {
     if (id) {
+        if (typeof canDoctorAccessPatient === 'function' && !canDoctorAccessPatient(id)) {
+            console.warn(`[Security] Acceso denegado a paciente ${id}: no derivado por Recepción.`);
+            localStorage.removeItem('dental_active_patient_id');
+            if (typeof resetPatientEHRState === 'function') resetPatientEHRState();
+            updateActivePatientUI();
+            return false;
+        }
         localStorage.setItem('dental_active_patient_id', id);
     } else {
         localStorage.removeItem('dental_active_patient_id');
@@ -1163,6 +1220,7 @@ function setActivePatientId(id) {
         resetPatientEHRState();
     }
     updateActivePatientUI();
+    return true;
 }
 
 function getExchangeRate() {
@@ -2714,7 +2772,11 @@ async function renderPatientSearchResults(query) {
         return;
     }
 
-    const patients = await SupabaseDataService.getPatients();
+    let patients = await SupabaseDataService.getPatients();
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
+        patients = patients.filter(p => typeof isPatientAssignedToDoctor === 'function' ? isPatientAssignedToDoctor(p, curUser) : true);
+    }
     const filtered = patients.filter(p => {
         const name = (p.fullname || '').toLowerCase();
         const ci = (p.id || '').toLowerCase();
@@ -2971,6 +3033,15 @@ window.selectPatientAndLoadApprovedBudget = async function(patientId) {
         if (searchIcon) searchIcon.style.display = 'block';
         await renderOdontogramView();
         renderBudgetTable();
+        return;
+    }
+
+    if (patientId && typeof canDoctorAccessPatient === 'function' && !canDoctorAccessPatient(patientId)) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Acceso Denegado',
+            text: 'Este paciente no ha sido derivado a su consulta por Recepción.'
+        });
         return;
     }
 
@@ -3711,6 +3782,14 @@ window.closeBudgetFinanciallyDirect = window.finalizeBudgetDirect;
 
 window.finalizePatientTreatment = async function(patientId) {
     try {
+        if (patientId && typeof canDoctorAccessPatient === 'function' && !canDoctorAccessPatient(patientId)) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Acceso Denegado',
+                text: 'Este paciente no ha sido derivado a su consulta por Recepción.'
+            });
+            return;
+        }
         const invoices = await SupabaseDataService.getInvoices();
         const patientBudgets = invoices.filter(inv => String(inv.patientId) === String(patientId));
         const activeBudget = patientBudgets.find(b => b.status === 'Aprobado') || patientBudgets[0];
@@ -6360,7 +6439,10 @@ async function renderPatientsTable(filter = null, searchQuery = null, highlightP
     });
 
     if (patients.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted" style="padding: 24px;">No se encontraron pacientes en este filtro.</td></tr>`;
+        const noPatMsg = isDoctor 
+            ? '<i class="fa-solid fa-user-lock" style="font-size:1.6rem; display:block; margin-bottom:8px; color:#0d9488;"></i><strong>Sin pacientes asignados</strong><br><span style="font-size:0.85rem;">No posee pacientes derivados o asignados a su consulta por el módulo de Recepción.</span>'
+            : 'No se encontraron pacientes en este filtro.';
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted" style="padding: 24px;">${noPatMsg}</td></tr>`;
         return;
     }
 
@@ -7447,6 +7529,15 @@ window.selectPatientForOdontogram = async function(patientId) {
 };
 
 window.openEHRForPatient = function(patientId) {
+    if (patientId && typeof canDoctorAccessPatient === 'function' && !canDoctorAccessPatient(patientId)) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Acceso Denegado',
+            text: 'Este paciente no ha sido derivado a su consulta por Recepción.'
+        });
+        return;
+    }
+
     setActivePatientId(patientId);
     document.querySelector('.nav-item[data-tab="ehr"]').click();
 };
@@ -10423,6 +10514,14 @@ window.sendDirectSaleReceiptWhatsApp = async function(docId = null) {
 
 window.openPatientReceiptsHub = async function(patientId) {
     if (!patientId) return;
+    if (typeof canDoctorAccessPatient === 'function' && !canDoctorAccessPatient(patientId)) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Acceso Denegado',
+            text: 'Este paciente no ha sido derivado a su consulta por Recepción.'
+        });
+        return;
+    }
     window.currentReceiptsHubPatientId = patientId;
 
     const patients = await SupabaseDataService.getPatients();
@@ -10699,7 +10798,10 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
     }
 
     if (patients.length === 0) {
-        listGroup.innerHTML = `<div style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 0.85rem;"><i class="fa-solid fa-user-slash" style="display:block; font-size:1.5rem; margin-bottom:6px;"></i>Sin coincidencias</div>`;
+        const noPatMsg = isDoctor 
+            ? 'No posee pacientes derivados o asignados a su consulta clínica por Recepción.'
+            : 'Sin coincidencias de pacientes';
+        listGroup.innerHTML = `<div style="padding: 24px 16px; text-align: center; color: var(--text-muted); font-size: 0.85rem;"><i class="fa-solid fa-user-lock" style="display:block; font-size:1.6rem; margin-bottom:8px; color:#0d9488;"></i>${noPatMsg}</div>`;
     } else {
         patients.forEach(p => {
             const item = document.createElement('a');
@@ -10729,6 +10831,10 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
     const activePatient = activeId ? allPatients.find(p => p.id === activeId) : null;
     if (!activePatient) {
         resetPatientEHRState();
+        const summaryFiliation = document.getElementById('ehr-summary-filiation');
+        if (summaryFiliation) {
+            summaryFiliation.innerHTML = `<div style="padding: 35px 20px; text-align: center; color: var(--text-muted);"><i class="fa-solid fa-user-lock" style="font-size:2rem; margin-bottom:12px; display:block; color:#0d9488;"></i><strong>${isDoctor ? 'Sin pacientes asignados' : 'Ningún paciente seleccionado'}</strong><div style="font-size:0.85rem; margin-top:4px;">${isDoctor ? 'No posee pacientes derivados por Recepción en este momento.' : 'Seleccione un paciente de la lista izquierda para visualizar su expediente.'}</div></div>`;
+        }
         return;
     }
 
@@ -11981,7 +12087,16 @@ window.createDentalBudgetFromAnamnesis = async function(patientId) {
     if (typeof window.openBudgetForNewPatient === 'function') {
         await window.openBudgetForNewPatient(patientId);
     } else {
-        setActivePatientId(patientId);
+        if (patientId && typeof canDoctorAccessPatient === 'function' && !canDoctorAccessPatient(patientId)) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Acceso Denegado',
+            text: 'Este paciente no ha sido derivado a su consulta por Recepción.'
+        });
+        return;
+    }
+
+    setActivePatientId(patientId);
         const nav = document.querySelector('.nav-item[data-tab="odontogram"]');
         if (nav) nav.click();
     }
@@ -12122,6 +12237,15 @@ window.openPaymentForTreatmentItem = function(patientId, budgetId, itemId, treat
         });
         return;
     }
+    if (patientId && typeof canDoctorAccessPatient === 'function' && !canDoctorAccessPatient(patientId)) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Acceso Denegado',
+            text: 'Este paciente no ha sido derivado a su consulta por Recepción.'
+        });
+        return;
+    }
+
     setActivePatientId(patientId);
     const conceptInput = document.getElementById('pay-concept');
     if (conceptInput) {
@@ -13583,6 +13707,9 @@ function renderWeeklySchedulePlanner(container, appointments, weekInfo, searchQu
     // Resolve doctor schedule filter if specific doctor selected
     let selectedDocObj = null;
     let docSchedule = null;
+    if (isDoctor && currentUser) {
+        selectedDoctorId = currentUser.id;
+    }
     const isAllDocs = !selectedDoctorId || selectedDoctorId === 'all' || selectedDoctorId === 'todos' || String(selectedDoctorId).trim() === '';
     if (!isAllDocs) {
         const docsPool = (doctorsList && doctorsList.length > 0) ? doctorsList : (window._availableDoctorsCache || []);
@@ -13599,6 +13726,19 @@ function renderWeeklySchedulePlanner(container, appointments, weekInfo, searchQu
 
     let doctorBannerHtml = '';
     if (selectedDocObj && docSchedule && docSchedule.hasSchedule && docSchedule.activeDaysCount > 0 && !docSchedule.isPreviaCita) {
+        const rightBadgeOrBtn = isDoctor ? `
+            <span class="badge-tag cyan" style="font-size:0.75rem; padding:5px 12px; font-weight:700; border-radius:20px;">
+                <i class="fa-solid fa-lock"></i> Mi Agenda Exclusiva
+            </span>
+        ` : `
+            <span class="badge-tag green" style="font-size:0.75rem; padding:5px 12px; font-weight:700; border-radius:20px;">
+                <i class="fa-solid fa-shield-halved"></i> Filtro de disponibilidad activo
+            </span>
+            <button type="button" class="btn btn-xs btn-outline" onclick="const sel=document.getElementById('agenda-filter-doctor'); if(sel){ sel.value='all'; window.onAgendaFilterChange(); }" style="background:#fff; font-size:0.75rem; border-color:#cbd5e1; cursor:pointer;" title="Quitar filtro y ver todos los médicos">
+                <i class="fa-solid fa-xmark"></i> Ver todos
+            </button>
+        `;
+
         doctorBannerHtml = `
             <div class="doctor-schedule-summary-banner" style="margin-bottom: 14px; background: linear-gradient(135deg, #f0fdfa 0%, #e0f2fe 100%); border: 1px solid #7dd3fc; border-radius: 10px; padding: 12px 18px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; box-shadow: 0 2px 6px rgba(13,148,136,0.08);">
                 <div style="display:flex; align-items:center; gap:12px;">
@@ -13607,7 +13747,7 @@ function renderWeeklySchedulePlanner(container, appointments, weekInfo, searchQu
                     </div>
                     <div>
                         <div style="font-weight:700; color:#0f172a; font-size:0.95rem; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                            Agenda filtrada por médico: <span style="color:#0d9488;">${selectedDocObj.fullname || selectedDocObj.name}</span>
+                            ${isDoctor ? 'Mi Agenda Médica:' : 'Agenda filtrada por médico:'} <span style="color:#0d9488;">${selectedDocObj.fullname || selectedDocObj.name}</span>
                             ${(selectedDocObj.doctorProfile?.specialty || selectedDocObj.role) ? `<span class="badge-tag purple" style="font-size:0.72rem; padding:2px 8px;">${selectedDocObj.doctorProfile?.specialty || selectedDocObj.role}</span>` : ''}
                         </div>
                         <div style="font-size:0.82rem; color:#475569; margin-top:3px; display:flex; align-items:center; gap:6px;">
@@ -13618,12 +13758,20 @@ function renderWeeklySchedulePlanner(container, appointments, weekInfo, searchQu
                     </div>
                 </div>
                 <div style="display:flex; align-items:center; gap:8px;">
-                    <span class="badge-tag green" style="font-size:0.75rem; padding:5px 12px; font-weight:700; border-radius:20px;">
-                        <i class="fa-solid fa-shield-halved"></i> Filtro de disponibilidad activo
-                    </span>
-                    <button type="button" class="btn btn-xs btn-outline" onclick="const sel=document.getElementById('agenda-filter-doctor'); if(sel){ sel.value='all'; window.onAgendaFilterChange(); }" style="background:#fff; font-size:0.75rem; border-color:#cbd5e1; cursor:pointer;" title="Quitar filtro y ver todos los médicos">
-                        <i class="fa-solid fa-xmark"></i> Ver todos
-                    </button>
+                    ${rightBadgeOrBtn}
+                </div>
+            </div>
+        `;
+    }
+
+    let emptyDoctorNoticeHtml = '';
+    if (isDoctor && totalWeek === 0) {
+        emptyDoctorNoticeHtml = `
+            <div style="background:#f8fafc; border:1px dashed #cbd5e1; border-radius:10px; padding:16px 20px; text-align:center; margin-bottom:14px; color:#64748b; display:flex; align-items:center; justify-content:center; gap:12px;">
+                <i class="fa-solid fa-calendar-xmark" style="font-size:1.6rem; color:#0d9488;"></i>
+                <div style="text-align:left;">
+                    <strong style="font-size:0.95rem; color:#334155; display:block;">Sin citas asignadas para esta semana</strong>
+                    <span style="font-size:0.82rem; color:#64748b;">No posee pacientes agendados ni derivados por Recepción para este período (Sin actividad asignada).</span>
                 </div>
             </div>
         `;
@@ -13631,6 +13779,7 @@ function renderWeeklySchedulePlanner(container, appointments, weekInfo, searchQu
 
     wrapper.innerHTML = `
         ${doctorBannerHtml}
+        ${emptyDoctorNoticeHtml}
         <div class="weekly-planner-nav">
             <div class="weekly-nav-btn-group">
                 <button type="button" class="btn btn-sm btn-outline" onclick="window.navigateAgendaWeek(-1)" title="Semana Anterior">
@@ -13697,7 +13846,7 @@ function renderWeeklySchedulePlanner(container, appointments, weekInfo, searchQu
                 apptsHtml = `
                     <div style="text-align:center; padding:35px 10px; color:#94a3b8; font-size:0.8rem; display:flex; flex-direction:column; align-items:center; gap:6px;">
                         <i class="fa-regular fa-calendar-check" style="font-size:1.6rem; color:#cbd5e1;"></i>
-                        <span>Sin citas para este día</span>
+                        <span>${isDoctor ? 'Sin actividad asignada' : 'Sin citas para este día'}</span>
                     </div>
                 `;
             }
@@ -13783,12 +13932,12 @@ function renderWeeklySchedulePlanner(container, appointments, weekInfo, searchQu
             headerBadgeHtml = `<span class="badge-tag" style="background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; font-size:0.65rem; padding:1px 6px; font-weight:700;"><i class="fa-solid fa-lock"></i> No atiende</span>`;
             const alertSafeDoc = (selectedDocObj.fullname || selectedDocObj.name || '').replace(/'/g, "\\'");
             const alertSafeDays = (docSchedule.activeDayNames || []).join(', ');
-            headerAddBtnHtml = `
+            headerAddBtnHtml = isDoctor ? '' : `
                 <button type="button" class="weekly-day-add-btn disabled-blocked" style="opacity:0.35; cursor:not-allowed; background:#e2e8f0; color:#94a3b8;" title="Dr(a). ${alertSafeDoc} no atiende los ${day.name}s" onclick="Swal.fire({ icon: 'warning', title: 'Día No Disponible', html: 'El Dr(a). <strong>${alertSafeDoc}</strong> no atiende los días <strong>${day.name}</strong>.<br><br>📅 Días de atención configurados: <strong>${alertSafeDays}</strong><br>⏰ Horario: <strong>${selectedDocObj.doctorProfile?.schedule || selectedDocObj.doctor_profile?.schedule || selectedDocObj.schedule || ''}</strong>' })">
                     <i class="fa-solid fa-ban"></i>
                 </button>
             `;
-            bodyAddBtnHtml = `
+            bodyAddBtnHtml = isDoctor ? '' : `
                 <button type="button" class="weekly-add-slot-btn disabled-blocked" style="opacity:0.4; cursor:not-allowed; background:#f1f5f9; border-color:#e2e8f0; color:#94a3b8;" onclick="Swal.fire({ icon: 'warning', title: 'Día No Disponible', html: 'El Dr(a). <strong>${alertSafeDoc}</strong> no atiende los días <strong>${day.name}</strong>.<br><br>📅 Días de atención configurados: <strong>${alertSafeDays}</strong><br>⏰ Horario: <strong>${selectedDocObj.doctorProfile?.schedule || selectedDocObj.doctor_profile?.schedule || selectedDocObj.schedule || ''}</strong>' })">
                     <i class="fa-solid fa-lock"></i> No disponible para este médico
                 </button>
@@ -13799,12 +13948,12 @@ function renderWeeklySchedulePlanner(container, appointments, weekInfo, searchQu
                 headerBadgeHtml = `<span class="badge-tag teal" style="font-size:0.65rem; padding:1px 6px; font-weight:700;"><i class="fa-solid fa-user-check"></i> ${shiftLabel}</span>`;
             }
             const prefillDocArg = selectedDocObj ? `, prefillDoctorId: '${selectedDocObj.id}'` : '';
-            headerAddBtnHtml = `
+            headerAddBtnHtml = isDoctor ? '' : `
                 <button type="button" class="weekly-day-add-btn" onclick="window.openNewAppointmentModal({ prefillDate: '${day.isoDate}'${prefillDocArg} })" title="Asignar Cita el ${day.name} ${day.dayNum}">
                     <i class="fa-solid fa-plus"></i>
                 </button>
             `;
-            bodyAddBtnHtml = `
+            bodyAddBtnHtml = isDoctor ? '' : `
                 <button type="button" class="weekly-add-slot-btn" onclick="window.openNewAppointmentModal({ prefillDate: '${day.isoDate}'${prefillDocArg} })">
                     <i class="fa-solid fa-plus"></i> Asignar en este día
                 </button>
@@ -13918,12 +14067,26 @@ async function renderAgendaView(filter = (window.currentAgendaFilter || 'pending
         }
     }
 
+    agendaListMain.innerHTML = '';
+    const currentUser = getCurrentUser();
+    const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
+    const isDoctor = currentUser && (typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false);
+    const isHygienist = currentUser && (typeof isHygienistRole === 'function' ? isHygienistRole(currentUser.role) : (currentUser.role && currentUser.role.toLowerCase().includes('higien')));
+    const isRecep = currentUser && (typeof isReceptionOrCashierUser === 'function' ? isReceptionOrCashierUser(currentUser) : (currentUser.role && (currentUser.role.toLowerCase().includes('recep') || currentUser.role.toLowerCase().includes('caja'))));
+    const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor && !isHygienist);
+    const hideContact = typeof shouldHidePatientContact === 'function' && shouldHidePatientContact(currentUser);
+
     // Ensure Agenda buttons are immediately bound before any early returns
     const addAppointmentBtn = document.getElementById('btn-add-appointment-agenda');
     if (addAppointmentBtn) {
-        addAppointmentBtn.onclick = async () => {
-            await window.openNewAppointmentModal();
-        };
+        if (isDoctor) {
+            addAppointmentBtn.style.display = 'none';
+        } else {
+            addAppointmentBtn.style.display = '';
+            addAppointmentBtn.onclick = async () => {
+                await window.openNewAppointmentModal();
+            };
+        }
     }
     const sendRemindersBtn = document.getElementById('btn-send-reminders-all-agenda');
     if (sendRemindersBtn) {
@@ -13932,15 +14095,7 @@ async function renderAgendaView(filter = (window.currentAgendaFilter || 'pending
         };
     }
 
-    agendaListMain.innerHTML = '';
     let allAppointments = await SupabaseDataService.getAppointments();
-    const currentUser = getCurrentUser();
-    const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
-    const isDoctor = currentUser && (typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false);
-    const isHygienist = currentUser && (typeof isHygienistRole === 'function' ? isHygienistRole(currentUser.role) : (currentUser.role && currentUser.role.toLowerCase().includes('higien')));
-    const isRecep = currentUser && (typeof isReceptionOrCashierUser === 'function' ? isReceptionOrCashierUser(currentUser) : (currentUser.role && (currentUser.role.toLowerCase().includes('recep') || currentUser.role.toLowerCase().includes('caja'))));
-    const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor && !isHygienist);
-    const hideContact = typeof shouldHidePatientContact === 'function' && shouldHidePatientContact(currentUser);
 
     // If logged in as Doctor: ONLY show his assigned appointments
     if (isDoctor) {
@@ -14044,8 +14199,8 @@ async function renderAgendaView(filter = (window.currentAgendaFilter || 'pending
     // Apply Secondary Filters (Specialty, Doctor, Shift)
     const selectedSpecialty = document.getElementById('agenda-filter-specialty')?.value || 'all';
     const rawDoctorVal = document.getElementById('agenda-filter-doctor')?.value;
-    const isAllDoctors = !rawDoctorVal || rawDoctorVal === 'all' || rawDoctorVal === 'todos' || rawDoctorVal.trim() === '';
-    const selectedDoctor = isAllDoctors ? 'all' : rawDoctorVal;
+    const isAllDoctors = !isDoctor && (!rawDoctorVal || rawDoctorVal === 'all' || rawDoctorVal === 'todos' || rawDoctorVal.trim() === '');
+    const selectedDoctor = isDoctor ? currentUser.id : (isAllDoctors ? 'all' : rawDoctorVal);
     const selectedShift = document.getElementById('agenda-filter-shift')?.value || 'all';
 
     if (selectedSpecialty !== 'all') {
@@ -14087,7 +14242,7 @@ async function renderAgendaView(filter = (window.currentAgendaFilter || 'pending
     // If weekly planner mode is active, render dedicated weekly planner grid
     if (filter === 'week' && window._agendaViewMode === 'planner') {
         if (!weekInfo) weekInfo = getWeekDaysRange(window._agendaWeeklyRefDate || new Date());
-        renderWeeklySchedulePlanner(agendaListMain, appointments, weekInfo, searchQuery, isAssistant, selectedDoctor, doctors);
+        renderWeeklySchedulePlanner(agendaListMain, appointments, weekInfo, searchQuery, isAssistant, isDoctor ? currentUser.id : selectedDoctor, doctors);
         return;
     }
 
@@ -14100,11 +14255,14 @@ async function renderAgendaView(filter = (window.currentAgendaFilter || 'pending
     });
 
     if (appointments.length === 0) {
-        const emptyMsg = filter === 'pending' 
+        let emptyMsg = filter === 'pending' 
             ? '¡Excelente! No hay citas pendientes por atender en este momento.'
             : (filter === 'attended' ? 'Aún no se han registrado citas atendidas hoy.' : 'No se encontraron citas con los filtros activos.');
-        const emptyIcon = filter === 'pending' ? 'fa-clipboard-check' : 'fa-calendar-xmark';
-        agendaListMain.innerHTML = `<div style="text-align:center; padding:35px 20px; color:var(--text-muted);"><i class="fa-solid ${emptyIcon}" style="font-size:2.2rem; color: #10b981; margin-bottom:12px; display:block;"></i><div style="font-size:0.95rem; font-weight:600;">${emptyMsg}</div></div>`;
+        if (isDoctor) {
+            emptyMsg = 'No posee citas ni pacientes asignados para este período (Sin actividad asignada).';
+        }
+        const emptyIcon = (filter === 'pending' && !isDoctor) ? 'fa-clipboard-check' : 'fa-calendar-xmark';
+        agendaListMain.innerHTML = `<div style="text-align:center; padding:35px 20px; color:var(--text-muted);"><i class="fa-solid ${emptyIcon}" style="font-size:2.2rem; color: #0d9488; margin-bottom:12px; display:block;"></i><div style="font-size:0.95rem; font-weight:600;">${emptyMsg}</div></div>`;
         return;
     }
 
@@ -14208,10 +14366,16 @@ async function renderAgendaView(filter = (window.currentAgendaFilter || 'pending
 window.renderAgendaView = renderAgendaView;
 
 window.onAgendaFilterChange = async function() {
+    const cur = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const isDoc = cur && typeof isDoctorUser === 'function' && isDoctorUser(cur);
     const docSelect = document.getElementById('agenda-filter-doctor');
-    const rawVal = docSelect ? docSelect.value : 'all';
-    const isAllDoctors = !rawVal || rawVal === 'all' || rawVal === 'todos' || rawVal.trim() === '';
-    const selectedDoctor = isAllDoctors ? 'all' : rawVal;
+    if (isDoc && docSelect && cur) {
+        docSelect.value = cur.id;
+        docSelect.disabled = true;
+    }
+    const rawVal = docSelect ? docSelect.value : (isDoc ? cur.id : 'all');
+    const isAllDoctors = !isDoc && (!rawVal || rawVal === 'all' || rawVal === 'todos' || rawVal.trim() === '');
+    const selectedDoctor = isDoc ? cur.id : (isAllDoctors ? 'all' : rawVal);
 
     // Si se selecciona un médico específico o ya estamos en el planificador semanal, aseguramos semana + planificador activo
     if (window._agendaViewMode === 'planner' || !isAllDoctors) {
@@ -14265,6 +14429,14 @@ window.viewAttendedSessionForPatient = async function(patientId) {
         const patient = patients.find(p => p.id === patientId);
         if (!patient) {
             Swal.fire({ icon: 'error', title: 'Error', text: 'No se encontró la ficha del paciente.' });
+            return;
+        }
+        if (typeof canDoctorAccessPatient === 'function' && !canDoctorAccessPatient(patient)) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Acceso Denegado',
+                text: 'Este paciente no ha sido derivado a su consulta por Recepción.'
+            });
             return;
         }
         setActivePatientId(patient.id);
@@ -14365,7 +14537,16 @@ window.populateSessionNumberSelect = function(patient, targetSessionNum = null) 
 
 window.openSessionModalForPatient = async function(patientId, sessionNum, procedureName) {
     try {
-        setActivePatientId(patientId);
+        if (patientId && typeof canDoctorAccessPatient === 'function' && !canDoctorAccessPatient(patientId)) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Acceso Denegado',
+            text: 'Este paciente no ha sido derivado a su consulta por Recepción.'
+        });
+        return;
+    }
+
+    setActivePatientId(patientId);
         const patients = await SupabaseDataService.getPatients();
         const patient = patients.find(p => p.id === patientId);
         if (!patient) {
@@ -14464,7 +14645,16 @@ window.openPaymentModalForAppointment = async function(patientId, patientName, t
             return;
         }
 
-        setActivePatientId(patientId);
+        if (patientId && typeof canDoctorAccessPatient === 'function' && !canDoctorAccessPatient(patientId)) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Acceso Denegado',
+            text: 'Este paciente no ha sido derivado a su consulta por Recepción.'
+        });
+        return;
+    }
+
+    setActivePatientId(patientId);
         const modal = document.getElementById('modal-payment');
         if (modal) {
             const conceptInput = document.getElementById('pay-concept');
@@ -14665,6 +14855,19 @@ window.atenderAppointmentFromAgenda = async (apptId) => {
         if (!patient) {
             Swal.fire({ icon: 'error', title: 'Error', text: 'No se encontró la ficha del paciente asociado a esta cita.' });
             return;
+        }
+
+        const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+        if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
+            const isAssigned = typeof isPatientAssignedToDoctor === 'function' && isPatientAssignedToDoctor(patient, curUser, appts);
+            if (!isAssigned) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Acceso Denegado',
+                    text: 'Este paciente no ha sido derivado a su consulta por Recepción.'
+                });
+                return;
+            }
         }
 
         // Set state
@@ -21428,7 +21631,16 @@ if (patientSameDay.length === 0) {
     if (formSysUser) formSysUser.onsubmit = handleSaveSystemUser;
 
     window.openBudgetForNewPatient = async function(patientId) {
-        setActivePatientId(patientId);
+        if (patientId && typeof canDoctorAccessPatient === 'function' && !canDoctorAccessPatient(patientId)) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Acceso Denegado',
+            text: 'Este paciente no ha sido derivado a su consulta por Recepción.'
+        });
+        return;
+    }
+
+    setActivePatientId(patientId);
 
         // Forzar cambio al editor del odontograma
         localStorage.setItem('dental_odontogram_subview', 'editor');
@@ -23430,6 +23642,11 @@ async function populateAppointmentPatientSelect() {
         }
     }
 
+    const curDoc = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+    if (curDoc && (typeof isDoctorUser === 'function' ? isDoctorUser(curDoc) : false) && Array.isArray(patients)) {
+        patients = patients.filter(p => isPatientAssignedToDoctor(p, curDoc));
+    }
+
     select.innerHTML = '';
     if (!patients || patients.length === 0) {
         select.innerHTML = '<option value="">-- No hay pacientes registrados --</option>';
@@ -24990,6 +25207,16 @@ function initPatientStepperWizard() {
 
     window.openPatientModalForNew = () => {
         const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+        const isDoc = curUser && (typeof isDoctorUser === 'function' ? isDoctorUser(curUser) : false);
+        if (isDoc) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Acceso Restringido',
+                text: 'El registro y derivación de pacientes corresponde formalmente al módulo de Recepción. El médico solo atiende pacientes previamente derivados.',
+                confirmButtonColor: '#0891b2'
+            });
+            return;
+        }
         const isHyg = curUser && (typeof isHygienistRole === 'function' ? isHygienistRole(curUser.role) : (curUser.role && curUser.role.toLowerCase().includes('higien')));
         if (isHyg) {
             Swal.fire({
@@ -25051,6 +25278,15 @@ function initPatientStepperWizard() {
             const p = patients.find(pat => pat.id === patientId);
             if (!p) {
                 Swal.fire({ icon: 'error', title: 'Error', text: 'No se encontró la ficha del paciente.' });
+                return;
+            }
+
+            if (typeof canDoctorAccessPatient === 'function' && !canDoctorAccessPatient(p)) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Acceso Denegado',
+                    text: 'Este paciente no ha sido derivado a su consulta por Recepción.'
+                });
                 return;
             }
 
