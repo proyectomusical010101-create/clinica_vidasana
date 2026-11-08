@@ -291,6 +291,9 @@ function isPatientAssignedToHygienist(patient, appointments = null, budgets = nu
     // 3. Dental treatments or sessions
     if (Array.isArray(patient.treatments) && patient.treatments.some(t => isDentalSpecialtyOrArea(t.specialty || t.name || t.area || 'odontologia'))) return true;
     if (Array.isArray(patient.sessions) && patient.sessions.some(s => isDentalSpecialtyOrArea(s.specialty || s.procedure || s.notes || 'odontologia'))) return true;
+    if (patient.metadata && Array.isArray(patient.metadata.treatments) && patient.metadata.treatments.some(t => isDentalSpecialtyOrArea(t.specialty || t.name || t.area || 'odontologia'))) return true;
+    if (patient.metadata && Array.isArray(patient.metadata.photos) && patient.metadata.photos.length > 0) return true;
+    if (Array.isArray(patient.photos) && patient.photos.length > 0) return true;
 
     // 4. Appointments strictly matching Odontology
     if (Array.isArray(appointments) && appointments.length > 0) {
@@ -659,7 +662,26 @@ window.isPatientAssignedToDoctor = isPatientAssignedToDoctor;
 
 function canDoctorAccessPatient(patientOrId, doctorUser = null) {
     const cur = doctorUser || (typeof getCurrentUser === 'function' ? getCurrentUser() : null);
-    if (!cur || typeof isDoctorUser !== 'function' || !isDoctorUser(cur)) {
+    if (!cur) return true;
+    if (typeof isHygienistUser === 'function' && isHygienistUser(cur)) {
+        if (!patientOrId) return true;
+        let patObj = (typeof patientOrId === 'object' && patientOrId !== null) ? patientOrId : null;
+        if (!patObj && typeof SupabaseDataService !== 'undefined' && SupabaseDataService._patientsCache) {
+            patObj = SupabaseDataService._patientsCache.find(p => String(p.id) === String(patientOrId));
+        }
+        if (!patObj) {
+            try {
+                const rawP = localStorage.getItem('dental_patients');
+                if (rawP) {
+                    const arr = JSON.parse(rawP);
+                    patObj = arr.find(p => String(p.id) === String(patientOrId));
+                }
+            } catch(e) {}
+        }
+        if (!patObj) return true;
+        return typeof isPatientAssignedToHygienist === 'function' ? isPatientAssignedToHygienist(patObj) : true;
+    }
+    if (typeof isDoctorUser !== 'function' || !isDoctorUser(cur)) {
         return true;
     }
     if (!patientOrId) return true;
@@ -15176,10 +15198,13 @@ window.openSessionModalForPatient = async function(patientId, sessionNum, proced
 
         // Populate planned treatments selector
         const trtSelect = document.getElementById('s-planned-treatment-select');
+        const numInput = document.getElementById('s-num');
+        const curDocUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+        const isHyg = curDocUser && (typeof isHygienistUser === 'function' ? isHygienistUser(curDocUser) : (typeof isHygienistRole === 'function' && isHygienistRole(curDocUser.role)));
+        
         if (trtSelect) {
             trtSelect.innerHTML = '<option value="">-- Selección manual / Tratamiento libre --</option>';
             let trts = (patient.metadata && patient.metadata.treatments) || [];
-            const curDocUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
             if (curDocUser && typeof isDoctorUser === 'function' && isDoctorUser(curDocUser)) {
                 const isDental = typeof isDentalDoctor === 'function' && isDentalDoctor(curDocUser);
                 trts = trts.filter(t => {
@@ -15187,6 +15212,10 @@ window.openSessionModalForPatient = async function(patientId, sessionNum, proced
                     if (isDental) return isDentalT;
                     if (isDentalT) return false;
                     return true;
+                });
+            } else if (isHyg) {
+                trts = trts.filter(t => {
+                    return (typeof isDentalService === 'function' && isDentalService(t)) || (typeof isDentalSpecialtyOrArea === 'function' && isDentalSpecialtyOrArea(t.area || t.specialty || t.name));
                 });
             }
             trts.forEach((t, idx) => {
@@ -15205,10 +15234,28 @@ window.openSessionModalForPatient = async function(patientId, sessionNum, proced
                 trtSelect.appendChild(opt);
             });
 
+            // Opciones preconfiguradas para toma de Rx e Impresiones dentales
+            const optGroupDirect = document.createElement('optgroup');
+            optGroupDirect.label = '⚡ Actos Clínicos Directos (Rx e Impresiones)';
+            const optRx = document.createElement('option');
+            optRx.value = 'preset-rx';
+            optRx.dataset.name = 'Toma de Radiografía Dental (Rx): Estudio radiográfico ejecutado (Periapical / Panorámica / Control)';
+            optRx.dataset.tooth = 'General';
+            optRx.innerText = '📸 Toma Radiográfica Dental (Rx Periapical / Panorámica)';
+            optGroupDirect.appendChild(optRx);
+
+            const optImp = document.createElement('option');
+            optImp.value = 'preset-imp';
+            optImp.dataset.name = 'Toma de Impresiones Dentales: Toma de impresión en alginato / silicona para modelos de estudio y trabajo';
+            optImp.dataset.tooth = 'General';
+            optImp.innerText = '🦷 Toma de Impresiones Dentales (Alginato / Silicona / Modelos)';
+            optGroupDirect.appendChild(optImp);
+            trtSelect.appendChild(optGroupDirect);
+
             trtSelect.onchange = () => {
                 const chosenNum = trtSelect.value;
                 if (chosenNum) {
-                    if (numInput) numInput.value = chosenNum;
+                    if (numInput && !chosenNum.startsWith('preset-')) numInput.value = chosenNum;
                     const selOpt = trtSelect.options[trtSelect.selectedIndex];
                     const procName = selOpt ? selOpt.dataset.name : '';
                     const toothName = selOpt ? selOpt.dataset.tooth : '';
@@ -15228,7 +15275,17 @@ window.openSessionModalForPatient = async function(patientId, sessionNum, proced
             };
         }
 
-        const inventory = await SupabaseDataService.getInventory();
+        let inventory = await SupabaseDataService.getInventory();
+        if (isHyg && Array.isArray(inventory)) {
+            // Higienista: enfocar descargo a insumos de Odontología, Radiografía e Impresiones
+            inventory = inventory.filter(item => {
+                const area = String(item.area || item.category || item.department || '').toLowerCase();
+                const name = String(item.name || '').toLowerCase();
+                if (area.includes('gineco') || area.includes('cardio') || area.includes('pediatr') || area.includes('oftalmo')) return false;
+                if (name.includes('espéculo') || name.includes('citobrush') || name.includes('gel conductor')) return false;
+                return true;
+            });
+        }
         const container = document.getElementById('session-materials-container');
         renderSessionMaterialsList(inventory, container);
 
@@ -15236,6 +15293,24 @@ window.openSessionModalForPatient = async function(patientId, sessionNum, proced
         openModal('modal-session');
     } catch(e) {
         console.error("Error opening session modal for patient:", e);
+    }
+};
+
+window.setSessionProcedurePreset = function(presetType) {
+    const procInput = document.getElementById('s-procedure');
+    if (!procInput) return;
+    let text = '';
+    if (presetType === 'rx') {
+        text = 'Toma de Radiografía Dental (Rx): Estudio radiográfico ejecutado (Periapical / Panorámica / Control).';
+    } else if (presetType === 'impresion' || presetType === 'impression') {
+        text = 'Toma de Impresiones Dentales: Toma de impresión en alginato / silicona para modelos de estudio y trabajo.';
+    }
+    if (!text) return;
+    const current = (procInput.value || '').trim();
+    if (!current || current.startsWith('Sesión N°') || current === 'Procedimiento Odontológico') {
+        procInput.value = text;
+    } else if (!current.includes(text)) {
+        procInput.value = `${current}\n• ${text}`;
     }
 };
 
@@ -18663,6 +18738,10 @@ function initGlobalEvents() {
                 sCommission = parseFloat(selOpt?.getAttribute('data-commission') || 0);
             }
             
+            const curSessionUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+            const curSessionDoctorName = (curSessionUser && (curSessionUser.fullname || curSessionUser.name)) || patient.assignedDoctor || '';
+            const curSessionSpecialty = (curSessionUser && (curSessionUser.specialty || curSessionUser.area)) || patient.specialty || 'Odontología';
+            
             // Construct new session
             const sessionObj = {
                 sessionNum,
@@ -18670,6 +18749,9 @@ function initGlobalEvents() {
                 procedure,
                 indications,
                 signatureData,
+                doctor: curSessionDoctorName,
+                specialist: curSessionDoctorName,
+                specialty: curSessionSpecialty,
                 materials: [],
                 paymentUSD,
                 paymentMethod,

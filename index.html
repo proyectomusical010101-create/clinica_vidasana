@@ -1797,6 +1797,7 @@
                                             <button class="check-chip" data-gallery-filter="Antes">Antes</button>
                                             <button class="check-chip" data-gallery-filter="Después">Después</button>
                                             <button class="check-chip" data-gallery-filter="Radiografía">Rayos X / Radiografías</button>
+                                            <button class="check-chip" data-gallery-filter="Impresión Dental">Impresiones Dentales</button>
                                             <button class="check-chip" data-gallery-filter="Control">Control</button>
                                         </div>
 
@@ -6141,7 +6142,17 @@
                     </div>
 
                     <div class="form-group mb-15">
-                        <label>Procedimiento Realizado *</label>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 6px;">
+                            <label style="margin: 0;">Procedimiento Realizado *</label>
+                            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                <button type="button" class="btn btn-xs btn-outline" style="border-color:#0284c7; color:#0284c7; font-weight:700; background:#f0f9ff; padding:3px 9px; border-radius:6px; cursor:pointer;" onclick="window.setSessionProcedurePreset('rx')" title="Insertar toma de Radiografía">
+                                    <i class="fa-solid fa-x-ray text-blue"></i> + Toma Radiográfica (Rx)
+                                </button>
+                                <button type="button" class="btn btn-xs btn-outline" style="border-color:#0d9488; color:#0d9488; font-weight:700; background:#ecfdf5; padding:3px 9px; border-radius:6px; cursor:pointer;" onclick="window.setSessionProcedurePreset('impresion')" title="Insertar toma de Impresiones">
+                                    <i class="fa-solid fa-tooth text-cyan"></i> + Toma de Impresiones Dentales
+                                </button>
+                            </div>
+                        </div>
                         <textarea id="s-procedure" required rows="3" placeholder="Detalle los procedimientos odontológicos realizados en esta sesión..."></textarea>
                     </div>
 
@@ -6388,6 +6399,7 @@
                             <option value="Antes">Antes del Tratamiento</option>
                             <option value="Después">Después / Resultado Final</option>
                             <option value="Radiografía">Rayos X / Radiografía (Periapical / Panorámica)</option>
+                            <option value="Impresión Dental">Toma de Impresión / Modelo de Estudio</option>
                             <option value="Control">Control Periódico / Evolución</option>
                         </select>
                     </div>
@@ -9203,14 +9215,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=410"></script>
-    <script src="supabaseClient.js?v=410"></script>
-    <script src="odontogram.js?v=410"></script>
-    <script src="signature.js?v=410"></script>
-    <script src="whatsapp.js?v=410"></script>
-    <script src="kardex.js?v=410"></script>
-    <script src="app.js?v=410"></script>
-    <script src="clinicalERP.js?v=410"></script>
-    <script src="tutorial.js?v=410"></script>
+    <script src="seededData.js?v=411"></script>
+    <script src="supabaseClient.js?v=411"></script>
+    <script src="odontogram.js?v=411"></script>
+    <script src="signature.js?v=411"></script>
+    <script src="whatsapp.js?v=411"></script>
+    <script src="kardex.js?v=411"></script>
+    <script src="app.js?v=411"></script>
+    <script src="clinicalERP.js?v=411"></script>
+    <script src="tutorial.js?v=411"></script>
 </body>
 </html>
