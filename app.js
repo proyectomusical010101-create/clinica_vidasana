@@ -1722,7 +1722,7 @@ function applyRolePermissionsUI(role) {
     const permissions = {
         admin: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'users', 'billing', 'finance', 'stationery', 'settings', 'help', 'specialties', 'rooms', 'payroll', 'consumables'],
         doctor: ['dashboard', 'agenda', 'odontogram', 'ehr', 'pricing', 'settings', 'help', 'hygienist_finances'],
-        hygienist: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'consumables', 'settings', 'help', 'hygienist_finances'],
+        hygienist: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'settings', 'help', 'hygienist_finances'],
         assistant: ['dashboard', 'patients', 'agenda', 'odontogram', 'ehr', 'inventory', 'pricing', 'consumables', 'settings', 'help']
     };
 
@@ -2102,12 +2102,22 @@ function applyRolePermissionsUI(role) {
             if (directSaleBtn) directSaleBtn.style.display = 'none';
             const headerActionDirectSale = document.getElementById('header-action-direct-sale');
             if (headerActionDirectSale) headerActionDirectSale.style.display = 'none';
+            const headerActionConsumableSale = document.getElementById('header-action-consumable-sale');
+            if (headerActionConsumableSale) headerActionConsumableSale.style.display = 'none';
             const ehrAbonoBtn = document.getElementById('btn-ehr-add-abono');
             if (ehrAbonoBtn) ehrAbonoBtn.style.display = 'none';
             const btnBillDirect = document.getElementById('btn-bill-budget-direct');
             if (btnBillDirect) btnBillDirect.style.display = 'none';
             const casheaBtn = document.getElementById('btn-header-cashea');
             if (casheaBtn) casheaBtn.style.display = 'none';
+            const navConsumables = document.querySelector('.nav-item[data-tab="consumables"]');
+            if (navConsumables) navConsumables.style.display = 'none';
+            const btnAddConsumable = document.getElementById('btn-add-consumable');
+            if (btnAddConsumable) btnAddConsumable.style.display = 'none';
+            const fabConsumableSale = document.getElementById('fab-act-consumable-sale');
+            if (fabConsumableSale) fabConsumableSale.style.display = 'none';
+            const fabDirectSale = document.getElementById('fab-act-direct-sale');
+            if (fabDirectSale) fabDirectSale.style.display = 'none';
 
             // Ocultamiento total de presupuestos médicos no odontológicos para higienista
             const medEditor = document.getElementById('medical-budget-editor-container');
@@ -2246,6 +2256,8 @@ function renderMobileNavigationForRole(roleType) {
     } else if (roleType === 'hygienist') {
         if (fabPatient) fabPatient.style.display = 'none'; // Hygienist doesn't register new patients
         if (fabDirectSale) fabDirectSale.style.display = 'none';
+        const fabConsSale = document.getElementById('fab-act-consumable-sale');
+        if (fabConsSale) fabConsSale.style.display = 'none';
         if (fabAppt) fabAppt.style.display = 'flex';
         if (fabBudget) fabBudget.style.display = 'flex';
         if (fabEvol) fabEvol.style.display = 'flex';
@@ -6949,7 +6961,7 @@ async function renderPatientsTable(filter = null, searchQuery = null, highlightP
                     <button class="btn btn-xs btn-outline btn-act-icon btn-act-contact" onclick="window.copyPatientContact('${p.id}', event)" title="Ver y Copiar Datos de Contacto (Teléfono, Correo, Instagram)" style="color: #0284c7; border-color: #bae6fd;">
                         <i class="fa-solid fa-address-card"></i>
                     </button>
-                    ${!isDoctor ? `<button class="btn btn-xs btn-outline btn-act-icon btn-act-cobrar" onclick="window.openDirectSaleModal('${p.id}')" title="Venta Directa / Cobro Rápido">
+                    ${!isDoctor && !isHygienist ? `<button class="btn btn-xs btn-outline btn-act-icon btn-act-cobrar" onclick="window.openDirectSaleModal('${p.id}')" title="Venta Directa / Cobro Rápido">
                         <i class="fa-solid fa-bolt"></i>
                     </button>` : ''}
                     ${!isRecep ? `<button class="btn btn-xs btn-primary btn-act-presupuesto" onclick="selectPatientForOdontogram('${p.id}')" title="${isDoctor && !isDentalDoc ? 'Emitir Presupuesto / Orden Médica' : 'Emitir Presupuesto'}">
@@ -7975,13 +7987,18 @@ window.closeHeaderNewMenu = function() {
 
 window.triggerHeaderNewAction = async function(action) {
     window.closeHeaderNewMenu();
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const isDoc = curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser);
+    const isHyg = curUser && (typeof isHygienistUser === 'function' ? isHygienistUser(curUser) : (typeof isHygienistRole === 'function' && isHygienistRole(curUser.role)));
+
     if (action === 'consumable-sale') {
-        const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
-        if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
+        if (isDoc || isHyg) {
             Swal.fire({
                 icon: 'warning',
-                title: 'Acceso Restringido a Caja',
-                text: 'El rol médico no puede realizar ventas o facturación.'
+                title: 'Acceso Restringido',
+                text: isHyg
+                    ? 'El rol de Higienista no tiene permisos para efectuar ventas directas ni dispensar insumos o consumibles en el sistema.'
+                    : 'El rol médico no puede realizar ventas o facturación.'
             });
             return;
         }
@@ -7990,12 +8007,13 @@ window.triggerHeaderNewAction = async function(action) {
         }
         return;
     } else if (action === 'direct-sale') {
-        const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
-        if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
+        if (isDoc || isHyg) {
             Swal.fire({
                 icon: 'warning',
-                title: 'Acceso Restringido a Caja',
-                text: 'El rol médico no puede realizar ventas o facturación. La Caja o Recepción es la encargada de generar las órdenes y ventas.'
+                title: 'Acceso Restringido',
+                text: isHyg
+                    ? 'El rol de Higienista no tiene permisos para efectuar ventas directas ni dispensar insumos o consumibles en el sistema.'
+                    : 'El rol médico no puede realizar ventas o facturación. La Caja o Recepción es la encargada de generar las órdenes y ventas.'
             });
             return;
         }
@@ -8147,6 +8165,15 @@ window.openDirectSaleModal = async function(preselectedPatientId = null, initial
             icon: 'warning',
             title: 'Acceso Restringido',
             text: 'El rol médico no tiene permisos para realizar ventas de mostrador, insumos o facturación. Esta función corresponde a Caja / Recepción.'
+        });
+        return;
+    }
+    const isHyg = curUser && (typeof isHygienistUser === 'function' ? isHygienistUser(curUser) : (typeof isHygienistRole === 'function' && isHygienistRole(curUser.role)));
+    if (isHyg) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Acceso Restringido',
+            text: 'El rol de Higienista no tiene permisos para efectuar ventas directas ni dispensar insumos o consumibles en el sistema.'
         });
         return;
     }
@@ -10260,6 +10287,15 @@ window.processDirectSale = async function() {
             icon: 'warning',
             title: 'Acceso Restringido',
             text: 'El rol médico no tiene permisos para realizar ventas de mostrador, insumos o facturación. Esta función corresponde a Caja / Recepción.'
+        });
+        return;
+    }
+    const isHyg = curUser && (typeof isHygienistUser === 'function' ? isHygienistUser(curUser) : (typeof isHygienistRole === 'function' && isHygienistRole(curUser.role)));
+    if (isHyg) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Acceso Restringido',
+            text: 'El rol de Higienista no tiene permisos para efectuar ventas directas ni dispensar insumos o consumibles en el sistema.'
         });
         return;
     }
@@ -15611,7 +15647,7 @@ async function renderInventoryTable(filter = null, searchQuery = null, areaFilte
             statusBadge = `<span class="badge-tag red">Stock Crítico</span>`;
         }
 
-        const deleteMatBtn = isAssistant ? '' : `<button class="btn btn-xs btn-outline text-red" onclick="deleteInventoryItem('${item.code}')" title="Eliminar Insumo"><i class="fa-solid fa-trash"></i></button>`;
+        const deleteMatBtn = (isAssistant || isHygienist) ? '' : `<button class="btn btn-xs btn-outline text-red" onclick="deleteInventoryItem('${item.code}')" title="Eliminar Insumo"><i class="fa-solid fa-trash"></i></button>`;
 
         // Parse portions if fraccionado
         let stockDisplay = `${item.currentStock} ${item.unit}`;
@@ -35326,6 +35362,20 @@ window._currentConsumableCategoryFilter = 'all';
 window._currentEditingConsumableCode = null;
 
 window.renderConsumablesView = async function() {
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const isDoc = curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser);
+    const isHyg = curUser && (typeof isHygienistUser === 'function' ? isHygienistUser(curUser) : (typeof isHygienistRole === 'function' && isHygienistRole(curUser.role)));
+    if (isDoc || isHyg) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Acceso Restringido',
+            text: isHyg ? 'El rol de Higienista no tiene permisos para acceder al módulo de consumibles ni realizar ventas directas.' : 'El rol médico no tiene permisos para acceder al módulo de consumibles ni realizar ventas de mostrador.'
+        });
+        const agendaTab = document.querySelector('.nav-item[data-tab="agenda"]');
+        if (agendaTab) agendaTab.click();
+        return;
+    }
+
     try {
         const list = await SupabaseDataService.getConsumables();
         window._cachedConsumables = list || [];
@@ -35483,11 +35533,13 @@ window.filterConsumablesList = function() {
 
 window.openCreateConsumableModal = function() {
     const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
-    if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
+    const isDoc = curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser);
+    const isHyg = curUser && (typeof isHygienistUser === 'function' ? isHygienistUser(curUser) : (typeof isHygienistRole === 'function' && isHygienistRole(curUser.role)));
+    if (isDoc || isHyg) {
         Swal.fire({
             icon: 'warning',
             title: 'Acceso Restringido',
-            text: 'El rol médico no tiene permisos para crear ni gestionar productos consumibles o ventas de mostrador.'
+            text: isHyg ? 'El rol de Higienista no tiene permisos para crear productos consumibles ni realizar ventas directas.' : 'El rol médico no tiene permisos para crear ni gestionar productos consumibles o ventas de mostrador.'
         });
         return;
     }
@@ -35525,11 +35577,13 @@ window.openCreateConsumableModal = function() {
 
 window.editConsumable = function(code) {
     const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
-    if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
+    const isDoc = curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser);
+    const isHyg = curUser && (typeof isHygienistUser === 'function' ? isHygienistUser(curUser) : (typeof isHygienistRole === 'function' && isHygienistRole(curUser.role)));
+    if (isDoc || isHyg) {
         Swal.fire({
             icon: 'warning',
             title: 'Acceso Restringido',
-            text: 'El rol médico no tiene permisos para gestionar productos consumibles o ventas de mostrador.'
+            text: isHyg ? 'El rol de Higienista no tiene permisos para gestionar productos consumibles ni realizar ventas directas.' : 'El rol médico no tiene permisos para gestionar productos consumibles o ventas de mostrador.'
         });
         return;
     }
@@ -35573,11 +35627,13 @@ window.closeConsumableModal = function() {
 
 window.saveConsumableFromModal = async function() {
     const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
-    if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
+    const isDoc = curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser);
+    const isHyg = curUser && (typeof isHygienistUser === 'function' ? isHygienistUser(curUser) : (typeof isHygienistRole === 'function' && isHygienistRole(curUser.role)));
+    if (isDoc || isHyg) {
         Swal.fire({
             icon: 'warning',
             title: 'Acceso Restringido',
-            text: 'El rol médico no tiene permisos para crear ni guardar productos consumibles.'
+            text: isHyg ? 'El rol de Higienista no tiene permisos para guardar ni gestionar productos consumibles.' : 'El rol médico no tiene permisos para crear ni guardar productos consumibles.'
         });
         return;
     }
@@ -35645,11 +35701,13 @@ window.saveConsumableFromModal = async function() {
 
 window.restockConsumablePrompt = async function(code) {
     const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
-    if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
+    const isDoc = curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser);
+    const isHyg = curUser && (typeof isHygienistUser === 'function' ? isHygienistUser(curUser) : (typeof isHygienistRole === 'function' && isHygienistRole(curUser.role)));
+    if (isDoc || isHyg) {
         Swal.fire({
             icon: 'warning',
             title: 'Acceso Restringido',
-            text: 'El rol médico no tiene permisos para surtir inventario ni gestionar productos consumibles.'
+            text: isHyg ? 'El rol de Higienista no tiene permisos para surtir ni gestionar productos consumibles.' : 'El rol médico no tiene permisos para surtir inventario ni gestionar productos consumibles.'
         });
         return;
     }
@@ -35715,11 +35773,13 @@ window.restockConsumablePrompt = async function(code) {
 
 window.deleteConsumableItem = async function(code) {
     const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
-    if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
+    const isDoc = curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser);
+    const isHyg = curUser && (typeof isHygienistUser === 'function' ? isHygienistUser(curUser) : (typeof isHygienistRole === 'function' && isHygienistRole(curUser.role)));
+    if (isDoc || isHyg) {
         Swal.fire({
             icon: 'warning',
             title: 'Acceso Restringido',
-            text: 'El rol médico no tiene permisos para eliminar productos ni gestionar ventas.'
+            text: isHyg ? 'El rol de Higienista no tiene permisos para eliminar ni gestionar productos consumibles.' : 'El rol médico no tiene permisos para eliminar productos ni gestionar ventas.'
         });
         return;
     }
