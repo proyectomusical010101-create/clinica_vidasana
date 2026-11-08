@@ -3184,6 +3184,7 @@ class SupabaseDataService {
             servicePrice = 0,
             patientId = '',
             patientName = '',
+            patientDni = '',
             doctorName = '',
             doctorId = '',
             assistantName = '',
@@ -3301,12 +3302,28 @@ class SupabaseDataService {
 
         const clinicRetained = Math.max(0, price - (docAmount + astAmount));
 
+        // Validación estricta de paciente para procedimientos auxiliares y bonificación
+        const validPatientId = String(patientId || '').trim();
+        const validPatientName = String(patientName || '').trim();
+        const isGenericName = !validPatientName || 
+            validPatientName.toLowerCase() === 'paciente particular' || 
+            validPatientName.toLowerCase() === 'paciente s/n' || 
+            validPatientName.toLowerCase() === 'sin paciente vinculado';
+
+        const isPatientValid = !!(validPatientId && !isGenericName);
+        const isAuxiliaryOrHyg = astHas || !!assistantId || !!assistantName || 
+            (sourceType && (sourceType.includes('auxiliary') || sourceType === 'clinical_session')) ||
+            /radiograf|rayos\s*x|\brx\b|impresi[óo]n|profilaxis/i.test(serviceName);
+
         const record = {
             id: 'liq-srv-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
             service_code: serviceCode || 'SRV-GEN',
             service_name: serviceName || 'Servicio Clínico Atendido',
-            patient_id: patientId,
-            patient_name: patientName || 'Paciente Particular',
+            patient_id: validPatientId,
+            patient_name: validPatientName || (isAuxiliaryOrHyg ? 'Sin paciente vinculado' : 'Paciente Particular'),
+            patient_dni: params.patientDni || params.patient_dni || patientDni || '',
+            patient_validated: isPatientValid,
+            patient_validation_date: isPatientValid ? new Date().toISOString() : null,
             service_price: price,
             date: date,
             source_type: sourceType,
@@ -3335,7 +3352,8 @@ class SupabaseDataService {
                 calc_type: astCalcType,
                 rate: astRate,
                 amount: astAmount,
-                status: astHas ? 'Pendiente' : 'No Aplica',
+                status: astHas ? (isPatientValid ? 'Pendiente' : 'Pendiente Validación Paciente') : 'No Aplica',
+                patient_validated: isPatientValid,
                 paid_at: null,
                 payment_method: null,
                 payment_ref: null
@@ -3346,6 +3364,24 @@ class SupabaseDataService {
         };
 
         return await this.saveServiceLiquidation(record);
+    }
+
+    static async linkAndValidatePatientForLiquidation(liquidationId, pId, pName, pDni = '') {
+        const liquidations = await this.getServiceLiquidations();
+        const item = liquidations.find(l => l.id === liquidationId);
+        if (!item) throw new Error('Liquidación no encontrada.');
+        item.patient_id = pId;
+        item.patient_name = pName;
+        if (pDni) item.patient_dni = pDni;
+        item.patient_validated = true;
+        item.patient_validation_date = new Date().toISOString();
+        if (item.assistant) {
+            item.assistant.patient_validated = true;
+            if (item.assistant.status === 'Pendiente Validación Paciente') {
+                item.assistant.status = 'Pendiente';
+            }
+        }
+        return await this.saveServiceLiquidation(item);
     }
 
     static async recordServiceForLiquidation(params) {

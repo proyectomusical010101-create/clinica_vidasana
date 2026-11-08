@@ -1802,12 +1802,25 @@
 
             const isHyg = !!g.isHygienist;
             const pendingItems = isHyg 
-                ? g.items.filter(x => x.assistant && x.assistant.status === 'Pendiente')
+                ? g.items.filter(x => x.assistant && (x.assistant.status === 'Pendiente' || x.assistant.status === 'Pendiente Validación Paciente'))
                 : g.items.filter(x => x.doctor && x.doctor.status === 'Pendiente');
 
             if (pendingItems.length === 0) {
                 Swal.fire({ icon: 'info', title: 'Sin Pagos Pendientes', text: `Todos los honorarios de ${isHyg ? 'la higienista ' : ''}${g.name} ya han sido liquidados.` });
                 return;
+            }
+
+            // Validación administrativa de pacientes para procedimientos auxiliares de higienista
+            if (isHyg) {
+                const unvalidated = pendingItems.filter(x => !x.patient_id || !x.patient_name || x.patient_name === 'Paciente S/N' || x.patient_name === 'Sin paciente vinculado' || x.patient_name === 'Requiere Vincular Paciente' || x.patient_validated === false);
+                if (unvalidated.length > 0) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Validación de Paciente Requerida',
+                        html: `Existen <strong>${unvalidated.length}</strong> procedimiento(s) auxiliar(es) sin paciente validado.<br><br>Todo registro de procedimiento auxiliar debe vincular de forma obligatoria el identificador y nombre del paciente para que Administración pueda validar y autorizar la bonificación por productividad correspondiente.`
+                    });
+                    return;
+                }
             }
 
             const pendingIds = pendingItems.map(x => x.id);
@@ -2201,7 +2214,8 @@
                     const ptRows = pt.items.map(item => {
                         const price = parseFloat(item.service_price || 0);
                         const feeAmt = isHyg ? parseFloat(item.assistant?.amount || 0) : parseFloat(item.doctor?.amount || 0);
-                        const isPend = isHyg ? (item.assistant?.status === 'Pendiente') : (item.doctor?.status === 'Pendiente');
+                        const isBlockedForPatient = isHyg && (item.assistant?.status === 'Pendiente Validación Paciente' || !item.patient_id || !item.patient_name || item.patient_name === 'Paciente S/N' || item.patient_name === 'Sin paciente vinculado' || item.patient_name === 'Requiere Vincular Paciente' || item.patient_validated === false);
+                        const isPend = isHyg ? (item.assistant?.status === 'Pendiente' || isBlockedForPatient) : (item.doctor?.status === 'Pendiente');
                         
                         const rateObj = isHyg ? item.assistant : item.doctor;
                         const rateText = rateObj?.type === 'fixed' 
@@ -2209,6 +2223,8 @@
                             : `${rateObj?.rate || (isHyg ? 30 : 40)}%`;
 
                         const dateStr = item.date || (item.created_at ? item.created_at.substring(0, 10) : 'Hoy');
+                        const ptNameItem = item.patient_name || pt.patientName || 'Paciente';
+                        const ptIdItem = item.patient_id || pt.patientId || '';
 
                         return `
                             <tr style="border-bottom: 1px solid #f1f5f9;">
@@ -2217,6 +2233,13 @@
                                 </td>
                                 <td style="padding: 9px 14px;">
                                     <strong style="color: #0f172a; font-size: 0.85rem;">${item.service_name}</strong>
+                                    <div style="font-size: 0.73rem; color: #64748b; margin-top: 2px;">
+                                        <i class="fa-solid fa-hospital-user text-cyan"></i> Paciente: <strong>${ptNameItem}</strong>
+                                        ${ptIdItem ? `<span style="font-family: monospace; background: #e0f2fe; color: #0369a1; padding: 1px 5px; border-radius: 4px; font-size: 0.70rem; font-weight: 700; margin-left: 4px;">ID: ${ptIdItem}</span>` : ''}
+                                        ${!isBlockedForPatient 
+                                            ? `<span class="badge-tag green" style="font-size: 0.65rem; padding: 1px 5px; margin-left: 4px;"><i class="fa-solid fa-circle-check"></i> Validado</span>` 
+                                            : `<span class="badge-tag red" style="font-size: 0.65rem; padding: 1px 5px; margin-left: 4px;"><i class="fa-solid fa-triangle-exclamation"></i> Requiere Validar Paciente</span>`}
+                                    </div>
                                     ${item.notes ? `<div style="font-size: 0.72rem; color: #64748b;">${item.notes}</div>` : ''}
                                 </td>
                                 <td style="padding: 9px 14px; text-align: right; font-weight: 600; color: #334155;">
@@ -2229,12 +2252,22 @@
                                     <strong style="color: #15803d; font-size: 0.90rem;">$${feeAmt.toFixed(2)}</strong>
                                 </td>
                                 <td style="padding: 9px 14px; text-align: center;">
-                                    <span class="badge-tag ${isPend ? 'amber' : 'green'}" style="font-size: 0.72rem;">
-                                        ${isPend ? 'Pendiente' : 'Liquidado'}
-                                    </span>
+                                    ${isBlockedForPatient ? `
+                                        <span class="badge-tag red" style="font-size: 0.70rem; font-weight: 700;" title="No se puede liquidar hasta que se vincule el identificador y nombre del paciente">
+                                            <i class="fa-solid fa-lock"></i> Por Validar
+                                        </span>
+                                    ` : `
+                                        <span class="badge-tag ${isPend ? 'amber' : 'green'}" style="font-size: 0.72rem;">
+                                            ${isPend ? 'Pendiente' : 'Liquidado'}
+                                        </span>
+                                    `}
                                 </td>
                                 <td style="padding: 9px 14px; text-align: right;">
-                                    ${isPend ? `
+                                    ${isBlockedForPatient ? `
+                                        <button type="button" class="btn btn-xs btn-outline" onclick="window.ClinicalERP.openLinkPatientModal('${item.id}')" style="border-color:#f59e0b; color:#d97706; font-weight:700; background:#fefce8;" title="Vincular identificador y nombre de paciente para autorizar bonificación">
+                                            <i class="fa-solid fa-id-card"></i> Validar Paciente
+                                        </button>
+                                    ` : (isPend ? `
                                         <button type="button" class="btn btn-xs btn-outline" onclick="window.ClinicalERP.openEditGainModal('${item.id}')" style="border-color:#0284c7; color:#0284c7; font-weight:700; margin-right:4px;" title="Editar o personalizar porcentaje o monto de comisión antes de liquidar">
                                             <i class="fa-solid fa-pen-to-square"></i> Editar
                                         </button>
@@ -2243,18 +2276,24 @@
                                         </button>
                                     ` : `
                                         <span class="text-muted" style="font-size:0.75rem;"><i class="fa-solid fa-circle-check text-green"></i> Pagado</span>
-                                    `}
+                                    `)}
                                 </td>
                             </tr>
                         `;
                     }).join('');
 
+                    const hasValidPtHeader = pt.patientId && pt.patientName && pt.patientName !== 'Paciente S/N' && pt.patientName !== 'Sin paciente vinculado' && pt.patientName !== 'Requiere Vincular Paciente';
+
                     return `
                         <div style="margin: 10px 16px 14px 16px; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; background: #ffffff;">
                             <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; flex-wrap: wrap; gap: 8px;">
-                                <div style="display: flex; align-items: center; gap: 8px;">
+                                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                                     <i class="fa-solid fa-user-check text-cyan"></i>
                                     <strong style="color: #0f172a; font-size: 0.88rem;">${pt.patientName}</strong>
+                                    ${pt.patientId ? `<span class="badge-tag teal" style="font-size: 0.70rem; font-weight: 700;"><i class="fa-solid fa-id-card"></i> ID: ${pt.patientId}</span>` : ''}
+                                    ${hasValidPtHeader 
+                                        ? `<span class="badge-tag green" style="font-size: 0.68rem; font-weight: 700;"><i class="fa-solid fa-circle-check"></i> Paciente Validado</span>` 
+                                        : `<span class="badge-tag red" style="font-size: 0.68rem; font-weight: 700;"><i class="fa-solid fa-triangle-exclamation"></i> Requiere Identificador</span>`}
                                     <span class="badge-tag gray" style="font-size: 0.72rem;">${pt.items.length} servicio(s) atendido(s)</span>
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 14px;">
@@ -2430,11 +2469,19 @@
                         ? `<span class="badge-tag" style="background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; font-size: 0.68rem; font-weight: 700; margin-left: 4px;" title="Atención concretada a crédito interno de la clínica. Honorarios listos para liquidar al médico."><i class="fa-solid fa-hand-holding-dollar"></i> Crédito Interno</span>` 
                         : '');
 
+                const isBlockedForPatient = item.assistant && item.assistant.has_assistant && (item.assistant.status === 'Pendiente Validación Paciente' || !item.patient_id || !item.patient_name || item.patient_name === 'Paciente S/N' || item.patient_name === 'Sin paciente vinculado' || item.patient_name === 'Requiere Vincular Paciente' || item.patient_validated === false);
+
                 return `
                     <tr>
                         <td>
                             <div style="font-weight: 700; color: #0f172a;">${item.patient_name || 'Paciente S/N'}</div>
-                            <div style="font-size: 0.74rem; color: #64748b;"><i class="fa-regular fa-calendar"></i> ${item.date || (item.created_at ? item.created_at.substring(0,10) : 'Hoy')}${methodBadge}</div>
+                            <div style="font-size: 0.74rem; color: #64748b; margin-top: 2px;">
+                                ${item.patient_id ? `<span style="font-family: monospace; background: #e0f2fe; color: #0369a1; padding: 1px 5px; border-radius: 4px; font-weight: 700;">ID: ${item.patient_id}</span>` : '<span style="color:#ef4444; font-weight:600;">Sin ID</span>'}
+                                ${!isBlockedForPatient 
+                                    ? `<span class="badge-tag green" style="font-size: 0.65rem; padding: 1px 5px; margin-left: 4px;"><i class="fa-solid fa-circle-check"></i> Validado</span>` 
+                                    : `<span class="badge-tag red" style="font-size: 0.65rem; padding: 1px 5px; margin-left: 4px;"><i class="fa-solid fa-triangle-exclamation"></i> Requiere Validar</span>`}
+                            </div>
+                            <div style="font-size: 0.74rem; color: #64748b; margin-top: 2px;"><i class="fa-regular fa-calendar"></i> ${item.date || (item.created_at ? item.created_at.substring(0,10) : 'Hoy')}${methodBadge}</div>
                         </td>
                         <td>
                             <strong style="color: #0f172a; font-size: 0.88rem;">${item.service_name}</strong>
@@ -2473,13 +2520,17 @@
                         </td>
                         <td class="text-right">
                             <div style="display: inline-flex; align-items: center; gap: 6px;">
-                                ${(item.overall_status !== 'Liquidado Total') ? `
+                                ${isBlockedForPatient ? `
+                                    <button type="button" class="btn btn-sm btn-outline" onclick="window.ClinicalERP.openLinkPatientModal('${item.id}')" title="Vincular identificador y nombre de paciente para autorizar bonificación" style="border-color:#f59e0b; color:#d97706; font-weight:700; background:#fefce8; padding: 4px 10px; font-size: 0.78rem;">
+                                        <i class="fa-solid fa-id-card"></i> Validar Paciente
+                                    </button>
+                                ` : ((item.overall_status !== 'Liquidado Total') ? `
                                     <button type="button" class="btn btn-sm btn-primary" onclick="window.ClinicalERP.openSettleModal('${item.id}')" title="Liquidar Honorarios" style="padding: 5px 12px; font-weight: 700; border-radius: 8px; background: #16a34a !important; border: none !important; font-size: 0.8rem;">
                                         <i class="fa-solid fa-hand-holding-dollar"></i> Liquidar
                                     </button>
                                 ` : `
                                     <span class="badge-tag green" style="font-size: 0.72rem; padding: 4px 8px;"><i class="fa-solid fa-check-double"></i> Conciliado</span>
-                                `}
+                                `)}
                                 <button type="button" class="btn btn-xs btn-outline" onclick="window.ClinicalERP.deleteServiceLiquidation('${item.id}')" title="Eliminar registro" style="border-color: #fca5a5; color: #ef4444; font-size: 0.8rem;">
                                     <i class="fa-solid fa-trash"></i>
                                 </button>
@@ -2736,14 +2787,113 @@
             }
         },
 
+        async openLinkPatientModal(id) {
+            const item = this.serviceLiquidations.find(x => x.id === id);
+            if (!item) return;
+
+            let patients = [];
+            try {
+                patients = await SupabaseDataService.getPatients();
+            } catch(e) {
+                patients = [];
+            }
+
+            let opts = '<option value="">-- Seleccionar Paciente Registrado en la Clínica --</option>';
+            patients.forEach(p => {
+                const pDni = p.dni || p.cedula || p.idNumber || '';
+                const dniLabel = pDni ? ` | C.I. ${pDni}` : '';
+                opts += `<option value="${p.id}" data-name="${p.fullname || p.name}" data-dni="${pDni}">${p.fullname || p.name} (ID: ${p.id}${dniLabel})</option>`;
+            });
+
+            const { value: formValues } = await Swal.fire({
+                title: '<div style="display:flex; align-items:center; justify-content:center; gap:8px; color:#0d9488;"><i class="fa-solid fa-id-card"></i> Validar Paciente para Bonificación</div>',
+                html: `
+                    <div style="text-align: left; font-size: 0.86rem; color: #334155;">
+                        <p style="margin-bottom: 12px; line-height: 1.4;">
+                            Para que Administración autorice el pago de la bonificación del procedimiento auxiliar (<strong>${item.service_name}</strong>), vincule el identificador y nombre del paciente:
+                        </p>
+                        <div style="margin-bottom: 12px;">
+                            <label style="font-weight: 700; font-size: 0.78rem; display: block; margin-bottom: 4px; color: #0f172a;">Paciente Registrado *:</label>
+                            <select id="swal-link-patient-select" class="swal2-input" style="width: 100%; height: 38px; font-size: 0.85rem; margin: 0; padding: 4px 8px;" onchange="
+                                const opt = this.options[this.selectedIndex];
+                                if (opt && opt.value) {
+                                    document.getElementById('swal-link-patient-id').value = opt.value;
+                                    document.getElementById('swal-link-patient-name').value = opt.dataset.name || '';
+                                    const dniIn = document.getElementById('swal-link-patient-dni');
+                                    if (dniIn) dniIn.value = opt.dataset.dni || '';
+                                }
+                            ">
+                                ${opts}
+                            </select>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                            <div>
+                                <label style="font-weight: 700; font-size: 0.78rem; display: block; margin-bottom: 4px; color: #0f172a;">Identificador / ID *:</label>
+                                <input type="text" id="swal-link-patient-id" class="swal2-input" placeholder="ej: P-1002" style="width: 100%; height: 38px; font-size: 0.85rem; margin: 0; padding: 4px 8px;" value="${item.patient_id || ''}">
+                            </div>
+                            <div>
+                                <label style="font-weight: 700; font-size: 0.78rem; display: block; margin-bottom: 4px; color: #0f172a;">Cédula / DNI:</label>
+                                <input type="text" id="swal-link-patient-dni" class="swal2-input" placeholder="V-12345678" style="width: 100%; height: 38px; font-size: 0.85rem; margin: 0; padding: 4px 8px;" value="${item.patient_dni || ''}">
+                            </div>
+                        </div>
+                        <div>
+                            <label style="font-weight: 700; font-size: 0.78rem; display: block; margin-bottom: 4px; color: #0f172a;">Nombre Completo del Paciente *:</label>
+                            <input type="text" id="swal-link-patient-name" class="swal2-input" placeholder="Nombre y Apellidos" style="width: 100%; height: 38px; font-size: 0.85rem; margin: 0; padding: 4px 8px;" value="${(item.patient_name && item.patient_name !== 'Paciente S/N' && item.patient_name !== 'Sin paciente vinculado') ? item.patient_name : ''}">
+                        </div>
+                    </div>
+                `,
+                focusConfirm: false,
+                showCancelButton: true,
+                confirmButtonText: '<i class="fa-solid fa-check"></i> Validar y Autorizar Bonificación',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#10b981',
+                preConfirm: () => {
+                    const pId = document.getElementById('swal-link-patient-id').value.trim();
+                    const pName = document.getElementById('swal-link-patient-name').value.trim();
+                    const pDni = document.getElementById('swal-link-patient-dni').value.trim();
+                    if (!pId || !pName) {
+                        Swal.showValidationMessage('Debe ingresar obligatoriamente el Identificador y Nombre del paciente.');
+                        return false;
+                    }
+                    return { pId, pName, pDni };
+                }
+            });
+
+            if (formValues) {
+                try {
+                    await SupabaseDataService.linkAndValidatePatientForLiquidation(id, formValues.pId, formValues.pName, formValues.pDni);
+                    Swal.fire({
+                        icon: 'success',
+                        title: '¡Paciente Validado con Éxito!',
+                        text: 'El identificador y nombre han sido vinculados al procedimiento auxiliar. Bonificación autorizada para liquidación.',
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                    if (this.loadAll) await this.loadAll();
+                } catch(err) {
+                    Swal.fire({ icon: 'error', title: 'Error al validar', text: err.message || 'No se pudo actualizar el registro.' });
+                }
+            }
+        },
+
         openSettleModal(id, preselectedTarget = 'doctor') {
             const item = this.serviceLiquidations.find(x => x.id === id);
             if (!item) return;
 
+            const hasValidPt = !!(item.patient_id && item.patient_name && item.patient_name !== 'Paciente S/N' && item.patient_name !== 'Sin paciente vinculado' && item.patient_name !== 'Requiere Vincular Paciente' && item.patient_validated !== false);
+            if (preselectedTarget === 'assistant' && !hasValidPt) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Validación de Paciente Requerida',
+                    text: 'Todo registro de procedimiento auxiliar debe vincular de forma obligatoria el identificador y nombre del paciente para que Administración pueda validar y autorizar la bonificación por productividad correspondiente.'
+                });
+                return;
+            }
+
             document.getElementById('settle-liquidation-id').value = item.id;
             document.getElementById('settle-service-name').innerText = item.service_name;
             document.getElementById('settle-service-price').innerText = '$' + (parseFloat(item.service_price || 0)).toFixed(2);
-            document.getElementById('settle-patient-name').innerHTML = '<i class="fa-solid fa-user"></i> ' + (item.patient_name || 'Paciente S/N');
+            document.getElementById('settle-patient-name').innerHTML = '<i class="fa-solid fa-user"></i> ' + (item.patient_name || 'Paciente S/N') + (item.patient_id ? ` <span class="badge-tag teal" style="font-size:0.72rem; font-weight:700;"><i class="fa-solid fa-id-card"></i> ID: ${item.patient_id}</span>` : '') + (hasValidPt ? ` <span class="badge-tag green" style="font-size:0.70rem; font-weight:700;"><i class="fa-solid fa-circle-check"></i> Validado</span>` : ` <span class="badge-tag red" style="font-size:0.70rem; font-weight:700;"><i class="fa-solid fa-triangle-exclamation"></i> Requiere Validar</span>`);
             document.getElementById('settle-service-date').innerHTML = '<i class="fa-regular fa-calendar"></i> ' + (item.date || (item.created_at ? item.created_at.substring(0,10) : 'Hoy'));
             document.getElementById('settle-payment-ref').value = '';
             document.getElementById('settle-notes').value = '';
@@ -2811,6 +2961,19 @@
             const amountVal = parseFloat(document.getElementById('settle-amount-input').value) || 0;
 
             const item = this.serviceLiquidations.find(x => x.id === id);
+
+            if (target === 'assistant' || target === 'both') {
+                const hasValidPt = item && item.patient_id && item.patient_name && item.patient_name !== 'Paciente S/N' && item.patient_name !== 'Sin paciente vinculado' && item.patient_name !== 'Requiere Vincular Paciente' && item.patient_validated !== false;
+                if (!hasValidPt) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Validación de Paciente Requerida',
+                        text: 'Todo registro de procedimiento auxiliar debe vincular de forma obligatoria el identificador y nombre del paciente para que Administración pueda validar y autorizar la bonificación por productividad correspondiente.'
+                    });
+                    return;
+                }
+            }
+
             const docGross = (item && item.doctor) ? parseFloat(item.doctor.amount || 0) : 0;
             const astAmt = (item && item.assistant && item.assistant.status === 'Pendiente') ? parseFloat(item.assistant.amount || 0) : 0;
 

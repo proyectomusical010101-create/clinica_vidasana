@@ -12466,6 +12466,34 @@ window.saveEHRPhoto = async function(e) {
         // Save to Supabase Cloud & LocalStorage
         const updatedPatient = await SupabaseDataService.addPatientPhoto(activeId, newPhoto);
 
+        // Registro de bonificación para procedimiento auxiliar ejecutado por higienista
+        const curUserPhoto = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+        const isHygPhoto = curUserPhoto && (typeof isHygienistUser === 'function' ? isHygienistUser(curUserPhoto) : (typeof isHygienistRole === 'function' && isHygienistRole(curUserPhoto.role)));
+        if (isHygPhoto && (category === 'Radiografía' || category === 'Impresión Dental')) {
+            const patTarget = updatedPatient || (await SupabaseDataService.getPatients()).find(p => p.id === activeId);
+            if (patTarget && patTarget.id && patTarget.fullname) {
+                try {
+                    await SupabaseDataService.recordServiceCompletionForLiquidation({
+                        serviceCode: category === 'Radiografía' ? 'RX-DENT' : 'IMP-DENT',
+                        serviceName: `${category === 'Radiografía' ? 'Toma Radiográfica (Rx)' : 'Toma de Impresión Dental'}: ${title}`,
+                        servicePrice: 0,
+                        patientId: patTarget.id,
+                        patientName: patTarget.fullname,
+                        patientDni: patTarget.dni || patTarget.cedula || patTarget.idNumber || '',
+                        doctorName: patTarget.assignedDoctor || 'Médico Tratante',
+                        assistantName: curUserPhoto.fullname,
+                        assistantId: curUserPhoto.id,
+                        hasAssistant: true,
+                        sourceType: 'auxiliary_procedure',
+                        date: new Date().toISOString().split('T')[0],
+                        notes: `Estudio radiográfico/impresión subido al expediente (${notes || title})`
+                    });
+                } catch(eLiq) {
+                    console.warn('[Liquidation] Note: auxiliary liquidation recorded with validation', eLiq);
+                }
+            }
+        }
+
         // Reset and close modal
         if (document.getElementById('form-ehr-photo-upload')) {
             document.getElementById('form-ehr-photo-upload').reset();
@@ -18725,6 +18753,26 @@ function initGlobalEvents() {
             const patient = patients.find(p => p.id === activeId);
             if (!patient) return;
 
+            // Validación obligatoria de paciente para procedimientos auxiliares y bonificación
+            const curSessionUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+            const isHyg = curSessionUser && (typeof isHygienistUser === 'function' ? isHygienistUser(curSessionUser) : (typeof isHygienistRole === 'function' && isHygienistRole(curSessionUser.role)));
+            const isAuxiliary = isHyg || /radiograf|rayos\s*x|\brx\b|impresi[óo]n|modelo|profilaxis|limpieza/i.test(procedure);
+
+            if (isAuxiliary) {
+                const patId = String(patient.id || '').trim();
+                const patName = String(patient.fullname || patient.name || '').trim();
+                const isGeneric = !patName || patName.toLowerCase() === 'paciente particular' || patName.toLowerCase() === 'paciente s/n';
+
+                if (!patId || isGeneric) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Validación de Paciente Requerida',
+                        text: 'Todo registro de procedimiento auxiliar debe vincular de forma obligatoria el identificador y nombre del paciente, permitiendo a Administración validar y autorizar la bonificación por productividad correspondiente.'
+                    });
+                    return;
+                }
+            }
+
             if (!patient.sessions) patient.sessions = [];
 
             const sAccountEl = document.getElementById('s-payment-account');
@@ -18738,7 +18786,6 @@ function initGlobalEvents() {
                 sCommission = parseFloat(selOpt?.getAttribute('data-commission') || 0);
             }
             
-            const curSessionUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
             const curSessionDoctorName = (curSessionUser && (curSessionUser.fullname || curSessionUser.name)) || patient.assignedDoctor || '';
             const curSessionSpecialty = (curSessionUser && (curSessionUser.specialty || curSessionUser.area)) || patient.specialty || 'Odontología';
             
@@ -18824,8 +18871,12 @@ function initGlobalEvents() {
                                 servicePrice: srvPrice,
                                 patientId: patient.id,
                                 patientName: patient.fullname,
+                                patientDni: patient.dni || patient.cedula || patient.idNumber || '',
                                 doctorName: srvDoc,
-                                sourceType: 'clinical_session',
+                                assistantName: isHyg ? currentUser.fullname : '',
+                                assistantId: isHyg ? currentUser.id : '',
+                                hasAssistant: isHyg,
+                                sourceType: isHyg ? 'auxiliary_procedure' : 'clinical_session',
                                 date: datetime ? datetime.split(' ')[0] : new Date().toISOString().split('T')[0],
                                 notes: `Sesión clínica #${sessionNum} concretada (${procedure})`
                             });
@@ -18833,6 +18884,30 @@ function initGlobalEvents() {
                     } catch(eLiq) {
                         console.warn('Error recording liquidation from session:', eLiq);
                     }
+                }
+            }
+
+            // Auto-record para procedimientos auxiliares directos (Rx / Impresiones) o ejecutados por higienista fuera del plan
+            if (isHyg || (/radiograf|rayos\s*x|\brx\b|impresi[óo]n|profilaxis/i.test(procedure) && (!patient.metadata || !patient.metadata.treatments || !patient.metadata.treatments.find(t => t.sessionNum === sessionNum)))) {
+                try {
+                    const currentUser = getCurrentUser();
+                    await SupabaseDataService.recordServiceCompletionForLiquidation({
+                        serviceCode: /radiograf|rayos\s*x|\brx\b/i.test(procedure) ? 'RX-DENT' : (/impresi[óo]n/i.test(procedure) ? 'IMP-DENT' : 'SES-AUX'),
+                        serviceName: procedure,
+                        servicePrice: paymentUSD > 0 ? paymentUSD : 0,
+                        patientId: patient.id,
+                        patientName: patient.fullname,
+                        patientDni: patient.dni || patient.cedula || patient.idNumber || '',
+                        doctorName: patient.assignedDoctor || 'Médico Tratante',
+                        assistantName: isHyg ? (currentUser ? currentUser.fullname : 'Higienista Dental') : (patient.assignedAssistant || ''),
+                        assistantId: isHyg ? (currentUser ? currentUser.id : '') : '',
+                        hasAssistant: true,
+                        sourceType: 'auxiliary_procedure',
+                        date: datetime ? datetime.split(' ')[0] : new Date().toISOString().split('T')[0],
+                        notes: `Procedimiento auxiliar registrado en sesión #${sessionNum} (${procedure})`
+                    });
+                } catch(eAuxLiq) {
+                    console.warn('Error recording auxiliary procedure liquidation:', eAuxLiq);
                 }
             }
 
