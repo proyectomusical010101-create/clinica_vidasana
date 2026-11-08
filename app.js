@@ -11179,6 +11179,16 @@ window.resetPatientEHRState = resetPatientEHRState;
 
 window._currentEhrPaymentsAreaFilter = window._currentEhrPaymentsAreaFilter || 'dental';
 window.setEhrPaymentsAreaFilter = async function(filter, btnEl) {
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const isHyg = curUser && (typeof isHygienistUser === 'function' ? isHygienistUser(curUser) : (typeof isHygienistRole === 'function' && isHygienistRole(curUser.role)));
+    if (isHyg && filter !== 'dental') {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Acceso Restringido',
+            text: 'El perfil de Higienista solo tiene acceso a la información y expedientes del área odontológica.'
+        });
+        return;
+    }
     window._currentEhrPaymentsAreaFilter = filter || 'dental';
     document.querySelectorAll('#ehr-payments-filter-chips .check-chip').forEach(b => b.classList.remove('active'));
     if (btnEl) btnEl.classList.add('active');
@@ -11423,7 +11433,7 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
                 String(i.patient_id) === String(activePatient.id) ||
                 String(i.metadata?.patientId) === String(activePatient.id)
             );
-            const approvedBudgets = patientBudgets.filter(b => 
+            let approvedBudgets = patientBudgets.filter(b => 
                 String(b.status).toLowerCase() === 'aprobado' || 
                 String(b.status).toLowerCase() === 'approved' || 
                 String(b.status).toLowerCase() === 'pagada' || 
@@ -11431,6 +11441,20 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
                 String(b.status).toLowerCase() === 'completada' || 
                 String(b.status).toLowerCase() === 'finalizado'
             );
+
+            // Si es higienista: segmentación estricta al área odontológica (excluir presupuestos u órdenes médicas no dentales)
+            if (isHygienist) {
+                approvedBudgets = approvedBudgets.filter(b => {
+                    const cat = String(b.category || b.metadata?.category || '').trim().toLowerCase();
+                    const spec = String(b.specialty || b.metadata?.specialty || '').trim().toLowerCase();
+                    const dept = String(b.department || b.metadata?.department || '').trim().toLowerCase();
+                    const bType = String(b.type || '').trim().toLowerCase();
+                    const isMedical = bType === 'medical' || cat.includes('medicin') || cat.includes('gineco') || cat.includes('cardio') || cat.includes('pediatr') || spec.includes('medicin') || spec.includes('gineco') || spec.includes('cardio');
+                    if (isMedical) return false;
+                    return isDentalSpecialtyOrArea(cat) || isDentalSpecialtyOrArea(spec) || isDentalSpecialtyOrArea(dept) || (b.odontogramData && Object.keys(b.odontogramData).length > 0) || (b.items && b.items.some(it => isDentalService(it)));
+                });
+            }
+
             // Ordenar de más antiguo a más reciente
             approvedBudgets.sort((a, b) => new Date(a.invoiceDate || a.date || a.createdAt || 0) - new Date(b.invoiceDate || b.date || b.createdAt || 0));
 
@@ -11454,6 +11478,16 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
                         sessionNum: idx + 1
                     }));
                 }
+            }
+
+            if (isHygienist && treatmentsList.length > 0) {
+                treatmentsList = treatmentsList.filter(t => {
+                    const tName = String(t.name || '').toLowerCase();
+                    const spec = String(t.specialist || '').toLowerCase();
+                    if (spec.includes('gineco') || spec.includes('cardio') || spec.includes('medicina') || spec.includes('pediatr')) return false;
+                    if (tName.includes('consulta médica') || tName.includes('ginecolog') || tName.includes('citolog') || tName.includes('prenatal') || tName.includes('electrocardiograma')) return false;
+                    return true;
+                });
             }
 
             // 4. Odontodiagrama Tab (Comparación Diagnóstico Inicial vs Evolución Actual de Presupuestos Aprobados)
@@ -11531,7 +11565,18 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
 
             // Cálculo dinámico del total de sesiones requeridas (Solo para presupuestos aprobados)
             let totalSessions = 0;
-            const completedSessions = activePatient.sessions ? activePatient.sessions.length : 0;
+            const patientSessions = (activePatient.sessions || []).filter(s => {
+                if (!isHygienist) return true;
+                const proc = String(s.procedure || '').toLowerCase();
+                const spec = String(s.specialist || s.doctor || s.specialty || '').toLowerCase();
+                const ind = String(s.indications || '').toLowerCase();
+                // Excluir notas evolutivas o diagnósticos de otras ramas médicas (Ginecología, Medicina Interna, Cardiología, etc.)
+                if (spec.includes('gineco') || spec.includes('cardio') || spec.includes('medicina') || spec.includes('pediatr') || spec.includes('oftalmo') || spec.includes('traumato')) return false;
+                if (proc.includes('consulta médica') || proc.includes('ginecolog') || proc.includes('citolog') || proc.includes('prenatal') || proc.includes('electrocardiograma') || proc.includes('holter') || proc.includes('medicina general') || proc.includes('medicina interna') || proc.includes('pediatría')) return false;
+                if (ind.includes('ginecolog') || ind.includes('citolog') || ind.includes('prenatal') || ind.includes('cardiolog') || ind.includes('medicina interna')) return false;
+                return true;
+            });
+            const completedSessions = patientSessions ? patientSessions.length : 0;
             let pct = 0;
             let treatmentTitle = 'Sin tratamiento activo';
 
@@ -11657,8 +11702,7 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
                     timeline.appendChild(trtSection);
                 }
 
-                // 2. Renderizar Línea de Tiempo de Sesiones (1 a Total)
-                const patientSessions = activePatient.sessions || [];
+                // 2. Renderizar Línea de Tiempo de Sesiones (1 a Total) (patientSessions ya filtrado para el perfil)
 
                 for (let sNum = 1; sNum <= totalSessions; sNum++) {
                     const s = patientSessions.find(sess => sess.sessionNum === sNum);
@@ -11770,7 +11814,7 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
             
             const allPaymentsList = [];
             const processedEhrPayKeys = new Set();
-            const payAreaFilter = window._currentEhrPaymentsAreaFilter || 'dental';
+            const payAreaFilter = isHygienist ? 'dental' : (window._currentEhrPaymentsAreaFilter || 'dental');
 
             // Sincronizar estado visual de los chips de filtro de pagos
             document.querySelectorAll('#ehr-payments-filter-chips .check-chip').forEach(b => {
@@ -12030,8 +12074,33 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
             // 5. Interconsultas, Récipes e Indicaciones Tab
             const interconsultationsContainer = document.getElementById('ehr-interconsultations-list');
             if (interconsultationsContainer) {
-                const ics = (meta.interconsultations) || [];
-                const rcs = (meta.recipes) || [];
+                let ics = (meta.interconsultations) || [];
+                let rcs = (meta.recipes) || [];
+
+                // Si es higienista: bloquear interconsultas y récipes de otras ramas médicas (Ginecología, Medicina Interna, etc.)
+                if (isHygienist) {
+                    ics = ics.filter(ic => {
+                        const spec = String(ic.specialty || ic.doctor || '').toLowerCase();
+                        const notes = String(ic.notes || '').toLowerCase();
+                        const studies = (ic.studies || []).map(s => String(s.name || '').toLowerCase()).join(' ');
+                        if (spec.includes('gineco') || spec.includes('cardio') || spec.includes('medicina') || spec.includes('pediatr') || spec.includes('oftalmo') || spec.includes('traumato')) return false;
+                        if (notes.includes('ginecolog') || notes.includes('citolog') || notes.includes('prenatal') || notes.includes('medicina interna') || notes.includes('medicina general') || notes.includes('cardiolog')) return false;
+                        if (studies.includes('citolog') || studies.includes('pap ') || studies.includes('papanicolau') || studies.includes('colposcop') || studies.includes('ekg') || studies.includes('electrocardio') || studies.includes('holter')) return false;
+                        return true;
+                    });
+
+                    rcs = rcs.filter(rc => {
+                        const trt = String(rc.treatmentLinked || '').toLowerCase();
+                        const doc = String(rc.doctor || rc.specialist || '').toLowerCase();
+                        const notes = String(rc.notes || '').toLowerCase();
+                        const ind = String(rc.indications || '').toLowerCase();
+                        if (doc.includes('gineco') || doc.includes('cardio') || doc.includes('medicina') || doc.includes('pediatr')) return false;
+                        if (trt.includes('gineco') || trt.includes('cardio') || trt.includes('medicina general') || trt.includes('medicina interna')) return false;
+                        if (notes.includes('ginecolog') || notes.includes('citolog') || notes.includes('prenatal') || notes.includes('cardiolog') || notes.includes('medicina interna')) return false;
+                        if (ind.includes('ginecolog') || ind.includes('citolog') || ind.includes('prenatal') || ind.includes('cardiolog') || ind.includes('medicina interna')) return false;
+                        return true;
+                    });
+                }
 
                 if (ics.length === 0 && rcs.length === 0) {
                     interconsultationsContainer.innerHTML = `
@@ -12179,6 +12248,20 @@ function renderEHRGallery(patient, filter = 'all') {
         photos = patient.photos;
     } else if (patient && patient.metadata && Array.isArray(patient.metadata.photos)) {
         photos = patient.metadata.photos;
+    }
+
+    // Si es higienista: restringir fotos y estudios de imagen exclusivamente al ámbito odontológico
+    const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const isHyg = curUser && (typeof isHygienistUser === 'function' ? isHygienistUser(curUser) : (typeof isHygienistRole === 'function' && isHygienistRole(curUser.role)));
+    if (isHyg && photos.length > 0) {
+        photos = photos.filter(p => {
+            const title = String(p.title || '').toLowerCase();
+            const notes = String(p.notes || '').toLowerCase();
+            const cat = String(p.category || '').toLowerCase();
+            if (title.includes('gineco') || title.includes('citolog') || title.includes('prenatal') || title.includes('ekg') || title.includes('electro') || title.includes('holter')) return false;
+            if (notes.includes('gineco') || notes.includes('citolog') || notes.includes('prenatal') || notes.includes('ekg') || notes.includes('electro') || notes.includes('holter')) return false;
+            return true;
+        });
     }
 
     // Keep summary subtab mini gallery synchronized as well
@@ -12779,9 +12862,20 @@ async function exportEHRToPDF() {
     let systemicText = sumSystemic.length > 0 ? sumSystemic.join(', ') : 'Ninguna declarada';
     let medText = patient.medication || 'Sin medicación prescrita';
 
+    const curPdfUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const isHygPdf = curPdfUser && (typeof isHygienistUser === 'function' ? isHygienistUser(curPdfUser) : (typeof isHygienistRole === 'function' && isHygienistRole(curPdfUser.role)));
+
     let evolutionsHtml = '';
-    if (patient.clinicalNotes && patient.clinicalNotes.length > 0) {
-        patient.clinicalNotes.forEach(note => {
+    let notesToDisplay = patient.clinicalNotes || [];
+    if (isHygPdf && notesToDisplay.length > 0) {
+        notesToDisplay = notesToDisplay.filter(note => {
+            const c = String(note.content || '').toLowerCase();
+            if (c.includes('gineco') || c.includes('citolog') || c.includes('prenatal') || c.includes('cardiolog') || c.includes('medicina general') || c.includes('medicina interna') || c.includes('pediatría')) return false;
+            return true;
+        });
+    }
+    if (notesToDisplay.length > 0) {
+        notesToDisplay.forEach(note => {
             evolutionsHtml += `
                 <div style="margin-bottom: 12px; padding: 10px 14px; background: #f8fafc; border-left: 3px solid #0284c7; border-radius: 4px;">
                     <div style="display:flex; justify-content:space-between; font-size: 0.78rem; color: #64748b; margin-bottom: 4px;">
@@ -12802,7 +12896,16 @@ async function exportEHRToPDF() {
     // Budgets / Invoices
     try {
         const allInvoices = await SupabaseDataService.getInvoices();
-        const patientBudgets = allInvoices.filter(i => String(i.patientId) === String(patient.id));
+        let patientBudgets = allInvoices.filter(i => String(i.patientId) === String(patient.id));
+        if (isHygPdf) {
+            patientBudgets = patientBudgets.filter(b => {
+                const cat = String(b.category || b.metadata?.category || '').trim().toLowerCase();
+                const spec = String(b.specialty || b.metadata?.specialty || '').trim().toLowerCase();
+                const bType = String(b.type || '').trim().toLowerCase();
+                if (bType === 'medical' || cat.includes('medicin') || cat.includes('gineco') || cat.includes('cardio') || cat.includes('pediatr')) return false;
+                return isDentalSpecialtyOrArea(cat) || isDentalSpecialtyOrArea(spec) || (b.odontogramData && Object.keys(b.odontogramData).length > 0);
+            });
+        }
         patientBudgets.forEach(b => {
             const isCashea = !!(b.is_cashea || b.casheaDetails || b.metadata?.isCashea || b.paymentTerms === 'Financiamiento Cashea');
             const isPaid = b.status === 'Aprobado' || b.status === 'Pagado' || b.status === 'Pagada' || b.status === 'Liquidado Cashea';
@@ -12983,7 +13086,16 @@ async function exportEHRToPDF() {
     try { document.body.removeChild(odTempContainer); } catch(e) {}
 
     // Interconsultations and Recipes HTML compilation
-    const ics = (patient.metadata && patient.metadata.interconsultations) || [];
+    let ics = (patient.metadata && patient.metadata.interconsultations) || [];
+    if (isHygPdf && ics.length > 0) {
+        ics = ics.filter(ic => {
+            const spec = String(ic.specialty || ic.doctor || '').toLowerCase();
+            const notes = String(ic.notes || '').toLowerCase();
+            if (spec.includes('gineco') || spec.includes('cardio') || spec.includes('medicina')) return false;
+            if (notes.includes('ginecolog') || notes.includes('citolog') || notes.includes('prenatal') || notes.includes('cardiolog') || notes.includes('medicina general')) return false;
+            return true;
+        });
+    }
     let interconsultationsHtml = '';
     if (ics.length > 0) {
         ics.forEach(ic => {
@@ -13004,7 +13116,16 @@ async function exportEHRToPDF() {
         interconsultationsHtml = `<p style="font-size:0.82rem; color:#64748b; font-style:italic; margin:4px 0;">Sin solicitudes de interconsulta registradas.</p>`;
     }
 
-    const rcs = (patient.metadata && patient.metadata.recipes) || [];
+    let rcs = (patient.metadata && patient.metadata.recipes) || [];
+    if (isHygPdf && rcs.length > 0) {
+        rcs = rcs.filter(rc => {
+            const trt = String(rc.treatmentLinked || '').toLowerCase();
+            const notes = String(rc.notes || '').toLowerCase();
+            if (trt.includes('gineco') || trt.includes('cardio') || trt.includes('medicina general') || trt.includes('medicina interna')) return false;
+            if (notes.includes('ginecolog') || notes.includes('citolog') || notes.includes('prenatal') || notes.includes('cardiolog') || notes.includes('medicina interna')) return false;
+            return true;
+        });
+    }
     let recipesHtml = '';
     if (rcs.length > 0) {
         recipesHtml = '<h4 style="margin:10px 0 6px 0; font-size:0.88rem; color:#059669;">📋 Prescripciones Médicas e Indicaciones Emitidas:</h4>';
