@@ -368,6 +368,122 @@ function isDentalDoctor(user) {
 }
 window.isDentalDoctor = isDentalDoctor;
 
+function isDentalService(service) {
+    if (!service) return false;
+    const cat = String(service.category || '').toLowerCase();
+    const area = String(service.area || '').toLowerCase();
+    const dept = String(service.department || '').toLowerCase();
+    const name = String(service.name || '').toLowerCase();
+    const code = String(service.code || '').toLowerCase();
+
+    if (typeof isDentalSpecialtyOrArea === 'function') {
+        if (isDentalSpecialtyOrArea(cat) || isDentalSpecialtyOrArea(area) || isDentalSpecialtyOrArea(dept)) {
+            return true;
+        }
+    }
+
+    const dentalTerms = [
+        'odont', 'dent', 'ortod', 'endod', 'periodon', 'maxilofacial', 'bucal', 
+        'protesis', 'implant', 'exodoncia', 'limpieza dental', 'profilaxis', 
+        'blanqueamiento', 'carilla', 'corona', 'puente', 'sellante', 'curetaje', 
+        'gingiv', 'panoramica', 'periapical', 'resina', 'amalgama', 'tartrectomia'
+    ];
+    return dentalTerms.some(term => cat.includes(term) || area.includes(term) || dept.includes(term) || name.includes(term) || code.includes(term));
+}
+window.isDentalService = isDentalService;
+
+function isServiceMatchingDoctorSpecialty(service, user = null) {
+    if (!service) return false;
+    const curUser = user || (typeof getCurrentUser === 'function' ? getCurrentUser() : null);
+    if (!curUser) return true;
+
+    // Non-doctors (admin, cashier, receptionist, assistant) see standard catalog
+    const isAdmin = typeof isSuperOrAdminRole === 'function' ? isSuperOrAdminRole(curUser.role) : false;
+    if (isAdmin) return true;
+    const isDoc = typeof isDoctorUser === 'function' ? isDoctorUser(curUser) : false;
+    if (!isDoc) return true;
+
+    const docProf = curUser.doctorProfile || curUser.doctor_profile || {};
+    const assignedServices = docProf.assignedServices || curUser.services;
+
+    // 1. Whitelist of assigned services takes precedence if configured by admin
+    if (Array.isArray(assignedServices) && assignedServices.length > 0) {
+        const srvCode = String(service.code || service.id || '').trim();
+        const srvName = String(service.name || '').trim().toLowerCase();
+        if (assignedServices.some(c => String(c).trim() === srvCode || String(c).trim().toLowerCase() === srvName)) {
+            return true;
+        }
+    }
+
+    const isDentalDoc = typeof isDentalDoctor === 'function' && isDentalDoctor(curUser);
+    const isDentalSrv = isDentalService(service);
+
+    // Rule 1: Dental Doctors ONLY see Dental Services (never medical consultations, general medicine, lab, gynecology, cardiology, etc.)
+    if (isDentalDoc) {
+        return isDentalSrv;
+    }
+
+    // Rule 2: Non-Dental Doctors MUST NEVER see Dental Services
+    if (isDentalSrv) {
+        return false;
+    }
+
+    // Rule 3: Filter non-dental services by doctor's specific specialty
+    const docSpecRaw = String(docProf.specialty || curUser.specialty || curUser.role || '').toLowerCase();
+    const docSpec = docSpecRaw.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+
+    const cat = String(service.category || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    const area = String(service.area || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    const dept = String(service.department || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    const name = String(service.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+
+    // General Medicine doctor
+    const isGeneral = docSpec.includes('general') || docSpec.includes('integral') || docSpec.includes('triaje') || docSpec === 'medico' || docSpec === 'doctor';
+    if (isGeneral) {
+        const isSpecializedSubspecialty = cat.includes('cardio') || cat.includes('gineco') || cat.includes('pediatr') || 
+                                          cat.includes('traumatol') || cat.includes('oftalmol') || cat.includes('laboratorio');
+        if (isSpecializedSubspecialty) {
+            return area.includes('general') || cat.includes('general') || name.includes('general') || name.includes('consulta general');
+        }
+        return true;
+    }
+
+    // Specific medical specialties mapping
+    const specialtiesMap = [
+        { key: 'pediatr', match: ['pediatr', 'infantil', 'nino', 'vacuna'] },
+        { key: 'gineco', match: ['gineco', 'obstetr', 'prenatal', 'citolog', 'embaraz', 'ecografia obstetrica', 'papanicolau', 'colposcop', 'pelvic'] },
+        { key: 'cardio', match: ['cardio', 'electrocardiograma', 'ecocardiograma', 'holter', 'mapa', 'tension', 'arritmia'] },
+        { key: 'traumat', match: ['traumat', 'ortoped', 'inmovilizacion', 'yeso', 'ferula', 'articulac', 'hueso'] },
+        { key: 'oftalmo', match: ['oftalmo', 'ocular', 'fondo de ojo', 'refraccion', 'agudeza visual', 'vision'] },
+        { key: 'dermato', match: ['dermato', 'piel', 'cauterizacion', 'biopsia de piel', 'verruga'] },
+        { key: 'urolo', match: ['urolo', 'prostata', 'urologico', 'cistoscopia'] },
+        { key: 'gastro', match: ['gastro', 'endoscopia', 'colonoscopia', 'digestiv'] },
+        { key: 'otorrino', match: ['otorrino', 'oido', 'laringe', 'nariz', 'audiometria'] },
+        { key: 'neumo', match: ['neumo', 'pulmon', 'espirometria', 'respirat'] }
+    ];
+
+    for (const specDef of specialtiesMap) {
+        if (docSpec.includes(specDef.key)) {
+            const matchesService = specDef.match.some(m => cat.includes(m) || area.includes(m) || dept.includes(m) || name.includes(m));
+            if (matchesService) return true;
+            if (name.includes('consulta') && (name.includes(specDef.key) || cat.includes(specDef.key) || area.includes(specDef.key))) {
+                return true;
+            }
+            return false;
+        }
+    }
+
+    // Generic match against doctor specialty keywords
+    const keywords = docSpec.split(/[\s,/-]+/).filter(w => w.length > 3 && !['dr.', 'dra.', 'medico', 'medica', 'doctor', 'doctora', 'especialista'].includes(w));
+    if (keywords.length > 0) {
+        return keywords.some(kw => cat.includes(kw) || area.includes(kw) || dept.includes(kw) || name.includes(kw));
+    }
+
+    // Fallback: exclude dental and lab
+    return !isDentalSrv && !cat.includes('laboratorio');
+}
+window.isServiceMatchingDoctorSpecialty = isServiceMatchingDoctorSpecialty;
+
 function isSuperOrAdminRole(role) {
     if (!role) return false;
     const r = String(role).toLowerCase().trim();
@@ -1850,6 +1966,90 @@ function applyRolePermissionsUI(role) {
                     window.navigateToTab('agenda');
                 }
             }
+
+            // OCULTAMIENTO DE COMPONENTES AJENOS & AISLAMIENTO POR ESPECIALIDAD
+            const curDocUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+            const isDental = curDocUser && typeof isDentalDoctor === 'function' && isDentalDoctor(curDocUser);
+            document.body.classList.toggle('is-dental-doctor', Boolean(isDental));
+            document.body.classList.toggle('is-non-dental-doctor', !isDental);
+
+            const odontogramNav = document.querySelector('.nav-item[data-tab="odontogram"]');
+            const mobOdontogramNav = document.getElementById('mob-nav-odontogram');
+            const ehrOdontogramSubtabBtn = document.querySelector('.subtab-btn[data-subtab="odontogram-comp"]');
+            const ehrOdontogramSubtabPane = document.getElementById('subtab-odontogram-comp');
+
+            if (!isDental) {
+                // Perfil Médico No Odontológico (Pediatría, Ginecología, Medicina General, Cardiología, etc.)
+                // 1. Sidebar y navegación: Reemplazar etiqueta "Odontograma" por "Órdenes & Presupuestos"
+                if (odontogramNav) {
+                    odontogramNav.setAttribute('data-tooltip', 'Órdenes & Presupuestos');
+                    const oIcon = odontogramNav.querySelector('i');
+                    if (oIcon) oIcon.className = 'fa-solid fa-file-invoice-dollar text-cyan';
+                    const oLabel = odontogramNav.querySelector('.nav-label');
+                    if (oLabel) oLabel.innerText = 'Órdenes & Pres.';
+                }
+                if (mobOdontogramNav) {
+                    const mIcon = mobOdontogramNav.querySelector('i');
+                    if (mIcon) mIcon.className = 'fa-solid fa-file-invoice-dollar';
+                    const mSpan = mobOdontogramNav.querySelector('span');
+                    if (mSpan) mSpan.innerText = 'Órdenes';
+                }
+
+                // 2. Expediente (EHR): Ocultamiento absoluto del Odontodiagrama
+                if (ehrOdontogramSubtabBtn) ehrOdontogramSubtabBtn.style.display = 'none';
+                if (ehrOdontogramSubtabPane) ehrOdontogramSubtabPane.style.display = 'none';
+                const curSavedSubtab = localStorage.getItem('dental_ehr_subtab') || window.currentEHRSubtab;
+                if (curSavedSubtab === 'odontogram-comp') {
+                    localStorage.setItem('dental_ehr_subtab', 'summary');
+                    window.currentEHRSubtab = 'summary';
+                }
+
+                // 3. Ocultamiento total del diagrama dental
+                const odEditor = document.getElementById('odontogram-editor-container');
+                if (odEditor) {
+                    odEditor.classList.add('hidden');
+                    odEditor.style.display = 'none';
+                }
+
+                // 4. Catálogo: Bloqueo de visualización de otras áreas en el editor de presupuestos médicos
+                const showAllBaremoBox = document.getElementById('med-budget-show-all-baremo');
+                if (showAllBaremoBox) {
+                    showAllBaremoBox.checked = false;
+                    const lbl = showAllBaremoBox.closest('label');
+                    if (lbl) lbl.style.display = 'none';
+                }
+
+                // 5. Redirección de seguridad si estaba en la vista de editor de dientes
+                const currentOdSubview = localStorage.getItem('dental_odontogram_subview') || document.documentElement.getAttribute('data-odontogram-subview');
+                if (currentOdSubview === 'editor') {
+                    localStorage.setItem('dental_odontogram_subview', 'list');
+                    document.documentElement.setAttribute('data-odontogram-subview', 'list');
+                }
+            } else {
+                // Perfil Médico Odontológico (Odontología, Ortodoncia, Endodoncia, Periodoncia, etc.)
+                if (odontogramNav) {
+                    odontogramNav.setAttribute('data-tooltip', 'Odontograma');
+                    const oIcon = odontogramNav.querySelector('i');
+                    if (oIcon) oIcon.className = 'fa-solid fa-tooth text-cyan';
+                    const oLabel = odontogramNav.querySelector('.nav-label');
+                    if (oLabel) oLabel.innerText = 'Odontograma';
+                }
+                if (mobOdontogramNav) {
+                    const mIcon = mobOdontogramNav.querySelector('i');
+                    if (mIcon) mIcon.className = 'fa-solid fa-tooth';
+                    const mSpan = mobOdontogramNav.querySelector('span');
+                    if (mSpan) mSpan.innerText = 'Odonto';
+                }
+                if (ehrOdontogramSubtabBtn) ehrOdontogramSubtabBtn.style.display = '';
+                if (ehrOdontogramSubtabPane) ehrOdontogramSubtabPane.style.display = '';
+
+                // Ocultar editor de presupuesto médico general
+                const medEditor = document.getElementById('medical-budget-editor-container');
+                if (medEditor) {
+                    medEditor.classList.add('hidden');
+                    medEditor.style.display = 'none';
+                }
+            }
         } else {
             // Restore Birthdays for non-doctor roles (Admin, Assistant, Hygienist)
             const bdayHubBtn = document.getElementById('btn-birthday-hub');
@@ -1865,6 +2065,34 @@ function applyRolePermissionsUI(role) {
                 navHygFinTab.setAttribute('data-tooltip', 'Mis Finanzas');
                 const hygIcon = navHygFinTab.querySelector('i');
                 if (hygIcon) hygIcon.className = 'fa-solid fa-wallet text-cyan';
+            }
+
+            // Restore Odontogram nav & EHR subtab for Admin / Assistant / Hygienist
+            document.body.classList.remove('is-dental-doctor');
+            document.body.classList.remove('is-non-dental-doctor');
+            const odontogramNav = document.querySelector('.nav-item[data-tab="odontogram"]');
+            if (odontogramNav) {
+                odontogramNav.setAttribute('data-tooltip', 'Odontograma');
+                const oIcon = odontogramNav.querySelector('i');
+                if (oIcon) oIcon.className = 'fa-solid fa-tooth text-cyan';
+                const oLabel = odontogramNav.querySelector('.nav-label');
+                if (oLabel) oLabel.innerText = 'Odontograma';
+            }
+            const mobOdontogramNav = document.getElementById('mob-nav-odontogram');
+            if (mobOdontogramNav) {
+                const mIcon = mobOdontogramNav.querySelector('i');
+                if (mIcon) mIcon.className = 'fa-solid fa-tooth';
+                const mSpan = mobOdontogramNav.querySelector('span');
+                if (mSpan) mSpan.innerText = 'Odonto';
+            }
+            const ehrOdontogramSubtabBtn = document.querySelector('.subtab-btn[data-subtab="odontogram-comp"]');
+            if (ehrOdontogramSubtabBtn) ehrOdontogramSubtabBtn.style.display = '';
+            const ehrOdontogramSubtabPane = document.getElementById('subtab-odontogram-comp');
+            if (ehrOdontogramSubtabPane) ehrOdontogramSubtabPane.style.display = '';
+            const showAllBaremoBox = document.getElementById('med-budget-show-all-baremo');
+            if (showAllBaremoBox) {
+                const lbl = showAllBaremoBox.closest('label');
+                if (lbl) lbl.style.display = '';
             }
         }
 
@@ -2382,23 +2610,81 @@ window.navigateToTab = async function(tabName) {
     document.documentElement.setAttribute('data-active-tab', tabName);
 
     if (tabName === 'odontogram') {
-        const subview = localStorage.getItem('dental_odontogram_subview') || 'editor';
-        const activeId = getActivePatientId();
+        const curNavUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+        const isDocNav = curNavUser && typeof isDoctorUser === 'function' && isDoctorUser(curNavUser);
+        const isDentalNav = isDocNav && typeof isDentalDoctor === 'function' && isDentalDoctor(curNavUser);
+
         const editorContainer = document.getElementById('odontogram-editor-container');
         const listContainer = document.getElementById('odontogram-list-container');
+        const medEditorContainer = document.getElementById('medical-budget-editor-container');
 
-        if (subview === 'editor' || activeId) {
-            localStorage.setItem('dental_odontogram_subview', 'editor');
-            document.documentElement.setAttribute('data-odontogram-subview', 'editor');
-            if (listContainer) listContainer.classList.add('hidden');
-            if (editorContainer) editorContainer.classList.remove('hidden');
-            await renderOdontogramView();
+        if (isDocNav && !isDentalNav) {
+            // Perfil Médico No Odontológico: Aislamiento estricto del odontodiagrama
+            if (editorContainer) {
+                editorContainer.classList.add('hidden');
+                editorContainer.style.display = 'none';
+            }
+            const subview = localStorage.getItem('dental_odontogram_subview') || 'list';
+            if (subview === 'medical-editor') {
+                document.documentElement.setAttribute('data-odontogram-subview', 'medical-editor');
+                if (listContainer) listContainer.classList.add('hidden');
+                if (medEditorContainer) medEditorContainer.classList.remove('hidden');
+            } else {
+                localStorage.setItem('dental_odontogram_subview', 'list');
+                document.documentElement.setAttribute('data-odontogram-subview', 'list');
+                if (medEditorContainer) medEditorContainer.classList.add('hidden');
+                if (listContainer) listContainer.classList.remove('hidden');
+                await renderBudgetListView();
+            }
+        } else if (isDocNav && isDentalNav) {
+            // Perfil Médico Odontológico: Aislamiento del editor médico sin odontodiagrama
+            if (medEditorContainer) {
+                medEditorContainer.classList.add('hidden');
+                medEditorContainer.style.display = 'none';
+            }
+            const subview = localStorage.getItem('dental_odontogram_subview') || 'editor';
+            const activeId = getActivePatientId();
+            if (subview === 'editor' || activeId) {
+                localStorage.setItem('dental_odontogram_subview', 'editor');
+                document.documentElement.setAttribute('data-odontogram-subview', 'editor');
+                if (listContainer) listContainer.classList.add('hidden');
+                if (editorContainer) {
+                    editorContainer.classList.remove('hidden');
+                    editorContainer.style.display = '';
+                }
+                await renderOdontogramView();
+            } else {
+                localStorage.setItem('dental_odontogram_subview', 'list');
+                document.documentElement.setAttribute('data-odontogram-subview', 'list');
+                if (editorContainer) editorContainer.classList.add('hidden');
+                if (listContainer) listContainer.classList.remove('hidden');
+                await renderBudgetListView();
+            }
         } else {
-            localStorage.setItem('dental_odontogram_subview', 'list');
-            document.documentElement.setAttribute('data-odontogram-subview', 'list');
-            if (editorContainer) editorContainer.classList.add('hidden');
-            if (listContainer) listContainer.classList.remove('hidden');
-            await renderBudgetListView();
+            // Roles administrativos / asistentes
+            const subview = localStorage.getItem('dental_odontogram_subview') || 'editor';
+            const activeId = getActivePatientId();
+
+            if (subview === 'medical-editor') {
+                document.documentElement.setAttribute('data-odontogram-subview', 'medical-editor');
+                if (listContainer) listContainer.classList.add('hidden');
+                if (editorContainer) editorContainer.classList.add('hidden');
+                if (medEditorContainer) medEditorContainer.classList.remove('hidden');
+            } else if (subview === 'editor' || activeId) {
+                localStorage.setItem('dental_odontogram_subview', 'editor');
+                document.documentElement.setAttribute('data-odontogram-subview', 'editor');
+                if (listContainer) listContainer.classList.add('hidden');
+                if (medEditorContainer) medEditorContainer.classList.add('hidden');
+                if (editorContainer) editorContainer.classList.remove('hidden');
+                await renderOdontogramView();
+            } else {
+                localStorage.setItem('dental_odontogram_subview', 'list');
+                document.documentElement.setAttribute('data-odontogram-subview', 'list');
+                if (editorContainer) editorContainer.classList.add('hidden');
+                if (medEditorContainer) medEditorContainer.classList.add('hidden');
+                if (listContainer) listContainer.classList.remove('hidden');
+                await renderBudgetListView();
+            }
         }
     } else if (tabName === 'patients') {
         await renderPatientsTable();
@@ -3247,6 +3533,7 @@ async function renderBudgetListView(forceRefresh = false) {
     const currentUser = getCurrentUser();
     const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
     const isDoctor = currentUser && (typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false);
+    const isDentalDoc = isDoctor && typeof isDentalDoctor === 'function' && isDentalDoctor(currentUser);
     const isHygienist = currentUser && (typeof isHygienistRole === 'function' ? isHygienistRole(currentUser.role) : (currentUser.role && currentUser.role.toLowerCase().includes('higien')));
     const isRecep = currentUser && (typeof isReceptionOrCashierUser === 'function' ? isReceptionOrCashierUser(currentUser) : (currentUser.role && (currentUser.role.toLowerCase().includes('recep') || currentUser.role.toLowerCase().includes('caja'))));
     const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor && !isHygienist);
@@ -3948,6 +4235,18 @@ window.startBudgetCreation = async function(category) {
 };
 
 window.openMedicalBudgetEditor = async function({ budgetId = null, specialtyCategory = 'Consultas Médicas', patientId = null } = {}) {
+    const curUserCheck = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (curUserCheck && typeof isDoctorUser === 'function' && isDoctorUser(curUserCheck) && typeof isDentalDoctor === 'function' && isDentalDoctor(curUserCheck)) {
+        // Médicos odontológicos no usan el editor médico sin odontodiagrama
+        if (typeof window.startBudgetCreation === 'function') {
+            await window.startBudgetCreation('Odontología');
+        }
+        if (patientId && typeof window.selectPatientForOdontogram === 'function') {
+            await window.selectPatientForOdontogram(patientId);
+        }
+        return;
+    }
+
     localStorage.setItem('dental_odontogram_subview', 'medical-editor');
     document.documentElement.setAttribute('data-odontogram-subview', 'medical-editor');
 
@@ -4035,8 +4334,25 @@ window.openMedicalBudgetEditor = async function({ budgetId = null, specialtyCate
 
     // Configurar Departamento / Área
     const deptSelect = document.getElementById('med-budget-department-select');
-    if (deptSelect) {
+    const curUserDoc = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const isDocUserActive = curUserDoc && typeof isDoctorUser === 'function' && isDoctorUser(curUserDoc);
+    if (isDocUserActive) {
+        const docSpec = curUserDoc.doctorProfile?.specialty || curUserDoc.doctor_profile?.specialty || curUserDoc.role || specialtyCategory || 'Consultas Médicas';
+        if (deptSelect) {
+            deptSelect.value = docSpec;
+            deptSelect.disabled = true;
+            deptSelect.title = "Área clínica bloqueada a su especialidad médica";
+        }
+        const showAllContainer = document.getElementById('med-budget-show-all-baremo')?.closest('label');
+        if (showAllContainer) showAllContainer.style.display = 'none';
+        const showAllInput = document.getElementById('med-budget-show-all-baremo');
+        if (showAllInput) showAllInput.checked = false;
+    } else if (deptSelect) {
         deptSelect.value = specialtyCategory;
+        deptSelect.disabled = false;
+        deptSelect.title = "";
+        const showAllContainer = document.getElementById('med-budget-show-all-baremo')?.closest('label');
+        if (showAllContainer) showAllContainer.style.display = '';
     }
 
     // Título dinámico
@@ -4389,13 +4705,7 @@ window.setupMedicalBaremoSearch = function() {
 
             if (isDocUser) {
                 // Doctor isolation: strictly limit baremo by specialty, completely disallow cross-specialty procedures
-                filtered = baremo.filter(b => {
-                    const text = ((b.category || '') + ' ' + (b.department || '') + ' ' + (b.name || '')).toLowerCase();
-                    const isDentalSrv = text.includes('odont') || text.includes('dental') || text.includes('endodon') || text.includes('periodon') || text.includes('ortodon') || text.includes('protesis dental');
-                    if (isDental) return isDentalSrv;
-                    if (isDentalSrv) return false;
-                    return true;
-                });
+                filtered = baremo.filter(b => typeof isServiceMatchingDoctorSpecialty === 'function' ? isServiceMatchingDoctorSpecialty(b, curUser) : true);
             } else if (!showAll) {
                 filtered = baremo.filter(b => window.isServiceInClinicalFilter ? window.isServiceInClinicalFilter(b, currentDept) : true);
             }
@@ -5134,6 +5444,17 @@ window.loadBudgetIntoEditor = async function(budgetId) {
 // ODONTOGRAM & BUDGET VIEW
 // ==========================================
 async function renderOdontogramView() {
+    const curUserO = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (curUserO && typeof isDoctorUser === 'function' && isDoctorUser(curUserO) && typeof isDentalDoctor === 'function' && !isDentalDoctor(curUserO)) {
+        // Médicos no odontológicos nunca acceden a la vista de odontograma dental
+        const actPatId = typeof getActivePatientId === 'function' ? getActivePatientId() : null;
+        const docSpec = curUserO.doctorProfile?.specialty || curUserO.doctor_profile?.specialty || curUserO.role || 'Consultas Médicas';
+        if (typeof window.openMedicalBudgetEditor === 'function') {
+            await window.openMedicalBudgetEditor({ specialtyCategory: docSpec, patientId: actPatId });
+        }
+        return;
+    }
+
     localStorage.setItem('dental_odontogram_subview', 'editor');
     document.documentElement.setAttribute('data-odontogram-subview', 'editor');
     await updateActivePatientUI();
@@ -6423,6 +6744,7 @@ async function renderPatientsTable(filter = null, searchQuery = null, highlightP
     const currentUser = getCurrentUser();
     const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
     const isDoctor = currentUser && (typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false);
+    const isDentalDoc = isDoctor && typeof isDentalDoctor === 'function' && isDentalDoctor(currentUser);
     const isHygienist = currentUser && (typeof isHygienistRole === 'function' ? isHygienistRole(currentUser.role) : (currentUser.role && currentUser.role.toLowerCase().includes('higien')));
     const isRecep = currentUser && (typeof isReceptionOrCashierUser === 'function' ? isReceptionOrCashierUser(currentUser) : (currentUser.role && (currentUser.role.toLowerCase().includes('recep') || currentUser.role.toLowerCase().includes('caja'))));
     const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor && !isHygienist);
@@ -6598,8 +6920,8 @@ async function renderPatientsTable(filter = null, searchQuery = null, highlightP
                     ${!isDoctor ? `<button class="btn btn-xs btn-outline btn-act-icon btn-act-cobrar" onclick="window.openDirectSaleModal('${p.id}')" title="Venta Directa / Cobro Rápido">
                         <i class="fa-solid fa-bolt"></i>
                     </button>` : ''}
-                    ${!isRecep ? `<button class="btn btn-xs btn-primary btn-act-presupuesto" onclick="selectPatientForOdontogram('${p.id}')" title="Emitir Presupuesto">
-                        <i class="fa-solid fa-tooth"></i> <span>Presupuesto</span>
+                    ${!isRecep ? `<button class="btn btn-xs btn-primary btn-act-presupuesto" onclick="selectPatientForOdontogram('${p.id}')" title="${isDoctor && !isDentalDoc ? 'Emitir Presupuesto / Orden Médica' : 'Emitir Presupuesto'}">
+                        <i class="fa-solid ${isDoctor && !isDentalDoc ? 'fa-file-invoice-dollar' : 'fa-tooth'}"></i> <span>Presupuesto</span>
                     </button>` : ''}
                     <button class="btn btn-xs btn-outline btn-act-icon btn-act-editar" onclick="window.editPatient('${p.id}')" title="Editar Ficha / Historia">
                         <i class="fa-solid fa-pen-to-square"></i>
@@ -10808,6 +11130,7 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
     const currentUser = getCurrentUser();
     const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
     const isDoctor = currentUser && (typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false);
+    const isDentalDoc = isDoctor && typeof isDentalDoctor === 'function' && isDentalDoctor(currentUser);
     const isHygienist = currentUser && (typeof isHygienistRole === 'function' ? isHygienistRole(currentUser.role) : (currentUser.role && currentUser.role.toLowerCase().includes('higien')));
     const isRecep = currentUser && (typeof isReceptionOrCashierUser === 'function' ? isReceptionOrCashierUser(currentUser) : (currentUser.role && (currentUser.role.toLowerCase().includes('recep') || currentUser.role.toLowerCase().includes('caja'))));
     const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor && !isHygienist);
@@ -14129,6 +14452,7 @@ async function renderAgendaView(filter = (window.currentAgendaFilter || 'pending
     const currentUser = getCurrentUser();
     const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
     const isDoctor = currentUser && (typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false);
+    const isDentalDoc = isDoctor && typeof isDentalDoctor === 'function' && isDentalDoctor(currentUser);
     const isHygienist = currentUser && (typeof isHygienistRole === 'function' ? isHygienistRole(currentUser.role) : (currentUser.role && currentUser.role.toLowerCase().includes('higien')));
     const isRecep = currentUser && (typeof isReceptionOrCashierUser === 'function' ? isReceptionOrCashierUser(currentUser) : (currentUser.role && (currentUser.role.toLowerCase().includes('recep') || currentUser.role.toLowerCase().includes('caja'))));
     const canDelete = typeof canCurrentUserDelete === 'function' ? canCurrentUserDelete(currentUser) : (!isAssistant && !isDoctor && !isHygienist);
@@ -14640,7 +14964,17 @@ window.openSessionModalForPatient = async function(patientId, sessionNum, proced
         const trtSelect = document.getElementById('s-planned-treatment-select');
         if (trtSelect) {
             trtSelect.innerHTML = '<option value="">-- Selección manual / Tratamiento libre --</option>';
-            const trts = (patient.metadata && patient.metadata.treatments) || [];
+            let trts = (patient.metadata && patient.metadata.treatments) || [];
+            const curDocUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+            if (curDocUser && typeof isDoctorUser === 'function' && isDoctorUser(curDocUser)) {
+                const isDental = typeof isDentalDoctor === 'function' && isDentalDoctor(curDocUser);
+                trts = trts.filter(t => {
+                    const isDentalT = (typeof isDentalService === 'function' && isDentalService(t)) || (typeof isDentalSpecialtyOrArea === 'function' && isDentalSpecialtyOrArea(t.area || t.specialty || t.name));
+                    if (isDental) return isDentalT;
+                    if (isDentalT) return false;
+                    return true;
+                });
+            }
             trts.forEach((t, idx) => {
                 const opt = document.createElement('option');
                 const tNum = t.sessionNum || (idx + 1);
@@ -15585,6 +15919,7 @@ async function renderPricingTable(filter = 'all', searchQuery = '') {
     const currentUser = getCurrentUser();
     const isAssistant = currentUser && (typeof isAssistantUser === 'function' ? isAssistantUser(currentUser) : (currentUser.role && currentUser.role.toLowerCase().includes('asistente')));
     const isDoctor = currentUser && (typeof isDoctorUser === 'function' ? isDoctorUser(currentUser) : false);
+    const isDentalDoc = isDoctor && typeof isDentalDoctor === 'function' && isDentalDoctor(currentUser);
     const isHygienist = currentUser && (typeof isHygienistRole === 'function' ? isHygienistRole(currentUser.role) : (currentUser.role && currentUser.role.toLowerCase().includes('higien')));
     const canManage = typeof canCurrentUserManageServices === 'function' ? canCurrentUserManageServices(currentUser) : false;
     const hideContact = typeof shouldHidePatientContact === 'function' && shouldHidePatientContact(currentUser);
@@ -23289,7 +23624,17 @@ if (patientSameDay.length === 0) {
         const noteTrtSelect = document.getElementById('note-treatment-select');
         if (noteTrtSelect) {
             noteTrtSelect.innerHTML = '<option value="">-- Selección libre / Escribir manualmente --</option>';
-            const trts = (patient.metadata && patient.metadata.treatments) || [];
+            let trts = (patient.metadata && patient.metadata.treatments) || [];
+            const curDocUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+            if (curDocUser && typeof isDoctorUser === 'function' && isDoctorUser(curDocUser)) {
+                const isDental = typeof isDentalDoctor === 'function' && isDentalDoctor(curDocUser);
+                trts = trts.filter(t => {
+                    const isDentalT = (typeof isDentalService === 'function' && isDentalService(t)) || (typeof isDentalSpecialtyOrArea === 'function' && isDentalSpecialtyOrArea(t.area || t.specialty || t.name));
+                    if (isDental) return isDentalT;
+                    if (isDentalT) return false;
+                    return true;
+                });
+            }
             trts.forEach((t, idx) => {
                 const opt = document.createElement('option');
                 const tNum = t.sessionNum || (idx + 1);

@@ -104,6 +104,22 @@
             display: block !important;
         }
 
+        /* Non-dental doctor isolation: hide odontogram editor, teeth charts, and EHR odontogram comparison */
+        body.is-non-dental-doctor #odontogram-editor-container,
+        body.is-non-dental-doctor .subtab-btn[data-subtab="odontogram-comp"],
+        body.is-non-dental-doctor #subtab-odontogram-comp,
+        body.is-non-dental-doctor #btn-new-dental-budget,
+        body.is-non-dental-doctor #med-budget-show-all-baremo,
+        body.is-non-dental-doctor label[for="med-budget-show-all-baremo"],
+        body.is-non-dental-doctor #lbl-med-budget-show-all-baremo {
+            display: none !important;
+        }
+
+        /* Dental doctor isolation: hide non-dental medical budget editor */
+        body.is-dental-doctor #medical-budget-editor-container {
+            display: none !important;
+        }
+
         .budget-type-card {
             transition: all 0.22s ease-in-out;
         }
@@ -1440,7 +1456,7 @@
                                 <h3 style="margin: 0; font-size: 1.05rem; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
                                     <i class="fa-solid fa-list-check text-cyan"></i> Procedimientos, Consultas y Estudios a Presupuestar
                                 </h3>
-                                <label style="font-size: 0.82rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                                <label id="lbl-med-budget-show-all-baremo" for="med-budget-show-all-baremo" style="font-size: 0.82rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;">
                                     <input type="checkbox" id="med-budget-show-all-baremo" onchange="window.refreshMedicalBaremoSelect()"> Mostrar servicios de todas las áreas
                                 </label>
                             </div>
@@ -9171,14 +9187,14 @@
     </div>
 
     <!-- Application JavaScript Bundles -->
-    <script src="seededData.js?v=406"></script>
-    <script src="supabaseClient.js?v=406"></script>
-    <script src="odontogram.js?v=406"></script>
-    <script src="signature.js?v=406"></script>
-    <script src="whatsapp.js?v=406"></script>
-    <script src="kardex.js?v=406"></script>
-    <script src="app.js?v=406"></script>
-    <script src="clinicalERP.js?v=406"></script>
-    <script src="tutorial.js?v=406"></script>
+    <script src="seededData.js?v=407"></script>
+    <script src="supabaseClient.js?v=407"></script>
+    <script src="odontogram.js?v=407"></script>
+    <script src="signature.js?v=407"></script>
+    <script src="whatsapp.js?v=407"></script>
+    <script src="kardex.js?v=407"></script>
+    <script src="app.js?v=407"></script>
+    <script src="clinicalERP.js?v=407"></script>
+    <script src="tutorial.js?v=407"></script>
 </body>
 </html>
