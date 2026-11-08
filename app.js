@@ -11749,12 +11749,40 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
 
                     const isSuperAdmin = currentUser && (currentUser.role === 'Super Administrador' || currentUser.role === 'admin' || (typeof isSuperAdminUser === 'function' && isSuperAdminUser(currentUser)));
                     let trtRowsHtml = treatmentsList.map((t, idx) => {
-                        const isDone = (idx < completedSessions) || t.status === 'Completado';
+                        const isDone = (idx < completedSessions) || t.status === 'Completado' || t.status === 'Realizado';
                         const toothNum = extractToothNumber(t);
                         const toothLabel = toothNum === 'General' ? 'Pieza General' : `Pieza ${toothNum}`;
                         const itemBudgetId = activeApprovedBudget ? activeApprovedBudget.id : '';
                         const safeItemName = window.escapeApptText(t.name || 'Tratamiento');
                         const safePrice = parseFloat(t.price || 0);
+
+                        let actionsHtml = '';
+                        if (isHygienist) {
+                            if (!isDone) {
+                                actionsHtml = `
+                                    <button type="button" class="btn btn-xs btn-primary" style="background-color: #0d9488 !important; color: white !important; font-weight: 700; padding: 2px 8px; border: none;" onclick="window.markHygienistProcedureRealizado('${activePatient.id}', '${itemBudgetId}', '${t.id || idx}', '${safeItemName}', ${safePrice})" title="Marcar como Realizado y Sincronizar con Caja">
+                                        <i class="fa-solid fa-check"></i> Realizado
+                                    </button>
+                                `;
+                            } else {
+                                actionsHtml = `
+                                    <span class="badge-tag green" style="background: rgba(16, 185, 129, 0.15); color: #059669; font-weight: 700; padding: 2px 6px;">
+                                        <i class="fa-solid fa-circle-check"></i> Realizado
+                                    </span>
+                                `;
+                            }
+                        } else {
+                            actionsHtml = `
+                                <button type="button" class="btn btn-xs btn-outline" style="color: #059669; border-color: #10b981; background: #ecfdf5; font-weight: 700; padding: 2px 8px;" onclick="window.openPaymentForTreatmentItem('${activePatient.id}', '${itemBudgetId}', '${t.id || idx}', '${safeItemName}', ${safePrice}, '${toothLabel}')" title="Abonar directamente a este tratamiento">
+                                    <i class="fa-solid fa-hand-holding-dollar"></i> Abonar
+                                </button>
+                                ${isSuperAdmin ? `
+                                <button type="button" class="btn btn-xs btn-outline text-teal" style="padding: 2px 6px;" onclick="window.editTreatmentStatus('${activePatient.id}', '${itemBudgetId}', '${t.id || idx}', '${safeItemName}', '${isDone ? 'Realizado' : 'Planificado'}')" title="Editar Estado del Tratamiento (Solo Super Admin)">
+                                    <i class="fa-solid fa-sliders"></i>
+                                </button>` : ''}
+                            `;
+                        }
+
                         return `
                             <tr style="border-bottom: 1px solid var(--border-color); font-size: 0.85rem;">
                                 <td style="padding: 6px 8px;"><strong>${toothLabel}</strong></td>
@@ -11762,17 +11790,11 @@ async function renderEHRView(filter = 'all', searchQuery = '') {
                                 <td style="padding: 6px 8px; color: #15803d; font-weight: 600;">${safePrice.toFixed(2)}</td>
                                 <td style="padding: 6px 8px;">${t.specialist || 'Dr. Asignado'}</td>
                                 <td style="padding: 6px 8px;">
-                                    <span class="badge-tag ${isDone ? 'green' : 'amber'}">${isDone ? '✓ Atendido' : '⏳ Planificado'}</span>
+                                    <span class="badge-tag ${isDone ? 'green' : 'amber'}">${isDone ? '✓ Realizado' : '⏳ Planificado'}</span>
                                 </td>
                                 <td style="padding: 6px 8px; text-align: right;">
                                     <div style="display: inline-flex; gap: 4px; align-items: center; justify-content: flex-end;">
-                                        <button type="button" class="btn btn-xs btn-outline" style="color: #059669; border-color: #10b981; background: #ecfdf5; font-weight: 700; padding: 2px 8px;" onclick="window.openPaymentForTreatmentItem('${activePatient.id}', '${itemBudgetId}', '${t.id || idx}', '${safeItemName}', ${safePrice}, '${toothLabel}')" title="Abonar directamente a este tratamiento">
-                                            <i class="fa-solid fa-hand-holding-dollar"></i> Abonar
-                                        </button>
-                                        ${isSuperAdmin ? `
-                                        <button type="button" class="btn btn-xs btn-outline text-teal" style="padding: 2px 6px;" onclick="window.editTreatmentStatus('${activePatient.id}', '${itemBudgetId}', '${t.id || idx}', '${safeItemName}', '${isDone ? 'Completado' : 'Planificado'}')" title="Editar Estado del Tratamiento (Solo Super Admin)">
-                                            <i class="fa-solid fa-sliders"></i>
-                                        </button>` : ''}
+                                        ${actionsHtml}
                                     </div>
                                 </td>
                             </tr>
@@ -12918,13 +12940,147 @@ window.editTreatmentStatus = async function(patientId, budgetId, itemId, treatme
     }
 };
 
+window.markHygienistProcedureRealizado = async function(patientId, budgetId, itemId, treatmentName, price) {
+    try {
+        const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+        const isHyg = curUser && (typeof isHygienistUser === 'function' ? isHygienistUser(curUser) : (typeof isHygienistRole === 'function' && isHygienistRole(curUser.role)));
+        const isAdminOrDoc = curUser && (curUser.role === 'admin' || curUser.role === 'Super Administrador' || (typeof isDoctorUser === 'function' && isDoctorUser(curUser)));
+        
+        if (!isHyg && !isAdminOrDoc) {
+            Swal.fire({ icon: 'warning', title: 'Acceso Denegado', text: 'Solo la Higienista o el personal autorizado puede asentar la realización del procedimiento.' });
+            return;
+        }
+
+        const patients = await SupabaseDataService.getPatients();
+        const pat = patients.find(p => String(p.id) === String(patientId));
+        if (!pat) {
+            Swal.fire({ icon: 'error', title: 'Error', text: 'No se encontró el paciente.' });
+            return;
+        }
+
+        const chargePrice = parseFloat(price) || 0;
+        const confirm = await Swal.fire({
+            title: '¿Confirmar Procedimiento Realizado?',
+            html: `
+                <div style="text-align: left; font-size: 0.9rem;">
+                    <p style="margin-bottom: 6px;">Paciente: <strong>${pat.fullname}</strong></p>
+                    <p style="margin-bottom: 6px;">Procedimiento: <strong>${treatmentName}</strong></p>
+                    <p style="margin-bottom: 12px; color: #0d9488; font-weight: 700; font-size: 1rem;">Monto a cobrar en Caja: $${chargePrice.toFixed(2)} USD</p>
+                    <div style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 10px; border-radius: 6px; font-size: 0.83rem; color: #166534; line-height: 1.4;">
+                        <i class="fa-solid fa-cash-register"></i> Al marcar como <strong>Realizado</strong>, se enviará de inmediato la orden de cobro a <strong>Caja</strong> con estatus <strong>"Pendiente"</strong> para el egreso del paciente.
+                    </div>
+                </div>
+            `,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, Marcar Realizado',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#0d9488',
+            cancelButtonColor: '#64748b'
+        });
+
+        if (!confirm.isConfirmed) return;
+
+        // 1. Actualizar estado del tratamiento en metadata del paciente
+        if (!pat.metadata) pat.metadata = {};
+        if (!Array.isArray(pat.metadata.treatments)) pat.metadata.treatments = [];
+
+        let foundTrt = pat.metadata.treatments.find((t, idx) => String(t.id || idx) === String(itemId) || t.name === treatmentName);
+        if (foundTrt) {
+            foundTrt.status = 'Realizado';
+            foundTrt.completedDate = new Date().toISOString();
+        } else {
+            pat.metadata.treatments.push({
+                id: itemId || 'trt-' + Date.now(),
+                name: treatmentName,
+                price: chargePrice,
+                status: 'Realizado',
+                completedDate: new Date().toISOString()
+            });
+        }
+
+        // 2. Si viene de un presupuesto, actualizar en el presupuesto también
+        if (budgetId) {
+            const invoices = await SupabaseDataService.getInvoices();
+            const inv = invoices.find(i => String(i.id) === String(budgetId));
+            if (inv && Array.isArray(inv.items)) {
+                const target = inv.items.find((it, idx) => String(it.id || idx) === String(itemId) || it.name === treatmentName);
+                if (target) {
+                    target.status = 'Realizado';
+                    await SupabaseDataService.saveInvoice(inv);
+                }
+            }
+        }
+
+        // 3. Sincronización en tiempo real con Caja (Estado: 'Pendiente')
+        const pendingDocId = 'COB-PEND-' + Date.now().toString().slice(-6);
+        const todayStr = new Date().toISOString().split('T')[0];
+        if (!pat.payments) pat.payments = [];
+
+        const alreadyPending = pat.payments.some(p => p.concept && p.concept.includes(treatmentName) && p.status === 'Pendiente');
+        if (!alreadyPending && chargePrice > 0) {
+            pat.payments.unshift({
+                id: pendingDocId,
+                docId: pendingDocId,
+                date: todayStr,
+                concept: `${treatmentName} (Realizado por Higienista)`,
+                totalUSD: chargePrice,
+                paidUSD: 0,
+                balanceUSD: chargePrice,
+                status: 'Pendiente',
+                sourceType: 'hygienist_procedure',
+                performerName: curUser ? (curUser.fullname || curUser.name) : 'Higienista Dental',
+                performerId: curUser ? curUser.id : ''
+            });
+        }
+
+        // 4. Registrar liquidación administrativa / productividad para la higienista
+        try {
+            await SupabaseDataService.recordServiceCompletionForLiquidation({
+                serviceCode: /radiograf|rayos\s*x|\brx\b/i.test(treatmentName) ? 'RX-DENT' : (/impresi[óo]n/i.test(treatmentName) ? 'IMP-DENT' : 'SES-AUX'),
+                serviceName: treatmentName,
+                servicePrice: chargePrice,
+                patientId: pat.id,
+                patientName: pat.fullname,
+                patientDni: pat.dni || pat.cedula || pat.idNumber || '',
+                doctorName: pat.assignedDoctor || 'Odontología',
+                assistantName: curUser ? curUser.fullname : 'Higienista Dental',
+                assistantId: curUser ? curUser.id : '',
+                hasAssistant: true,
+                sourceType: 'auxiliary_procedure',
+                date: todayStr,
+                notes: `Procedimiento marcado como Realizado (${treatmentName})`
+            });
+        } catch(liqErr) {
+            console.warn('Error recording liquidation for hygienist procedure:', liqErr);
+        }
+
+        // 5. Guardar paciente y refrescar vista
+        await SupabaseDataService.savePatient(pat);
+        await renderEHRView();
+
+        Swal.fire({
+            icon: 'success',
+            title: '¡Procedimiento Realizado!',
+            html: `Se actualizó a <strong>Realizado</strong> y se notificó a <strong>Caja</strong> con estatus <strong>Pendiente ($${chargePrice.toFixed(2)} USD)</strong>.`,
+            timer: 2500,
+            showConfirmButton: false
+        });
+    } catch(err) {
+        console.error("Error in markHygienistProcedureRealizado:", err);
+        Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo actualizar el estado del procedimiento.' });
+    }
+};
+
 window.openPaymentForTreatmentItem = function(patientId, budgetId, itemId, treatmentName, price, toothLabel) {
     const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
-    if (curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser)) {
+    const isDoc = curUser && typeof isDoctorUser === 'function' && isDoctorUser(curUser);
+    const isHyg = curUser && (typeof isHygienistUser === 'function' ? isHygienistUser(curUser) : (typeof isHygienistRole === 'function' && isHygienistRole(curUser.role)));
+    if (isDoc || isHyg) {
         Swal.fire({
             icon: 'warning',
-            title: 'Acceso Restringido',
-            text: 'El personal médico no gestiona cobros. Las cobranzas deben realizarse desde Recepción / Caja.'
+            title: 'Cero Visibilidad Financiera Directa',
+            text: 'Su rol no está autorizado para recibir cobros ni abonos. Las cobranzas deben realizarse exclusivamente por Recepción / Caja.'
         });
         return;
     }
@@ -18947,6 +19103,7 @@ function initGlobalEvents() {
                 procedure,
                 indications,
                 signatureData,
+                status: 'Realizado',
                 doctor: curSessionDoctorName,
                 specialist: curSessionDoctorName,
                 specialty: curSessionSpecialty,
@@ -19000,7 +19157,7 @@ function initGlobalEvents() {
             if (patient.metadata && patient.metadata.treatments && patient.metadata.treatments.length > 0) {
                 const trt = patient.metadata.treatments.find(t => t.sessionNum === sessionNum) || patient.metadata.treatments[sessionNum - 1];
                 if (trt) {
-                    trt.status = 'Completado';
+                    trt.status = 'Realizado';
                     trt.completedDate = datetime;
                     
                     if (trt.tooth && trt.tooth !== 'Gnl' && !isNaN(parseInt(trt.tooth))) {
@@ -19134,6 +19291,49 @@ function initGlobalEvents() {
                 }
             }
 
+            // Sincronización en tiempo real con Caja para rol Higienista (Estado: 'Pendiente')
+            if (isHyg) {
+                let chargePrice = 0;
+                const trt = patient.metadata?.treatments?.find(t => t.sessionNum === sessionNum) || patient.metadata?.treatments?.[sessionNum - 1];
+                if (trt && parseFloat(trt.price || trt.cost || 0) > 0) {
+                    chargePrice = parseFloat(trt.price || trt.cost || 0);
+                } else {
+                    try {
+                        const baremo = await SupabaseDataService.getBaremo();
+                        const procLower = procedure.toLowerCase();
+                        const match = baremo.find(b => 
+                            (b.name && b.name.toLowerCase() === procLower) ||
+                            (procLower.includes('radiograf') && b.name.toLowerCase().includes('radiograf')) ||
+                            (procLower.includes('impresi') && b.name.toLowerCase().includes('impresi')) ||
+                            (procLower.includes('profilaxis') && b.name.toLowerCase().includes('profilaxis'))
+                        );
+                        if (match) chargePrice = parseFloat(match.priceUSD || match.price || 0);
+                    } catch(eB) {}
+                }
+                if (chargePrice === 0) chargePrice = 15;
+
+                const pendingDocId = 'COB-PEND-' + Date.now().toString().slice(-6);
+                const pendingDate = datetime ? datetime.split(' ')[0] : new Date().toISOString().split('T')[0];
+                if (!patient.payments) patient.payments = [];
+                
+                const alreadyHasPending = patient.payments.some(p => p.concept && p.concept.includes(`Sesión #${sessionNum}`) && p.status === 'Pendiente');
+                if (!alreadyHasPending) {
+                    patient.payments.unshift({
+                        id: pendingDocId,
+                        docId: pendingDocId,
+                        date: pendingDate,
+                        concept: `Sesión #${sessionNum}: ${procedure} (Realizado por Higienista)`,
+                        totalUSD: chargePrice,
+                        paidUSD: 0,
+                        balanceUSD: chargePrice,
+                        status: 'Pendiente',
+                        sourceType: 'hygienist_procedure',
+                        performerName: curSessionUser ? (curSessionUser.fullname || curSessionUser.name) : 'Higienista Dental',
+                        performerId: curSessionUser ? curSessionUser.id : ''
+                    });
+                }
+            }
+
             await SupabaseDataService.savePatient(patient);
 
             let apptUpdated = false;
@@ -19175,30 +19375,50 @@ function initGlobalEvents() {
             }
 
             // Show success alert with Receipt print/download/WhatsApp options
-            Swal.fire({
-                icon: 'success',
-                title: 'Sesión Registrada',
-                text: 'La evolución de la sesión y firma de conformidad fueron guardadas exitosamente.',
-                showCancelButton: true,
-                showDenyButton: true,
-                confirmButtonText: '<i class="fa-brands fa-whatsapp text-green"></i> Enviar WhatsApp',
-                denyButtonText: '<i class="fa-solid fa-file-pdf"></i> Descargar PDF',
-                cancelButtonText: 'Cerrar',
-                confirmButtonColor: '#10b981',
-                denyButtonColor: '#0284c7',
-                cancelButtonColor: '#64748b'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    const receiptUrl = `${window.location.origin}/?patientId=${patient.id}&view=receipt&sessionNum=${sessionNum}`;
-                    const msg = WhatsAppService.generateSessionReceiptMessage(patient, sessionObj, receiptUrl);
-                    WhatsAppService.sendToPatient(patient.phone, msg);
-                } else if (result.isDenied) {
-                    window.downloadSessionReceiptPDF(patient, sessionObj);
-                }
+            if (isHyg) {
+                Swal.fire({
+                    icon: 'success',
+                    title: '¡Procedimiento Realizado!',
+                    html: `
+                        <div style="font-size: 0.92rem; text-align: left;">
+                            <p style="margin-bottom: 6px;">Paciente: <strong>${patient.fullname}</strong></p>
+                            <p style="margin-bottom: 6px;">Procedimiento: <strong>${procedure}</strong></p>
+                            <p style="margin-bottom: 8px;">Estado Operativo: <span class="badge-tag green">✓ Realizado</span></p>
+                            <div style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 10px; border-radius: 6px; font-size: 0.82rem; color: #166534;">
+                                <i class="fa-solid fa-cash-register"></i> Se notificó a <strong>Caja / Recepción</strong> con estatus <strong>"Pendiente de Cobro"</strong> para el egreso del paciente.
+                            </div>
+                        </div>
+                    `,
+                    timer: 4000,
+                    showConfirmButton: true,
+                    confirmButtonText: 'Entendido',
+                    confirmButtonColor: '#0d9488'
+                });
+            } else {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Sesión Registrada',
+                    text: 'La evolución de la sesión y firma de conformidad fueron guardadas exitosamente.',
+                    showCancelButton: true,
+                    showDenyButton: true,
+                    confirmButtonText: '<i class="fa-brands fa-whatsapp text-green"></i> Enviar WhatsApp',
+                    denyButtonText: '<i class="fa-solid fa-file-pdf"></i> Descargar PDF',
+                    cancelButtonText: 'Cerrar',
+                    confirmButtonColor: '#10b981',
+                    denyButtonColor: '#0284c7',
+                    cancelButtonColor: '#64748b'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        const receiptUrl = `${window.location.origin}/?patientId=${patient.id}&view=receipt&sessionNum=${sessionNum}`;
+                        const msg = WhatsAppService.generateSessionReceiptMessage(patient, sessionObj, receiptUrl);
+                        WhatsAppService.sendToPatient(patient.phone, msg);
+                    } else if (result.isDenied) {
+                        window.downloadSessionReceiptPDF(patient, sessionObj);
+                    }
 
-                // Prompt to schedule next session if attended from Agenda
-                if (window.activeAttendingAppointmentId) {
-                    window.activeAttendingAppointmentId = null;
+                    // Prompt to schedule next session if attended from Agenda
+                    if (window.activeAttendingAppointmentId) {
+                        window.activeAttendingAppointmentId = null;
 
                         setTimeout(() => {
                             Swal.fire({
@@ -19220,6 +19440,7 @@ function initGlobalEvents() {
                         }, 600);
                     }
                 });
+            }
         } catch(err) {
             console.error("Error saving patient session:", err);
             Swal.fire({ icon: 'error', title: 'Error al Guardar', text: err.message || err });
@@ -27806,6 +28027,25 @@ async function loadPatientBillingItems(pId) {
         }
     }
 
+    // Incorporar cobros pendientes de procedimientos realizados por la higienista
+    const patientsList = await SupabaseDataService.getPatients();
+    const patForBilling = patientsList.find(p => String(p.id) === String(pId));
+    if (patForBilling && Array.isArray(patForBilling.payments)) {
+        const pendingPayments = patForBilling.payments.filter(p => p.status === 'Pendiente' && p.totalUSD > 0);
+        pendingPayments.forEach(pay => {
+            const alreadyIn = loadedItems.some(it => it.name === pay.concept || pay.concept.includes(it.name));
+            if (!alreadyIn) {
+                loadedItems.unshift({
+                    code: 'PROC-PEND',
+                    name: pay.concept,
+                    price: parseFloat(pay.balanceUSD !== undefined ? pay.balanceUSD : pay.totalUSD) || 0,
+                    hygienistBonus: 0,
+                    qty: 1
+                });
+            }
+        });
+    }
+
     billingItems = loadedItems;
     renderBillingItemsTable();
 }
@@ -29677,8 +29917,13 @@ async function renderReceivables() {
                         <td class="text-green">${pd.toFixed(2)}</td>
                         <td class="text-red"><strong>${bal.toFixed(2)}</strong></td>
                         <td>
-                            <div class="actions-cell-group">
-                                <button class="btn btn-xs btn-success" onclick="openEHRForPatient('${p.id}')" title="Abonar en EHR"><i class="fa-solid fa-hand-holding-dollar"></i> Cobrar / EHR</button>
+                            <div class="actions-cell-group" style="display: flex; gap: 4px; align-items: center; justify-content: flex-end;">
+                                <button class="btn btn-xs btn-success" style="background-color: #10b981 !important; color: white !important; font-weight: 700; border: none; padding: 3px 8px;" onclick="window.quickSettlePendingReceivable('${p.id}', '${pay.id || pay.docId || ''}')" title="Cobrar en Caja y Cambiar a Pagado">
+                                    <i class="fa-solid fa-cash-register"></i> Cobrar / Pagado
+                                </button>
+                                <button class="btn btn-xs btn-outline" style="padding: 3px 8px;" onclick="openEHRForPatient('${p.id}')" title="Ver Expediente en EHR">
+                                    <i class="fa-solid fa-file-medical"></i> EHR
+                                </button>
                             </div>
                         </td>
                     `;
@@ -29706,6 +29951,155 @@ async function renderReceivables() {
         console.error('Error running renderCasheaReceivables:', casheaErr);
     }
 }
+
+window.quickSettlePendingReceivable = async function(patientId, paymentDocId) {
+    try {
+        const curUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+        const isHyg = curUser && (typeof isHygienistUser === 'function' ? isHygienistUser(curUser) : (typeof isHygienistRole === 'function' && isHygienistRole(curUser.role)));
+        if (isHyg) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Cero Visibilidad Financiera Directa',
+                text: 'La higienista no cuenta con permisos para recibir pagos ni liquidar cobros de caja.'
+            });
+            return;
+        }
+
+        const patients = await SupabaseDataService.getPatients();
+        const pat = patients.find(p => String(p.id) === String(patientId));
+        if (!pat) {
+            Swal.fire({ icon: 'error', title: 'Error', text: 'No se encontró el paciente.' });
+            return;
+        }
+
+        const payItem = (pat.payments || []).find(p => String(p.id || p.docId) === String(paymentDocId)) ||
+                        (pat.payments || []).find(p => p.status === 'Pendiente' || (p.balanceUSD && p.balanceUSD > 0));
+        if (!payItem) {
+            Swal.fire({ icon: 'info', title: 'Sin saldo pendiente', text: 'No se encontró una orden de cobro pendiente para este registro.' });
+            return;
+        }
+
+        const amountToPay = parseFloat(payItem.balanceUSD !== undefined ? payItem.balanceUSD : payItem.totalUSD) || 0;
+        const rate = typeof getExchangeRate === 'function' ? getExchangeRate() : 36.5;
+        const amountBs = (amountToPay * rate).toFixed(2);
+
+        const { value: formValues } = await Swal.fire({
+            title: `<i class="fa-solid fa-cash-register text-green"></i> Recepción / Cobro de Salida`,
+            html: `
+                <div style="text-align: left; font-size: 0.9rem;">
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+                        <p style="margin: 0 0 4px 0;"><strong>Paciente:</strong> ${pat.fullname} (C.I: ${pat.id})</p>
+                        <p style="margin: 0 0 4px 0;"><strong>Concepto:</strong> ${payItem.concept || 'Procedimiento Realizado'}</p>
+                        <p style="margin: 0; font-size: 1.05rem; color: #15803d; font-weight: 700;">
+                            Monto a Cobrar: $${amountToPay.toFixed(2)} USD <span style="font-size: 0.88rem; color: #64748b; font-weight: normal;">(Bs. ${amountBs})</span>
+                        </p>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 10px;">
+                        <label style="font-weight: 600; display: block; margin-bottom: 4px;">Método de Pago *</label>
+                        <select id="quick-settle-method" class="swal2-select" style="width: 100%; margin: 0; display: block;">
+                            <option value="cash">💵 Efectivo ($ USD)</option>
+                            <option value="cash_bs">💵 Efectivo (Bs.)</option>
+                            <option value="pagomovil" selected>📱 Pago Móvil (Bs.)</option>
+                            <option value="pos">💳 Punto de Venta / Débito (Bs.)</option>
+                            <option value="zelle">🌐 Zelle ($ USD)</option>
+                            <option value="transfer">🏦 Transferencia Bancaria</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 10px;">
+                        <label style="font-weight: 600; display: block; margin-bottom: 4px;">Banco / Destino (Opcional)</label>
+                        <input id="quick-settle-bank" type="text" class="swal2-input" placeholder="ej: Banesco, Mercantil, BNC..." style="width: 100%; margin: 0; display: block;">
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 6px;">
+                        <label style="font-weight: 600; display: block; margin-bottom: 4px;">Referencia / N° Comprobante</label>
+                        <input id="quick-settle-ref" type="text" class="swal2-input" placeholder="ej: Últimos 4 dígitos o ref bancaria" style="width: 100%; margin: 0; display: block;">
+                    </div>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Registrar Abono y Cambiar a Pagado',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#10b981',
+            cancelButtonColor: '#64748b',
+            focusConfirm: false,
+            preConfirm: () => {
+                const method = document.getElementById('quick-settle-method')?.value || 'pagomovil';
+                const bank = document.getElementById('quick-settle-bank')?.value.trim() || '';
+                const ref = document.getElementById('quick-settle-ref')?.value.trim() || '';
+                return { method, bank, ref };
+            }
+        });
+
+        if (!formValues) return;
+
+        const todayStr = new Date().toISOString().split('T')[0];
+
+        // 1. Actualizar el pago del paciente a Pagado
+        payItem.paidUSD = payItem.totalUSD;
+        payItem.balanceUSD = 0;
+        payItem.status = 'Pagado';
+        payItem.method = formValues.method;
+        payItem.bank = formValues.bank;
+        payItem.reference = formValues.ref;
+        payItem.paidDate = todayStr;
+
+        await SupabaseDataService.savePatient(pat);
+
+        // 2. Si existe factura asociada con este ID o referencia, marcarla pagada
+        try {
+            const invoices = await SupabaseDataService.getInvoices();
+            const inv = invoices.find(i => String(i.id) === String(paymentDocId) || (String(i.patientId) === String(pat.id) && i.status === 'Pendiente'));
+            if (inv) {
+                inv.status = 'Pagado';
+                inv.paidRef = inv.totalRef;
+                inv.balanceRef = 0;
+                inv.paymentMethod = formValues.method;
+                await SupabaseDataService.saveInvoice(inv);
+            }
+        } catch(eInv) {
+            console.warn("Could not sync invoice status:", eInv);
+        }
+
+        // 3. Refrescar tablas
+        if (typeof renderReceivables === 'function') {
+            await renderReceivables();
+        }
+        if (typeof renderEHRView === 'function') {
+            await renderEHRView();
+        }
+        if (typeof renderDashboard === 'function') {
+            renderDashboard(window.currentDashboardPeriod || 'month');
+        }
+
+        Swal.fire({
+            icon: 'success',
+            title: '¡Cobro Liquidado con Éxito!',
+            html: `
+                <div style="font-size: 0.92rem;">
+                    El procedimiento de <strong>${pat.fullname}</strong> ha sido cambiado a <span class="badge-tag green">✓ Pagado</span>.<br>
+                    Monto cobrado en Caja: <strong>$${amountToPay.toFixed(2)} USD</strong>.
+                </div>
+            `,
+            showDenyButton: true,
+            denyButtonText: '<i class="fa-solid fa-print"></i> Imprimir Recibo',
+            denyButtonColor: '#0284c7',
+            confirmButtonText: 'Aceptar',
+            confirmButtonColor: '#10b981'
+        }).then((res) => {
+            if (res.isDenied) {
+                if (typeof window.printEhrPaymentReceipt === 'function') {
+                    window.printEhrPaymentReceipt(payItem.docId || payItem.id);
+                }
+            }
+        });
+
+    } catch(err) {
+        console.error("Error in quickSettlePendingReceivable:", err);
+        Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo liquidar el cobro.' });
+    }
+};
 
 window.switchReceivablesTab = function(tab, btn) {
     const secPatients = document.getElementById('section-rec-patients');
