@@ -2109,6 +2109,13 @@ function applyRolePermissionsUI(role) {
             const casheaBtn = document.getElementById('btn-header-cashea');
             if (casheaBtn) casheaBtn.style.display = 'none';
 
+            // Ocultamiento total de presupuestos médicos no odontológicos para higienista
+            const medEditor = document.getElementById('medical-budget-editor-container');
+            if (medEditor) {
+                medEditor.classList.add('hidden');
+                medEditor.style.display = 'none';
+            }
+
             // Ensure Birthdays & WhatsApp greetings are accessible to Hygienist
             const bdayHubBtn = document.getElementById('btn-birthday-hub');
             if (bdayHubBtn) bdayHubBtn.style.display = 'inline-flex';
@@ -4188,6 +4195,16 @@ window.openSelectBudgetTypeModal = async function(patientId = null) {
         });
         return;
     }
+    if (cur && (typeof isHygienistUser === 'function' ? isHygienistUser(cur) : isHygienistRole(cur.role))) {
+        // Higienista Dental: límite departamental exclusivo a Odontología
+        if (typeof window.startBudgetCreation === 'function') {
+            await window.startBudgetCreation('Odontología');
+        }
+        if (patientId && typeof window.selectPatientForOdontogram === 'function') {
+            await window.selectPatientForOdontogram(patientId);
+        }
+        return;
+    }
     if (cur && typeof isDoctorUser === 'function' && isDoctorUser(cur)) {
         if (typeof isDentalDoctor === 'function' && isDentalDoctor(cur)) {
             // Dental doctor -> route to Odontología
@@ -4236,6 +4253,21 @@ window.startBudgetCreation = async function(category) {
 
 window.openMedicalBudgetEditor = async function({ budgetId = null, specialtyCategory = 'Consultas Médicas', patientId = null } = {}) {
     const curUserCheck = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    const isHygienistActive = curUserCheck && (typeof isHygienistUser === 'function' ? isHygienistUser(curUserCheck) : isHygienistRole(curUserCheck.role));
+    if (isHygienistActive) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Límite Departamental',
+            text: 'El rol de Higienista solo está autorizado para cotizar y emitir presupuestos clínicos de Odontología.'
+        });
+        if (typeof window.startBudgetCreation === 'function') {
+            await window.startBudgetCreation('Odontología');
+        }
+        if (patientId && typeof window.selectPatientForOdontogram === 'function') {
+            await window.selectPatientForOdontogram(patientId);
+        }
+        return;
+    }
     if (curUserCheck && typeof isDoctorUser === 'function' && isDoctorUser(curUserCheck) && typeof isDentalDoctor === 'function' && isDentalDoctor(curUserCheck)) {
         // Médicos odontológicos no usan el editor médico sin odontodiagrama
         if (typeof window.startBudgetCreation === 'function') {
@@ -14546,7 +14578,7 @@ async function renderAgendaView(filter = (window.currentAgendaFilter || 'pending
     window._availableDoctorsCache = doctors;
 
     const filterSpecSel = document.getElementById('agenda-filter-specialty');
-    if (filterSpecSel && filterSpecSel.options.length <= 1) {
+    if (filterSpecSel) {
         let dynamicSpecs = [];
         if (window.ClinicalERP && window.ClinicalERP.specialties && window.ClinicalERP.specialties.length > 0) {
             dynamicSpecs = window.ClinicalERP.specialties;
@@ -14558,10 +14590,22 @@ async function renderAgendaView(filter = (window.currentAgendaFilter || 'pending
             'Cardiología', 'Ginecología', 'Pediatría', 'Traumatología', 'Oftalmología',
             ...dynamicSpecs.map(s => s.name || s.nombre).filter(Boolean)
         ]));
-        const currVal = filterSpecSel.value;
-        filterSpecSel.innerHTML = '<option value="all">🏥 Todas las Especialidades</option>' + 
-            allSpecs.map(s => `<option value="${s}">${s}</option>`).join('');
-        if (currVal) filterSpecSel.value = currVal;
+
+        if (isHygienist) {
+            const dentalSpecs = allSpecs.filter(s => typeof isDentalSpecialtyOrArea === 'function' ? isDentalSpecialtyOrArea(s) : s.toLowerCase().includes('odont'));
+            const listToUse = dentalSpecs.length > 0 ? dentalSpecs : ['Odontología'];
+            filterSpecSel.innerHTML = listToUse.map(s => `<option value="${s}">🦷 ${s}</option>`).join('');
+            filterSpecSel.value = listToUse[0];
+            filterSpecSel.disabled = (listToUse.length === 1);
+            filterSpecSel.title = "Filtro limitado exclusivamente a Odontología para perfil Higienista";
+        } else if (filterSpecSel.options.length <= 1) {
+            filterSpecSel.disabled = false;
+            filterSpecSel.title = "";
+            const currVal = filterSpecSel.value;
+            filterSpecSel.innerHTML = '<option value="all">🏥 Todas las Especialidades</option>' + 
+                allSpecs.map(s => `<option value="${s}">${s}</option>`).join('');
+            if (currVal) filterSpecSel.value = currVal;
+        }
     }
 
     const filterDocSel = document.getElementById('agenda-filter-doctor');
@@ -14570,6 +14614,19 @@ async function renderAgendaView(filter = (window.currentAgendaFilter || 'pending
             filterDocSel.innerHTML = `<option value="${currentUser.id}">👨‍⚕️ ${currentUser.fullname}</option>`;
             filterDocSel.value = currentUser.id;
             filterDocSel.disabled = true;
+        }
+    } else if (isHygienist) {
+        if (filterDocSel) {
+            const dentalDocs = doctors.filter(d => typeof isDentalDoctor === 'function' ? isDentalDoctor(d) : true);
+            const currVal = filterDocSel.value;
+            filterDocSel.disabled = false;
+            filterDocSel.innerHTML = '<option value="all">🦷 Todos los Odontólogos</option>' + 
+                dentalDocs.map(d => `<option value="${d.id}">${d.fullname || d.name}</option>`).join('');
+            if (currVal && dentalDocs.some(d => String(d.id) === String(currVal))) {
+                filterDocSel.value = currVal;
+            } else {
+                filterDocSel.value = 'all';
+            }
         }
     } else if (filterDocSel && filterDocSel.options.length <= 1) {
         const currVal = filterDocSel.value;
@@ -17471,6 +17528,9 @@ window.deleteUser = async function(userId) {
 // UNIFIED SPECIALTY SELECTS POPULATOR
 // ==========================================
 window.populateAllSpecialtySelects = function(selectedNameToSet = null) {
+    const curUser = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+    const isHyg = curUser && (typeof isHygienistUser === 'function' ? isHygienistUser(curUser) : isHygienistRole(curUser.role));
+
     let dynamicSpecs = [];
     if (window.ClinicalERP && window.ClinicalERP.specialties && window.ClinicalERP.specialties.length > 0) {
         dynamicSpecs = window.ClinicalERP.specialties;
@@ -17503,19 +17563,41 @@ window.populateAllSpecialtySelects = function(selectedNameToSet = null) {
     // 2. Agenda Filter (#agenda-filter-specialty)
     const agendaFilter = document.getElementById('agenda-filter-specialty');
     if (agendaFilter) {
-        const currentVal = agendaFilter.value || 'all';
-        agendaFilter.innerHTML = '<option value="all">🏥 Todas las Especialidades</option>' + 
-            allSpecs.map(s => `<option value="${s}">${s}</option>`).join('');
-        if (currentVal) agendaFilter.value = currentVal;
+        if (isHyg) {
+            const dentalSpecs = allSpecs.filter(s => typeof isDentalSpecialtyOrArea === 'function' ? isDentalSpecialtyOrArea(s) : s.toLowerCase().includes('odont'));
+            const listToUse = dentalSpecs.length > 0 ? dentalSpecs : ['Odontología General'];
+            agendaFilter.innerHTML = listToUse.map(s => `<option value="${s}">🦷 ${s}</option>`).join('');
+            agendaFilter.value = listToUse[0];
+            agendaFilter.disabled = (listToUse.length === 1);
+            agendaFilter.title = "Filtro bloqueado a Odontología para perfil Higienista";
+        } else {
+            agendaFilter.disabled = false;
+            agendaFilter.title = "";
+            const currentVal = agendaFilter.value || 'all';
+            agendaFilter.innerHTML = '<option value="all">🏥 Todas las Especialidades</option>' + 
+                allSpecs.map(s => `<option value="${s}">${s}</option>`).join('');
+            if (currentVal) agendaFilter.value = currentVal;
+        }
     }
 
     // 3. Appointment Modal (#app-specialty-select)
     const appSpec = document.getElementById('app-specialty-select');
     if (appSpec) {
-        const currentVal = appSpec.value;
-        appSpec.innerHTML = allSpecs.map(s => `<option value="${s}">${s}</option>`).join('');
-        if (currentVal && allSpecs.includes(currentVal)) {
-            appSpec.value = currentVal;
+        if (isHyg) {
+            const dentalSpecs = allSpecs.filter(s => typeof isDentalSpecialtyOrArea === 'function' ? isDentalSpecialtyOrArea(s) : s.toLowerCase().includes('odont'));
+            const listToUse = dentalSpecs.length > 0 ? dentalSpecs : ['Odontología General'];
+            appSpec.innerHTML = listToUse.map(s => `<option value="${s}">${s}</option>`).join('');
+            appSpec.value = listToUse[0];
+            appSpec.disabled = (listToUse.length === 1);
+            appSpec.title = "Especialidad bloqueada a Odontología para perfil Higienista";
+        } else {
+            appSpec.disabled = false;
+            appSpec.title = "";
+            const currentVal = appSpec.value;
+            appSpec.innerHTML = allSpecs.map(s => `<option value="${s}">${s}</option>`).join('');
+            if (currentVal && allSpecs.includes(currentVal)) {
+                appSpec.value = currentVal;
+            }
         }
     }
 
@@ -20495,6 +20577,9 @@ function initGlobalEvents() {
     window._availableDoctorsCache = [];
 
     window.populateAppointmentDropdowns = async function(appt = {}) {
+        const curUser = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+        const isHyg = curUser && (typeof isHygienistUser === 'function' ? isHygienistUser(curUser) : isHygienistRole(curUser.role));
+
         // 1. Especialidad
         const specSel = document.getElementById('app-specialty-select');
         let dynamicSpecs = [];
@@ -20503,15 +20588,32 @@ function initGlobalEvents() {
         } else {
             try { dynamicSpecs = JSON.parse(localStorage.getItem('vidasana_specialties')) || []; } catch(e) {}
         }
-        const allSpecs = Array.from(new Set([
+        let allSpecs = Array.from(new Set([
             'Odontología', 'Medicina General', 'Laboratorio', 'Rayos X e Imagen',
             'Cardiología', 'Ginecología', 'Pediatría', 'Traumatología', 'Oftalmología',
             ...dynamicSpecs.map(s => s.name || s.nombre).filter(Boolean)
         ]));
 
+        if (isHyg) {
+            // Límite departamental: La higienista solo calendariza citas para Odontología
+            allSpecs = allSpecs.filter(s => typeof isDentalSpecialtyOrArea === 'function' ? isDentalSpecialtyOrArea(s) : s.toLowerCase().includes('odont'));
+            if (allSpecs.length === 0) allSpecs = ['Odontología'];
+        }
+
         if (specSel) {
             specSel.innerHTML = allSpecs.map(s => `<option value="${s}">${s}</option>`).join('');
-            if (appt.specialty) specSel.value = appt.specialty;
+            if (appt.specialty && allSpecs.includes(appt.specialty)) {
+                specSel.value = appt.specialty;
+            } else {
+                specSel.value = allSpecs[0] || 'Odontología';
+            }
+            if (isHyg && allSpecs.length === 1) {
+                specSel.disabled = true;
+                specSel.title = "Especialidad bloqueada a Odontología para perfil Higienista";
+            } else {
+                specSel.disabled = false;
+                specSel.title = "";
+            }
         }
 
         // 2. Load Doctors, Staff & Rooms
@@ -20521,17 +20623,21 @@ function initGlobalEvents() {
             SupabaseDataService.getClinicRooms ? SupabaseDataService.getClinicRooms().catch(() => []) : []
         ]);
 
-        const doctors = users.filter(u => window.isDoctorUser(u));
+        let doctors = users.filter(u => window.isDoctorUser(u));
+        if (isHyg) {
+            doctors = doctors.filter(u => typeof isDentalDoctor === 'function' ? isDentalDoctor(u) : true);
+        }
 
         (staff || []).forEach(st => {
             if (window.isDoctorUser(st)) {
+                if (isHyg && typeof isDentalDoctor === 'function' && !isDentalDoctor(st)) return;
                 const n = (st.name || st.fullname || '').toLowerCase();
                 if (!doctors.some(d => (d.fullname || '').toLowerCase() === n)) {
                     doctors.push({
                         id: st.id,
                         fullname: st.name || st.fullname,
-                        role: st.role || st.puesto || 'Médico Especialista',
-                        doctorProfile: { specialty: st.department || 'Medicina General' }
+                        role: st.role || st.puesto || 'Médico Odontólogo',
+                        doctorProfile: { specialty: st.department || 'Odontología' }
                     });
                 }
             }
@@ -20566,8 +20672,13 @@ function initGlobalEvents() {
         // 4. Rooms
         const roomSel = document.getElementById('app-room-select');
         if (roomSel) {
+            let availableRooms = rooms;
+            if (isHyg) {
+                availableRooms = rooms.filter(rm => typeof isDentalSpecialtyOrArea === 'function' ? isDentalSpecialtyOrArea(rm.area || rm.name || rm.department || 'odontologia') : true);
+                if (availableRooms.length === 0) availableRooms = rooms;
+            }
             roomSel.innerHTML = '<option value="">-- Sin Consultorio Asignado --</option>' +
-                rooms.map(rm => `<option value="${rm.id}" data-name="${rm.name || rm.room_number}">${rm.name || rm.room_number}</option>`).join('');
+                availableRooms.map(rm => `<option value="${rm.id}" data-name="${rm.name || rm.room_number}">${rm.name || rm.room_number}</option>`).join('');
             if (appt.roomId) roomSel.value = appt.roomId;
             else if (appt.roomName) {
                 for (let i = 0; i < roomSel.options.length; i++) {
@@ -20594,6 +20705,7 @@ function initGlobalEvents() {
         if (!docSel) return;
         const curUser = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
         const isDoc = curUser && (typeof isDoctorUser === 'function' ? isDoctorUser(curUser) : false);
+        const isHyg = curUser && (typeof isHygienistUser === 'function' ? isHygienistUser(curUser) : isHygienistRole(curUser.role));
 
         if (isDoc) {
             const docProf = curUser.doctorProfile || curUser.doctor_profile || {};
@@ -20606,7 +20718,10 @@ function initGlobalEvents() {
         }
 
         docSel.disabled = false;
-        const docs = window._availableDoctorsCache || [];
+        let docs = window._availableDoctorsCache || [];
+        if (isHyg) {
+            docs = docs.filter(d => typeof isDentalDoctor === 'function' ? isDentalDoctor(d) : true);
+        }
         
         const specLower = (selectedSpec || '').toLowerCase();
         const sortedDocs = [...docs].sort((a, b) => {
@@ -21283,6 +21398,21 @@ if (patientSameDay.length === 0) {
             const selectedRoomOpt = roomSel && roomSel.selectedIndex > 0 ? roomSel.options[roomSel.selectedIndex] : null;
             const roomId = selectedRoomOpt ? selectedRoomOpt.value : '';
             const roomName = selectedRoomOpt ? (selectedRoomOpt.dataset.name || selectedRoomOpt.text) : '';
+
+            // Validación de Límite Departamental para Perfil Higienista
+            const curApptUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+            const isHygAppt = curApptUser && (typeof isHygienistUser === 'function' ? isHygienistUser(curApptUser) : isHygienistRole(curApptUser.role));
+            if (isHygAppt) {
+                const isDentalSpec = typeof isDentalSpecialtyOrArea === 'function' ? isDentalSpecialtyOrArea(specialty) : specialty.toLowerCase().includes('odont');
+                if (!isDentalSpec) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Especialidad No Permitida',
+                        text: 'El rol de Higienista solo tiene autorización para calendarizar citas en el departamento de Odontología.'
+                    });
+                    return;
+                }
+            }
 
             // --- VALIDACIONES INTELIGENTES DE CONFLICTOS Y DISPONIBILIDAD ---
             const targetDateStr = getNormalizedAppointmentDate({ date: finalDate, isTomorrow });
